@@ -51,6 +51,12 @@ android {
         }
     }
 
+    // Geen versleutelde lijst van afhankelijkheden (alleen leesbaar door Google) in de APK, zoals IzzyOnDroid en F-Droid vragen
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     // Native bibliotheken gecomprimeerd in de APK: kleiner om te downloaden (IzzyOnDroid vraagt hoogstens ~30 MB)
     packaging {
         jniLibs {
