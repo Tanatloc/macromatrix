@@ -1,0 +1,1 @@
+Renamed to MacroMatrix everywhere. Note: the Android package name changed, uninstall the old app once.
