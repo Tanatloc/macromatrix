@@ -17,6 +17,19 @@ import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Een fout in een scherm: een leesbare melding in plaats van een grijs vlak, zodat ze te melden is
+  ErrorWidget.builder = (details) => Material(
+    color: const Color(0xFFFFF4F2),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        'Something went wrong here. Please send a screenshot to privacy@divinenet.online.\n\n${details.exceptionAsString()}',
+        style: const TextStyle(color: Color(0xFF9B1C1C), fontSize: 12),
+        maxLines: 8,
+        overflow: TextOverflow.ellipsis,
+      ),
+    ),
+  );
   Intl.defaultLocale = 'nl_BE';
   await initializeDateFormatting(appLocale);
 

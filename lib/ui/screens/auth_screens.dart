@@ -37,7 +37,7 @@ class AuthGate extends StatelessWidget {
     final a = context.watch<Account>();
     final s = context.watch<AppState>();
     if (!a.ready) return Scaffold(backgroundColor: context.pal.bg, body: const SizedBox.expand());
-    if (Account.configured && !a.signedIn && !a.localOnly) return const WelcomeScreen();
+    if (Account.configured && !a.signedIn && (kIsWeb || !a.localOnly)) return const WelcomeScreen();
     if (Account.configured && !s.hasProfile) return const ProfileSetupScreen();
     return const Shell();
   }
@@ -213,8 +213,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen(register: false))),
                     child: Text(tr('Log in', 'Inloggen')),
                   ),
-                  const SizedBox(height: 6),
-                  TextButton(onPressed: () => _withoutAccount(context), child: Text(tr('Use without an account', 'Gebruiken zonder account'))),
+                  // Zonder account alleen in de app (gsm, pc); op de website altijd met account
+                  if (!kIsWeb) ...[
+                    const SizedBox(height: 6),
+                    TextButton(onPressed: () => _withoutAccount(context), child: Text(tr('Use without an account', 'Gebruiken zonder account'))),
+                  ],
                   const SizedBox(height: 12),
                   Wrap(
                     alignment: WrapAlignment.center,
