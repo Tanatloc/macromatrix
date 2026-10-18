@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Een M in een 5x5-matrix: de M-cellen in de kleuren van de macro's, de rest zachte punten -->
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14857D"/><stop offset="1" stop-color="#0A4F4A"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <rect x="212" y="212" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <circle cx="388" cy="264" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <circle cx="512" cy="264" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <circle cx="636" cy="264" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <rect x="708" y="212" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <rect x="212" y="336" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <rect x="336" y="336" width="104" height="104" rx="28" fill="#7F96FF"/>
+  <circle cx="512" cy="388" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <rect x="584" y="336" width="104" height="104" rx="28" fill="#F08DB2"/>
+  <rect x="708" y="336" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <rect x="212" y="460" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <circle cx="388" cy="512" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <rect x="460" y="460" width="104" height="104" rx="28" fill="#F2B14C"/>
+  <circle cx="636" cy="512" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <rect x="708" y="460" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <rect x="212" y="584" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <circle cx="388" cy="636" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <circle cx="512" cy="636" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <circle cx="636" cy="636" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <rect x="708" y="584" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <rect x="212" y="708" width="104" height="104" rx="28" fill="#FFFFFF"/>
+  <circle cx="388" cy="760" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <circle cx="512" cy="760" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <circle cx="636" cy="760" r="16" fill="#FFFFFF" fill-opacity="0.25"/>
+  <rect x="708" y="708" width="104" height="104" rx="28" fill="#FFFFFF"/>
+</svg>

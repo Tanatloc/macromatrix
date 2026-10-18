@@ -1,0 +1,1 @@
+First public release: scanner, friends and battles, voice logging, Health Connect, widget.

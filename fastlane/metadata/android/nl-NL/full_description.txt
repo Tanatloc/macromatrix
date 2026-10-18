@@ -1,0 +1,10 @@
+<p>MacroMatrix toont wat je echt binnenkrijgt: energie, macro's en alle 69 voedingsstoffen, afgezet tegen de EFSA-richtwaarden.</p>
+<ul>
+<li><b>Bijhouden</b>: elke vitamine, elk mineraal, vetzuren en essentiële aminozuren, met een Nutrient Score per dag, week en maand.</li>
+<li><b>Snel loggen</b>: zoek in meer dan 15.000 basisproducten uit officiële Europese tabellen en miljoenen merkproducten, scan barcodes of zeg gewoon wat je at.</li>
+<li><b>Scannen</b>: productscore, Nutri-Score, bewerkingsgraad, additieven met hun risico volgens EFSA, je allergenen, herkomst (EU of VS) en betere keuzes.</li>
+<li><b>Vrienden</b>: weekklassement, battles, levels, badges en titels. Vrienden zien alleen je naam, level en weekscore.</li>
+<li>Health Connect, widget op je startscherm, herinneringen, Nederlands en Engels, licht en donker thema, werkt offline.</li>
+</ul>
+<p>Je gegevens blijven in de EU. Geen advertenties, geen tracking, geen verkoop van gegevens. Een account is nodig om tussen toestellen te synchroniseren.</p>
+<p>Geen medisch advies.</p>

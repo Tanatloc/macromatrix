@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Product toevoegen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-light{--bg:#F4F3EF;--surface:#FFFFFF;--surface-2:#FAF9F6;--sunken:#EEECE7;--line:#E4E1DA;--line-strong:#D3CFC6;--ink:#15171A;--ink-2:#4B5058;--ink-3:#676C75;--brand:#0E6B65;--brand-soft:#E2EFEC;--on-brand:#FFFFFF;--protein:#3D5BD9;--carbs:#B8741A;--fat:#A9466B;--fiber:#2E7D5B;--low:#9A5B00;--low-fill:#D98E1F;--low-soft:#FBEEDA;--ok:#1C7357;--ok-fill:#2A9D74;--ok-soft:#E1F0E9;--high:#B3362A;--high-fill:#D2513F;--high-soft:#F8E2DE;--track:#ECE9E3;--shadow:0 1px 2px rgba(21,23,26,.04),0 12px 32px -18px rgba(21,23,26,.22)}
+.t-dark{--bg:#0D0F11;--surface:#15181B;--surface-2:#1A1E22;--sunken:#111316;--line:#25292E;--line-strong:#343A41;--ink:#ECEDEF;--ink-2:#A8ADB5;--ink-3:#8B919A;--brand:#5BC3B6;--brand-soft:#132B28;--on-brand:#06201D;--protein:#8FA3FF;--carbs:#E3A956;--fat:#E08BAA;--fiber:#6CC79A;--low:#E7A651;--low-fill:#D99434;--low-soft:#2E2412;--ok:#62C99E;--ok-fill:#3BAA80;--ok-soft:#12291F;--high:#F0806F;--high-fill:#D9604E;--high-soft:#351A16;--track:#22262B;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 32px -20px rgba(0,0,0,.9)}
+.num{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.eyebrow{font-family:'Geist Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--brand)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 1240px; position: relative; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif; font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased">
+  <header style="display: flex; align-items: center; justify-content: space-between; padding: 18px 16px 4px">
+    <a href="Log.dc.html" aria-label="Terug" style="width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--ink)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <button aria-label="Favoriet" style="width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path></svg>
+    </button>
+  </header>
+
+  <section style="padding: 6px 20px 0; display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15">Zalm, wild, rauw</h1>
+    <span style="font-size: 13.5px; color: var(--ink-2)">Saumon, cru, sauvage</span>
+    <span style="display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--ink-3)">
+      <span class="num" style="height: 20px; padding: 0 6px; border-radius: 5px; background: var(--sunken); color: var(--ink-2); font-size: 10px; font-weight: 600; display: inline-grid; place-items: center">FR</span>
+      CIQUAL 2020 · 40 gemeten · 7 geschat (≈)
+    </span>
+  </section>
+
+  <!-- Hoeveelheid -->
+  <section aria-label="Hoeveelheid" style="margin: 16px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <button aria-label="Minder" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line-strong); background: transparent; display: grid; place-items: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg>
+      </button>
+      <label style="flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 6px">
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Hoeveelheid in gram</span>
+        <input class="num" value="125" style="width: 96px; border: none; outline: none; background: transparent; text-align: right; font-size: 40px; font-weight: 600; letter-spacing: -0.04em; color: var(--ink); padding: 0">
+        <span style="font-size: 16px; color: var(--ink-2)">gram</span>
+      </label>
+      <button aria-label="Meer" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line-strong); background: transparent; display: grid; place-items: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      </button>
+    </div>
+    <div style="display: flex; gap: 6px; margin-top: 14px">
+      <sc-for list="{{portions}}" as="p" hint-placeholder-count="3">
+        <button style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid {{p.border}}; background: {{p.bg}}; color: {{p.color}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px">
+          <span style="font-size: 12.5px; font-weight: 600">{{p.label}}</span>
+          <span class="num" style="font-size: 10.5px; opacity: .8">{{p.grams}}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display: flex; gap: 6px; margin-top: 10px">
+      <sc-for list="{{meals}}" as="m" hint-placeholder-count="4">
+        <button style="flex: 1; height: 32px; border-radius: 9px; border: none; background: {{m.bg}}; color: {{m.color}}; font-size: 12px; font-weight: {{m.weight}}">{{m.label}}</button>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- Macro's voor deze hoeveelheid -->
+  <section aria-label="Macro's" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 10px 16px 0">
+    <sc-for list="{{tiles}}" as="t" hint-placeholder-count="4">
+      <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 9px; display: flex; flex-direction: column; gap: 2px">
+        <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-2)"><span style="width: 6px; height: 6px; border-radius: 2px; background: {{t.color}}"></span>{{t.label}}</span>
+        <span class="num" style="font-size: 19px; font-weight: 600; letter-spacing: -0.03em">{{t.value}}</span>
+        <span class="num" style="font-size: 10.5px; color: var(--ink-3)">{{t.share}}</span>
+      </div>
+    </sc-for>
+  </section>
+
+  <!-- Effect op vandaag: huidige stand + wat dit product toevoegt -->
+  <section aria-label="Effect op vandaag" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 16px 6px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Effect op vandaag</h2>
+      <span style="display: inline-flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ink-3)">
+        <span style="display: inline-flex; align-items: center; gap: 4px"><span style="width: 10px; height: 6px; border-radius: 2px; background: var(--ink-3)"></span>al gegeten</span>
+        <span style="display: inline-flex; align-items: center; gap: 4px"><span style="width: 10px; height: 6px; border-radius: 2px; background: var(--brand)"></span>dit product</span>
+      </span>
+    </div>
+    <div style="display: flex; flex-direction: column; margin-top: 8px">
+      <sc-for list="{{impact}}" as="i" hint-placeholder-count="5">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 88px; column-gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line)">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="font-size: 13.5px; font-weight: 500">{{i.name}}</span>
+            <span style="position: relative; height: 7px; border-radius: 4px; background: var(--track)">
+              <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{i.before}}; background: var(--ink-3); border-radius: 4px 0 0 4px"></span>
+              <span style="position: absolute; top: 0; bottom: 0; left: {{i.before}}; width: {{i.add}}; background: var(--brand); border-radius: 0 4px 4px 0"></span>
+              <span style="position: absolute; top: -3px; bottom: -3px; left: {{i.tick}}; width: 2px; background: var(--ink); border-radius: 1px"></span>
+            </span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end">
+            <span class="num" style="font-size: 13px; font-weight: 600; color: {{i.color}}">{{i.after}}</span>
+            <span class="num" style="font-size: 10.5px; color: var(--ink-3)">was {{i.was}}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- Alle waarden, compact -->
+  <section aria-label="Voedingswaarden" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 14px 16px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Per 125 g</h2>
+      <span style="font-size: 12px; color: var(--ink-3)">% van je dagdoel</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; margin-top: 6px">
+      <sc-for list="{{values}}" as="v" hint-placeholder-count="12">
+        <div style="display: flex; align-items: baseline; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--line)">
+          <span style="flex: 1; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{v.name}}</span>
+          <span class="num" style="font-size: 12px; font-style: {{v.style}}">{{v.amount}}</span>
+          <span class="num" style="width: 34px; text-align: right; font-size: 11px; color: var(--ink-3)">{{v.pct}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <p style="margin: 10px 0 0; font-size: 11.5px; color: var(--ink-3); line-height: 1.45">≈ geschat: ontbreekt in CIQUAL, aangevuld uit hetzelfde voedingsmiddel in USDA. Tik op een waarde voor de bron.</p>
+  </section>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 20px; background: var(--bg); border-top: 1px solid var(--line)">
+    <a href="Main.dc.html" style="height: 54px; border-radius: 16px; background: var(--ink); color: var(--bg); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 15.5px; font-weight: 600; text-decoration: none">
+      Toevoegen aan avondeten <span class="num" style="opacity: .7; font-weight: 500">208 kcal</span>
+    </a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":390,"height":1240}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? false;
+    const sel = (on) => ({ bg: on ? 'var(--ink)' : 'transparent', color: on ? 'var(--bg)' : 'var(--ink)', border: on ? 'var(--ink)' : 'var(--line-strong)' });
+    const portions = [['100 g', '100 g', false], ['1 moot', '125 g', true], ['1 portie', '150 g', false]].map(([label, grams, on]) => ({ label, grams, ...sel(on) }));
+    const meals = ['Ontbijt', 'Lunch', 'Avond', 'Snack'].map((label, i) => ({
+      label, bg: i === 2 ? 'var(--sunken)' : 'transparent', color: i === 2 ? 'var(--ink)' : 'var(--ink-3)', weight: i === 2 ? '600' : '500',
+    }));
+    const tiles = [
+      { label: 'kcal', value: '208', share: '10% dag', color: 'var(--ink)' },
+      { label: 'Eiwit', value: '26,3', share: '16% · g', color: 'var(--protein)' },
+      { label: 'Koolh.', value: '0', share: '0% · g', color: 'var(--carbs)' },
+      { label: 'Vet', value: '11,5', share: '14% · g', color: 'var(--fat)' },
+    ];
+    // Procent van doel voor en na; de balk loopt tot 200% van het doel, het streepje is 100%
+    const scale = (p) => Math.min(100, p / 2).toFixed(1) + '%';
+    const impact = [
+      { name: 'Vitamine D', before: 34, after: 125 },
+      { name: 'EPA + DHA', before: 48, after: 850, unit: '' },
+      { name: 'Seleen', before: 117, after: 168 },
+      { name: 'Jodium', before: 41, after: 51 },
+      { name: 'Natrium (max)', before: 119, after: 122, high: true },
+    ].map((i) => {
+      const b = Math.min(200, i.before), a = Math.min(200, i.after);
+      const color = i.high ? 'var(--high)' : i.after >= 100 ? 'var(--ok)' : 'var(--low)';
+      return {
+        name: i.name,
+        before: scale(b),
+        add: (Math.min(100, a / 2) - Math.min(100, b / 2)).toFixed(1) + '%',
+        tick: '50%',
+        after: (i.after > 999 ? '>999' : i.after) + '%',
+        was: i.before + '%',
+        color,
+      };
+    });
+    const values = [
+      ['Vitamine D', '13,8 µg', '92%'], ['Vitamine B12', '4,0 µg', '100%'], ['Vitamine B6', '1,0 mg', '59%'], ['Vitamine B3', '10,3 mg', '61%'],
+      ['Vitamine A', '19 µg', '3%'], ['Vitamine E', '1,6 mg', '12%'], ['B5 ≈', '2,0 mg', '41%', true], ['Choline ≈', '81 mg', '20%', true],
+      ['Seleen', '36 µg', '51%'], ['Fosfor', '312 mg', '57%'], ['Kalium', '456 mg', '13%'], ['Magnesium', '36 mg', '10%'],
+      ['Jodium', '15 µg', '10%'], ['Natrium', '55 mg', '3%'], ['Leucine ≈', '2,1 g', '69%', true], ['Lysine ≈', '2,4 g', '103%', true],
+    ].map(([name, amount, pct, est]) => ({ name, amount, pct, style: est ? 'italic' : 'normal' }));
+    return { theme: dark ? 't-dark' : 't-light', portions, meals, tiles, impact, values };
+  }
+}
+</script>
+</body>
+</html>

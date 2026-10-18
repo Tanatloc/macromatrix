@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Alle voedingsstoffen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-light{--bg:#F4F3EF;--surface:#FFFFFF;--surface-2:#FAF9F6;--sunken:#EEECE7;--line:#E4E1DA;--line-strong:#D3CFC6;--ink:#15171A;--ink-2:#4B5058;--ink-3:#676C75;--brand:#0E6B65;--brand-soft:#E2EFEC;--on-brand:#FFFFFF;--protein:#3D5BD9;--carbs:#B8741A;--fat:#A9466B;--fiber:#2E7D5B;--low:#9A5B00;--low-fill:#D98E1F;--low-soft:#FBEEDA;--ok:#1C7357;--ok-fill:#2A9D74;--ok-soft:#E1F0E9;--high:#B3362A;--high-fill:#D2513F;--high-soft:#F8E2DE;--track:#ECE9E3;--shadow:0 1px 2px rgba(21,23,26,.04),0 12px 32px -18px rgba(21,23,26,.22)}
+.t-dark{--bg:#0D0F11;--surface:#15181B;--surface-2:#1A1E22;--sunken:#111316;--line:#25292E;--line-strong:#343A41;--ink:#ECEDEF;--ink-2:#A8ADB5;--ink-3:#8B919A;--brand:#5BC3B6;--brand-soft:#132B28;--on-brand:#06201D;--protein:#8FA3FF;--carbs:#E3A956;--fat:#E08BAA;--fiber:#6CC79A;--low:#E7A651;--low-fill:#D99434;--low-soft:#2E2412;--ok:#62C99E;--ok-fill:#3BAA80;--ok-soft:#12291F;--high:#F0806F;--high-fill:#D9604E;--high-soft:#351A16;--track:#22262B;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 32px -20px rgba(0,0,0,.9)}
+.num{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.eyebrow{font-family:'Geist Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--brand)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 1880px; position: relative; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif; font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased">
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; padding: 22px 20px 12px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span class="eyebrow">Vrijdag 16 oktober</span>
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1">Voedingsstoffen</h1>
+    </div>
+    <button aria-label="Filter en volgorde" style="width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+    </button>
+  </header>
+
+  <!-- Score: hoe compleet is je voeding vandaag -->
+  <section aria-label="Volledigheid" style="margin: 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 18px; display: flex; gap: 16px; align-items: center">
+    <div style="position: relative; width: 84px; height: 84px; flex: none">
+      <svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="Volledigheidsscore 78 van 100">
+        <circle cx="42" cy="42" r="36" fill="none" stroke="var(--track)" stroke-width="7"></circle>
+        <circle cx="42" cy="42" r="36" fill="none" stroke="var(--ok-fill)" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{score.dash}}" transform="rotate(-90 42 42)"></circle>
+      </svg>
+      <span class="num" style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; font-weight: 600; letter-spacing: -0.04em">78</span>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 15px; font-weight: 600">Volledigheidsscore</span>
+      <span style="display: flex; height: 6px; border-radius: 3px; overflow: hidden; gap: 2px">
+        <span style="flex: {{counts.ok}}; background: var(--ok-fill)"></span>
+        <span style="flex: {{counts.low}}; background: var(--low-fill)"></span>
+        <span style="flex: {{counts.high}}; background: var(--high-fill)"></span>
+      </span>
+      <span class="num" style="display: flex; gap: 12px; font-size: 11.5px; color: var(--ink-2)">
+        <span><strong style="color: var(--ink); font-weight: 600">{{counts.ok}}</strong> op doel</span>
+        <span><strong style="color: var(--ink); font-weight: 600">{{counts.low}}</strong> tekort</span>
+        <span><strong style="color: var(--ink); font-weight: 600">{{counts.high}}</strong> te veel</span>
+      </span>
+      <span style="font-size: 11.5px; color: var(--ink-3)">Gegevens compleet voor 94% van je kcal</span>
+    </div>
+  </section>
+
+  <!-- Verhoudingen -->
+  <section aria-label="Verhoudingen" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 10px 16px 0">
+    <sc-for list="{{ratios}}" as="r" hint-placeholder-count="4">
+      <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 11.5px; color: var(--ink-2)">{{r.label}}</span>
+        <span style="display: flex; align-items: center; gap: 7px">
+          <span class="num" style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em">{{r.value}}</span>
+          <span style="width: 7px; height: 7px; border-radius: 50%; box-sizing: border-box; background: {{r.dot}}; border: 2px solid {{r.ring}}"></span>
+        </span>
+        <span class="num" style="font-size: 10.5px; color: var(--ink-3)">{{r.hint}}</span>
+      </div>
+    </sc-for>
+  </section>
+
+  <nav aria-label="Groepen" style="display: flex; gap: 6px; padding: 14px 16px 6px; overflow: hidden">
+    <sc-for list="{{tabs}}" as="t" hint-placeholder-count="6">
+      <button style="flex: none; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid {{t.border}}; background: {{t.bg}}; color: {{t.color}}; font-size: 13px; font-weight: 500">{{t.label}}</button>
+    </sc-for>
+  </nav>
+
+  <div style="display: flex; justify-content: flex-end; gap: 12px; padding: 2px 20px 8px; font-size: 11px; color: var(--ink-3)">
+    <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 2px; height: 10px; background: var(--ink)"></span>doel</span>
+    <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 14px; height: 6px; border-radius: 2px; background: var(--high-soft); border: 1px solid var(--high-fill); box-sizing: border-box"></span>boven maximum</span>
+  </div>
+
+  <sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+    <section aria-label="{{g.title}}" style="margin: 0 16px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 8px 16px 4px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 6px 0 4px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">{{g.title}}</h2>
+        <span class="num" style="font-size: 11.5px; color: var(--ink-3)">{{g.summary}}</span>
+      </div>
+      <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="10">
+        <div style="display: grid; grid-template-columns: 104px minmax(0, 1fr) 54px; column-gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line)">
+          <span style="display: flex; flex-direction: column; min-width: 0">
+            <span style="font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+            <span class="num" style="font-size: 10.5px; color: var(--ink-3); white-space: nowrap">{{r.detail}}</span>
+          </span>
+          <span style="position: relative; height: 8px; border-radius: 4px; background: var(--track)">
+            <span style="position: absolute; top: 0; bottom: 0; left: {{r.limitLeft}}; right: 0; background: {{r.limitBg}}; border-radius: 0 4px 4px 0"></span>
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{r.width}}; background: {{r.fill}}; border-radius: 4px"></span>
+            <span style="position: absolute; top: -3px; bottom: -3px; left: {{r.tick}}; width: 2px; margin-left: -1px; background: var(--ink); border-radius: 1px"></span>
+          </span>
+          <span style="display: flex; align-items: center; justify-content: flex-end; gap: 6px">
+            <span class="num" style="font-size: 12.5px; font-weight: 600; color: {{r.text}}">{{r.pct}}</span>
+            <sc-if value="{{r.isLow}}" hint-placeholder-val="{{ false }}"><span style="width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--low-fill)"></span></sc-if>
+            <sc-if value="{{r.isOk}}" hint-placeholder-val="{{ true }}"><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--ok-fill)"></span></sc-if>
+            <sc-if value="{{r.isHigh}}" hint-placeholder-val="{{ false }}"><span style="width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--high-fill)"></span></sc-if>
+          </span>
+        </div>
+      </sc-for>
+    </section>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":390,"height":1880}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? false;
+    const C = 2 * Math.PI * 36;
+    const ratios = [
+      { label: 'Omega-6 : omega-3', value: '2,3 : 1', hint: 'doel ≤ 4 : 1', s: 'ok' },
+      { label: 'Kalium : natrium', value: '1,3 : 1', hint: 'doel ≥ 2 : 1', s: 'low' },
+      { label: 'Calcium : magnesium', value: '3,5 : 1', hint: 'doel ± 2 : 1', s: 'low' },
+      { label: 'Zink : koper', value: '6,3 : 1', hint: 'doel 5–15 : 1', s: 'ok' },
+    ].map((r) => ({ ...r, dot: r.s === 'ok' ? 'var(--ok-fill)' : 'transparent', ring: r.s === 'ok' ? 'var(--ok-fill)' : 'var(--low-fill)' }));
+    const tabs = ['Alles', 'Macro', 'Vitaminen', 'Mineralen', 'Vetzuren', 'Aminozuren'].map((label, i) => ({
+      label, bg: i === 0 ? 'var(--ink)' : 'var(--surface)', color: i === 0 ? 'var(--bg)' : 'var(--ink-2)', border: i === 0 ? 'var(--ink)' : 'var(--line)',
+    }));
+
+    // [naam, gegeten, doel, eenheid, bovengrens|null, alleenLimiet]
+    // De balk loopt tot 150% van het doel; het streepje staat op 100% (2/3 van de breedte).
+    const row = ([name, amount, goal, unit, upper, limitOnly]) => {
+      const pct = amount / goal * 100;
+      const status = limitOnly ? (pct > 100 ? 'high' : 'ok') : (upper && amount > upper ? 'high' : pct >= 100 ? 'ok' : 'low');
+      const scaleMax = goal * 1.5;
+      const limit = limitOnly ? goal : upper;
+      const fmt = (v) => (v >= 100 ? Math.round(v).toLocaleString('nl-BE') : String(+v.toFixed(v < 10 ? 1 : 0)).replace('.', ','));
+      return {
+        name,
+        detail: fmt(amount) + ' / ' + (limitOnly ? 'max ' : '') + fmt(goal) + ' ' + unit,
+        pct: Math.round(pct) + '%',
+        width: Math.min(100, amount / scaleMax * 100).toFixed(1) + '%',
+        tick: (100 / 1.5).toFixed(1) + '%',
+        limitLeft: limit && limit < scaleMax ? (limit / scaleMax * 100).toFixed(1) + '%' : '100%',
+        limitBg: limit && limit < scaleMax ? 'var(--high-soft)' : 'transparent',
+        fill: 'var(--' + status + '-fill)',
+        text: status === 'ok' ? 'var(--ink)' : 'var(--' + status + ')',
+        isLow: status === 'low', isOk: status === 'ok', isHigh: status === 'high', status,
+      };
+    };
+    const vitamins = [
+      ['Vitamine A', 812, 750, 'µg'], ['Vitamine C', 146, 110, 'mg'], ['Vitamine D', 5.1, 15, 'µg', 100], ['Vitamine E', 9.8, 13, 'mg', 300],
+      ['Vitamine K1', 186, 70, 'µg'], ['B1 thiamine', 1.4, 1.1, 'mg'], ['B2 riboflavine', 2.1, 1.6, 'mg'], ['B3 niacine', 24, 17, 'mg'],
+      ['B5 pantotheenz.', 6.2, 5, 'mg'], ['B6', 2.2, 1.7, 'mg', 12], ['B7 biotine', 28, 40, 'µg'], ['B9 folaat', 412, 330, 'µg'],
+      ['B12', 4.8, 4, 'µg'], ['Choline', 352, 400, 'mg'],
+    ].map(row);
+    const minerals = [
+      ['Calcium', 1124, 950, 'mg', 2500], ['Koper', 1.9, 1.6, 'mg', 5], ['Jodium', 62, 150, 'µg', 600],
+      ['IJzer', 13.2, 11, 'mg'], ['Magnesium', 318, 350, 'mg'], ['Mangaan', 5.8, 3, 'mg'], ['Fosfor', 1780, 550, 'mg'],
+      ['Kalium', 3120, 3500, 'mg'], ['Seleen', 82, 70, 'µg', 255], ['Natrium', 2380, 2000, 'mg', null, true], ['Zink', 11.9, 11.7, 'mg', 25],
+    ].map(row);
+    const summary = (rows) => rows.filter((r) => r.status === 'ok').length + ' / ' + rows.length + ' op doel';
+    const all = vitamins.concat(minerals);
+    const count = (s) => all.filter((r) => r.status === s).length;
+    return {
+      theme: dark ? 't-dark' : 't-light',
+      score: { dash: (C * 0.78).toFixed(1) + ' ' + C.toFixed(1) },
+      counts: { ok: count('ok'), low: count('low'), high: count('high') },
+      ratios, tabs,
+      groups: [
+        { title: 'Vitaminen', rows: vitamins, summary: summary(vitamins) },
+        { title: 'Mineralen', rows: minerals, summary: summary(minerals) },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

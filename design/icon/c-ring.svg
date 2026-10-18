@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="230" fill="#F4F2EC"/>
+  <!-- Nutrient Score-ring in de drie macrokleuren, met een blad in het midden -->
+  <g fill="none" stroke-width="96" stroke-linecap="round" transform="rotate(-90 512 512)">
+    <circle cx="512" cy="512" r="300" stroke="#3D5BD9" stroke-dasharray="560 1885"/>
+    <circle cx="512" cy="512" r="300" stroke="#B8741A" stroke-dasharray="560 1885" stroke-dashoffset="-628"/>
+    <circle cx="512" cy="512" r="300" stroke="#A9466B" stroke-dasharray="560 1885" stroke-dashoffset="-1256"/>
+  </g>
+  <path d="M400 640 c0-150 100-250 250-250 0 150-100 250-250 250z M400 640 l120-120" fill="#0E6B65" stroke="#0E6B65" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M400 640 L540 500" stroke="#F4F2EC" stroke-width="26" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Lege dag</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-light{--bg:#F4F3EF;--surface:#FFFFFF;--surface-2:#FAF9F6;--sunken:#EEECE7;--line:#E4E1DA;--line-strong:#D3CFC6;--ink:#15171A;--ink-2:#4B5058;--ink-3:#676C75;--brand:#0E6B65;--brand-soft:#E2EFEC;--on-brand:#FFFFFF;--protein:#3D5BD9;--carbs:#B8741A;--fat:#A9466B;--fiber:#2E7D5B;--low:#9A5B00;--low-fill:#D98E1F;--low-soft:#FBEEDA;--ok:#1C7357;--ok-fill:#2A9D74;--ok-soft:#E1F0E9;--high:#B3362A;--high-fill:#D2513F;--high-soft:#F8E2DE;--track:#ECE9E3;--shadow:0 1px 2px rgba(21,23,26,.04),0 12px 32px -18px rgba(21,23,26,.22)}
+.t-dark{--bg:#0D0F11;--surface:#15181B;--surface-2:#1A1E22;--sunken:#111316;--line:#25292E;--line-strong:#343A41;--ink:#ECEDEF;--ink-2:#A8ADB5;--ink-3:#8B919A;--brand:#5BC3B6;--brand-soft:#132B28;--on-brand:#06201D;--protein:#8FA3FF;--carbs:#E3A956;--fat:#E08BAA;--fiber:#6CC79A;--low:#E7A651;--low-fill:#D99434;--low-soft:#2E2412;--ok:#62C99E;--ok-fill:#3BAA80;--ok-soft:#12291F;--high:#F0806F;--high-fill:#D9604E;--high-soft:#351A16;--track:#22262B;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 32px -20px rgba(0,0,0,.9)}
+.num{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.eyebrow{font-family:'Geist Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--brand)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 844px; position: relative; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif; font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased">
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; padding: 22px 20px 14px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span class="eyebrow">Zaterdag · week 42</span>
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1">Vandaag</h1>
+    </div>
+    <span class="num" style="font-size: 12.5px; color: var(--ink-3); padding-bottom: 4px">07:12</span>
+  </header>
+
+  <main style="display: flex; flex-direction: column; gap: 12px; padding: 0 16px">
+    <!-- Budget van de dag, nog onaangeroerd -->
+    <section aria-label="Budget van vandaag" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 18px">
+      <div style="display: flex; align-items: center; gap: 16px">
+        <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="27" fill="none" stroke="var(--track)" stroke-width="7"></circle>
+        </svg>
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span class="eyebrow">Budget vandaag</span>
+          <span style="display: flex; align-items: baseline; gap: 5px"><span class="num" style="font-size: 26px; font-weight: 600; letter-spacing: -0.04em">2.042</span><span style="font-size: 13px; color: var(--ink-2)">kcal</span></span>
+          <span class="num" style="font-size: 12px; color: var(--ink-3)">160 g eiwit · 280 g koolh. · 82 g vet</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lege toestand: leg uit wat er komt, en geef een snelle start -->
+    <section aria-label="Begin je dag" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 22px 18px 18px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px" aria-hidden="true">
+        <sc-for list="{{ghost}}" as="g" hint-placeholder-count="25">
+          <div style="height: 22px; border-radius: 5px; background: var(--sunken); border: 1px dashed var(--line-strong); box-sizing: border-box; opacity: {{g.opacity}}"></div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h2 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em">Begin je dag</h2>
+        <p style="margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.5">Zodra je iets logt, vullen deze 25 vakjes zich met je vitaminen en mineralen. Je ziet meteen waar je staat.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <sc-for list="{{quick}}" as="q" hint-placeholder-count="3">
+          <a href="{{q.href}}" style="display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; column-gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); text-decoration: none">
+            <span style="width: 36px; height: 36px; border-radius: 10px; background: var(--sunken); display: grid; place-items: center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{q.icon}}"></path></svg>
+            </span>
+            <span style="display: flex; flex-direction: column; min-width: 0">
+              <span style="font-size: 14px; font-weight: 600">{{q.title}}</span>
+              <span style="font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{q.sub}}</span>
+            </span>
+            <span class="num" style="font-size: 12.5px; color: var(--ink-3)">{{q.meta}}</span>
+          </a>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- Wat er vanzelf komt -->
+    <section aria-label="Gepland" style="border: 1px dashed var(--line-strong); border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 12px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3"></path></svg>
+      <span style="font-size: 13px; color: var(--ink-2); line-height: 1.45"><strong style="color: var(--ink); font-weight: 600">Vitamine D3 25 µg</strong> komt om 08:00 automatisch in je ontbijt.</span>
+    </section>
+  </main>
+
+  <a href="Log.dc.html" style="position: absolute; right: 16px; bottom: 92px; height: 52px; padding: 0 20px 0 16px; border-radius: 16px; background: var(--ink); color: var(--bg); display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; text-decoration: none; box-shadow: 0 10px 24px -10px rgba(0,0,0,.45)">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Toevoegen
+  </a>
+  <nav aria-label="Hoofdmenu" style="position: absolute; left: 0; right: 0; bottom: 0; height: 76px; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 8px 6px 14px; box-sizing: border-box">
+    <sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+      <a href="{{n.href}}" aria-current="{{n.current}}" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{n.color}}; font-size: 11px; font-weight: {{n.weight}}">
+        <span style="width: 52px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: {{n.bg}}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.icon}}"></path></svg>
+        </span>{{n.label}}
+      </a>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? false;
+    const ghost = Array.from({ length: 25 }, (_, i) => ({ opacity: (1 - i * 0.025).toFixed(2) }));
+    const quick = [
+      { title: 'Mijn standaard ontbijt', sub: 'Havervlokken · Skyr · Blauwe bessen · Walnoten', meta: '512 kcal', href: 'Food.dc.html', icon: 'M5 11h14a7 7 0 0 1-14 0zM9 7c0-2 2-2 2-4M13 7c0-2 2-2 2-4M3 20h18' },
+      { title: 'Ontbijt van gisteren', sub: '4 items kopiëren', meta: '498 kcal', href: 'Food.dc.html', icon: 'M8 8h11v11H8zM5 16V5h11' },
+      { title: 'Barcode scannen', sub: 'Merkproduct opzoeken', meta: '', href: 'Log.dc.html', icon: 'M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 8v8M11 8v8M14 8v8M17 8v8' },
+    ];
+    const icons = {
+      today: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 8v4l3 2',
+      food: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9',
+      trends: 'M4 19h16M5 15l4-5 4 3 6-7',
+      body: 'M12 3a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M7 21l2-9h6l2 9M8 12l-3-3M16 12l3-3',
+      profile: 'M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4.5 20.5a7.5 7.5 0 0 1 15 0',
+    };
+    const nav = [
+      ['Vandaag', 'today', 'Main.dc.html'], ['Voeding', 'food', 'Nutrients.dc.html'], ['Trends', 'trends', 'Trends.dc.html'],
+      ['Lichaam', 'body', 'Goals.dc.html'], ['Profiel', 'profile', 'Goals.dc.html'],
+    ].map(([label, key, href], i) => ({
+      label, href, icon: icons[key], current: i === 0 ? 'page' : 'false',
+      color: i === 0 ? 'var(--ink)' : 'var(--ink-3)', weight: i === 0 ? '600' : '500', bg: i === 0 ? 'var(--sunken)' : 'transparent',
+    }));
+    return { theme: dark ? 't-dark' : 't-light', ghost, quick, nav };
+  }
+}
+</script>
+</body>
+</html>

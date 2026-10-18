@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Doorgesneden granaatappel: de pitjes liggen als een matrix -->
+<defs><clipPath id="in"><circle cx="512" cy="560" r="240"/></clipPath></defs>
+  <rect width="1024" height="1024" rx="230" fill="#FCEFE8"/>
+  <path d="M452 250 L470 190 L512 236 L554 190 L572 250 Z" fill="#9E1F33"/>
+  <circle cx="512" cy="560" r="300" fill="#B5223B"/>
+  <circle cx="512" cy="560" r="240" fill="#FBE3D6"/>
+  <g clip-path="url(#in)">
+  <rect x="300" y="360" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="410" y="360" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="520" y="360" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="630" y="360" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="300" y="470" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="410" y="470" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="520" y="470" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="630" y="470" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="300" y="580" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="410" y="580" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="520" y="580" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="630" y="580" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="300" y="690" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="410" y="690" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="520" y="690" width="90" height="90" rx="30" fill="#D62D4A"/>
+  <rect x="630" y="690" width="90" height="90" rx="30" fill="#D62D4A"/>
+  </g>
+  <rect x="300" y="360" width="90" height="90" rx="30" fill="#F2B14C" opacity="0"/>
+</svg>

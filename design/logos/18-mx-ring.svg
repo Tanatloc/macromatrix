@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- "Mx" in de ring van je Nutrient Score, bijna vol -->
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F2A44"/><stop offset="1" stop-color="#0E1424"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="56"/>
+  <g transform="rotate(-90 512 512)" fill="none" stroke-width="56" stroke-linecap="round">
+    <circle cx="512" cy="512" r="330" stroke="#7F96FF" stroke-dasharray="622 2073"/>
+    <circle cx="512" cy="512" r="330" stroke="#F2B14C" stroke-dasharray="622 2073" stroke-dashoffset="-705"/>
+    <circle cx="512" cy="512" r="330" stroke="#F08DB2" stroke-dasharray="415 2073" stroke-dashoffset="-1410"/>
+  </g>
+  <text x="512" y="610" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="270" fill="#FFFFFF" letter-spacing="-10">Mx</text>
+</svg>

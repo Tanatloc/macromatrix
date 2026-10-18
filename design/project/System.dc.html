@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Designsysteem</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-light{--bg:#F4F3EF;--surface:#FFFFFF;--surface-2:#FAF9F6;--sunken:#EEECE7;--line:#E4E1DA;--line-strong:#D3CFC6;--ink:#15171A;--ink-2:#4B5058;--ink-3:#676C75;--brand:#0E6B65;--brand-soft:#E2EFEC;--on-brand:#FFFFFF;--protein:#3D5BD9;--carbs:#B8741A;--fat:#A9466B;--fiber:#2E7D5B;--low:#9A5B00;--low-fill:#D98E1F;--low-soft:#FBEEDA;--ok:#1C7357;--ok-fill:#2A9D74;--ok-soft:#E1F0E9;--high:#B3362A;--high-fill:#D2513F;--high-soft:#F8E2DE;--track:#ECE9E3;--shadow:0 1px 2px rgba(21,23,26,.04),0 12px 32px -18px rgba(21,23,26,.22)}
+.t-dark{--bg:#0D0F11;--surface:#15181B;--surface-2:#1A1E22;--sunken:#111316;--line:#25292E;--line-strong:#343A41;--ink:#ECEDEF;--ink-2:#A8ADB5;--ink-3:#8B919A;--brand:#5BC3B6;--brand-soft:#132B28;--on-brand:#06201D;--protein:#8FA3FF;--carbs:#E3A956;--fat:#E08BAA;--fiber:#6CC79A;--low:#E7A651;--low-fill:#D99434;--low-soft:#2E2412;--ok:#62C99E;--ok-fill:#3BAA80;--ok-soft:#12291F;--high:#F0806F;--high-fill:#D9604E;--high-soft:#351A16;--track:#22262B;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 32px -20px rgba(0,0,0,.9)}
+.num{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.eyebrow{font-family:'Geist Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--brand)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="t-light" style="width: 2270px; height: 1840px; box-sizing: border-box; padding: 56px 64px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif; font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased">
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 28px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <span class="eyebrow">Voedingsapp · designsysteem</span>
+      <h1 style="margin: 0; font-size: 36px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">Precisie, rustig gebracht</h1>
+    </div>
+    <span class="num" style="font-size: 12px; color: var(--ink-3)">Geist + Geist Mono · 4-pt raster · licht en donker</span>
+  </header>
+
+  <!-- Kleur -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px">
+    <sc-for list="{{palettes}}" as="p" hint-placeholder-count="2">
+      <section aria-label="{{p.title}}" class="{{p.cls}}" style="background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 24px; padding: 24px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em">{{p.title}}</h2>
+          <span class="num" style="font-size: 11.5px; color: var(--ink-3)">.{{p.cls}}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 8px">
+          <sc-for list="{{p.base}}" as="s" hint-placeholder-count="11">
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="height: 56px; border-radius: 10px; background: {{s.hex}}; box-shadow: inset 0 0 0 1px var(--line)"></span>
+              <span style="font-size: 12px; font-weight: 500; margin-top: 3px">{{s.name}}</span>
+              <span class="num" style="font-size: 10.5px; color: var(--ink-3)">{{s.hex}}</span>
+            </span>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 0.8fr)) repeat(3, minmax(0, 1.4fr)); gap: 8px; margin-top: 20px">
+          <sc-for list="{{p.macros}}" as="s" hint-placeholder-count="4">
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="height: 40px; border-radius: 10px; background: {{s.hex}}"></span>
+              <span style="font-size: 12px; font-weight: 500; margin-top: 3px">{{s.name}}</span>
+              <span class="num" style="font-size: 10.5px; color: var(--ink-3)">{{s.hex}}</span>
+            </span>
+          </sc-for>
+          <sc-for list="{{p.status}}" as="s" hint-placeholder-count="3">
+            <span style="display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line)">
+              <span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; background: {{s.soft}}; color: {{s.text}}; font-size: 12px; font-weight: 600">
+                <sc-if value="{{s.isLow}}" hint-placeholder-val="{{ false }}"><span style="width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; border: 2px solid {{s.fill}}"></span></sc-if>
+                <sc-if value="{{s.isOk}}" hint-placeholder-val="{{ true }}"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{s.fill}}"></span></sc-if>
+                <sc-if value="{{s.isHigh}}" hint-placeholder-val="{{ false }}"><span style="width: 0; height: 0; border-left: 4.5px solid transparent; border-right: 4.5px solid transparent; border-bottom: 8px solid {{s.fill}}"></span></sc-if>
+                {{s.name}}
+              </span>
+              <span class="num" style="display: flex; gap: 10px; font-size: 10.5px; color: var(--ink-3)">
+                <span style="display: inline-flex; align-items: center; gap: 4px"><span style="width: 10px; height: 10px; border-radius: 3px; background: {{s.fill}}"></span>{{s.fill}}</span>
+                <span style="display: inline-flex; align-items: center; gap: 4px"><span style="width: 10px; height: 10px; border-radius: 3px; background: {{s.soft}}; box-shadow: inset 0 0 0 1px var(--line)"></span>{{s.soft}}</span>
+              </span>
+              <span style="font-size: 11px; color: var(--ink-2)">{{s.shape}}</span>
+            </span>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+  </div>
+
+  <!-- Typografie en ruimte -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; margin-top: 24px">
+    <section aria-label="Typografie" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em">Typografie</h2>
+        <span style="font-size: 12px; color: var(--ink-3)">cijfers altijd mono met tabular-nums, zodat kolommen uitlijnen</span>
+      </div>
+      <sc-for list="{{type}}" as="t" hint-placeholder-count="7">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; column-gap: 24px; align-items: center; padding: 10px 0; border-top: 1px solid {{t.border}}">
+          <span style="font-family: {{t.family}}; font-size: {{t.size}}; font-weight: {{t.weight}}; letter-spacing: {{t.ls}}; text-transform: {{t.tt}}; color: {{t.color}}; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{t.sample}}</span>
+          <span style="display: flex; flex-direction: column">
+            <span style="font-size: 13px; font-weight: 500">{{t.role}}</span>
+            <span class="num" style="font-size: 11px; color: var(--ink-3)">{{t.spec}}</span>
+          </span>
+        </div>
+      </sc-for>
+    </section>
+
+    <section aria-label="Ruimte, hoeken en iconen" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 22px">
+      <div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em">Ruimte</h2>
+          <span style="font-size: 12px; color: var(--ink-3)">4-pt raster · schermrand 16 · kaartbinnenkant 18 · tussen kaarten 10</span>
+        </div>
+        <div style="display: flex; align-items: flex-end; gap: 22px">
+          <sc-for list="{{spaces}}" as="s" hint-placeholder-count="8">
+            <span style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px">
+              <span style="width: {{s.w}}; height: 32px; border-radius: 3px; background: var(--brand); opacity: .85"></span>
+              <span class="num" style="font-size: 11.5px; font-weight: 600">{{s.v}}</span>
+              <span style="font-size: 11px; color: var(--ink-3); white-space: nowrap">{{s.use}}</span>
+            </span>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em">Hoeken en diepte</h2>
+        <div style="display: flex; align-items: flex-end; gap: 16px">
+          <sc-for list="{{radii}}" as="r" hint-placeholder-count="7">
+            <span style="display: flex; flex-direction: column; gap: 6px">
+              <span style="width: 84px; height: 56px; border-radius: {{r.r}}; background: var(--surface-2); border: 1px solid var(--line-strong); box-shadow: {{r.shadow}}"></span>
+              <span class="num" style="font-size: 11.5px; font-weight: 600">{{r.label}}</span>
+              <span style="font-size: 11px; color: var(--ink-3)">{{r.use}}</span>
+            </span>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em">Iconen</h2>
+        <div style="display: flex; align-items: center; gap: 14px">
+          <sc-for list="{{icons}}" as="i" hint-placeholder-count="8">
+            <span style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); display: grid; place-items: center">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{i}}"></path></svg>
+            </span>
+          </sc-for>
+          <span style="font-size: 12px; color: var(--ink-3); margin-left: 6px">lijn 1,8 op 24 px · ronde uiteinden · geen vulling</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Componenten en grafieken -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; margin-top: 24px">
+    <section aria-label="Componenten" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 22px">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em">Componenten</h2>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span class="eyebrow">Knoppen</span>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+          <button style="height: 54px; padding: 0 24px; border: 0; border-radius: 16px; background: var(--ink); color: var(--bg); display: inline-flex; align-items: center; gap: 10px; font-size: 15.5px; font-weight: 600">Toevoegen aan avondeten <span class="num" style="opacity: .7; font-weight: 500">208 kcal</span></button>
+          <button style="height: 36px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--brand); color: var(--on-brand); font-size: 13.5px; font-weight: 600">Toevoegen</button>
+          <button style="height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 13.5px; font-weight: 500">Annuleren</button>
+          <button aria-label="Toevoegen" style="width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+          <span style="font-size: 11.5px; color: var(--ink-3)">inkt = hoofdactie · merkkleur = snelle positieve actie</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span class="eyebrow">Keuze</span>
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+          <span style="display: inline-flex; gap: 6px">
+            <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 500">Alles</button>
+            <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 13px; font-weight: 500">Vitaminen</button>
+            <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 13px; font-weight: 500">Mineralen</button>
+          </span>
+          <span style="display: inline-grid; grid-template-columns: repeat(3, 80px); gap: 2px; padding: 3px; border-radius: 12px; background: var(--sunken)">
+            <button style="height: 30px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-3); font-size: 12.5px; font-weight: 500">7 dagen</button>
+            <button style="height: 30px; border: 0; border-radius: 9px; background: var(--surface); font-size: 12.5px; font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.08)">30 dagen</button>
+            <button style="height: 30px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-3); font-size: 12.5px; font-weight: 500">90 dagen</button>
+          </span>
+          <span style="display: inline-flex; align-items: center; gap: 8px">
+            <button aria-label="Minder" style="width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 16px; line-height: 1">−</button>
+            <span class="num" style="min-width: 64px; text-align: center; font-size: 18px; font-weight: 600">125 g</span>
+            <button aria-label="Meer" style="width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 16px; line-height: 1">+</button>
+          </span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span class="eyebrow">Labels</span>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+          <sc-for list="{{sources}}" as="s" hint-placeholder-count="5"><span class="num" style="height: 22px; min-width: 30px; padding: 0 6px; box-sizing: border-box; border-radius: 6px; background: var(--sunken); color: var(--ink-2); font-size: 10px; font-weight: 600; display: inline-grid; place-items: center">{{s}}</span></sc-for>
+          <span style="width: 12px"></span>
+          <span style="height: 22px; padding: 0 8px; border-radius: 6px; background: var(--low-soft); color: var(--low); font-size: 11.5px; font-weight: 500; display: inline-flex; align-items: center">+ Vit. D 73%</span>
+          <span style="height: 22px; padding: 0 8px; border-radius: 6px; background: var(--high-soft); color: var(--high); font-size: 11.5px; font-weight: 500; display: inline-flex; align-items: center">Natrium 59% van max</span>
+          <span style="height: 22px; padding: 0 8px; border-radius: 6px; background: var(--sunken); color: var(--ink-2); font-size: 11.5px; font-weight: 500; display: inline-flex; align-items: center">EPA+DHA 1,6 g</span>
+          <span style="width: 12px"></span>
+          <span style="display: inline-flex; align-items: baseline; gap: 6px; font-size: 13px"><span style="color: var(--ink-2)">Choline</span><span class="num" style="font-style: italic; color: var(--ink-2)">≈ 81 mg</span><span style="font-size: 11px; color: var(--ink-3)">geschat, bron bij tik</span></span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <span class="eyebrow">Voedingsstofrij</span>
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 64px; column-gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line)">
+            <span style="display: flex; flex-direction: column">
+              <span style="font-size: 13px; font-weight: 500">{{r.name}}</span>
+              <span class="num" style="font-size: 10.5px; color: var(--ink-3)">{{r.detail}}</span>
+            </span>
+            <span style="position: relative; height: 8px; border-radius: 4px; background: var(--track)">
+              <span style="position: absolute; top: 0; bottom: 0; left: {{r.limitLeft}}; right: 0; background: {{r.limitBg}}; border-radius: 0 4px 4px 0"></span>
+              <span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{r.width}}; background: {{r.fill}}; border-radius: 4px"></span>
+              <span style="position: absolute; top: -3px; bottom: -3px; left: 66.7%; width: 2px; margin-left: -1px; background: var(--ink); border-radius: 1px"></span>
+            </span>
+            <span style="display: flex; align-items: center; justify-content: flex-end; gap: 6px">
+              <span class="num" style="font-size: 12.5px; font-weight: 600; color: {{r.text}}">{{r.pct}}</span>
+              <sc-if value="{{r.isLow}}" hint-placeholder-val="{{ false }}"><span style="width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--low-fill)"></span></sc-if>
+              <sc-if value="{{r.isOk}}" hint-placeholder-val="{{ true }}"><span style="width: 9px; height: 9px; border-radius: 50%; background: var(--ok-fill)"></span></sc-if>
+              <sc-if value="{{r.isHigh}}" hint-placeholder-val="{{ false }}"><span style="width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--high-fill)"></span></sc-if>
+            </span>
+          </div>
+        </sc-for>
+        <span style="font-size: 11.5px; color: var(--ink-3); margin-top: 4px">schaal tot 150% van het doel · streep = doel · rode zone = boven de veilige bovengrens</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span class="eyebrow">Kaart en zoekveld</span>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start">
+          <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+            <span style="font-size: 15px; font-weight: 600">Eiwit</span>
+            <span style="display: flex; align-items: baseline; gap: 4px"><span class="num" style="font-size: 22px; font-weight: 600; letter-spacing: -0.03em">128</span><span class="num" style="font-size: 12px; color: var(--ink-3)">/ 160 g</span></span>
+            <span style="height: 6px; border-radius: 3px; background: var(--track)"><span style="display: block; height: 6px; width: 80%; border-radius: 3px; background: var(--protein)"></span></span>
+          </div>
+          <div style="height: 48px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--surface); display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--ink-3)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+            <span style="font-size: 15px">Zoek een product of scan</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Grafieken" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em">Grafieken</h2>
+        <span style="font-size: 12px; color: var(--ink-3)">elke grafiek beantwoordt één vraag</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{charts}}" as="c" hint-placeholder-count="8">
+          <div style="border: 1px solid var(--line); border-radius: 16px; background: var(--surface-2); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 13.5px; font-weight: 600">{{c.title}}</span>
+            <span style="font-size: 12px; color: var(--ink-2); margin-bottom: 10px">{{c.use}}</span>
+            <svg width="448" height="64" viewBox="0 0 448 64" aria-hidden="true" style="display: block; overflow: visible">
+              <path d="{{c.p1}}" style="fill: {{c.f1}}" opacity="{{c.o1}}"></path>
+              <path d="{{c.p2}}" style="fill: {{c.f2}}" opacity="{{c.o2}}"></path>
+              <path d="{{c.p3}}" style="fill: {{c.f3}}" opacity="{{c.o3}}"></path>
+              <path d="{{c.p4}}" style="fill: {{c.f4}}" opacity="{{c.o4}}"></path>
+              <path d="{{c.dots}}" fill="none" style="stroke: var(--ink-3)" stroke-width="5" stroke-linecap="round" opacity="0.55"></path>
+              <path d="{{c.line}}" fill="none" style="stroke: {{c.lc}}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>
+              <path d="{{c.dash}}" fill="none" style="stroke: var(--ink)" stroke-width="1.5" stroke-dasharray="3 3"></path>
+            </svg>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin: 14px 0 0; font-size: 12px; color: var(--ink-3)">Niet gebruiken: taartdiagrammen voor micro's, radar-diagrammen, dubbele y-assen, 3D.</p>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2270,"height":1840}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const sw = (names, hexes) => names.map((name, i) => ({ name, hex: hexes[i] }));
+    const baseNames = ['bg', 'surface', 'surface-2', 'sunken', 'line', 'line-strong', 'ink', 'ink-2', 'ink-3', 'brand', 'brand-soft'];
+    const macroNames = ['Eiwit', 'Koolhydraten', 'Vet', 'Vezels'];
+    const status = (fills, softs, texts) => [
+      { name: 'Tekort', shape: 'open ring · onder doel', isLow: true, isOk: false, isHigh: false },
+      { name: 'Op doel', shape: 'volle stip · doel gehaald', isLow: false, isOk: true, isHigh: false },
+      { name: 'Te veel', shape: 'driehoek · boven maximum', isLow: false, isOk: false, isHigh: true },
+    ].map((s, i) => ({ ...s, fill: fills[i], soft: softs[i], text: texts[i] }));
+    const palettes = [
+      {
+        title: 'Licht', cls: 't-light',
+        base: sw(baseNames, ['#F4F3EF', '#FFFFFF', '#FAF9F6', '#EEECE7', '#E4E1DA', '#D3CFC6', '#15171A', '#4B5058', '#676C75', '#0E6B65', '#E2EFEC']),
+        macros: sw(macroNames, ['#3D5BD9', '#B8741A', '#A9466B', '#2E7D5B']),
+        status: status(['#D98E1F', '#2A9D74', '#D2513F'], ['#FBEEDA', '#E1F0E9', '#F8E2DE'], ['#9A5B00', '#1C7357', '#B3362A']),
+      },
+      {
+        title: 'Donker', cls: 't-dark',
+        base: sw(baseNames, ['#0D0F11', '#15181B', '#1A1E22', '#111316', '#25292E', '#343A41', '#ECEDEF', '#A8ADB5', '#8B919A', '#5BC3B6', '#132B28']),
+        macros: sw(macroNames, ['#8FA3FF', '#E3A956', '#E08BAA', '#6CC79A']),
+        status: status(['#D99434', '#3BAA80', '#D9604E'], ['#2E2412', '#12291F', '#351A16'], ['#E7A651', '#62C99E', '#F0806F']),
+      },
+    ];
+
+    const mono = "'Geist Mono', ui-monospace, monospace", sans = "'Geist', system-ui, sans-serif";
+    const type = [
+      { sample: '2.042 kcal', role: 'Kerngetal', spec: 'Mono 44 / 600 / −4,5%', family: mono, size: '44px', weight: 600, ls: '-0.045em', tt: 'none', color: 'var(--ink)' },
+      { sample: 'Voedingsstoffen', role: 'Schermtitel', spec: 'Geist 28 / 600 / −2,5%', family: sans, size: '28px', weight: 600, ls: '-0.025em', tt: 'none', color: 'var(--ink)' },
+      { sample: 'Waar kwam het vandaan', role: 'Kaarttitel', spec: 'Geist 15 / 600', family: sans, size: '15px', weight: 600, ls: '0', tt: 'none', color: 'var(--ink)' },
+      { sample: 'Nog 32 mg te gaan — ongeveer 6 g pompoenpitten.', role: 'Tekst', spec: 'Geist 15 / 400 · regel 1,4', family: sans, size: '15px', weight: 400, ls: '0', tt: 'none', color: 'var(--ink-2)' },
+      { sample: 'Zalm, wild, rauw', role: 'Rij', spec: 'Geist 13,5 / 500', family: sans, size: '13.5px', weight: 500, ls: '0', tt: 'none', color: 'var(--ink)' },
+      { sample: 'Saumon, cru, sauvage · CIQUAL 2020', role: 'Bijschrift', spec: 'Geist 11,5 / 400 · ink-3', family: sans, size: '11.5px', weight: 400, ls: '0', tt: 'none', color: 'var(--ink-3)' },
+      { sample: 'Vrijdag · week 42', role: 'Bovenschrift', spec: 'Mono 10,5 / 500 / +9% · hoofdletters', family: mono, size: '10.5px', weight: 500, ls: '0.09em', tt: 'uppercase', color: 'var(--ink-3)' },
+    ].map((t, i) => ({ ...t, border: i === 0 ? 'transparent' : 'var(--line)' }));
+
+    const spaces = [[4, 'binnen labels'], [6, 'chips'], [8, 'icoon–tekst'], [10, 'tussen kaarten'], [12, 'blokken'], [16, 'schermrand'], [18, 'in kaarten'], [24, 'secties']]
+      .map(([v, use]) => ({ v, use, w: v + 'px' }));
+    const radii = [
+      ['6', 'bronlabel', '6px'], ['8', 'invoer', '8px'], ['10', 'kleine knop', '10px'], ['12', 'tegel', '12px'],
+      ['16', 'lijstkaart', '16px'], ['20', 'kaart', '20px'], ['999', 'pil', '999px'],
+    ].map(([label, use, r]) => ({ label, use, r, shadow: label === '20' ? 'var(--shadow)' : 'none' }));
+    const icons = [
+      'M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 8v4l3 2',
+      'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9',
+      'M4 19h16M5 15l4-5 4 3 6-7',
+      'M12 3a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M7 21l2-9h6l2 9M8 12l-3-3M16 12l3-3',
+      'M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4.5 20.5a7.5 7.5 0 0 1 15 0',
+      'M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M7 12h10',
+      'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M20 20l-3.5-3.5',
+      'M12 5v14M5 12h14',
+    ];
+
+    const row = ([name, amount, goal, unit, upper, limitOnly]) => {
+      const pct = amount / goal * 100;
+      const st = limitOnly ? (pct > 100 ? 'high' : 'ok') : pct >= 100 ? 'ok' : 'low';
+      const scaleMax = goal * 1.5, limit = limitOnly ? goal : upper;
+      return {
+        name, detail: String(amount).replace('.', ',') + ' / ' + (limitOnly ? 'max ' : '') + goal.toLocaleString('nl-BE') + ' ' + unit,
+        pct: Math.round(pct) + '%', width: Math.min(100, amount / scaleMax * 100).toFixed(1) + '%',
+        limitLeft: limit && limit < scaleMax ? (limit / scaleMax * 100).toFixed(1) + '%' : '100%',
+        limitBg: limit && limit < scaleMax ? 'var(--high-soft)' : 'transparent',
+        fill: 'var(--' + st + '-fill)', text: st === 'ok' ? 'var(--ink)' : 'var(--' + st + ')',
+        isLow: st === 'low', isOk: st === 'ok', isHigh: st === 'high',
+      };
+    };
+    const rows = [['Vitamine D', 5.1, 15, 'µg', 100], ['Zink', 11.9, 11.7, 'mg', 25], ['Natrium', 2380, 2000, 'mg', null, true]].map(row);
+
+    // Kleine grafiekvoorbeelden, 448 × 64
+    const W = 448, H = 64;
+    const blank = { p1: '', p2: '', p3: '', p4: '', f1: 'none', f2: 'none', f3: 'none', f4: 'none', o1: 1, o2: 1, o3: 1, o4: 1, dots: '', line: '', lc: 'var(--ink)', dash: '' };
+    const rect = (x, y, w, h) => 'M' + x.toFixed(1) + ' ' + y.toFixed(1) + 'h' + w.toFixed(1) + 'v' + h.toFixed(1) + 'h' + (-w).toFixed(1) + 'z';
+    const series = [0.82, 1.04, 1.1, 0.78, 0.95, 1.18, 0.72, 0.98, 1.05, 0.88, 0.83, 1.08, 0.99, 0.86, 0.77, 1.02, 1.12, 0.91, 0.8, 0.99, 1.03, 0.87, 0.95, 1.06, 0.82, 0.99, 1.05, 1.0];
+    const n = series.length, step = W / n;
+    const by = (v) => H - v / 1.3 * (H - 2);
+    const bars = (pred) => series.map((v, i) => (pred(v, i) ? rect(i * step + (step - 8) / 2, by(v), 8, H - by(v)) : '')).join('');
+    const avgLine = (fy) => series.map((_, i) => i).filter((i) => i >= 6).map((i, k) => (k ? 'L' : 'M') + (i * step + step / 2).toFixed(1) + ' ' + fy(series.slice(i - 6, i + 1).reduce((a, b) => a + b, 0) / 7).toFixed(1)).join('');
+
+    const range = { ...blank,
+      p1: rect(0, 26, W, 12), f1: 'var(--track)',
+      p2: rect(W * 0.8, 26, W * 0.2, 12), f2: 'var(--high-soft)',
+      p3: rect(0, 26, W * 0.42, 12), f3: 'var(--low-fill)',
+      p4: rect(W * 2 / 3 - 1, 19, 2, 26), f4: 'var(--ink)' };
+    const target = { ...blank,
+      p1: bars((v) => v < 1), f1: 'var(--low-fill)', o1: 0.55,
+      p2: bars((v, i) => v >= 1 && i < n - 1), f2: 'var(--ok-fill)', o2: 0.9,
+      p3: bars((v, i) => i === n - 1), f3: 'var(--ink)',
+      line: avgLine(by), lc: 'var(--brand)', dash: 'M0 ' + by(1).toFixed(1) + 'H' + W };
+    const band = { ...blank,
+      p1: rect(0, by(1.1), W, by(0.9) - by(1.1)), f1: 'var(--ok-soft)',
+      p2: bars(() => true), f2: 'var(--ink-3)', o2: 0.35,
+      line: avgLine(by), lc: 'var(--ink)' };
+    let pp = '', pc = '', pf = '';
+    for (let i = 0; i < 20; i++) {
+      const s = W / 20, x = i * s + (s - 14) / 2, p = 0.23 + (i * 7 % 9) / 100, f = 0.25 + (i * 5 % 11) / 100;
+      pp += rect(x, H - p * H, 14, p * H); pc += rect(x, f * H, 14, H - p * H - f * H); pf += rect(x, 0, 14, f * H);
+    }
+    const stacked = { ...blank, p1: pp, f1: 'var(--protein)', p2: pc, f2: 'var(--carbs)', p3: pf, f3: 'var(--fat)' };
+    const pat = ['aabaacabaacbaaabaacabaabacaa', 'bcbcbbccbcbccbbcbcbbccbcbccb', 'cccbcccccbcccccccbccccbccccc', 'chchhcchhchchhchcchhchchhcch'];
+    const cells = { a: '', b: '', c: '', h: '' };
+    pat.forEach((r, ri) => r.split('').forEach((k, ci) => { cells[k] += rect(ci * 16, ri * 16, 13, 13); }));
+    const heat = { ...blank, p1: cells.a, f1: 'var(--low-fill)', p2: cells.b, f2: 'var(--low-fill)', o2: 0.3, p3: cells.c, f3: 'var(--ok-fill)', p4: cells.h, f4: 'var(--high-fill)' };
+    const kg = [79.6, null, 79.3, 79.5, null, 79.1, 79.4, 79.2, null, 79.0, 79.3, 78.9, null, 79.1, 78.8, 79.0, null, 78.7, 79.0, 78.8, 78.6, null, 78.9, 78.5, 78.7, null, 78.4, 78.6];
+    const wy = (w) => 4 + (79.8 - w) / 1.6 * 56;
+    let t = kg[0];
+    const trend = kg.map((w) => (t = w == null ? t : t + 0.15 * (w - t)));
+    const weight = { ...blank,
+      dots: kg.map((w, i) => (w == null ? '' : 'M' + (i * step + step / 2).toFixed(1) + ' ' + wy(w).toFixed(1) + 'h0')).join(''),
+      line: trend.map((w, i) => (i ? 'L' : 'M') + (i * step + step / 2).toFixed(1) + ' ' + wy(w).toFixed(1)).join(''), lc: 'var(--brand)' };
+    const segs = [26, 25, 16, 10, 23];
+    let x0 = 0;
+    const contrib = { ...blank, f1: 'var(--brand)', f2: 'var(--brand)', f3: 'var(--brand)', f4: 'var(--line-strong)', o1: 1, o2: 0.7, o3: 0.45 };
+    const keys = ['p1', 'p2', 'p3', 'p3', 'p4'];
+    segs.forEach((s, i) => { const w = s / 100 * W; contrib[keys[i]] += rect(x0, 22, w - 2, 20); x0 += w; });
+    const scale = W / 1.5;
+    const effect = { ...blank,
+      p1: rect(0, 10, W, 14) + rect(0, 40, W, 14), f1: 'var(--track)',
+      p2: rect(0, 10, 1.25 * scale, 14), f2: 'var(--ok-fill)',
+      p3: rect(0, 10, 0.34 * scale, 14) + rect(0, 40, 1.19 * scale, 14), f3: 'var(--ink-3)', o3: 0.55,
+      p4: rect(1.19 * scale, 40, 0.03 * scale, 14), f4: 'var(--high-fill)',
+      dash: 'M' + scale.toFixed(1) + ' 2V62' };
+
+    const charts = [
+      { title: 'Bereikbalk', use: 'Dagstatus van één voedingsstof: streep = doel, rood = boven bovengrens', ...range },
+      { title: 'Staven met doellijn', use: 'Eén voedingsstof over 7–90 dagen, met 7-daags gemiddelde', ...target },
+      { title: 'Doelband', use: 'Energie per dag tegenover doel ±10%', ...band },
+      { title: '100%-gestapelde staven', use: 'Macroverdeling per dag, los van hoeveel je at', ...stacked },
+      { title: 'Heatmap', use: 'Patronen: welke micro’s mis je structureel', ...heat },
+      { title: 'Trendgewicht', use: 'Wegingen als stippen, trend als lijn, zonder dagruis', ...weight },
+      { title: 'Bijdragers', use: 'Welke producten leveren een voedingsstof', ...contrib },
+      { title: 'Voor en na', use: 'Effect van een portie vóór je ze toevoegt', ...effect },
+    ];
+
+    return { palettes, type, spaces, radii, icons, rows, sources: ['FR', 'NO', 'SE', 'US', 'OFF'], charts };
+  }
+}
+</script>
+</body>
+</html>

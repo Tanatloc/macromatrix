@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Kubus uit 27 blokjes: je voeding als matrix in 3D, met de macro's bovenop -->
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F2A44"/><stop offset="1" stop-color="#0E1424"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <polygon points="512,550 590,505 512,460 434,505" fill="#7F96FF" stroke="#7F96FF" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="417,495 495,450 417,405 339,450" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="321,440 400,395 321,350 243,395" fill="#F2B14C" stroke="#F2B14C" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="607,495 685,450 607,405 529,450" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="512,440 590,395 512,350 434,395" fill="#F08DB2" stroke="#F08DB2" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="417,385 495,340 417,295 339,340" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="703,440 781,395 703,350 624,395" fill="#F2B14C" stroke="#F2B14C" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="607,385 685,340 607,295 529,340" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="512,330 590,285 512,240 434,285" fill="#7F96FF" stroke="#7F96FF" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="503,565 425,520 425,610 503,655" fill="#4DB3A6" stroke="#4DB3A6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="503,675 425,630 425,720 503,765" fill="#5BC3B6" stroke="#5BC3B6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="503,785 425,740 425,830 503,875" fill="#4DB3A6" stroke="#4DB3A6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="408,510 330,465 330,555 408,600" fill="#5BC3B6" stroke="#5BC3B6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="408,620 330,575 330,665 408,710" fill="#F08DB2" stroke="#F08DB2" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="408,730 330,685 330,775 408,820" fill="#5BC3B6" stroke="#5BC3B6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="313,455 235,410 235,500 313,545" fill="#4DB3A6" stroke="#4DB3A6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="313,565 235,520 235,610 313,655" fill="#5BC3B6" stroke="#5BC3B6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="313,675 235,630 235,720 313,765" fill="#4DB3A6" stroke="#4DB3A6" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="521,565 599,520 599,610 521,655" fill="#2C8F86" stroke="#2C8F86" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="521,675 599,630 599,720 521,765" fill="#23786F" stroke="#23786F" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="521,785 599,740 599,830 521,875" fill="#F2B14C" stroke="#F2B14C" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="616,510 694,465 694,555 616,600" fill="#23786F" stroke="#23786F" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="616,620 694,575 694,665 616,710" fill="#2C8F86" stroke="#2C8F86" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="616,730 694,685 694,775 616,820" fill="#23786F" stroke="#23786F" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="711,455 789,410 789,500 711,545" fill="#2C8F86" stroke="#2C8F86" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="711,565 789,520 789,610 711,655" fill="#23786F" stroke="#23786F" stroke-width="8" stroke-linejoin="round"/>
+  <polygon points="711,675 789,630 789,720 711,765" fill="#2C8F86" stroke="#2C8F86" stroke-width="8" stroke-linejoin="round"/>
+</svg>

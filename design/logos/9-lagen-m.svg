@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Een volle M, gevuld met drie lagen zoals de macroverdeling (eiwit, koolhydraten, vet) -->
+<defs><clipPath id="m"><path d="M232 792 V292 Q232 232 292 232 H322 Q352 232 372 262 L512 472 L652 262 Q672 232 702 232 H732 Q792 232 792 292 V792 Q792 812 772 812 H672 Q652 812 652 792 V502 L548 652 Q512 702 476 652 L372 502 V792 Q372 812 352 812 H252 Q232 812 232 792 Z"/></clipPath></defs>
+  <rect width="1024" height="1024" rx="230" fill="#F6F1E7"/>
+  <g clip-path="url(#m)">
+    <rect x="200" y="200" width="624" height="230" fill="#4B63E6"/>
+    <rect x="200" y="430" width="624" height="220" fill="#D8962A"/>
+    <rect x="200" y="650" width="624" height="200" fill="#B04A6E"/>
+  </g>
+</svg>

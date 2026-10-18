@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Doelen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-light{--bg:#F4F3EF;--surface:#FFFFFF;--surface-2:#FAF9F6;--sunken:#EEECE7;--line:#E4E1DA;--line-strong:#D3CFC6;--ink:#15171A;--ink-2:#4B5058;--ink-3:#676C75;--brand:#0E6B65;--brand-soft:#E2EFEC;--on-brand:#FFFFFF;--protein:#3D5BD9;--carbs:#B8741A;--fat:#A9466B;--fiber:#2E7D5B;--low:#9A5B00;--low-fill:#D98E1F;--low-soft:#FBEEDA;--ok:#1C7357;--ok-fill:#2A9D74;--ok-soft:#E1F0E9;--high:#B3362A;--high-fill:#D2513F;--high-soft:#F8E2DE;--track:#ECE9E3;--shadow:0 1px 2px rgba(21,23,26,.04),0 12px 32px -18px rgba(21,23,26,.22)}
+.t-dark{--bg:#0D0F11;--surface:#15181B;--surface-2:#1A1E22;--sunken:#111316;--line:#25292E;--line-strong:#343A41;--ink:#ECEDEF;--ink-2:#A8ADB5;--ink-3:#8B919A;--brand:#5BC3B6;--brand-soft:#132B28;--on-brand:#06201D;--protein:#8FA3FF;--carbs:#E3A956;--fat:#E08BAA;--fiber:#6CC79A;--low:#E7A651;--low-fill:#D99434;--low-soft:#2E2412;--ok:#62C99E;--ok-fill:#3BAA80;--ok-soft:#12291F;--high:#F0806F;--high-fill:#D9604E;--high-soft:#351A16;--track:#22262B;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 32px -20px rgba(0,0,0,.9)}
+.num{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.eyebrow{font-family:'Geist Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--brand)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 1680px; position: relative; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif; font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased">
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; padding: 22px 20px 12px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span class="eyebrow">Profiel</span>
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1">Doelen</h1>
+    </div>
+    <span style="font-size: 12px; color: var(--ink-3)">Opgeslagen</span>
+  </header>
+
+  <!-- Energie -->
+  <section aria-label="Energie" style="margin: 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 18px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Energie</h2>
+      <button style="border: 0; background: none; padding: 0; color: var(--brand); font-size: 12.5px; font-weight: 500">Gegevens wijzigen</button>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px">
+      <sc-for list="{{body}}" as="b" hint-placeholder-count="5">
+        <span class="num" style="height: 26px; padding: 0 10px; display: inline-flex; align-items: center; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; color: var(--ink-2)">{{b}}</span>
+      </sc-for>
+    </div>
+    <div role="radiogroup" aria-label="Doel" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin-top: 14px; padding: 3px; border-radius: 12px; background: var(--sunken)">
+      <sc-for list="{{aims}}" as="a" hint-placeholder-count="3">
+        <button role="radio" aria-checked="{{a.checked}}" style="height: 32px; border: 0; border-radius: 9px; background: {{a.bg}}; color: {{a.color}}; font-size: 13px; font-weight: 500; box-shadow: {{a.shadow}}">{{a.label}}</button>
+      </sc-for>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px">
+      <span style="font-size: 13px; color: var(--ink-2)">Tempo</span>
+      <span style="display: inline-flex; align-items: center; gap: 8px">
+        <button aria-label="Trager" style="width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 15px; line-height: 1">−</button>
+        <span class="num" style="font-size: 14px; font-weight: 600; min-width: 92px; text-align: center">−0,25 kg/week</span>
+        <button aria-label="Sneller" style="width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 15px; line-height: 1">+</button>
+      </span>
+    </div>
+    <span style="display: block; margin-top: 14px; font-size: 12px; color: var(--ink-3)">Hoe berekenen we je verbruik?</span>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px">
+      <button style="text-align: left; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 13px; font-weight: 500">Formule</span>
+        <span style="font-size: 11.5px; color: var(--ink-3)">Mifflin-St Jeor × activiteit</span>
+        <span class="num" style="font-size: 14px; font-weight: 600; color: var(--ink-2); margin-top: 2px">2.290 kcal</span>
+      </button>
+      <button style="text-align: left; padding: 10px 12px; border-radius: 14px; border: 1.5px solid var(--brand); background: var(--brand-soft); display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 13px; font-weight: 600; color: var(--brand)">Adaptief</span>
+        <span style="font-size: 11.5px; color: var(--ink-2)">uit je gewicht en logboek</span>
+        <span class="num" style="font-size: 14px; font-weight: 600; margin-top: 2px">2.380 kcal</span>
+      </button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line)">
+      <span style="display: flex; flex-direction: column">
+        <span style="font-size: 13.5px; font-weight: 500">Dagdoel</span>
+        <span style="font-size: 11.5px; color: var(--ink-3)">beweging komt er automatisch bij</span>
+      </span>
+      <span style="display: flex; align-items: baseline; gap: 4px">
+        <span class="num" style="font-size: 24px; font-weight: 600; letter-spacing: -0.03em">2.042</span>
+        <span class="num" style="font-size: 12px; color: var(--ink-3)">kcal</span>
+      </span>
+    </div>
+  </section>
+
+  <!-- Macro's -->
+  <section aria-label="Macro's" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600">Macro's</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px">
+      <sc-for list="{{presets}}" as="p" hint-placeholder-count="6">
+        <button aria-pressed="{{p.pressed}}" style="height: 30px; padding: 0 11px; border-radius: 999px; border: 1px solid {{p.border}}; background: {{p.bg}}; color: {{p.color}}; font-size: 12.5px; font-weight: 500">{{p.label}}</button>
+      </sc-for>
+    </div>
+    <span style="display: flex; gap: 2px; height: 10px; margin: 16px 0 4px; border-radius: 5px; overflow: hidden">
+      <sc-for list="{{macros}}" as="m" hint-placeholder-count="3"><span style="flex: {{m.pct}}; background: {{m.color}}"></span></sc-for>
+    </span>
+    <sc-for list="{{macros}}" as="m" hint-placeholder-count="3">
+      <div style="display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 64px; column-gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid {{m.border}}">
+        <span style="width: 10px; height: 10px; border-radius: 3px; background: {{m.color}}"></span>
+        <span style="display: flex; flex-direction: column">
+          <span style="font-size: 13.5px; font-weight: 500">{{m.label}}</span>
+          <span class="num" style="font-size: 10.5px; color: var(--ink-3)">{{m.rule}}</span>
+        </span>
+        <span class="num" style="font-size: 12px; color: var(--ink-3)">{{m.pctLabel}}</span>
+        <span class="num" style="height: 30px; display: inline-flex; align-items: center; justify-content: flex-end; padding: 0 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; font-weight: 600">{{m.grams}}</span>
+      </div>
+    </sc-for>
+    <span style="display: block; margin-top: 10px; font-size: 11.5px; color: var(--ink-3)">Grammen voor vandaag, inclusief beweging. Vezels: minstens 30 g.</span>
+  </section>
+
+  <!-- Voorkeuren -->
+  <section aria-label="Voorkeuren en beperkingen" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600">Voorkeuren en beperkingen</h2>
+    <span style="display: block; margin-top: 2px; font-size: 12px; color: var(--ink-3)">Suggesties en zoekresultaten houden hier rekening mee.</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px">
+      <sc-for list="{{prefs}}" as="p" hint-placeholder-count="10">
+        <button aria-pressed="{{p.pressed}}" style="height: 30px; padding: 0 11px; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid {{p.border}}; background: {{p.bg}}; color: {{p.color}}; font-size: 12.5px; font-weight: 500">
+          <sc-if value="{{p.on}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></sc-if>{{p.label}}
+        </button>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- Eigen micro-doelen -->
+  <section aria-label="Eigen doelen" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px 12px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Eigen doelen</h2>
+      <span class="num" style="font-size: 11.5px; color: var(--ink-3)">rest volgt EFSA</span>
+    </div>
+    <sc-for list="{{custom}}" as="c" hint-placeholder-count="4">
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line)">
+        <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+          <span style="font-size: 13.5px; font-weight: 500">{{c.name}}</span>
+          <span style="font-size: 11.5px; color: var(--ink-3)">{{c.why}}</span>
+        </span>
+        <span style="display: flex; align-items: center; gap: 8px">
+          <span class="num" style="font-size: 12px; color: var(--ink-3); text-decoration: line-through">{{c.efsa}}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+          <span class="num" style="height: 28px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 8px; background: var(--brand-soft); color: var(--brand); font-size: 13px; font-weight: 600">{{c.own}}</span>
+        </span>
+      </div>
+    </sc-for>
+    <button style="width: 100%; height: 40px; margin-top: 10px; border-radius: 12px; border: 1px dashed var(--line-strong); background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 500">+ Doel voor een voedingsstof</button>
+  </section>
+
+  <!-- Weekschema -->
+  <section aria-label="Weekschema" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Weekschema</h2>
+      <span style="font-size: 11.5px; color: var(--ink-3)">meer op trainingsdagen</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 14px; align-items: end; height: 104px">
+      <sc-for list="{{week}}" as="d" hint-placeholder-count="7">
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; height: 100%">
+          <span class="num" style="font-size: 9.5px; color: var(--ink-3)">{{d.kcal}}</span>
+          <span style="width: 100%; height: {{d.h}}; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column-reverse; outline: {{d.outline}}; outline-offset: 2px">
+            <span style="flex: 26; background: var(--protein)"></span>
+            <span style="flex: {{d.c}}; background: var(--carbs)"></span>
+            <span style="flex: {{d.f}}; background: var(--fat)"></span>
+          </span>
+        </span>
+      </sc-for>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 8px; text-align: center">
+      <sc-for list="{{week}}" as="d" hint-placeholder-count="7">
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+          <span style="font-size: 12px; font-weight: {{d.weight}}; color: {{d.color}}">{{d.day}}</span>
+          <span style="width: 5px; height: 5px; border-radius: 50%; background: {{d.dot}}"></span>
+        </span>
+      </sc-for>
+    </div>
+    <span style="display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 11.5px; color: var(--ink-3)"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--brand)"></span>trainingsdag: meer koolhydraten, zelfde eiwit</span>
+  </section>
+
+  <nav aria-label="Hoofdmenu" style="position: absolute; left: 0; right: 0; bottom: 0; height: 76px; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 8px 6px 14px; box-sizing: border-box">
+    <sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+      <a href="{{n.href}}" aria-current="{{n.current}}" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{n.color}}; font-size: 11px; font-weight: {{n.weight}}">
+        <span style="width: 52px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: {{n.bg}}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.icon}}"></path></svg>
+        </span>{{n.label}}
+      </a>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":390,"height":1680}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? false;
+    const chip = (label, on) => ({
+      label, on, pressed: on ? 'true' : 'false',
+      bg: on ? 'var(--ink)' : 'var(--surface)', color: on ? 'var(--bg)' : 'var(--ink-2)', border: on ? 'var(--ink)' : 'var(--line)',
+    });
+
+    const aims = ['Afvallen', 'Behouden', 'Aankomen'].map((label, i) => ({
+      label, checked: i === 0 ? 'true' : 'false',
+      bg: i === 0 ? 'var(--surface)' : 'transparent', color: i === 0 ? 'var(--ink)' : 'var(--ink-3)',
+      shadow: i === 0 ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
+    }));
+    const presets = ['Gebalanceerd', 'Eiwitrijk', 'Koolhydraatarm', 'Keto', 'Mediterraan', 'Duursport'].map((l) => chip(l, l === 'Eiwitrijk'));
+
+    // Doelen zoals op het Vandaag-scherm: 160 g eiwit, 280 g koolhydraten, 82 g vet
+    const macros = [
+      { label: 'Eiwit', color: 'var(--protein)', grams: '160 g', rule: '2,0 g per kg lichaamsgewicht', kcal: 160 * 4 },
+      { label: 'Koolhydraten', color: 'var(--carbs)', grams: '280 g', rule: 'wat overblijft', kcal: 280 * 4 },
+      { label: 'Vet', color: 'var(--fat)', grams: '82 g', rule: 'minstens 0,8 g per kg', kcal: 82 * 9 },
+    ];
+    const totalK = macros.reduce((a, m) => a + m.kcal, 0);
+    macros.forEach((m, i) => {
+      m.pct = Math.round(m.kcal / totalK * 100);
+      m.pctLabel = m.pct + '%';
+      m.border = i === macros.length - 1 ? 'transparent' : 'var(--line)';
+    });
+
+    const prefs = [
+      ['Alles', false], ['Pescotarisch', true], ['Vegetarisch', false], ['Veganistisch', false],
+      ['Lactosevrij', true], ['Glutenvrij', false], ['Geen noten', false], ['Halal', false], ['Weinig suiker', true], ['Geen alcohol', false],
+    ].map(([l, on]) => chip(l, on));
+
+    const custom = [
+      { name: 'Vitamine D', why: 'advies huisarts, in de winter', efsa: '15 µg', own: '50 µg' },
+      { name: 'Natrium', why: 'maximum, voor de bloeddruk', efsa: 'max 2.000', own: 'max 1.500 mg' },
+      { name: 'EPA + DHA', why: 'eigen keuze', efsa: '250 mg', own: '500 mg' },
+      { name: 'Eiwit', why: 'volgt je macro-doel', efsa: '0,83 g/kg', own: '2,0 g/kg' },
+    ];
+
+    // Ma, wo, za training: meer koolhydraten, zelfde eiwit
+    const training = [true, false, true, false, false, true, false];
+    const week = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((day, i) => {
+      const t = training[i];
+      const kcal = t ? 2350 : 2042;
+      return {
+        day, kcal: kcal.toLocaleString('nl-BE'),
+        h: (kcal / 2350 * 76).toFixed(0) + 'px',
+        c: t ? 50 : 42, f: t ? 24 : 32,
+        dot: t ? 'var(--brand)' : 'transparent',
+        color: i === 4 ? 'var(--ink)' : 'var(--ink-2)', weight: i === 4 ? '600' : '500',
+        outline: i === 4 ? '1.5px solid var(--ink)' : '0',
+      };
+    });
+
+    const icons = {
+      today: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 8v4l3 2',
+      food: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9',
+      trends: 'M4 19h16M5 15l4-5 4 3 6-7',
+      body: 'M12 3a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M7 21l2-9h6l2 9M8 12l-3-3M16 12l3-3',
+      profile: 'M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4.5 20.5a7.5 7.5 0 0 1 15 0',
+    };
+    const nav = [
+      ['Vandaag', 'today', 'Main.dc.html'], ['Voeding', 'food', 'Nutrients.dc.html'], ['Trends', 'trends', 'Trends.dc.html'],
+      ['Lichaam', 'body', 'Goals.dc.html'], ['Profiel', 'profile', 'Goals.dc.html'],
+    ].map(([label, key, href], i) => ({
+      label, href, icon: icons[key],
+      current: i === 4 ? 'page' : 'false',
+      color: i === 4 ? 'var(--ink)' : 'var(--ink-3)',
+      weight: i === 4 ? '600' : '500',
+      bg: i === 4 ? 'var(--sunken)' : 'transparent',
+    }));
+
+    return {
+      theme: dark ? 't-dark' : 't-light',
+      body: ['Man', '34 jaar', '182 cm', '78,7 kg', 'Matig actief'],
+      aims, presets, macros, prefs, custom, week, nav,
+    };
+  }
+}
+</script>
+</body>
+</html>

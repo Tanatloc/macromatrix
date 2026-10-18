@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- M getekend met drie lijnen, in de kleuren van eiwit, koolhydraten en vet -->
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F2A44"/><stop offset="1" stop-color="#0E1424"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <g fill="none" stroke-width="92" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="282,752 282,282 512,552" stroke="#7F96FF"/>
+    <polyline points="512,552 742,282" stroke="#F2B14C"/>
+    <line x1="742" y1="282" x2="742" y2="752" stroke="#F08DB2"/>
+  </g>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Een vakje uit het periodiek systeem: "Mx", het element MacroMatrix -->
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F2A44"/><stop offset="1" stop-color="#0E1424"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <rect x="222" y="222" width="580" height="580" rx="70" fill="none" stroke="#5BC3B6" stroke-width="36"/>
+  <text x="282" y="340" font-family="DejaVu Sans" font-weight="bold" font-size="88" fill="#5BC3B6">42</text>
+  <text x="512" y="640" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="300" fill="#FFFFFF" letter-spacing="-10">Mx</text>
+  <g><rect x="282" y="696" width="150" height="40" rx="20" fill="#7F96FF"/><rect x="442" y="696" width="190" height="40" rx="20" fill="#F2B14C"/><rect x="642" y="696" width="100" height="40" rx="20" fill="#F08DB2"/></g>
+</svg>

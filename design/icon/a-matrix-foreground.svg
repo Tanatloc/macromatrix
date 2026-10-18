@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Android adaptief icoon: alleen de matrix, binnen de veilige zone (66%) -->
+  <g transform="translate(512 512) scale(0.62) translate(-300 -300)">
+    <rect x="0"   y="0"   width="168" height="168" rx="44" fill="#FFFFFF"/>
+    <rect x="216" y="0"   width="168" height="168" rx="44" fill="#FFFFFF" opacity="0.22"/>
+    <rect x="432" y="0"   width="168" height="168" rx="44" fill="#FFFFFF"/>
+    <rect x="0"   y="216" width="168" height="168" rx="44" fill="#FFFFFF"/>
+    <rect x="216" y="216" width="168" height="168" rx="44" fill="#F2B14C"/>
+    <rect x="432" y="216" width="168" height="168" rx="44" fill="#FFFFFF"/>
+    <rect x="0"   y="432" width="168" height="168" rx="44" fill="#7F96FF"/>
+    <rect x="216" y="432" width="168" height="168" rx="44" fill="#FFFFFF" opacity="0.22"/>
+    <rect x="432" y="432" width="168" height="168" rx="44" fill="#F08DB2"/>
+  </g>
+</svg>

@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Trends</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-light{--bg:#F4F3EF;--surface:#FFFFFF;--surface-2:#FAF9F6;--sunken:#EEECE7;--line:#E4E1DA;--line-strong:#D3CFC6;--ink:#15171A;--ink-2:#4B5058;--ink-3:#676C75;--brand:#0E6B65;--brand-soft:#E2EFEC;--on-brand:#FFFFFF;--protein:#3D5BD9;--carbs:#B8741A;--fat:#A9466B;--fiber:#2E7D5B;--low:#9A5B00;--low-fill:#D98E1F;--low-soft:#FBEEDA;--ok:#1C7357;--ok-fill:#2A9D74;--ok-soft:#E1F0E9;--high:#B3362A;--high-fill:#D2513F;--high-soft:#F8E2DE;--track:#ECE9E3;--shadow:0 1px 2px rgba(21,23,26,.04),0 12px 32px -18px rgba(21,23,26,.22)}
+.t-dark{--bg:#0D0F11;--surface:#15181B;--surface-2:#1A1E22;--sunken:#111316;--line:#25292E;--line-strong:#343A41;--ink:#ECEDEF;--ink-2:#A8ADB5;--ink-3:#8B919A;--brand:#5BC3B6;--brand-soft:#132B28;--on-brand:#06201D;--protein:#8FA3FF;--carbs:#E3A956;--fat:#E08BAA;--fiber:#6CC79A;--low:#E7A651;--low-fill:#D99434;--low-soft:#2E2412;--ok:#62C99E;--ok-fill:#3BAA80;--ok-soft:#12291F;--high:#F0806F;--high-fill:#D9604E;--high-soft:#351A16;--track:#22262B;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 32px -20px rgba(0,0,0,.9)}
+.num{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.eyebrow{font-family:'Geist Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--brand)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 1680px; position: relative; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif; font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased">
+  <header style="padding: 22px 20px 12px; display: flex; flex-direction: column; gap: 4px">
+    <span class="eyebrow">17 sep – 16 okt</span>
+    <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1">Trends</h1>
+  </header>
+  <div role="tablist" aria-label="Periode" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 0 16px 12px; padding: 3px; border-radius: 12px; background: var(--sunken)">
+    <sc-for list="{{ranges}}" as="r" hint-placeholder-count="3">
+      <button role="tab" aria-selected="{{r.selected}}" style="height: 34px; border: 0; border-radius: 9px; background: {{r.bg}}; color: {{r.color}}; font-size: 13px; font-weight: 500; box-shadow: {{r.shadow}}">{{r.label}}</button>
+    </sc-for>
+  </div>
+
+  <!-- Energie -->
+  <section aria-label="Energie" style="margin: 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 18px 14px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600">Energie</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0 12px">
+      <sc-for list="{{energy.stats}}" as="s" hint-placeholder-count="3">
+        <span style="display: flex; flex-direction: column">
+          <span style="font-size: 11.5px; color: var(--ink-3)">{{s.label}}</span>
+          <span class="num" style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em">{{s.value}}</span>
+        </span>
+      </sc-for>
+    </div>
+    <svg width="322" height="134" viewBox="0 0 322 134" role="img" aria-label="Energie per dag met doelband en 7-daags gemiddelde" style="display: block; overflow: visible">
+      <rect x="0" width="322" y="{{energy.bandY}}" height="{{energy.bandH}}" style="fill: var(--ok-soft)"></rect>
+      <line x1="0" x2="322" y1="{{energy.goalY}}" y2="{{energy.goalY}}" style="stroke: var(--ok-fill)" stroke-width="1" stroke-dasharray="3 3"></line>
+      <path d="{{energy.bars}}" style="fill: var(--ink-3)" opacity="0.35"></path>
+      <path d="{{energy.today}}" style="fill: var(--ink)"></path>
+      <polyline points="{{energy.avg}}" fill="none" style="stroke: var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+      <line x1="0" x2="322" y1="128" y2="128" style="stroke: var(--line-strong)" stroke-width="1"></line>
+    </svg>
+    <span class="num" style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10.5px; color: var(--ink-3)"><span>17 sep</span><span>1 okt</span><span>vandaag</span></span>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 11.5px; color: var(--ink-2)">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 8px; border-radius: 2px; background: var(--ok-soft); border: 1px dashed var(--ok-fill); box-sizing: border-box"></span>doel ±10%</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 2px; border-radius: 1px; background: var(--ink)"></span>7-daags gemiddelde</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--ink)"></span>vandaag (bezig)</span>
+    </div>
+  </section>
+
+  <!-- Macroverdeling -->
+  <section aria-label="Macroverdeling" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px 14px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Macroverdeling</h2>
+      <span style="font-size: 11.5px; color: var(--ink-3)">% van je energie</span>
+    </div>
+    <svg width="322" height="112" viewBox="0 0 322 112" role="img" aria-label="Verdeling eiwit, koolhydraten en vet per dag" style="display: block; margin-top: 12px; overflow: visible">
+      <path d="{{macro.protein}}" style="fill: var(--protein)"></path>
+      <path d="{{macro.carbs}}" style="fill: var(--carbs)"></path>
+      <path d="{{macro.fat}}" style="fill: var(--fat)"></path>
+      <line x1="0" x2="322" y1="{{macro.t1}}" y2="{{macro.t1}}" style="stroke: var(--surface)" stroke-width="1.5" stroke-dasharray="4 3"></line>
+      <line x1="0" x2="322" y1="{{macro.t2}}" y2="{{macro.t2}}" style="stroke: var(--surface)" stroke-width="1.5" stroke-dasharray="4 3"></line>
+    </svg>
+    <span class="num" style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10.5px; color: var(--ink-3)"><span>17 sep</span><span>1 okt</span><span>vandaag</span></span>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 12px">
+      <sc-for list="{{macro.legend}}" as="m" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line)">
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-2)"><span style="width: 8px; height: 8px; border-radius: 2px; background: {{m.color}}"></span>{{m.label}}</span>
+          <span class="num" style="font-size: 16px; font-weight: 600">{{m.avg}}</span>
+          <span class="num" style="font-size: 10.5px; color: var(--ink-3)">{{m.goal}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- Heatmap -->
+  <section aria-label="Micronutriënten per dag" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px 14px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Wat haal je, dag na dag</h2>
+      <span style="font-size: 11.5px; color: var(--ink-3)">laatste 14 dagen</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 84px 180px 34px; column-gap: 8px; align-items: center; margin-top: 12px">
+      <span></span>
+      <span class="num" style="display: grid; grid-template-columns: repeat(14, 11px); column-gap: 2px; font-size: 9.5px; color: var(--ink-3); text-align: center">
+        <sc-for list="{{heat.days}}" as="d" hint-placeholder-count="14"><span style="color: {{d.color}}; font-weight: {{d.weight}}">{{d.label}}</span></sc-for>
+      </span>
+      <span class="num" style="font-size: 9.5px; color: var(--ink-3); text-align: right">op doel</span>
+    </div>
+    <sc-for list="{{heat.rows}}" as="r" hint-placeholder-count="13">
+      <div style="display: grid; grid-template-columns: 84px 180px 34px; column-gap: 8px; align-items: center; margin-top: 5px">
+        <span style="font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+        <span style="display: grid; grid-template-columns: repeat(14, 11px); column-gap: 2px">
+          <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="14"><span title="{{c.title}}" style="height: 11px; border-radius: 3px; background: {{c.bg}}; box-shadow: {{c.ring}}"></span></sc-for>
+        </span>
+        <span class="num" style="font-size: 11.5px; font-weight: 600; text-align: right; color: {{r.color}}">{{r.count}}</span>
+      </div>
+    </sc-for>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; font-size: 11px; color: var(--ink-2)">
+      <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--low-fill)"></span>&lt; 50%</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--low-soft); box-shadow: inset 0 0 0 1px var(--low-fill)"></span>50–99%</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--ok-fill)"></span>op doel</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 10px; height: 10px; border-radius: 3px; background: var(--high-fill)"></span>boven max</span>
+    </div>
+    <a href="Nutrient.dc.html" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--low-soft); color: var(--ink); text-decoration: none; font-size: 12.5px">
+      <span><strong style="font-weight: 600">Vitamine D, jodium en omega-3</strong> haal je zelden. Bekijk waar je ze vindt.</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 5l7 7-7 7"></path></svg>
+    </a>
+  </section>
+
+  <!-- Gewicht -->
+  <section aria-label="Gewicht" style="margin: 10px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px 14px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Gewicht</h2>
+      <span class="num" style="font-size: 11.5px; color: var(--ok)">{{weight.delta}}</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 6px">
+      <span class="num" style="font-size: 30px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.1">{{weight.trend}}</span>
+      <span class="num" style="font-size: 13px; color: var(--ink-3)">kg trendgewicht</span>
+    </div>
+    <svg width="322" height="104" viewBox="0 0 322 104" role="img" aria-label="Dagelijkse wegingen en trendlijn" style="display: block; margin-top: 10px; overflow: visible">
+      <line x1="0" x2="322" y1="{{weight.g79}}" y2="{{weight.g79}}" style="stroke: var(--line)" stroke-width="1"></line>
+      <text x="322" y="{{weight.g79l}}" text-anchor="end" class="num" style="fill: var(--ink-3); font-size: 9.5px">79</text>
+      <line x1="0" x2="322" y1="{{weight.g78}}" y2="{{weight.g78}}" style="stroke: var(--line)" stroke-width="1"></line>
+      <text x="322" y="{{weight.g78l}}" text-anchor="end" class="num" style="fill: var(--ink-3); font-size: 9.5px">78</text>
+      <path d="{{weight.dots}}" fill="none" style="stroke: var(--ink-3)" stroke-width="5" stroke-linecap="round" opacity="0.55"></path>
+      <polyline points="{{weight.line}}" fill="none" style="stroke: var(--brand)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+    </svg>
+    <span class="num" style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10.5px; color: var(--ink-3)"><span>17 sep</span><span>1 okt</span><span>vandaag</span></span>
+    <div style="display: flex; gap: 12px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line)">
+      <span style="flex: 1; display: flex; flex-direction: column">
+        <span style="font-size: 13px; font-weight: 500">Geschat verbruik</span>
+        <span style="font-size: 11.5px; color: var(--ink-3)">uit je gewichtstrend en wat je logt</span>
+      </span>
+      <span class="num" style="font-size: 17px; font-weight: 600; letter-spacing: -0.02em">{{weight.tdee}}</span>
+    </div>
+  </section>
+
+  <!-- Mini-kaarten -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 10px 16px 0">
+    <section aria-label="Volledigheid" style="background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px">
+      <span style="font-size: 12px; color: var(--ink-2)">Volledigheid</span>
+      <span style="display: flex; align-items: baseline; gap: 6px">
+        <span class="num" style="font-size: 22px; font-weight: 600; letter-spacing: -0.03em">78</span>
+        <span class="num" style="font-size: 11px; color: var(--ink-3)">gem. {{score.avg}}</span>
+      </span>
+      <svg width="146" height="32" viewBox="0 0 146 32" role="img" aria-label="Volledigheidsscore per dag" style="display: block; margin-top: 6px; overflow: visible">
+        <polyline points="{{score.line}}" fill="none" style="stroke: var(--ok-fill)" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"></polyline>
+        <circle cx="{{score.lastX}}" cy="{{score.lastY}}" r="3" style="fill: var(--ok-fill)"></circle>
+      </svg>
+    </section>
+    <section aria-label="Gelogde dagen" style="background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px">
+      <span style="font-size: 12px; color: var(--ink-2)">Gelogde dagen</span>
+      <span style="display: flex; align-items: baseline; gap: 6px">
+        <span class="num" style="font-size: 22px; font-weight: 600; letter-spacing: -0.03em">{{logged.count}}</span>
+        <span class="num" style="font-size: 11px; color: var(--ink-3)">van 30</span>
+      </span>
+      <span style="display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 3px; margin-top: 8px">
+        <sc-for list="{{logged.days}}" as="d" hint-placeholder-count="30"><span style="aspect-ratio: 1; border-radius: 50%; background: {{d.bg}}; box-shadow: {{d.ring}}"></span></sc-for>
+      </span>
+    </section>
+  </div>
+
+  <nav aria-label="Hoofdmenu" style="position: absolute; left: 0; right: 0; bottom: 0; height: 76px; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 8px 6px 14px; box-sizing: border-box">
+    <sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+      <a href="{{n.href}}" aria-current="{{n.current}}" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{n.color}}; font-size: 11px; font-weight: {{n.weight}}">
+        <span style="width: 52px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: {{n.bg}}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.icon}}"></path></svg>
+        </span>{{n.label}}
+      </a>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":390,"height":1680}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? false;
+    const W = 322;
+    const fmt = (n) => Math.round(n).toLocaleString('nl-BE');
+    const sum = (a) => a.reduce((x, y) => x + y, 0);
+
+    const ranges = ['7 dagen', '30 dagen', '90 dagen'].map((label, i) => ({
+      label, selected: i === 1 ? 'true' : 'false',
+      bg: i === 1 ? 'var(--surface)' : 'transparent', color: i === 1 ? 'var(--ink)' : 'var(--ink-3)',
+      shadow: i === 1 ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
+    }));
+
+    // Energie: 30 dagen, vandaag is nog bezig
+    const kcal = [2150, 1980, 2310, 2045, 1890, 2480, 2620, 2010, 2095, 1950, 2140, 2060, 2390, 2210, 1920, 2070, 1985, 2160, 2550, 2300, 2030, 1960, 2105, 2015, 1940, 2450, 2180, 2060, 1995, 1842];
+    const goal = 2042, eBase = 128, eTop = 4, eMax = 3000;
+    const step = W / kcal.length, bw = 6;
+    const ey = (v) => eBase - v / eMax * (eBase - eTop);
+    let bars = '', today = '';
+    kcal.forEach((v, i) => {
+      const seg = 'M' + (i * step + (step - bw) / 2).toFixed(1) + ' ' + eBase + 'V' + ey(v).toFixed(1) + 'h' + bw + 'V' + eBase + 'z';
+      if (i === kcal.length - 1) today = seg; else bars += seg;
+    });
+    const done = kcal.slice(0, -1);
+    const avgPts = [];
+    for (let i = 6; i < done.length; i++) avgPts.push((i * step + step / 2).toFixed(1) + ',' + ey(sum(done.slice(i - 6, i + 1)) / 7).toFixed(1));
+    const avgKcal = sum(done) / done.length;
+    const inBand = done.filter((v) => v >= goal * 0.9 && v <= goal * 1.1).length;
+    const energy = {
+      bars, today, avg: avgPts.join(' '),
+      goalY: ey(goal).toFixed(1), bandY: ey(goal * 1.1).toFixed(1), bandH: (ey(goal * 0.9) - ey(goal * 1.1)).toFixed(1),
+      stats: [
+        { label: 'Gemiddeld', value: fmt(avgKcal) },
+        { label: 'Doel', value: fmt(goal) },
+        { label: 'Binnen ±10%', value: inBand + ' / ' + done.length },
+      ],
+    };
+
+    // Macro's in % van de energie, 100%-gestapeld per dag
+    const mH = 104, mTop = 4;
+    let pP = '', pC = '', pF = '';
+    const ps = [], cs = [], fs = [];
+    for (let i = 0; i < 30; i++) {
+      const p = 23 + (i * 7) % 9, f = 25 + (i * 5) % 11, c = 100 - p - f;
+      ps.push(p); cs.push(c); fs.push(f);
+      const x = (i * step + (step - 7) / 2).toFixed(1);
+      const yP = mTop + mH - p / 100 * mH, yC = yP - c / 100 * mH;
+      pP += 'M' + x + ' ' + (mTop + mH) + 'V' + yP.toFixed(1) + 'h7V' + (mTop + mH) + 'z';
+      pC += 'M' + x + ' ' + yP.toFixed(1) + 'V' + yC.toFixed(1) + 'h7V' + yP.toFixed(1) + 'z';
+      pF += 'M' + x + ' ' + yC.toFixed(1) + 'V' + mTop + 'h7V' + yC.toFixed(1) + 'z';
+    }
+    const tP = 26, tC = 45, tF = 29;
+    const macro = {
+      protein: pP, carbs: pC, fat: pF,
+      t1: (mTop + mH - tP / 100 * mH).toFixed(1), t2: (mTop + mH - (tP + tC) / 100 * mH).toFixed(1),
+      legend: [
+        { label: 'Eiwit', color: 'var(--protein)', avg: Math.round(sum(ps) / 30) + '%', goal: 'doel ' + tP + '%' },
+        { label: 'Koolhydr.', color: 'var(--carbs)', avg: Math.round(sum(cs) / 30) + '%', goal: 'doel ' + tC + '%' },
+        { label: 'Vet', color: 'var(--fat)', avg: Math.round(sum(fs) / 30) + '%', goal: 'doel ' + tF + '%' },
+      ],
+    };
+
+    // Heatmap: a = < 50%, b = 50–99%, c = op doel, h = boven maximum
+    const dayLetters = ['Z', 'Z', 'M', 'D', 'W', 'D', 'V', 'Z', 'Z', 'M', 'D', 'W', 'D', 'V'];
+    const days = dayLetters.map((label, i) => ({ label, color: i === 13 ? 'var(--ink)' : 'var(--ink-3)', weight: i === 13 ? '600' : '400' }));
+    const look = {
+      a: { bg: 'var(--low-fill)', ring: 'none', t: 'minder dan 50%' },
+      b: { bg: 'var(--low-soft)', ring: 'inset 0 0 0 1px var(--low-fill)', t: '50–99%' },
+      c: { bg: 'var(--ok-fill)', ring: 'none', t: 'op doel' },
+      h: { bg: 'var(--high-fill)', ring: 'none', t: 'boven maximum' },
+    };
+    const heatRows = [
+      ['Vitamine D', 'aabaacabaacbaa'], ['Jodium', 'abaacbaabacaba'], ['EPA + DHA', 'aaacaaabaacaaa'],
+      ['Magnesium', 'bcbcbbccbcbccb'], ['Kalium', 'bbcbbbcbbbcbbb'], ['Vezels', 'bcbccbcbccbccc'],
+      ['Folaat', 'cccbcccccbcccc'], ['Calcium', 'ccbccccbcccccc'], ['IJzer', 'cbcccbcccbcccc'],
+      ['Zink', 'cbcbccbccbcbcc'], ['Vitamine B12', 'cccccccccccccc'], ['Vitamine C', 'ccccbcccccbccc'],
+      ['Natrium (max)', 'chchhcchhchchh'],
+    ].map(([name, pattern]) => {
+      const cells = pattern.split('').map((k, i) => ({ bg: look[k].bg, ring: look[k].ring, title: name + ', ' + (i === 13 ? 'vandaag' : (13 - i) + ' d geleden') + ': ' + look[k].t }));
+      const n = pattern.split('').filter((k) => k === 'c').length;
+      return { name, cells, count: n + '/14', color: n >= 10 ? 'var(--ok)' : n >= 5 ? 'var(--ink-2)' : 'var(--low)' };
+    });
+
+    // Gewicht: wegingen (null = niet gewogen) en een exponentieel gewogen trend
+    const kg = [79.6, null, 79.3, 79.5, null, 79.1, 79.4, 79.2, null, 79.0, 79.3, 78.9, null, 79.1, 78.8, 79.0, null, 78.7, 79.0, 78.8, 78.6, null, 78.9, 78.5, 78.7, null, 78.4, 78.6, 78.3, 78.5];
+    const wy = (w) => 6 + (80 - w) / 2.4 * 92;
+    let t = kg[0];
+    const trend = kg.map((w) => (t = w == null ? t : t + 0.15 * (w - t)));
+    const dots = kg.map((w, i) => (w == null ? '' : 'M' + (i * step + step / 2).toFixed(1) + ' ' + wy(w).toFixed(1) + 'h0')).join('');
+    const delta = trend[trend.length - 1] - trend[0];
+    const tdee = avgKcal - delta * 7700 / 30;
+    const dec = (v) => v.toFixed(1).replace('.', ',');
+    const weight = {
+      dots, line: trend.map((w, i) => (i * step + step / 2).toFixed(1) + ',' + wy(w).toFixed(1)).join(' '),
+      trend: dec(trend[trend.length - 1]), delta: (delta < 0 ? '−' : '+') + dec(Math.abs(delta)) + ' kg in 30 dagen',
+      tdee: fmt(Math.round(tdee / 10) * 10) + ' kcal',
+      g79: wy(79).toFixed(1), g79l: (wy(79) - 3).toFixed(1), g78: wy(78).toFixed(1), g78l: (wy(78) - 3).toFixed(1),
+    };
+
+    // Volledigheid en gelogde dagen
+    const sc = [66, 71, 74, 62, 70, 77, 69, 73, 80, 68, 72, 75, 71, 78, 64, 74, 79, 72, 70, 83, 76, 73, 69, 77, 81, 74, 79, 86, 75, 78];
+    const sx = (i) => (i / (sc.length - 1) * 142 + 2).toFixed(1);
+    const sy = (v) => (30 - (v - 55) / 35 * 28).toFixed(1);
+    const missed = [4, 17];
+
+    const icons = {
+      today: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 8v4l3 2',
+      food: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9',
+      trends: 'M4 19h16M5 15l4-5 4 3 6-7',
+      body: 'M12 3a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M7 21l2-9h6l2 9M8 12l-3-3M16 12l3-3',
+      profile: 'M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4.5 20.5a7.5 7.5 0 0 1 15 0',
+    };
+    const nav = [
+      ['Vandaag', 'today', 'Main.dc.html'], ['Voeding', 'food', 'Nutrients.dc.html'], ['Trends', 'trends', 'Trends.dc.html'],
+      ['Lichaam', 'body', 'Goals.dc.html'], ['Profiel', 'profile', 'Goals.dc.html'],
+    ].map(([label, key, href], i) => ({
+      label, href, icon: icons[key],
+      current: i === 2 ? 'page' : 'false',
+      color: i === 2 ? 'var(--ink)' : 'var(--ink-3)',
+      weight: i === 2 ? '600' : '500',
+      bg: i === 2 ? 'var(--sunken)' : 'transparent',
+    }));
+
+    return {
+      theme: dark ? 't-dark' : 't-light',
+      ranges, energy, macro,
+      heat: { days, rows: heatRows },
+      weight,
+      score: { avg: Math.round(sum(sc) / sc.length), line: sc.map((v, i) => sx(i) + ',' + sy(v)).join(' '), lastX: sx(sc.length - 1), lastY: sy(sc[sc.length - 1]) },
+      logged: {
+        count: 30 - missed.length,
+        days: Array.from({ length: 30 }, (_, i) => (missed.includes(i)
+          ? { bg: 'transparent', ring: 'inset 0 0 0 1.5px var(--line-strong)' }
+          : { bg: i === 29 ? 'var(--ink)' : 'var(--brand)', ring: 'none' })),
+      },
+      nav,
+    };
+  }
+}
+</script>
+</body>
+</html>

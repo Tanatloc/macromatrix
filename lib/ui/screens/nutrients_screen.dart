@@ -1,0 +1,520 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../nutrition/insights.dart';
+import '../../nutrition/nutrients.dart';
+import '../../state/app_state.dart';
+import '../theme.dart';
+import '../widgets/bio_tips_view.dart';
+import '../widgets/kit.dart';
+import '../widgets/nutrient_row.dart';
+import 'nutrient_detail_screen.dart';
+import '../../i18n.dart';
+
+enum _Filter {
+  all('All', 'Alles', null),
+  macro('Macro', 'Macro', [NutrientGroup.general, NutrientGroup.carbs]),
+  vitamins('Vitamins', 'Vitaminen', [NutrientGroup.vitamins]),
+  minerals('Minerals', 'Mineralen', [NutrientGroup.minerals]),
+  fats('Fatty acids', 'Vetzuren', [NutrientGroup.fats]),
+  amino('Amino acids', 'Aminozuren', [NutrientGroup.protein]),
+  other('Other', 'Overige', [NutrientGroup.other]);
+
+  const _Filter(this.en, this.nl, this.groups);
+  final String en, nl;
+  String get label => tr(en, nl);
+  final List<NutrientGroup>? groups;
+}
+
+/// Alle voedingsstoffen van de gekozen dag, met een Nutrient Score, verhoudingen en een bereikbalk per stof
+/// (de dagweergave van het dashboard).
+class DayNutrients extends StatefulWidget {
+  const DayNutrients({super.key});
+
+  @override
+  State<DayNutrients> createState() => _DayNutrientsState();
+}
+
+class _DayNutrientsState extends State<DayNutrients> {
+  _Filter _filter = _Filter.all;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Narrow(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: s.entries.isEmpty
+                ? Panel(
+                    child: Text(
+                      tr(
+                        'Nothing eaten on this day yet. Add something under Today to see all your nutrients here.',
+                        'Nog niets gegeten op deze dag. Voeg iets toe bij Vandaag om hier al je voedingsstoffen te zien.',
+                      ),
+                      style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _ScoreCard(),
+                      const SizedBox(height: 10),
+                      _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
+                      const SizedBox(height: 4),
+                    ],
+                  ),
+          ),
+        ),
+        if (s.entries.isNotEmpty) ...[
+          Narrow(
+            child: SizedBox(
+              height: 50,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                children: [
+                  for (final f in _Filter.values)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: PillChip(label: f.label, selected: _filter == f, onTap: () => setState(() => _filter = f)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Narrow(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                children: [
+                  LegendItem(swatch: LegendItem.box(p.ink, w: 2, h: 10, radius: 1), label: tr('goal', 'doel')),
+                  LegendItem(
+                    swatch: LegendItem.box(p.highSoft, w: 14, h: 6, border: p.highFill),
+                    label: tr('above maximum', 'boven maximum'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Narrow(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  NutrientPanel(
+                    values: s.totals.values,
+                    targets: s.targets,
+                    incomplete: s.totals.incomplete,
+                    groups: _filter.groups,
+                    hidden: s.hiddenNutrients,
+                    onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tr(
+                      'Tap a nutrient for your history, the best sources and your own goal. '
+                          'Reference values: EFSA (healthy adults), amino acids: WHO. Not medical advice. '
+                          'The i icon means more than 10% of that day\'s calories come from products without data for that nutrient: '
+                          'the real total is then probably higher.',
+                      'Tik op een voedingsstof voor je verloop, de beste bronnen en je eigen doel. '
+                          'Richtwaarden: EFSA (gezonde volwassenen), aminozuren: WHO. Geen medisch advies. '
+                          'Het i-icoontje betekent dat meer dan 10% van je calorieën van die dag uit producten komt zonder gegevens voor die stof: '
+                          'het echte totaal ligt dan waarschijnlijk hoger.',
+                    ),
+                    style: TextStyle(fontSize: 12, height: 1.45, color: p.ink3),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ScoreCard extends StatelessWidget {
+  const _ScoreCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final v = s.totals.values;
+    final score = completenessScore(v, s.targets);
+    final levels = [
+      for (final k in stripKeys)
+        if (s.targets[k] != null) levelOf(v[k] ?? 0, s.targets[k]),
+    ];
+    int count(Level l) => levels.where((x) => x == l).length;
+    final coverage = dataCoverage(s.totals);
+
+    return Panel(
+      child: Row(
+        children: [
+          SizedBox(
+            width: 84,
+            height: 84,
+            child: CustomPaint(
+              painter: _ScoreRing(score / 100, p),
+              child: Center(child: Text('$score', style: numStyle(24))),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      tr('Nutrient Score', 'Nutrient Score'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                    ),
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      triggerMode: TooltipTriggerMode.tap,
+                      message: tr(
+                        'How close you are to your goal for ${stripKeys.length} vitamins and minerals, on average. '
+                            'Each nutrient counts up to 100%; above an upper limit the score drops.',
+                        'Hoe dicht je bij je doel zit voor ${stripKeys.length} vitaminen en mineralen, gemiddeld. '
+                            'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score.',
+                      ),
+                      child: Icon(Icons.info_outline_rounded, size: 15, color: p.ink3),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: SizedBox(
+                    height: 6,
+                    child: Row(
+                      children: [
+                        for (final l in [Level.ok, Level.low, Level.high])
+                          if (count(l) > 0)
+                            Expanded(
+                              flex: count(l),
+                              child: Container(color: p.fillOf(l), margin: const EdgeInsets.only(right: 2)),
+                            ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 12,
+                  children: [
+                    for (final (l, label) in [
+                      (Level.ok, tr('on target', 'op doel')),
+                      (Level.low, tr('short', 'tekort')),
+                      (Level.high, tr('too much', 'te veel')),
+                    ])
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${count(l)}',
+                              style: TextStyle(color: p.ink, fontWeight: FontWeight.w600),
+                            ),
+                            TextSpan(text: ' $label'),
+                          ],
+                        ),
+                        style: numStyle(11.5, weight: FontWeight.w400, color: p.ink2),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tr('Data complete for ${fmtPct(coverage)} of your kcal', 'Gegevens compleet voor ${fmtPct(coverage)} van je kcal'),
+                  style: TextStyle(fontSize: 11.5, color: p.ink3),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreRing extends CustomPainter {
+  _ScoreRing(this.fraction, this.p);
+  final double fraction;
+  final Palette p;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 7.0;
+    final rect = (Offset.zero & size).deflate(stroke / 2 + 1);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, 0, math.pi * 2, false, paint..color = p.track);
+    canvas.drawArc(rect, -math.pi / 2, math.pi * 2 * fraction.clamp(0, 1), false, paint..color = p.okFill);
+  }
+
+  @override
+  bool shouldRepaint(_ScoreRing old) => old.fraction != fraction || old.p != p;
+}
+
+/// Twee verhoudingen in gewone taal: omega-6 tegenover omega-3, en kalium tegenover natrium. Een balk toont waar
+/// je zit; het groene stuk is goed.
+class _Ratios extends StatelessWidget {
+  const _Ratios({required this.values});
+  final Map<String, double> values;
+
+  @override
+  Widget build(BuildContext context) {
+    double? ratio(String a, String b) {
+      final x = values[a], y = values[b];
+      return (x == null || y == null || y <= 0) ? null : x / y;
+    }
+
+    return Panel(
+      shadow: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Balance', 'Balans'),
+            trailing: Text(tr('tap for details', 'tik voor uitleg'), style: TextStyle(fontSize: 11.5, color: context.pal.ink3)),
+          ),
+          _RatioRow(
+            title: 'Omega-6 : 3',
+            value: ratio('omega6', 'omega3'),
+            max: 16,
+            good: (0, 4),
+            sentence: (r) => tr('You ate ${fmtDec(r)} times as much omega-6 as omega-3.', 'Je at ${fmtDec(r)} keer zoveel omega-6 als omega-3.'),
+            goal: tr('Good is at most 4 times as much.', 'Goed is hoogstens 4 keer zoveel.'),
+            tip: tr('More oily fish, flaxseed or walnuts helps.', 'Meer vette vis, lijnzaad of walnoten helpt.'),
+            okLabel: tr('Balanced', 'In balans'),
+            badLabel: tr('Too little omega-3', 'Te weinig omega-3'),
+          ),
+          _RatioRow(
+            title: tr('Potassium : salt', 'Kalium : zout'),
+            value: ratio('potassium', 'sodium'),
+            max: 5,
+            good: (2, double.infinity),
+            sentence: (r) => tr('You ate ${fmtDec(r)} times as much potassium as sodium.', 'Je at ${fmtDec(r)} keer zoveel kalium als natrium.'),
+            goal: tr('Good is at least 2 times as much.', 'Goed is minstens 2 keer zoveel.'),
+            tip: tr(
+              'Vegetables, fruit and legumes provide potassium; less salt helps too.',
+              'Groenten, fruit en peulvruchten geven kalium; minder zout helpt ook.',
+            ),
+            okLabel: tr('Balanced', 'In balans'),
+            badLabel: tr('Too much salt', 'Te veel zout'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RatioRow extends StatefulWidget {
+  const _RatioRow({
+    required this.title,
+    required this.value,
+    required this.max,
+    required this.good,
+    required this.sentence,
+    required this.goal,
+    required this.tip,
+    required this.okLabel,
+    required this.badLabel,
+  });
+
+  final String title;
+  final double? value;
+  final double max;
+  final (double, double) good;
+  final String Function(double) sentence;
+  final String goal, tip, okLabel, badLabel;
+
+  @override
+  State<_RatioRow> createState() => _RatioRowState();
+}
+
+/// Eén compacte regel: naam, balk, waarde en status. Tik voor de uitleg.
+class _RatioRowState extends State<_RatioRow> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final w = widget;
+    final v = w.value;
+    final ok = v != null && v >= w.good.$1 && v <= w.good.$2;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => setState(() => _open = !_open),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 112,
+                  child: Text(
+                    w.title,
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
+                  ),
+                ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      final width = c.maxWidth;
+                      double x(double r) => (r.clamp(0, w.max) / w.max) * width;
+                      return SizedBox(
+                        height: 14,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 4,
+                              height: 6,
+                              child: Container(
+                                decoration: BoxDecoration(color: p.track, borderRadius: BorderRadius.circular(3)),
+                              ),
+                            ),
+                            Positioned(
+                              left: x(w.good.$1),
+                              width: x(w.good.$2) - x(w.good.$1),
+                              top: 4,
+                              height: 6,
+                              child: Container(
+                                decoration: BoxDecoration(color: p.okFill, borderRadius: BorderRadius.circular(3)),
+                              ),
+                            ),
+                            if (v != null)
+                              Positioned(
+                                left: (x(v) - 2.5).clamp(0, width - 5),
+                                top: 0,
+                                width: 5,
+                                height: 14,
+                                child: Container(
+                                  decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(3)),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 58,
+                  child: Text(
+                    v == null ? '–' : '${fmtDec(v)}:1',
+                    textAlign: TextAlign.right,
+                    style: numStyle(13, color: p.ink),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  v == null ? Icons.remove_rounded : (ok ? Icons.check_circle_rounded : Icons.error_outline_rounded),
+                  size: 18,
+                  color: v == null ? p.ink3 : (ok ? p.ok : p.low),
+                ),
+              ],
+            ),
+            if (_open)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  v == null
+                      ? tr('No data yet.', 'Nog geen gegevens.')
+                      : '${ok ? w.okLabel : w.badLabel}. ${w.sentence(v)} ${w.goal}${ok ? '' : ' ${w.tip}'}',
+                  style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Balans en opname samen, standaard dichtgeklapt, zodat de Nutrient Score en de lijst meer ruimte krijgen.
+class _MoreInsights extends StatefulWidget {
+  const _MoreInsights({required this.values, required this.tips});
+  final Map<String, double> values;
+  final int tips;
+
+  @override
+  State<_MoreInsights> createState() => _MoreInsightsState();
+}
+
+class _MoreInsightsState extends State<_MoreInsights> {
+  // Onthouden zolang de app openstaat
+  static bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Panel(
+          shadow: false,
+          radius: 16,
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          onTap: () => setState(() => _open = !_open),
+          child: Row(
+            children: [
+              Icon(Icons.balance_rounded, color: p.brand, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr('Balance and absorption', 'Balans en opname'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                    ),
+                    Text(
+                      widget.tips == 0
+                          ? tr('Omega-6 : 3 and potassium : salt', 'Omega-6 : 3 en kalium : zout')
+                          : tr('2 balances · ${widget.tips} tips', '2 verhoudingen · ${widget.tips} tips'),
+                      style: TextStyle(fontSize: 12.5, color: p.ink2),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: p.ink3),
+            ],
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          alignment: Alignment.topCenter,
+          child: _open
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 10),
+                    _Ratios(values: widget.values),
+                    const SizedBox(height: 10),
+                    const BioTipsCard(),
+                  ],
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}

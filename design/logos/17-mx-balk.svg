@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- "Mx" met de macroverdeling eronder als één balk -->
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F2A44"/><stop offset="1" stop-color="#0E1424"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <text x="512" y="600" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="340" fill="#FFFFFF" letter-spacing="-12">Mx</text>
+  <rect x="222" y="680" width="200" height="56" rx="28" fill="#7F96FF"/><rect x="438" y="680" width="240" height="56" rx="28" fill="#F2B14C"/><rect x="694" y="680" width="108" height="56" rx="28" fill="#F08DB2"/>
+</svg>

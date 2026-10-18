@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A1D24"/>
+      <stop offset="1" stop-color="#0B0D11"/>
+    </linearGradient>
+    <linearGradient id="m" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5BE3C9"/>
+      <stop offset="1" stop-color="#0E9F8F"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <!-- Een M als hartslag/grafiek, met een blad als accent -->
+  <path d="M210 740 V300 L512 600 L814 300 V740" fill="none" stroke="url(#m)" stroke-width="110" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M640 250 c0-90 70-150 170-150 0 100-60 170-170 150z" fill="#8FE38A"/>
+</svg>

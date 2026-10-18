@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Vandaag</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-light{--bg:#F4F3EF;--surface:#FFFFFF;--surface-2:#FAF9F6;--sunken:#EEECE7;--line:#E4E1DA;--line-strong:#D3CFC6;--ink:#15171A;--ink-2:#4B5058;--ink-3:#676C75;--brand:#0E6B65;--brand-soft:#E2EFEC;--on-brand:#FFFFFF;--protein:#3D5BD9;--carbs:#B8741A;--fat:#A9466B;--fiber:#2E7D5B;--low:#9A5B00;--low-fill:#D98E1F;--low-soft:#FBEEDA;--ok:#1C7357;--ok-fill:#2A9D74;--ok-soft:#E1F0E9;--high:#B3362A;--high-fill:#D2513F;--high-soft:#F8E2DE;--track:#ECE9E3;--shadow:0 1px 2px rgba(21,23,26,.04),0 12px 32px -18px rgba(21,23,26,.22)}
+.t-dark{--bg:#0D0F11;--surface:#15181B;--surface-2:#1A1E22;--sunken:#111316;--line:#25292E;--line-strong:#343A41;--ink:#ECEDEF;--ink-2:#A8ADB5;--ink-3:#8B919A;--brand:#5BC3B6;--brand-soft:#132B28;--on-brand:#06201D;--protein:#8FA3FF;--carbs:#E3A956;--fat:#E08BAA;--fiber:#6CC79A;--low:#E7A651;--low-fill:#D99434;--low-soft:#2E2412;--ok:#62C99E;--ok-fill:#3BAA80;--ok-soft:#12291F;--high:#F0806F;--high-fill:#D9604E;--high-soft:#351A16;--track:#22262B;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 32px -20px rgba(0,0,0,.9)}
+.num{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.eyebrow{font-family:'Geist Mono',ui-monospace,monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--brand)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="{{theme}}" style="width: 390px; height: 1240px; position: relative; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif; font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased">
+
+  <!-- Kop: datum en navigatie tussen dagen -->
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; padding: 22px 20px 14px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span class="eyebrow">Vrijdag · week 42</span>
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1">Vandaag</h1>
+    </div>
+    <div style="display: flex; gap: 6px">
+      <button aria-label="Vorige dag" style="width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+      </button>
+      <button aria-label="Kalender" style="width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"></rect><path d="M3.5 9.5h17M8 3v4M16 3v4"></path></svg>
+      </button>
+      <button aria-label="Volgende dag" style="width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; color: var(--ink-3)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <main style="display: flex; flex-direction: column; gap: 12px; padding: 0 16px">
+
+    <!-- Energie: ring + kasboek, daaronder de macro's -->
+    <section aria-label="Energie en macro's" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 18px 18px 16px">
+      <div style="display: flex; align-items: center; gap: 18px">
+        <div style="position: relative; width: 124px; height: 124px; flex: none">
+          <svg width="124" height="124" viewBox="0 0 124 124" role="img" aria-label="75 procent van je energiebudget gegeten">
+            <circle cx="62" cy="62" r="54" fill="none" stroke="var(--track)" stroke-width="9"></circle>
+            <circle cx="62" cy="62" r="54" fill="none" stroke="var(--ink)" stroke-width="9" stroke-linecap="round" stroke-dasharray="{{ring.dash}}" transform="rotate(-90 62 62)"></circle>
+          </svg>
+          <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center">
+            <span class="num" style="font-size: 30px; font-weight: 600; letter-spacing: -0.04em; line-height: 1">610</span>
+            <span style="font-size: 12px; color: var(--ink-2); margin-top: 4px">kcal over</span>
+          </div>
+        </div>
+        <dl style="flex: 1; margin: 0; display: grid; grid-template-columns: 1fr auto; row-gap: 7px; font-size: 13px">
+          <dt style="color: var(--ink-2)">Doel</dt><dd class="num" style="margin: 0; text-align: right">2.042</dd>
+          <dt style="color: var(--ink-2); display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--brand)"></span>Beweging</dt><dd class="num" style="margin: 0; text-align: right; color: var(--brand)">+410</dd>
+          <dt style="color: var(--ink-2); display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: var(--ink)"></span>Gegeten</dt><dd class="num" style="margin: 0; text-align: right">−1.842</dd>
+          <dt style="border-top: 1px solid var(--line); padding-top: 7px; font-weight: 600">Over</dt><dd class="num" style="margin: 0; text-align: right; border-top: 1px solid var(--line); padding-top: 7px; font-weight: 600">610</dd>
+        </dl>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line)">
+        <sc-for list="{{macros}}" as="m" hint-placeholder-count="4">
+          <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr) 86px 38px; align-items: center; column-gap: 10px">
+            <span style="display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 500"><span style="width: 7px; height: 7px; border-radius: 2px; background: {{m.color}}"></span>{{m.name}}</span>
+            <span style="height: 6px; border-radius: 3px; background: var(--track); overflow: hidden"><span style="display: block; height: 100%; border-radius: 3px; width: {{m.width}}; background: {{m.color}}"></span></span>
+            <span class="num" style="font-size: 12.5px; text-align: right; color: var(--ink-2)"><span style="color: var(--ink); font-weight: 500">{{m.amount}}</span> / {{m.goal}} g</span>
+            <span class="num" style="font-size: 12px; text-align: right; color: var(--ink-3)">{{m.pct}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- Micronutriënten in één oogopslag -->
+    <section aria-label="Micronutriënten" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 18px">
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em">Micronutriënten</h2>
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2)"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok-fill)"></span><span class="num" style="color: var(--ink); font-weight: 600">{{okCount}}</span> van {{microCount}} op doel</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px">
+        <sc-for list="{{microRows}}" as="row" hint-placeholder-count="2">
+          <div style="display: flex; align-items: flex-start; gap: 8px">
+            <span class="eyebrow" style="width: 30px; padding-top: 8px">{{row.label}}</span>
+            <div style="display: flex; gap: 3px; flex: 1">
+              <sc-for list="{{row.cells}}" as="c" hint-placeholder-count="12">
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px">
+                  <div title="{{c.title}}" style="width: 100%; height: 28px; border-radius: 5px; background: {{c.soft}}; position: relative; overflow: hidden">
+                    <div style="position: absolute; left: 0; right: 0; bottom: 0; height: {{c.height}}; background: {{c.fill}}"></div>
+                  </div>
+                  <span class="num" style="font-size: 8.5px; color: var(--ink-3); letter-spacing: 0">{{c.abbr}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; gap: 14px; margin-top: 12px; font-size: 11.5px; color: var(--ink-2)">
+        <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--low-fill)"></span>Tekort</span>
+        <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ok-fill)"></span>Op doel</span>
+        <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 0; height: 0; border-left: 4.5px solid transparent; border-right: 4.5px solid transparent; border-bottom: 8px solid var(--high-fill)"></span>Boven max.</span>
+      </div>
+
+      <div style="margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--line)">
+        <sc-for list="{{attention}}" as="a" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 14px minmax(0, 1fr) 72px 44px; align-items: center; column-gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line)">
+            <sc-if value="{{a.isLow}}" hint-placeholder-val="{{ true }}"><span style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--low-fill)"></span></sc-if>
+            <sc-if value="{{a.isHigh}}" hint-placeholder-val="{{ false }}"><span style="width: 0; height: 0; border-left: 5.5px solid transparent; border-right: 5.5px solid transparent; border-bottom: 10px solid var(--high-fill)"></span></sc-if>
+            <span style="display: flex; flex-direction: column; min-width: 0">
+              <span style="font-size: 14px; font-weight: 500">{{a.name}}</span>
+              <span class="num" style="font-size: 11.5px; color: var(--ink-3)">{{a.detail}}</span>
+            </span>
+            <span style="height: 5px; border-radius: 3px; background: var(--track); overflow: hidden"><span style="display: block; height: 100%; width: {{a.width}}; background: {{a.fill}}"></span></span>
+            <span class="num" style="font-size: 13px; font-weight: 600; text-align: right; color: {{a.text}}">{{a.pct}}</span>
+          </div>
+        </sc-for>
+        <a href="Nutrients.dc.html" style="display: flex; align-items: center; justify-content: space-between; padding-top: 12px; font-size: 13.5px; font-weight: 500; text-decoration: none">Alle 64 voedingsstoffen<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg></a>
+      </div>
+    </section>
+
+    <!-- Suggestie op basis van je tekorten -->
+    <section aria-label="Suggestie" style="background: var(--brand-soft); border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <span class="eyebrow" style="color: var(--brand); display: flex; align-items: center; gap: 6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"></path></svg>Grootste winst vandaag</span>
+      <p style="margin: 0; font-size: 15px; line-height: 1.45; letter-spacing: -0.005em">100 g makreel brengt je <strong style="font-weight: 600">vitamine D van 34% naar 141%</strong> en voegt 2,7 g omega-3 toe.</p>
+      <div style="display: flex; gap: 8px">
+        <button style="height: 36px; padding: 0 14px; border-radius: 10px; border: none; background: var(--brand); color: var(--on-brand); font-size: 13.5px; font-weight: 600">Toevoegen</button>
+        <button style="height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-strong); background: transparent; font-size: 13.5px; font-weight: 500">Andere bronnen</button>
+      </div>
+    </section>
+
+    <!-- Afgelopen 7 dagen -->
+    <section aria-label="Afgelopen 7 dagen" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px">
+      <sc-for list="{{sparks}}" as="s" hint-placeholder-count="2">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <span class="eyebrow">{{s.label}}</span>
+          <span style="display: flex; align-items: baseline; gap: 4px"><span class="num" style="font-size: 20px; font-weight: 600; letter-spacing: -0.03em">{{s.value}}</span><span style="font-size: 12px; color: var(--ink-3)">{{s.unit}}</span></span>
+          <svg width="150" height="38" viewBox="0 0 150 38" role="img" aria-label="{{s.aria}}" style="margin-top: 4px; overflow: visible">
+            <line x1="0" x2="150" y1="{{s.targetY}}" y2="{{s.targetY}}" stroke="var(--line-strong)" stroke-dasharray="3 3"></line>
+            <path d="{{s.d}}" fill="none" stroke="{{s.color}}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"></path>
+            <circle cx="{{s.lastX}}" cy="{{s.lastY}}" r="3" fill="{{s.color}}"></circle>
+          </svg>
+          <span style="font-size: 11.5px; color: var(--ink-3)">{{s.note}}</span>
+        </div>
+      </sc-for>
+    </section>
+
+    <!-- Maaltijden -->
+    <section aria-label="Maaltijden" style="display: flex; flex-direction: column; gap: 8px; padding-top: 4px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Maaltijden</h2>
+        <span class="num" style="font-size: 12.5px; color: var(--ink-3)">1.842 kcal</span>
+      </div>
+      <sc-for list="{{meals}}" as="meal" hint-placeholder-count="4">
+        <sc-if value="{{meal.logged}}" hint-placeholder-val="{{ true }}">
+          <a href="Food.dc.html" style="display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; color: var(--ink); text-decoration: none">
+            <span style="display: flex; align-items: baseline; gap: 8px">
+              <span style="font-size: 14.5px; font-weight: 600">{{meal.name}}</span>
+              <span class="num" style="font-size: 11.5px; color: var(--ink-3)">{{meal.time}}</span>
+              <span class="num" style="margin-left: auto; font-size: 13.5px; font-weight: 500">{{meal.kcal}}</span>
+            </span>
+            <span style="font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{meal.items}}</span>
+            <span style="display: flex; height: 4px; border-radius: 2px; overflow: hidden; gap: 2px">
+              <span style="flex: {{meal.p}}; background: var(--protein)"></span>
+              <span style="flex: {{meal.c}}; background: var(--carbs)"></span>
+              <span style="flex: {{meal.f}}; background: var(--fat)"></span>
+            </span>
+          </a>
+        </sc-if>
+        <sc-if value="{{meal.empty}}" hint-placeholder-val="{{ false }}">
+          <a href="Log.dc.html" style="display: flex; align-items: center; justify-content: space-between; border: 1px dashed var(--line-strong); border-radius: 16px; padding: 14px; color: var(--ink-2); text-decoration: none">
+            <span style="font-size: 14.5px; font-weight: 600; color: var(--ink)">{{meal.name}}</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px">Nog niets gelogd<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span>
+          </a>
+        </sc-if>
+      </sc-for>
+    </section>
+  </main>
+
+  <!-- Snelle toevoegknop en navigatie -->
+  <a href="Log.dc.html" style="position: absolute; right: 16px; bottom: 92px; height: 52px; padding: 0 20px 0 16px; border-radius: 16px; background: var(--ink); color: var(--bg); display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; text-decoration: none; box-shadow: 0 10px 24px -10px rgba(0,0,0,.45)">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Toevoegen
+  </a>
+  <nav aria-label="Hoofdmenu" style="position: absolute; left: 0; right: 0; bottom: 0; height: 76px; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 8px 6px 14px; box-sizing: border-box">
+    <sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+      <a href="{{n.href}}" aria-current="{{n.current}}" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{n.color}}; font-size: 11px; font-weight: {{n.weight}}">
+        <span style="width: 52px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: {{n.bg}}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.icon}}"></path></svg>
+        </span>{{n.label}}
+      </a>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":390,"height":1240}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? false;
+    const C = 2 * Math.PI * 54;
+    const eaten = 1842, budget = 2452, burned = 410;
+    const eatenLen = C * eaten / budget;
+    const burnLen = C * burned / budget;
+
+    const macros = [
+      { name: 'Eiwit', color: 'var(--protein)', amount: 128, goal: 160 },
+      { name: 'Koolhydr.', color: 'var(--carbs)', amount: 196, goal: 280 },
+      { name: 'Vet', color: 'var(--fat)', amount: 61, goal: 82 },
+      { name: 'Vezels', color: 'var(--fiber)', amount: 31, goal: 30 },
+    ].map((m) => ({ ...m, width: Math.min(100, m.amount / m.goal * 100).toFixed(1) + '%', pct: Math.round(m.amount / m.goal * 100) + '%' }));
+
+    // [afkorting, naam, procent van doel, status]
+    const vit = [['A', 'Vitamine A', 108], ['C', 'Vitamine C', 133], ['D', 'Vitamine D', 34], ['E', 'Vitamine E', 75], ['K', 'Vitamine K1', 266], ['B1', 'B1', 127], ['B2', 'B2', 131], ['B3', 'B3', 141], ['B5', 'B5', 124], ['B6', 'B6', 129], ['B7', 'Biotine', 70], ['B9', 'Folaat', 125], ['B12', 'B12', 120], ['Ch', 'Choline', 88]];
+    const min = [['Ca', 'Calcium', 118], ['Cu', 'Koper', 119], ['I', 'Jodium', 41], ['Fe', 'IJzer', 120], ['Mg', 'Magnesium', 91], ['Mn', 'Mangaan', 193], ['P', 'Fosfor', 324], ['K', 'Kalium', 89], ['Se', 'Seleen', 117], ['Na', 'Natrium', 119, 'high'], ['Zn', 'Zink', 102]];
+    const cell = ([abbr, name, pct, kind]) => {
+      const status = kind === 'high' ? 'high' : pct >= 100 ? 'ok' : 'low';
+      return {
+        abbr,
+        title: name + ': ' + pct + '%',
+        height: (status === 'high' ? 100 : Math.min(100, pct)) + '%',
+        fill: 'var(--' + status + '-fill)',
+        soft: 'var(--' + status + '-soft)',
+        status,
+      };
+    };
+    const microRows = [
+      { label: 'Vit', cells: vit.map(cell) },
+      { label: 'Min', cells: min.map(cell) },
+    ];
+    const all = [...microRows[0].cells, ...microRows[1].cells];
+
+    const attention = [
+      { name: 'Vitamine D', detail: '5,1 / 15 µg', pct: '34%', w: 34, s: 'low' },
+      { name: 'Jodium', detail: '62 / 150 µg', pct: '41%', w: 41, s: 'low' },
+      { name: 'Natrium', detail: '2.380 / max 2.000 mg', pct: '119%', w: 100, s: 'high' },
+    ].map((a) => ({ ...a, isLow: a.s === 'low', isHigh: a.s === 'high', width: a.w + '%', fill: 'var(--' + a.s + '-fill)', text: 'var(--' + a.s + ')' }));
+
+    const spark = (label, unit, values, target, color, note, fmt) => {
+      const w = 150, h = 38, max = Math.max(...values, target) * 1.08, minV = Math.min(...values, target) * 0.85;
+      const y = (v) => (h - (v - minV) / (max - minV) * h).toFixed(1);
+      const step = w / (values.length - 1);
+      const d = values.map((v, i) => (i ? 'L' : 'M') + (i * step).toFixed(1) + ' ' + y(v)).join(' ');
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      return { label, unit, color, note, d, targetY: y(target), lastX: w, lastY: y(values[values.length - 1]), value: fmt(avg), aria: label + ', gemiddeld ' + fmt(avg) + ' ' + unit };
+    };
+    const nl = (n) => Math.round(n).toLocaleString('nl-BE');
+    const sparks = [
+      spark('Energie gem.', 'kcal', [2310, 2480, 2190, 2650, 2380, 2420, 2398], 2452, 'var(--ink)', '5 van 7 dagen binnen ±10%', nl),
+      spark('Eiwit gem.', 'g', [148, 162, 139, 171, 155, 149, 128], 160, 'var(--protein)', 'Doel 160 g · 4 van 7 dagen', nl),
+    ];
+
+    const meals = [
+      { name: 'Ontbijt', time: '08:10', kcal: '512', items: 'Havervlokken · Skyr natuur · Blauwe bessen · Walnoten', p: 24, c: 52, f: 24, logged: true },
+      { name: 'Lunch', time: '12:45', kcal: '768', items: 'Volkorenbrood · 2 eieren · Spinazie · Avocado · Tomaat', p: 22, c: 38, f: 40, logged: true },
+      { name: 'Tussendoortjes', time: '15:30', kcal: '562', items: 'Banaan · Amandelen · Eiwitshake', p: 34, c: 36, f: 30, logged: true },
+      { name: 'Avondeten', logged: false },
+    ].map((m) => ({ ...m, empty: !m.logged }));
+
+    const icons = {
+      today: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 8v4l3 2',
+      food: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9',
+      trends: 'M4 19h16M5 15l4-5 4 3 6-7',
+      body: 'M12 3a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M7 21l2-9h6l2 9M8 12l-3-3M16 12l3-3',
+      profile: 'M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4.5 20.5a7.5 7.5 0 0 1 15 0',
+    };
+    const nav = [
+      ['Vandaag', 'today', 'Main.dc.html'], ['Voeding', 'food', 'Nutrients.dc.html'], ['Trends', 'trends', 'Trends.dc.html'],
+      ['Lichaam', 'body', 'Goals.dc.html'], ['Profiel', 'profile', 'Goals.dc.html'],
+    ].map(([label, key, href], i) => ({
+      label, href, icon: icons[key],
+      current: i === 0 ? 'page' : 'false',
+      color: i === 0 ? 'var(--ink)' : 'var(--ink-3)',
+      weight: i === 0 ? '600' : '500',
+      bg: i === 0 ? 'var(--sunken)' : 'transparent',
+    }));
+
+    return {
+      theme: dark ? 't-dark' : 't-light',
+      ring: {
+        dash: eatenLen.toFixed(1) + ' ' + C.toFixed(1),
+        burnDash: burnLen.toFixed(1) + ' ' + C.toFixed(1),
+        burnOffset: (-eatenLen - 6).toFixed(1),
+      },
+      macros,
+      microRows,
+      okCount: all.filter((c) => c.status === 'ok').length,
+      microCount: all.length,
+      attention,
+      sparks,
+      meals,
+      nav,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Blad waarvan de nerven een raster vormen: natuurlijke voeding, nauwkeurig gemeten -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF6F2"/></linearGradient>
+    <linearGradient id="leaf" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0E6B65"/><stop offset="1" stop-color="#3FB68C"/></linearGradient>
+    <clipPath id="c"><path d="M232 792 C 232 432, 432 232, 792 232 C 792 592, 592 792, 232 792 Z"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <path d="M232 792 C 232 432, 432 232, 792 232 C 792 592, 592 792, 232 792 Z" fill="url(#leaf)"/>
+  <g clip-path="url(#c)" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="16">
+    <line x1="392" y1="150" x2="392" y2="900"/><line x1="512" y1="150" x2="512" y2="900"/><line x1="632" y1="150" x2="632" y2="900"/>
+    <line x1="150" y1="392" x2="900" y2="392"/><line x1="150" y1="512" x2="900" y2="512"/><line x1="150" y1="632" x2="900" y2="632"/>
+  </g>
+  <line x1="232" y1="792" x2="742" y2="282" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round"/>
+  <rect x="490" y="490" width="44" height="44" rx="10" fill="#F2B14C" transform="rotate(45 512 512)"/>
+</svg>
