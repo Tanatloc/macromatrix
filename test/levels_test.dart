@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/nutrition/levels.dart';
+import 'package:macromatrix/nutrition/levels.dart';
 
 void main() {
   test('levelcurve: elk level vraagt meer, level 100 ongeveer een jaar', () {

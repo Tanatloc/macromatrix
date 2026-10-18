@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/i18n.dart';
+import 'package:macromatrix/i18n.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/export.dart';
-import 'package:voedingsapp/data/food.dart';
-import 'package:voedingsapp/data/models.dart';
-import 'package:voedingsapp/data/off_client.dart';
-import 'package:voedingsapp/nutrition/estimate.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/nutrition/targets.dart';
+import 'package:macromatrix/data/export.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/data/models.dart';
+import 'package:macromatrix/data/off_client.dart';
+import 'package:macromatrix/nutrition/estimate.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/nutrition/targets.dart';
 
 void main() {
   const banaan = Food(ref: 'ciqual:13005', name: 'Banaan', source: FoodSource.ciqual, per100g: {'energy': 90, 'potassium': 360});

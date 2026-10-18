@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/food.dart';
-import 'package:voedingsapp/data/models.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/sync/sync_engine.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/data/models.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/sync/sync_engine.dart';
 
 /// Nagebootste server met dezelfde regels als de Supabase-trigger: oudere wijzigingen worden genegeerd,
 /// elke opgeslagen rij krijgt een oplopende server_ts.

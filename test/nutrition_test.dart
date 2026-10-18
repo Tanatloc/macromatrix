@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/food.dart';
-import 'package:voedingsapp/data/food_db.dart';
-import 'package:voedingsapp/data/off_client.dart';
-import 'package:voedingsapp/data/search_terms.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/nutrition/nutrients.dart';
-import 'package:voedingsapp/nutrition/targets.dart';
-import 'package:voedingsapp/nutrition/values.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/data/food_db.dart';
+import 'package:macromatrix/data/off_client.dart';
+import 'package:macromatrix/data/search_terms.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/nutrition/nutrients.dart';
+import 'package:macromatrix/nutrition/targets.dart';
+import 'package:macromatrix/nutrition/values.dart';
 
 void main() {
   group('values', () {

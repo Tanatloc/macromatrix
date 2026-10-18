@@ -1,6 +1,6 @@
 // ignore_for_file: avoid_print
 // Snelle controle tegen de echte Open Food Facts-API: dart run tool/off_smoke.dart
-import 'package:voedingsapp/data/off_client.dart';
+import 'package:macromatrix/data/off_client.dart';
 
 Future<void> main() async {
   final off = OffClient();

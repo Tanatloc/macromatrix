@@ -1,4 +1,4 @@
-package online.divinenet.voedingsapp
+package online.divinenet.macromatrix
 
 import android.appwidget.AppWidgetManager
 import android.content.Context

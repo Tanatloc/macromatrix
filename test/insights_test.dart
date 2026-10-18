@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/data/food.dart';
-import 'package:voedingsapp/nutrition/insights.dart';
-import 'package:voedingsapp/nutrition/preferences.dart';
-import 'package:voedingsapp/nutrition/targets.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/nutrition/insights.dart';
+import 'package:macromatrix/nutrition/preferences.dart';
+import 'package:macromatrix/nutrition/targets.dart';
 
 void main() {
   final targets = targetsFor(const Profile(), year: 2026);

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/nutrition/supplements.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/nutrition/supplements.dart';
 
 void main() {
   test('supplement aan- en afvinken: één regel per dag, telt niet als gelogde dag', () {

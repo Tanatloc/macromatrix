@@ -35,14 +35,14 @@ Future<void> main() async {
         // Niet lui: moet vanaf de start je level en score doorsturen, ook als je het vriendenscherm niet opent
         ChangeNotifierProvider(lazy: false, create: (_) => Friends(state, account)),
       ],
-      child: const VoedingsApp(),
+      child: const MacroMatrixApp(),
     ),
   );
   unawaited(reminders.init());
 }
 
-class VoedingsApp extends StatelessWidget {
-  const VoedingsApp({super.key});
+class MacroMatrixApp extends StatelessWidget {
+  const MacroMatrixApp({super.key});
 
   @override
   Widget build(BuildContext context) {

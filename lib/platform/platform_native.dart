@@ -23,6 +23,7 @@ bool get canScanBarcodes => Platform.isAndroid || Platform.isIOS;
 Future<(FoodDb, UserDb)> openDatabases() async {
   final dir = await getApplicationSupportDirectory();
   await dir.create(recursive: true);
+  _moveFromOldName(dir);
   final data = await rootBundle.load(FoodDb.asset);
   final file = File(p.join(dir.path, 'foods.db'));
   if (!file.existsSync() || file.lengthSync() != data.lengthInBytes) {
@@ -31,6 +32,19 @@ Future<(FoodDb, UserDb)> openDatabases() async {
   final foods = FoodDb(sqlite3.open(file.path, mode: OpenMode.readOnly));
   final user = UserDb(sqlite3.open(p.join(dir.path, 'user.db')));
   return (foods, user);
+}
+
+/// Op de pc stond de database eerst in een map met de oude naam (online.divinenet.voedingsapp). Bestaat er nog
+/// geen database onder de nieuwe naam, dan die overnemen (de oude map blijft als reserve).
+void _moveFromOldName(Directory dir) {
+  if (!Platform.isLinux && !Platform.isWindows) return;
+  if (File(p.join(dir.path, 'user.db')).existsSync()) return;
+  final old = Directory(dir.path.replaceAll('macromatrix', 'voedingsapp'));
+  if (old.path == dir.path) return;
+  for (final name in ['user.db', 'user.db-wal', 'user.db-shm']) {
+    final f = File(p.join(old.path, name));
+    if (f.existsSync()) f.copySync(p.join(dir.path, name));
+  }
 }
 
 /// Alleen de database van de gebruiker (voor taken op de achtergrond, zonder de grote voedingsdatabase).

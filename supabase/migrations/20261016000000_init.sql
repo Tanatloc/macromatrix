@@ -1,4 +1,4 @@
--- Voedingsapp: tabellen voor accounts en synchronisatie.
+-- MacroMatrix: tabellen voor accounts en synchronisatie.
 --
 -- Elke tabel heeft dezelfde kolommen als de lokale database (lib/data/user_db.dart, UserDb.syncTables), plus:
 --   user_id    van wie de rij is (Row Level Security: iedereen ziet en wijzigt alleen zijn eigen rijen)

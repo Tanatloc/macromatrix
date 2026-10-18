@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/nutrition/insights.dart';
+import 'package:macromatrix/nutrition/insights.dart';
 
 void main() {
   test('reeks: tot vandaag, of tot gisteren als vandaag nog leeg is', () {

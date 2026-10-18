@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
-import 'package:voedingsapp/ui/widgets/avatar.dart';
+import 'package:macromatrix/ui/widgets/avatar.dart';
 
 void main() {
   test('foto wordt vierkant 192 px en klein genoeg voor de server', () {

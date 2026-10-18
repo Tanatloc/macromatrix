@@ -2,7 +2,7 @@
 // Toont de eerste zoekresultaten voor een paar woorden: flutter test tool/search_probe_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/food_db.dart';
+import 'package:macromatrix/data/food_db.dart';
 
 void main() {
   test('zoekresultaten', () {

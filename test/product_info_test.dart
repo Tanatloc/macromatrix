@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/data/fdc_client.dart';
-import 'package:voedingsapp/data/off_client.dart';
-import 'package:voedingsapp/data/product_info.dart';
+import 'package:macromatrix/data/fdc_client.dart';
+import 'package:macromatrix/data/off_client.dart';
+import 'package:macromatrix/data/product_info.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

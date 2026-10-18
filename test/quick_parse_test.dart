@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/nutrition/quick_parse.dart';
+import 'package:macromatrix/nutrition/quick_parse.dart';
 
 void main() {
   test('Engels: gram, kom, stuks', () {

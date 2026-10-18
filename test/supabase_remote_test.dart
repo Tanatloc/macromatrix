@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase/supabase.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/sync/account.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/sync/account.dart';
 
 /// Controleert hoe [SupabaseRemote] zijn verzoeken naar de REST-API (PostgREST) opbouwt.
 void main() {

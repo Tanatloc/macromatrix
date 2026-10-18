@@ -4,7 +4,7 @@ CIQUAL-producten. Dagen waarop al iets staat, worden overgeslagen. De regels sta
 de volgende start van de app naar het account gaan.
 
 Gebruik (met de app gesloten, en ingelogd in die app):
-    python3 tool/seed_month.py ~/.local/share/online.divinenet.voedingsapp/user.db assets/db/foods.db [dagen]
+    python3 tool/seed_month.py ~/.local/share/online.divinenet.macromatrix/user.db assets/db/foods.db [dagen]
 """
 import random
 import sqlite3

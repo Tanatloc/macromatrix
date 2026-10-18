@@ -4,10 +4,10 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/i18n.dart';
-import 'package:voedingsapp/import/csv.dart';
-import 'package:voedingsapp/import/importer.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/i18n.dart';
+import 'package:macromatrix/import/csv.dart';
+import 'package:macromatrix/import/importer.dart';
 
 (String, Uint8List) file(String name, String text) => (name, Uint8List.fromList(utf8.encode(text)));
 

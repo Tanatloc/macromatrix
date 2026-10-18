@@ -29,10 +29,33 @@ Future<(FoodDb, UserDb)> openDatabases() async {
   final foods = FoodDb(sqlite.open('/foods.db', vfs: 'voeding-mem', mode: OpenMode.readOnly));
 
   // Gegevens van de gebruiker: blijvend in de browser
-  final idb = await IndexedDbFileSystem.open(dbName: 'voedingsapp');
+  final idb = await _userFileSystem();
   sqlite.registerVirtualFileSystem(idb, makeDefault: true);
   final user = UserDb(sqlite.open('/user.db'));
   return (foods, user);
+}
+
+/// Opslag van de gebruiker in de browser. Vroeger heette die "voedingsapp": bestaat de nieuwe nog niet, dan
+/// de database daaruit overnemen (de oude blijft als reserve staan).
+Future<IndexedDbFileSystem> _userFileSystem() async {
+  final fs = await IndexedDbFileSystem.open(dbName: 'macromatrix');
+  if (fs.xAccess('/user.db', 0) != 0) return fs;
+  final old = await IndexedDbFileSystem.open(dbName: 'voedingsapp');
+  try {
+    if (old.xAccess('/user.db', 0) != 0) {
+      final src = old.xOpen(Sqlite3Filename('/user.db'), SqlFlag.SQLITE_OPEN_READONLY).file;
+      final bytes = Uint8List(src.xFileSize());
+      src.xRead(bytes, 0);
+      src.xClose();
+      final dst = fs.xOpen(Sqlite3Filename('/user.db'), SqlFlag.SQLITE_OPEN_CREATE | SqlFlag.SQLITE_OPEN_READWRITE).file;
+      dst.xWrite(bytes, 0);
+      dst.xClose();
+      await fs.flush();
+    }
+  } finally {
+    await old.close();
+  }
+  return fs;
 }
 
 /// Tekstbestand downloaden via de browser.

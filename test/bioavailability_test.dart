@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/nutrition/bioavailability.dart';
-import 'package:voedingsapp/nutrition/targets.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/nutrition/bioavailability.dart';
+import 'package:macromatrix/nutrition/targets.dart';
 
 DiaryEntry e(String name, Meal meal, Map<String, double> per100, {double grams = 100}) =>
     DiaryEntry(id: name, day: '2026-10-17', meal: meal, foodRef: 'x:$name', name: name, grams: grams, quantity: grams, per100g: per100);

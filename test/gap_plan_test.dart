@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/data/food.dart';
-import 'package:voedingsapp/nutrition/gap_plan.dart';
-import 'package:voedingsapp/nutrition/insights.dart';
-import 'package:voedingsapp/nutrition/targets.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/nutrition/gap_plan.dart';
+import 'package:macromatrix/nutrition/insights.dart';
+import 'package:macromatrix/nutrition/targets.dart';
 
 Food f(String name, Map<String, double> v) => Food(ref: 'x:$name', name: name, source: FoodSource.ciqual, per100g: v);
 

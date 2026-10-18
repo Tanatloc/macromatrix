@@ -5,9 +5,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/food.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/sync/account.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/sync/account.dart';
 
 void main() {
   final env = Platform.environment;

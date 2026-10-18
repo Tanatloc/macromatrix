@@ -2,10 +2,10 @@
 // Live controle: merkproducten uit Open Food Facts aanvullen. flutter test tool/off_enrich_probe_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:voedingsapp/data/food_db.dart';
-import 'package:voedingsapp/data/off_client.dart';
-import 'package:voedingsapp/data/user_db.dart';
-import 'package:voedingsapp/state/app_state.dart';
+import 'package:macromatrix/data/food_db.dart';
+import 'package:macromatrix/data/off_client.dart';
+import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/state/app_state.dart';
 
 void main() {
   test('skyr en andere producten', () async {

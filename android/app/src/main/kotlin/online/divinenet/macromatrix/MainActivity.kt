@@ -1,4 +1,4 @@
-package online.divinenet.voedingsapp
+package online.divinenet.macromatrix
 
 import android.app.Activity
 import android.content.ActivityNotFoundException

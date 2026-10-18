@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/data/food.dart';
-import 'package:voedingsapp/nutrition/allergens.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/nutrition/allergens.dart';
 
 Food f(String name) => Food(ref: 'x:$name', name: name, source: FoodSource.ciqual, per100g: const {});
 

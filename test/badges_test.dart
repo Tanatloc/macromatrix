@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voedingsapp/nutrition/badges.dart';
-import 'package:voedingsapp/nutrition/levels.dart';
-import 'package:voedingsapp/sync/friends.dart';
+import 'package:macromatrix/nutrition/badges.dart';
+import 'package:macromatrix/nutrition/levels.dart';
+import 'package:macromatrix/sync/friends.dart';
 
 String _day(int i) {
   final d = DateTime(2026, 1, 1 + i);
