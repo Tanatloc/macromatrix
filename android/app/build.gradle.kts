@@ -51,6 +51,13 @@ android {
         }
     }
 
+    // Native bibliotheken gecomprimeerd in de APK: kleiner om te downloaden (IzzyOnDroid vraagt hoogstens ~30 MB)
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         release {
             // Met de echte sleutel als die er is; anders ongetekend (zo bouwt F-Droid, dat zelf ondertekent)

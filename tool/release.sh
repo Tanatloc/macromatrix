@@ -8,7 +8,8 @@ cd "$(dirname "$0")/.."
 v=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
 flutter build apk --release --dart-define-from-file=supabase.json
 cp build/app/outputs/flutter-apk/app-release.apk "/tmp/MacroMatrix-$v-universal.apk"
-flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define-from-file=supabase.json
+flutter build apk --release --split-per-abi --target-platform android-arm64,android-arm --dart-define-from-file=supabase.json
 cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "/tmp/MacroMatrix-$v-arm64-v8a.apk"
-gh release create "v$v" "/tmp/MacroMatrix-$v-arm64-v8a.apk" "/tmp/MacroMatrix-$v-universal.apk" \
+cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "/tmp/MacroMatrix-$v-armeabi-v7a.apk"
+gh release create "v$v" "/tmp/MacroMatrix-$v-arm64-v8a.apk" "/tmp/MacroMatrix-$v-armeabi-v7a.apk" "/tmp/MacroMatrix-$v-universal.apk" \
   -R Tanatloc/macromatrix-releases --title "MacroMatrix $v" --notes "${1:-Bug fixes and improvements.}"
