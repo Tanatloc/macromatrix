@@ -51,6 +51,15 @@ class Account extends ChangeNotifier {
 
   static bool get configured => supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
+  /// Bewust zonder account: alles blijft op dit toestel. Maak je later toch een account, dan gaan de lokale
+  /// gegevens mee (ze staan nog als "niet verstuurd").
+  bool get localOnly => db.setting('_local_only')?['on'] == true;
+
+  void setLocalOnly(bool on) {
+    db.setSetting('_local_only', {'on': on});
+    notifyListeners();
+  }
+
   SupabaseClient? _client;
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<void>? _dbSub;

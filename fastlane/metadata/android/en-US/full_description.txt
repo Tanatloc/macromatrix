@@ -6,5 +6,5 @@
 <li><b>Friends</b>: weekly leaderboard, battles, levels, badges and titles. Friends only see your name, level and weekly score.</li>
 <li>Health Connect import, home screen widget, reminders, English and Dutch, light and dark theme, works offline.</li>
 </ul>
-<p>Your data is stored in the EU. No ads, no tracking, no selling of data. An account is needed to sync between devices.</p>
+<p>Works without an account; with a free account your data is synced between devices and stored in the EU. No ads, no tracking, no selling of data.</p>
 <p>Not medical advice.</p>

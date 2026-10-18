@@ -160,6 +160,40 @@ class _AccountCardState extends State<AccountCard> {
     final a = context.watch<Account>();
     final p = context.pal;
 
+    if (Account.configured && !a.signedIn && a.localOnly) {
+      return Panel(
+        shadow: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.phone_android_rounded, color: p.ink3),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    tr(
+                      'You use MacroMatrix without an account: your data is only on this device. Create an account to sync between devices, back up your data and add friends.',
+                      'Je gebruikt MacroMatrix zonder account: je gegevens staan alleen op dit toestel. Maak een account om te synchroniseren, een back-up te hebben en vrienden toe te voegen.',
+                    ),
+                    style: TextStyle(fontSize: 13, height: 1.45, color: p.ink2),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: () {
+                a.setLocalOnly(false);
+                Navigator.of(context).popUntil((r) => r.isFirst);
+              },
+              child: Text(tr('Create account or log in', 'Account maken of inloggen')),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (!Account.configured || !a.signedIn) {
       return Panel(
         shadow: false,

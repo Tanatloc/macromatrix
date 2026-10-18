@@ -6,5 +6,5 @@
 <li><b>Vrienden</b>: weekklassement, battles, levels, badges en titels. Vrienden zien alleen je naam, level en weekscore.</li>
 <li>Health Connect, widget op je startscherm, herinneringen, Nederlands en Engels, licht en donker thema, werkt offline.</li>
 </ul>
-<p>Je gegevens blijven in de EU. Geen advertenties, geen tracking, geen verkoop van gegevens. Een account is nodig om tussen toestellen te synchroniseren.</p>
+<p>Werkt zonder account; met een gratis account worden je gegevens gesynchroniseerd en in de EU bewaard. Geen advertenties, geen tracking, geen verkoop van gegevens.</p>
 <p>Geen medisch advies.</p>

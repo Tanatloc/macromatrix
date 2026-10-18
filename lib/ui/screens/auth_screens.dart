@@ -37,7 +37,7 @@ class AuthGate extends StatelessWidget {
     final a = context.watch<Account>();
     final s = context.watch<AppState>();
     if (!a.ready) return Scaffold(backgroundColor: context.pal.bg, body: const SizedBox.expand());
-    if (Account.configured && !a.signedIn) return const WelcomeScreen();
+    if (Account.configured && !a.signedIn && !a.localOnly) return const WelcomeScreen();
     if (Account.configured && !s.hasProfile) return const ProfileSetupScreen();
     return const Shell();
   }
@@ -213,7 +213,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen(register: false))),
                     child: Text(tr('Log in', 'Inloggen')),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 6),
+                  TextButton(onPressed: () => _withoutAccount(context), child: Text(tr('Use without an account', 'Gebruiken zonder account'))),
+                  const SizedBox(height: 12),
                   Wrap(
                     alignment: WrapAlignment.center,
                     spacing: 4,
@@ -835,4 +837,29 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       ),
     );
   }
+}
+
+/// Zonder account verder: eerst uitleggen wat je dan mist.
+Future<void> _withoutAccount(BuildContext context) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(tr('Use without an account?', 'Zonder account gebruiken?')),
+      content: Text(
+        tr(
+          'Everything stays on this device only. Without an account there is no sync between devices, no friends or battles, '
+              'and voice logging only works if your phone has its own speech recognition. If you lose or reset this device, your data is gone.\n\n'
+              'You can create an account later in the settings; your data then comes along.',
+          'Alles blijft alleen op dit toestel. Zonder account is er geen synchronisatie tussen toestellen, geen vrienden of battles, '
+              'en spraak werkt alleen als je gsm zelf spraakherkenning heeft. Verlies of reset je dit toestel, dan zijn je gegevens weg.\n\n'
+              'Je kunt later in de instellingen alsnog een account maken; je gegevens gaan dan mee.',
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Continue without account', 'Verder zonder account'))),
+      ],
+    ),
+  );
+  if (ok == true && context.mounted) context.read<Account>().setLocalOnly(true);
 }
