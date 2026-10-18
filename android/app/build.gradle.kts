@@ -53,8 +53,8 @@ android {
 
     buildTypes {
         release {
-            // Met de echte sleutel als die er is, anders (bv. op een andere pc) met de debugsleutel
-            signingConfig = if (keystoreProperties.containsKey("storeFile")) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // Met de echte sleutel als die er is; anders ongetekend (zo bouwt F-Droid, dat zelf ondertekent)
+            if (keystoreProperties.containsKey("storeFile")) signingConfig = signingConfigs.getByName("release")
         }
     }
 }
