@@ -126,7 +126,11 @@ class _CatalogScreenState extends State<_CatalogScreen> {
   @override
   Widget build(BuildContext context) {
     final pal = context.pal;
-    final mine = {for (final x in context.watch<AppState>().supplements) x.id};
+    // Hoe vaak elk supplement al in je lijst staat (je mag hetzelfde meermaals toevoegen)
+    final mine = <String, int>{};
+    for (final x in context.watch<AppState>().supplements) {
+      mine[x.baseId] = (mine[x.baseId] ?? 0) + 1;
+    }
     final list = [
       for (final x in localizedCatalog)
         if (x.name.toLowerCase().contains(_q.toLowerCase()) || x.summary.toLowerCase().contains(_q.toLowerCase())) x,
@@ -164,14 +168,20 @@ class _CatalogScreenState extends State<_CatalogScreen> {
                 children: [
                   for (final x in list)
                     ListTile(
-                      enabled: !mine.contains(x.id),
                       title: Text(x.name),
                       subtitle: Text(
-                        mine.contains(x.id)
-                            ? tr('already in your list', 'staat al in je lijst')
-                            : [x.dose, if (x.summary.isNotEmpty) x.summary].join(' · '),
+                        [
+                          if (mine[x.id] case final n?) n == 1 ? tr('already in your list', 'staat al in je lijst') : tr('$n× in your list', '$n× in je lijst'),
+                          x.dose,
+                          if (x.summary.isNotEmpty) x.summary,
+                        ].join(' · '),
                       ),
-                      trailing: mine.contains(x.id) ? Icon(Icons.check_rounded, color: pal.ok) : const Icon(Icons.add_rounded),
+                      trailing: mine.containsKey(x.id)
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [Icon(Icons.check_rounded, color: pal.ok), const SizedBox(width: 4), const Icon(Icons.add_rounded)],
+                            )
+                          : const Icon(Icons.add_rounded),
                       onTap: () => Navigator.pop(context, x),
                     ),
                 ],

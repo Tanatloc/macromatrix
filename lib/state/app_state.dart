@@ -555,8 +555,12 @@ class AppState extends ChangeNotifier {
 
   void addSupplement(Supplement sup) {
     final list = supplements;
-    if (list.any((x) => x.id == sup.id)) return;
-    _saveSupplements([...list, sup.copyWith(since: dayKey(_dateOnly(DateTime.now())))]);
+    final taken = {for (final x in list) x.id};
+    var id = sup.baseId;
+    for (var n = 2; taken.contains(id); n++) {
+      id = '${sup.baseId}~$n';
+    }
+    _saveSupplements([...list, sup.copyWith(id: id, since: dayKey(_dateOnly(DateTime.now())))]);
     _refresh();
   }
 

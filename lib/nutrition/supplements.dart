@@ -26,6 +26,10 @@ class Supplement {
   /// Dag waarop je het toevoegde: automatisch aanvinken gebeurt niet voor dagen daarvoor.
   final String? since;
 
+  /// Hetzelfde supplement mag meer dan eens in je lijst (bv. 's ochtends en 's avonds); extra exemplaren krijgen
+  /// de id `<id>~2`, `<id>~3`… zodat elk zijn eigen vinkje per dag heeft.
+  String get baseId => id.split('~').first;
+
   String get ref => 'supp:$id';
   String entryId(String day) => 'supp:$id:$day';
 
@@ -38,8 +42,8 @@ class Supplement {
   static String _short(String name) => name.replaceAll(RegExp(r'\s*\(.*\)'), '');
   static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : v.toString().dec;
 
-  Supplement copyWith({bool? auto, String? since}) =>
-      Supplement(id: id, name: name, dose: dose, nutrients: nutrients, auto: auto ?? this.auto, since: since ?? this.since);
+  Supplement copyWith({String? id, bool? auto, String? since}) =>
+      Supplement(id: id ?? this.id, name: name, dose: dose, nutrients: nutrients, auto: auto ?? this.auto, since: since ?? this.since);
 
   Map<String, Object?> toJson() => {'id': id, 'name': name, 'dose': dose, 'nutrients': nutrients, 'auto': auto, 'since': since};
 

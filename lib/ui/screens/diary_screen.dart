@@ -1029,9 +1029,14 @@ class _EntryRow extends StatelessWidget {
       ),
       onDismissed: (_) {
         s.deleteEntry(e);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
           SnackBar(
             content: Text(tr('${e.name} removed', '${e.name} verwijderd')),
+            // Met een knop blijft een SnackBar standaard staan tot je tikt; deze moet vanzelf verdwijnen
+            persist: false,
+            duration: const Duration(seconds: 5),
             action: SnackBarAction(label: tr('Undo', 'Ongedaan maken'), onPressed: () => s.restoreEntry(e)),
           ),
         );
