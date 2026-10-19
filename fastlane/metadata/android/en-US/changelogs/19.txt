@@ -1,0 +1,1 @@
+Much more complete and accurate food data: Danish and British food tables and the 2025 French table added, missing nutrients filled from the same food in other tables (with cooking losses), hundreds of source errors corrected. You can add the same supplement more than once, and the undo bar now disappears on its own.
