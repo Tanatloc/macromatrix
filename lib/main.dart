@@ -34,7 +34,9 @@ Future<void> main() async {
   await initializeDateFormatting(appLocale);
 
   final (foods, user) = await openDatabases();
-  final state = AppState(foods: foods, user: user)..upgradeSavedProducts();
+  final state = AppState(foods: foods, user: user)
+    ..refreshBuiltinSnapshots()
+    ..upgradeSavedProducts();
   final account = Account(user, onRemoteChanges: state.reloadFromDisk);
   unawaited(account.init());
   final reminders = Reminders(state);

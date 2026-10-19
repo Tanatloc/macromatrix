@@ -68,6 +68,8 @@ de app zonder account.
 - `lib/state/app_state.dart`: centrale toestand (dag, dagboek, profiel, doelen)
 - `lib/ui/`: schermen en widgets
 - `tool/build_foods.py`: bouwt `assets/db/foods.db` uit alle bronnen
+- `tool/food_fixes.json`: correcties op fouten in de bronnen zelf, met uitleg per waarde
+- `tool/audit_foods.py`: controleert de database op waarden die niet kunnen kloppen
 - `tool/fetch_slv.py`: haalt de Zweedse database op via hun API
 - `tool/search_probe_test.dart`: toont zoekresultaten voor een paar woorden (`flutter test tool/search_probe_test.dart`)
 - `tool/seed_demo.py`: vult een voorbeelddag in, voor screenshots
@@ -83,7 +85,26 @@ Zet de bronnen in één map (zie de uitleg bovenaan `tool/build_foods.py` voor d
 
 ```bash
 python3 tool/build_foods.py <map> assets/db/foods.db
+python3 tool/audit_foods.py assets/db/foods.db /tmp/audit   # bevindingen.csv + samenvatting.md
 ```
+
+Wat het bouwscript doet met ontbrekende of foute waarden:
+
+1. Correcties uit `tool/food_fixes.json` (eenheidsfouten, tikfouten, een misleidende naam), vóór alles.
+2. Vaste regels: aminozuren die niet bij het eiwit passen vallen weg; een zuiver plantaardig product krijgt
+   B12, cholesterol, vitamine D (behalve paddenstoelen) en EPA/DHA = 0; vitamine A wordt pas uit retinol +
+   bètacaroteen berekend als retinol bekend is.
+3. Aanvullen, in drie rondes, telkens alleen met gemeten waarden (nooit een schatting van een schatting):
+   - hetzelfde voedingsmiddel in een andere bron (zelfde bereiding, naam = verfijning);
+   - een vergelijkbaar product (zelfde hoofdproduct, andere bereiding), geschaald met de vetvrije droge stof,
+     het vet of het eiwit; `~bron:id` in de kolom `estimated`;
+   - het gemiddelde van vergelijkbare producten (zelfde hoofdwoord, anders de categorie), nooit hoger dan het
+     hoogste gemeten product van die groep; `~~head:…` of `~~cat:…`.
+4. Onder de meetgrens (CIQUAL "< x") en nergens anders gevonden: 0.
+5. Geschatte deelwaarden worden ingekort tot ze niet boven het totaal uitkomen.
+
+De app toont elke geschatte waarde met ≈ en de herkomst. Verandert de database, dan werkt de app bij de start
+de dagboekregels van ingebouwde producten bij (tabel `meta`, sleutel `version`).
 
 Nog niet toegevoegd: Fineli (Finland, CC BY 4.0; download zit achter een botcontrole, dus met de hand
 downloaden) en NEVO (Nederland; aan te vragen bij het RIVM, gegevens mogen niet gewijzigd worden en je mag

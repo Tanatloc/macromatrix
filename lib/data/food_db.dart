@@ -21,6 +21,16 @@ class FoodDb {
 
   static bool isDbRef(String ref) => dbSources.contains(ref.split(':').first);
 
+  /// Vingerafdruk van de waarden in deze versie van de database (leeg bij een oude database zonder meta-tabel).
+  String get version {
+    try {
+      final rows = _db.select("SELECT value FROM meta WHERE key = 'version'");
+      return rows.isEmpty ? '' : rows.first['value'] as String;
+    } on SqliteException {
+      return '';
+    }
+  }
+
   Food _food(Row r) {
     final local = r['name_local'] as String;
     return Food(

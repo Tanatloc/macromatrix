@@ -168,7 +168,12 @@ void main() {
     test('eiwit krijgt geen waarden van een heel ei', () {
       for (final f in db.search('egg white raw')) {
         for (final donor in f.estimated.values) {
-          expect(db.byRef(donor)!.name.toLowerCase(), contains('white'));
+          // "~bron:id" = vergelijkbaar product, "~~groep" = gemiddelde van een groep (die moet ook over eiwit gaan)
+          if (donor.startsWith('~~')) {
+            expect(donor, contains('white'));
+          } else {
+            expect(db.byRef(donor.replaceFirst(RegExp(r'^~'), ''))!.name.toLowerCase(), contains('white'));
+          }
         }
       }
     });
@@ -181,6 +186,30 @@ void main() {
       expect(perKcal.first.$1.per100g['energy'], greaterThanOrEqualTo(15));
       expect(db.richestIn('epa_dha', limit: 3).first.$2, greaterThan(1000)); // vette vis of visolie
       expect(db.richestIn("x'; DROP TABLE foods; --"), isEmpty);
+    });
+
+    test('elk ei heeft choline, selenium en B12 (ontbreken kan niet)', () {
+      final eggs = db.search('egg').where(
+        (f) => RegExp(r'^eggs?\b', caseSensitive: false).hasMatch(f.name) &&
+            !RegExp(r'white|roll|noodle|salad|sauce|nog|flip|custard', caseSensitive: false).hasMatch(f.name),
+      );
+      expect(eggs.length, greaterThan(10));
+      for (final e in eggs) {
+        for (final k in ['choline', 'selenium', 'b12']) {
+          expect(e.per100g[k], greaterThan(0), reason: '${e.name} ($k)');
+        }
+      }
+    });
+
+    test('plantaardig heeft geen B12 of cholesterol, haring wel B12', () {
+      for (final q in ['lentils boiled', 'broccoli raw', 'apple raw']) {
+        final f = db.search(q).first;
+        expect(f.per100g['b12'] ?? 0, 0, reason: f.name);
+        expect(f.per100g['cholesterol'] ?? 0, 0, reason: f.name);
+      }
+      for (final f in db.search('herring raw')) {
+        expect(f.per100g['b12'], greaterThan(3), reason: f.name);
+      }
     });
 
     test('USDA-producten hebben micronutriënten en porties', () {

@@ -1,0 +1,140 @@
+{
+  "_uitleg": "Correcties op fouten in de bronnen zelf. Per product (bron:id) de nieuwe waarde per 100 g, of null om een foute waarde weg te laten (dan wordt ze opnieuw aangevuld). _waarom legt uit waarom.",
+  "fixes": {
+    "slv:7051": {
+      "b2": 0.21,
+      "_waarom": "Aroniapoeder: 210 mg B2 bestaat niet (1000× te hoog, eenheidsfout µg/mg)"
+    },
+    "slv:1955": {
+      "b6": 0.026,
+      "_waarom": "Oploskoffie: B6 is ongeveer 0,03 mg (USDA), niet 26 mg (eenheidsfout)"
+    },
+    "slv:7018": {
+      "b6": 0.026,
+      "potassium": null,
+      "_waarom": "Oploskoffie cafeïnevrij: B6 eenheidsfout (26 mg); kalium 0 is fout (ontbrekend als 0 ingevuld)"
+    },
+    "usda_sr:173487": {
+      "vit_c": 27.32,
+      "_waarom": "Babyvoeding appel-wortel-pompoen: 2732 mg vitamine C is 100× te hoog (verrijkte fruitpuree ~ 25–60 mg)"
+    },
+    "usda_sr:173174": {
+      "manganese": 2.69,
+      "_waarom": "SlimFast-poeder: 269 mg mangaan per 100 g is onmogelijk (decimaalfout)"
+    },
+    "usda_sr:172294": {
+      "copper": 0.37,
+      "_waarom": "Peutermelk PurAmino: 370 mg koper is 1000× te hoog (µg/mg)"
+    },
+    "slv:3418": {
+      "fat": 100,
+      "_waarom": "Bakolie: meer dan 100 g vet per 100 g kan niet"
+    },
+    "ciqual:19026": {
+      "fiber": 0,
+      "_waarom": "Ongezoete gecondenseerde melk bevat geen vezels"
+    },
+    "ciqual:15054": {
+      "epa": 0,
+      "dha": 0,
+      "_waarom": "Cashewnoot: geen EPA/DHA in noten"
+    },
+    "ciqual:17040": {
+      "epa": 0,
+      "dha": 0,
+      "_waarom": "Arachideolie: geen EPA/DHA in plantaardige olie"
+    },
+    "ciqual:9340": {
+      "epa": 0,
+      "dha": 0,
+      "_waarom": "Quinoa: geen EPA/DHA in granen"
+    },
+    "usda_sr:168874": {
+      "epa": 0,
+      "dha": 0,
+      "_waarom": "Quinoa: geen EPA/DHA in granen"
+    },
+    "ciqual:40102": {
+      "vit_a": null,
+      "_waarom": "Lamslever: 441 µg vitamine A is veel te laag (lever: 7000–50000 µg); opnieuw aangevuld uit een andere bron"
+    },
+    "mvt:06.151": {
+      "potassium": 2630,
+      "_waarom": "Gedroogde basilicum: kalium 26 mg is 100× te laag (andere bronnen ~2600 mg)"
+    },
+    "mvt:04.382": {
+      "b12": null,
+      "_waarom": "Rauwe haring: 0,1 µg B12 is fout (haring bevat ~6–13 µg)"
+    },
+    "mvt:04.383": {
+      "b12": null,
+      "_waarom": "Gekookte haring: 0,1 µg B12 is fout"
+    },
+    "ciqual:26173": {
+      "vit_d": null,
+      "_waarom": "Sprot: vitamine D 0 is fout voor vette vis (andere bron ~20 µg)"
+    },
+    "mvt:06.035": {
+      "copper": null,
+      "_waarom": "Boerenkool: 1,5 mg koper is ~10–30× te hoog"
+    },
+    "slv:1946": {
+      "_name": "Potato starch (potato flour)",
+      "_waarom": "Zweeds 'potatismjöl' is aardappelzetmeel; de waarden kloppen voor zetmeel, de Engelse naam 'Potato flour' misleidt"
+    },
+    "slv:6160": {
+      "phosphorus": null,
+      "magnesium": null,
+      "b9": null,
+      "_waarom": "Maanzaad: fosfor 66, magnesium 54 en foliumzuur 0 zijn veel te laag (andere bronnen ~860, ~340, ~80)"
+    },
+    "ciqual:10006": {
+      "calcium": null,
+      "_waarom": "Gekookte garnaal: 1000 mg calcium hoort bij garnaal mét schaal; vlees heeft ~50–100 mg"
+    },
+    "slv:610": {
+      "iodine": null,
+      "_waarom": "Rozijnen: 90 µg jodium is onrealistisch (andere bronnen ~0–2)"
+    },
+    "ciqual:13046": {
+      "b9": null,
+      "_waarom": "Rozijn: 82 µg foliumzuur is ~10× te hoog (andere bronnen 5–8)"
+    },
+    "ciqual:22002": {
+      "iron": null,
+      "_waarom": "Rauwe eidooier: 0,7 mg ijzer is te laag (andere bronnen ~2,7–5,3)"
+    },
+    "slv:1436": {
+      "b9": 230,
+      "_waarom": "Lamslever: 2000 µg foliumzuur is ~8× te hoog; USDA en Matvaretabellen geven 230–280 µg"
+    },
+    "ciqual:26043": {
+      "selenium": null,
+      "_waarom": "Rauwe kabeljauw: 136 µg selenium is ~5× te hoog (andere bronnen ~25)"
+    },
+    "ciqual:26134": {
+      "selenium": null,
+      "_waarom": "Rauwe koolvis: 120 µg selenium is ~5× te hoog (andere bronnen ~27)"
+    },
+    "ciqual:20016": {
+      "vit_c": null,
+      "_waarom": "Rauwe bloemkool: 4 mg vitamine C is veel te laag (andere bronnen 20–67)"
+    },
+    "slv:2569": {
+      "phosphorus": null,
+      "_waarom": "Lychee: 161 mg fosfor is ~5× te hoog (andere bronnen ~30)"
+    },
+    "slv:1403": {
+      "potassium": null,
+      "_waarom": "Gekookte langoustine: 56 mg kalium is ~4× te laag (andere bronnen ~230)"
+    },
+    "ciqual:13036": {
+      "beta_carotene": null,
+      "_waarom": "Watermeloen: 1220 µg bètacaroteen is ~4× hoger dan andere bronnen (230–300)"
+    },
+    "usda_sr:169091": {
+      "manganese": null,
+      "_waarom": "Gedroogde gezoete mango: 10 mg mangaan is ~30× te hoog (gedroogde mango ~0,3 mg)"
+    }
+  }
+}

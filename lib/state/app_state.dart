@@ -87,6 +87,21 @@ class AppState extends ChangeNotifier {
     _refresh();
   }
 
+  /// Na een update van de ingebouwde database: dagboekregels van ingebouwde producten bijwerken naar de nieuwe
+  /// (gecorrigeerde en aangevulde) waarden. Eén keer per databaseversie.
+  void refreshBuiltinSnapshots() {
+    final v = foods.version;
+    if (v.isEmpty || user.setting('_foodsdb')?['version'] == v) return;
+    var changed = 0;
+    for (final ref in user.diaryFoodRefs()) {
+      if (!FoodDb.isDbRef(ref)) continue;
+      final f = foods.byRef(ref);
+      if (f != null) changed += user.replaceDiarySnapshots(ref, f.per100g);
+    }
+    user.setSetting('_foodsdb', {'version': v});
+    if (changed > 0) _refresh();
+  }
+
   /// Eerder bewaarde merkproducten alsnog aanvullen met hun basisproduct (op de achtergrond, één voor één).
   Future<void> upgradeSavedProducts() async {
     for (final f in user.offFoodsWithoutProxy()) {

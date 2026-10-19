@@ -203,8 +203,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final editing = widget.entry != null;
     final kcal = amounts['energy'] ?? 0;
 
-    // Uitleg bij geschatte waarden: uit welk product in welke databank ze komen
-    final donors = <String, Food?>{for (final ref in _food.estimated.values.toSet()) ref: s.foods.byRef(ref)};
+    // Uitleg bij geschatte waarden: uit welk product in welke databank ze komen. "~bron:id" = vergelijkbaar product
+    // (geschaald), "~~head:x" of "~~cat:x" = gemiddelde van vergelijkbare producten (zie tool/build_foods.py)
+    String bare(String ref) => ref.replaceFirst(RegExp(r'^~+'), '');
+    final donors = <String, Food?>{
+      for (final ref in _food.estimated.values.toSet())
+        if (!ref.startsWith('~~')) ref: s.foods.byRef(bare(ref)),
+    };
     String donorName(String ref) =>
         '${donors[ref]?.source.labelWithCountry ?? tr('another database', 'een andere databank')}${donors[ref] == null ? '' : ' ("${donors[ref]!.name}")'}';
     final fromLabel = _food.source == FoodSource.off;
@@ -216,6 +221,20 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                     'adjusted to the protein and fat content of this product.',
                 'Geschat: staat niet op het etiket. Overgenomen van het vergelijkbare basisproduct in ${donorName(ref)}, '
                     'aangepast aan het eiwit- en vetgehalte van dit product.',
+              )
+            : ref.startsWith('~~')
+            ? tr(
+                'Estimated: missing in ${_food.source.label}. This is the average of comparable products '
+                    '(${ref.substring(ref.indexOf(':') + 1)}), adjusted to the water, fat and protein content of this product.',
+                'Geschat: ontbreekt in ${_food.source.label}. Dit is het gemiddelde van vergelijkbare producten '
+                    '(${ref.substring(ref.indexOf(':') + 1)}), aangepast aan het water-, vet- en eiwitgehalte van dit product.',
+              )
+            : ref.startsWith('~')
+            ? tr(
+                'Estimated: missing in ${_food.source.label}. Taken from a comparable product in ${donorName(ref)}, '
+                    'adjusted to the water, fat and protein content of this product.',
+                'Geschat: ontbreekt in ${_food.source.label}. Overgenomen van een vergelijkbaar product in ${donorName(ref)}, '
+                    'aangepast aan het water-, vet- en eiwitgehalte van dit product.',
               )
             : tr(
                 'Estimated: missing in ${_food.source.label} and filled in from the same food in ${donorName(ref)}.',
@@ -870,9 +889,9 @@ class _ValuesPanelState extends State<_ValuesPanel> {
                           'Tik op een waarde voor de bron.',
                     )
                   : tr(
-                      '≈ estimated: missing in ${widget.sourceLabel}, filled in from the same food in another database. '
+                      '≈ estimated: missing in ${widget.sourceLabel}, filled in from the same or a comparable food. '
                           'Tap a value for the source.',
-                      '≈ geschat: ontbreekt in ${widget.sourceLabel}, aangevuld uit hetzelfde voedingsmiddel in een andere databank. '
+                      '≈ geschat: ontbreekt in ${widget.sourceLabel}, aangevuld uit hetzelfde of een vergelijkbaar voedingsmiddel. '
                           'Tik op een waarde voor de bron.',
                     ),
               style: TextStyle(fontSize: 11.5, height: 1.45, color: p.ink3),

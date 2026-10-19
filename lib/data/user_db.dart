@@ -497,6 +497,22 @@ class UserDb {
 
   /// Ontbrekende waarden aanvullen in dagboekregels van dit product (bv. nadat een merkproduct is aangevuld
   /// uit zijn basisproduct). Bestaande waarden blijven ongewijzigd. Geeft het aantal bijgewerkte regels terug.
+  /// Alle voedingsmiddelen die in het dagboek voorkomen.
+  List<String> diaryFoodRefs() => [for (final r in _db.select('SELECT DISTINCT food_ref FROM diary WHERE deleted = 0')) r['food_ref'] as String];
+
+  /// Dagboekregels van een ingebouwd product gelijkzetten met de nieuwste waarden (na een update van de database:
+  /// verbeterde of aangevulde waarden gelden dan ook voor wat je eerder at). Geeft het aantal gewijzigde regels.
+  int replaceDiarySnapshots(String foodRef, NutrientMap per100g) {
+    final encoded = encodeNutrients(per100g);
+    var n = 0;
+    for (final r in _db.select('SELECT id, nutrients FROM diary WHERE food_ref = ? AND deleted = 0', [foodRef])) {
+      if (r['nutrients'] == encoded) continue;
+      _db.execute('UPDATE diary SET nutrients = ?, updated_at = ? WHERE id = ?', [encoded, _now(), r['id']]);
+      n++;
+    }
+    return n;
+  }
+
   int fillDiarySnapshots(String foodRef, NutrientMap per100g) {
     var n = 0;
     for (final r in _db.select('SELECT id, nutrients FROM diary WHERE food_ref = ? AND deleted = 0', [foodRef])) {
