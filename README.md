@@ -34,7 +34,9 @@ friends, levels, badges and weekly battles to keep you going. European data firs
 
 | Source | Licence |
 |---|---|
-| ANSES-CIQUAL 2020 (France) | Licence Ouverte (Etalab) |
+| ANSES-CIQUAL 2025 (France) | Licence Ouverte 2.0 (Etalab) |
+| Frida, DTU Food Institute (Denmark) | Free use with attribution |
+| McCance and Widdowson's CoFID 2021 (UK) | Open Government Licence v3.0 |
 | Livsmedelsverket (Sweden) | CC BY 4.0 |
 | Matvaretabellen, Mattilsynet (Norway) | NLOD |
 | USDA FoodData Central (US), incl. Branded Foods | Public domain (CC0) |

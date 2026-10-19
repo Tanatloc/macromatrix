@@ -23,6 +23,7 @@ De sleutels (energy, protein, vit_c, ...) komen overeen met lib/nutrition/nutrie
 import csv
 import glob
 import hashlib
+import html
 import json
 import re
 import sqlite3
@@ -32,7 +33,9 @@ from pathlib import Path
 
 # Volgorde in de app: lager = eerst getoond bij zoekresultaten van gelijke kwaliteit (Europa eerst)
 SOURCES = {
-    'ciqual': 'ANSES-CIQUAL 2020 (Frankrijk), Licence Ouverte',
+    'ciqual': 'ANSES-CIQUAL 2025 (Frankrijk), Licence Ouverte 2.0',
+    'cofid': "McCance and Widdowson's Composition of Foods Integrated Dataset 2021 (VK), Open Government Licence v3.0",
+    'frida': 'Frida, DTU Fødevareinstituttet, versie 6.1 (Denemarken), vrij te gebruiken met bronvermelding',
     'slv': 'Livsmedelsverket, Livsmedelsdatabasen (Zweden), CC BY 4.0',
     'mvt': 'Matvaretabellen, Mattilsynet (Noorwegen), NLOD',
     'usda_fnd': 'USDA FoodData Central, Foundation Foods (VS), publiek domein',
@@ -148,6 +151,8 @@ FACTOR = {
     ('G', 'g'): 1, ('MG', 'mg'): 1, ('UG', 'µg'): 1, ('KCAL', 'kcal'): 1,
     ('UG', 'mg'): 0.001, ('MG', 'g'): 0.001, ('G', 'mg'): 1000,
 }
+EUROPEAN = ('ciqual', 'slv', 'mvt', 'frida', 'cofid')
+
 # Hoofdbestanddelen: die vullen we nooit met een geschaalde waarde van een ander product aan
 MACROS = {'energy', 'protein', 'carbs', 'fat', 'fiber', 'sugars', 'starch', 'water', 'alcohol', '_salt'}
 
@@ -242,7 +247,7 @@ CIQUAL = {
 
 def ciqual_value(s):
     """Getal, None (niet gemeten) of ('<', grens) als de waarde onder de meetgrens lag."""
-    s = s.strip()
+    s = s.strip().replace('&lt;', '<')
     if s in ('-', ''):
         return None
     if s == 'traces':
@@ -253,17 +258,16 @@ def ciqual_value(s):
 
 
 def xml_records(path, tag):
-    text = Path(path).read_text(encoding='windows-1252')
+    raw = Path(path).read_bytes()
+    text = raw.decode('utf-8-sig') if raw.startswith(b'\xef\xbb\xbf') else raw.decode('windows-1252')
     for m in re.finditer(rf'<{tag}>(.*?)</{tag}>', text, re.S):
-        yield {k: v.strip() for k, v in re.findall(r'<(\w+)>(.*?)</\1>', m.group(1), re.S)}
+        yield {k: html.unescape(v.strip()) for k, v in re.findall(r'<(\w+)>(.*?)</\1>', m.group(1), re.S)}
 
 
-def ciqual_rows(root):
-    d = root / 'ciqual'
+def _ciqual_release(d):
     files = {k: sorted(glob.glob(str(d / f'{k}_[0-9]*.xml'))) for k in ('alim', 'alim_grp', 'compo')}
     if not all(files.values()):
-        print('CIQUAL: niet gevonden, overgeslagen')
-        return
+        return None
     groups = {}
     for g in xml_records(files['alim_grp'][-1], 'ALIM_GRP'):
         groups[g['alim_ssgrp_code']] = g['alim_ssgrp_nom_eng']
@@ -275,15 +279,145 @@ def ciqual_rows(root):
             if isinstance(v, tuple):
                 # Onder de meetgrens: bij macro's de helft van de grens; bij micro's eerst proberen aan te vullen
                 # uit een andere bron (een harde 0 is vaak onrealistisch, bv. selenium in ei), anders 0
-                if key in MACROS:
+                # (Zout niet: daaruit zou natrium berekend worden, en "zout < 2 g" is geen 400 mg natrium)
+                if key in MACROS and key != '_salt':
                     values.setdefault(c['alim_code'], {})[key] = v[1] / 2
                 else:
                     values.setdefault(c['alim_code'], {}).setdefault('_loq', {})[key] = v[1]
             elif v is not None:
                 values.setdefault(c['alim_code'], {})[key] = v
+    foods = {}
     for a in xml_records(files['alim'][-1], 'ALIM'):
         name = a.get('alim_nom_eng') or a['alim_nom_fr']
-        yield 'ciqual', a['alim_code'], name, a['alim_nom_fr'], groups.get(a.get('alim_ssgrp_code'), ''), values.get(a['alim_code'], {}), []
+        foods[a['alim_code']] = (name, a['alim_nom_fr'], groups.get(a.get('alim_ssgrp_code'), ''), values.get(a['alim_code'], {}))
+    return foods
+
+
+def ciqual_rows(root):
+    # Nieuwste uitgave (2025) eerst; producten die alleen in 2020 bestonden blijven, zodat oude dagboekregels
+    # hun product terugvinden
+    new = _ciqual_release(root / 'ciqual2025') or {}
+    old = _ciqual_release(root / 'ciqual') or {}
+    if not new and not old:
+        print('CIQUAL: niet gevonden, overgeslagen')
+        return
+    for code, (name, local, group, values) in {**old, **new}.items():
+        yield 'ciqual', code, name, local, group, values, []
+
+
+# ─────────────────────────── CoFID (Verenigd Koninkrijk) ───────────────────────────
+
+COFID = {
+    'WATER': 'water', 'PROT': 'protein', 'FAT': 'fat', 'CHO': 'carbs', 'KCALS': 'energy', 'STAR': 'starch',
+    'TOTSUG': 'sugars', 'ALCO': 'alcohol', 'AOACFIB': 'fiber', 'ENGFIB': '_fiber_nsp', 'SATFOD': 'sfa',
+    'MONOFOD': 'mufa', 'POLYFOD': 'pufa', 'FODTRANS': 'trans', 'CHOL': 'cholesterol',
+    'NA': 'sodium', 'K': 'potassium', 'CA': 'calcium', 'MG': 'magnesium', 'P': 'phosphorus', 'FE': 'iron',
+    'CU': 'copper', 'ZN': 'zinc', 'CL': 'chloride', 'MN': 'manganese', 'SE': 'selenium', 'I': 'iodine',
+    'RET': '_retinol', 'CAREQU': 'beta_carotene', 'VITD': 'vit_d', 'VITE': 'vit_e', 'VITK1': 'vit_k',
+    'THIA': 'b1', 'RIBO': 'b2', 'NIAC': 'b3', 'VITB6': 'b6', 'VITB12': 'b12', 'FOLT': 'b9', 'PANTO': 'b5',
+    'BIOT': 'b7', 'VITC': 'vit_c',
+    'FOD18:2cn6': 'la', 'FOD18:3cn3': 'ala', 'FOD20:4cn6': 'aa', 'FOD20:5cn3': 'epa', 'FOD22:5cn3': 'dpa',
+    'FOD22:6cn3': 'dha', 'FOD22:6': 'dha',
+}
+COFID_GROUPS = {
+    'A': 'Cereals and cereal products', 'B': 'Milk and milk products', 'C': 'Eggs', 'D': 'Vegetables',
+    'F': 'Fruit', 'G': 'Nuts and seeds', 'H': 'Herbs and spices', 'J': 'Fish and fish products',
+    'M': 'Meat and meat products', 'O': 'Fats and oils', 'P': 'Beverages', 'Q': 'Alcoholic beverages',
+    'S': 'Sugars, preserves and snacks', 'W': 'Soups, sauces and miscellaneous foods',
+}
+
+
+def cofid_value(s):
+    s = s.strip()
+    if s in ('', 'N'):  # N = aanwezig maar niet gemeten
+        return None
+    if s.lower().startswith('tr'):  # spoor
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def cofid_rows(root):
+    files = sorted(glob.glob(str(root / 'cofid' / '*Composition*Dataset*.xlsx'))) or sorted(glob.glob(str(root / 'cofid' / 'CoFID_2021.xlsx')))
+    if not files:
+        print('CoFID: niet gevonden, overgeslagen')
+        return
+    from xlsx_read import sheet_rows
+    foods = {}
+    for sheet in ('1.3 Proximates', '1.4 Inorganics', '1.5 Vitamins', '1.12 (PUFA per 100gFood)'):
+        rows = sheet_rows(files[-1], sheet)
+        next(rows)
+        codes = next(rows)
+        next(rows)
+        for r in rows:
+            if not r or not r[0].strip() or len(r) < 2:
+                continue
+            f = foods.setdefault(r[0].strip(), {'name': r[1].strip(), 'group': r[3].strip() if len(r) > 3 else '', 'n': {}})
+            for i, code in enumerate(codes):
+                key = COFID.get(code.strip())
+                if key and i < len(r):
+                    v = cofid_value(r[i])
+                    if v is not None and key not in f['n']:
+                        f['n'][key] = v
+    for code, f in foods.items():
+        n = f['n']
+        nsp = n.pop('_fiber_nsp', None)
+        if 'fiber' not in n and nsp is not None:
+            n['fiber'] = nsp  # Englyst-vezels (NSP) als AOAC ontbreekt: iets lager, maar beter dan niets
+        yield 'cofid', code, f['name'], '', COFID_GROUPS.get(f['group'][:1], ''), n, []
+
+
+# ─────────────────────────── Frida (Denemarken) ───────────────────────────
+
+FRIDA = {
+    356: 'energy', 218: 'protein', 172: 'carbs', 168: 'fiber', 141: 'fat', 19: 'alcohol', 327: '_salt', 268: 'water',
+    225: '_retinol', 303: 'beta_carotene', 126: 'vit_d', 135: 'vit_e', 442: 'vit_k', 164: '_vit_k1', 441: 'vit_k2',
+    37: 'b1', 36: '_b1', 39: 'b2', 294: 'b3', 40: 'b6', 210: 'b5', 42: 'b7', 143: 'b9', 38: 'b12', 47: 'vit_c',
+    201: 'sodium', 165: 'potassium', 108: 'calcium', 184: 'magnesium', 162: 'iron', 166: 'copper', 274: 'zinc',
+    187: 'manganese', 117: 'chromium', 190: 'molybdenum', 230: 'selenium', 214: 'phosphorus', 142: 'fluoride',
+    114: 'chloride', 163: 'iodine', 245: 'sugars', 243: 'starch', 248: 'sfa', 247: 'mufa', 251: 'pufa',
+    261: 'trans', 71: 'la', 74: 'ala', 86: 'aa', 87: 'epa', 98: 'dpa', 99: 'dha', 115: 'cholesterol',
+    159: 'histidine', 161: 'isoleucine', 180: 'leucine', 183: 'lysine', 189: 'methionine', 124: 'cystine',
+    211: 'phenylalanine', 264: 'tyrosine', 258: 'threonine', 262: 'tryptophan', 266: 'valine',
+    116: 'choline', 121: 'caffeine',
+}
+# Frida geeft aminozuren in mg en fluoride in µg; wij in g en mg
+FRIDA_FACTOR = {k: 0.001 for k in ('histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'cystine',
+                                    'phenylalanine', 'tyrosine', 'threonine', 'tryptophan', 'valine', 'fluoride')}
+
+
+def frida_rows(root):
+    files = sorted(glob.glob(str(root / 'frida' / 'FCDB_*_Dataset.xlsx')))
+    if not files:
+        print('Frida: niet gevonden, overgeslagen')
+        return
+    from xlsx_read import sheet_rows
+    groups = {}
+    foods = {}
+    for r in list(sheet_rows(files[-1], 'Food'))[1:]:
+        if len(r) > 2 and r[2].strip():
+            foods[r[2].strip()] = {'name': r[1].strip(), 'local': r[0].strip(), 'group': r[12].strip() if len(r) > 12 else '', 'n': {}}
+    for r in sheet_rows(files[-1], 'Data_Normalised'):
+        if len(r) < 8 or not r[3].strip().isdigit():
+            continue
+        f = foods.get(r[0].strip())
+        key = FRIDA.get(int(r[3]))
+        if f is None or key is None or r[7].strip() in ('', 'NULL'):
+            continue
+        try:
+            v = float(r[7])
+        except ValueError:
+            continue
+        f['n'][key] = max(0.0, v) * FRIDA_FACTOR.get(key, 1)
+    for fid, f in foods.items():
+        n = f['n']
+        if 'vit_k' not in n and '_vit_k1' in n:
+            n['vit_k'] = n['_vit_k1']
+        if 'b1' not in n and '_b1' in n:
+            n['b1'] = n['_b1']
+        yield 'frida', fid, f['name'], f['local'], f['group'], {k: v for k, v in n.items() if k not in ('_vit_k1', '_b1')}, []
 
 
 # ─────────────────────────── Livsmedelsverket (Zweden) ───────────────────────────
@@ -511,7 +645,7 @@ def gap_fill(rows):
                 continue
             if kcal >= 5 and k2 >= 5 and not (0.67 <= kcal / k2 <= 1.5):
                 continue
-            european = rows[j]['source'] in ('ciqual', 'slv', 'mvt')
+            european = rows[j]['source'] in EUROPEAN
             scored.append((-jaccard, 0 if european else 1, -len(original[j]), j))
         if not scored:
             continue
@@ -767,7 +901,7 @@ def similar_fill(rows):
             # Elk een eigen woord (bever / hert, selder / asperge): alleen als de namen verder sterk overeenkomen
             if content - c2 and c2 - content and jaccard < 0.75:
                 continue
-            european = rows[j]['source'] in ('ciqual', 'slv', 'mvt')
+            european = rows[j]['source'] in EUROPEAN
             # Dezelfde bereiding eerst: hoe kleiner het verschil in water, hoe betrouwbaarder het schalen
             scored.append((0 if s2 == state else 1, -jaccard, 0 if european else 1, -len(measured[j]), j))
         if not scored:
@@ -909,6 +1043,182 @@ GENERIC_HEADS = {'beverage', 'snack', 'restaurant', 'fast', 'babyfood', 'candie'
 RARE = {'b7', 'chromium', 'molybdenum', 'fluoride', 'vit_k2', 'chloride'}
 
 
+# ─────────────────────────── Aanvullen met labels ───────────────────────────
+#
+# Elk product heeft een label (tool/food_labels.jsonl, zie voedingsapp-data/labels/SPEC.md): voedingsmiddel,
+# deel, soort (plant/dier/…), groep, bereiding, kenmerken (gezouten, verrijkt, mager, …) en of het een gerecht is.
+# Daarmee herkennen we hetzelfde voedingsmiddel over alle databanken heen, in plaats van op woorden te gokken:
+#   1. hetzelfde voedingsmiddel (zelfde label, ook de bereiding): de mediaan van alle gemeten waarden;
+#   2. hetzelfde voedingsmiddel, andere bereiding of kenmerken: geschaald met de droge stof / het vet / het eiwit,
+#      en gecorrigeerd met de kookverliezen van de USDA (tool/retention.py);
+#   3. het gemiddelde van de groep (bv. vette vis, filet), uit alle databanken.
+# Verrijkte en niet-verrijkte producten worden voor vitamines en mineralen nooit gemengd.
+LABELS_FILE = Path(__file__).with_name('food_labels.jsonl')
+C_CLASS = {'raw': 'raw', 'frozen': 'raw', 'boiled': 'wet', 'stewed': 'wet', 'steamed': 'wet', 'microwaved': 'wet',
+           'cooked': 'wet', 'baked': 'dry', 'roasted': 'dry', 'grilled': 'dry', 'fried': 'dry', 'deep-fried': 'dry'}
+SIG_FLAGS = {'salted', 'unsalted', 'with bone', 'sweetened', 'fortified', 'reduced fat', 'lean', 'full fat', 'breaded', 'in oil', 'in water',
+             'in syrup', 'in juice', 'in brine', 'in sauce', 'diet', 'infant', 'with skin', 'without skin',
+             'decaffeinated', 'instant'}
+FORTIF = {'b12', 'vit_d', 'calcium', 'iron', 'b1', 'b2', 'b3', 'b6', 'b9', 'vit_c', 'vit_a', 'vit_e', 'zinc', 'iodine'}
+
+
+def load_labels():
+    if not LABELS_FILE.exists():
+        return {}
+    labels = {}
+    for line in LABELS_FILE.read_text().splitlines():
+        if line.strip():
+            x = json.loads(line)
+            x['f'] = x['f'].strip().lower()
+            x['fl'] = [f.strip().lower() for f in x.get('fl', [])]
+            labels[x['id']] = x
+    # Verbeteringen uit de controle van verdachte waarden (tool/apply_review.py)
+    fixes = LABELS_FILE.with_name('label_fixes.json')
+    if fixes.exists():
+        for ref, change in json.loads(fixes.read_text()).items():
+            if ref in labels:
+                labels[ref].update(change)
+                labels[ref]['f'] = labels[ref]['f'].strip().lower()
+    return labels
+
+
+def _same_key(l):
+    return (l['f'], l['p'], l['d'], C_CLASS.get(l['c'], l['c']), frozenset(set(l['fl']) & SIG_FLAGS))
+
+
+def _fortified(l):
+    return 'fortified' in l['fl']
+
+
+def label_rules(rows, labels):
+    """Plantaardig (geen gerecht, niet verrijkt): geen B12, cholesterol, EPA/DHA/DPA, AA; vitamine D alleen in
+    paddenstoelen (die zijn 'fungus', niet 'plant')."""
+    z = 0
+    for r in rows:
+        l = labels.get(f"{r['source']}:{r['sid']}")
+        if not l or l['k'] != 'plant' or l['d'] or _fortified(l):
+            continue
+        for k in ANIMAL_ONLY:
+            if k not in r['nut']:
+                r['nut'][k] = 0.0
+                r.setdefault('bio0', set()).add(k)
+                z += 1
+    return z
+
+
+def label_fill(rows, labels, retention_table):
+    import retention
+    refs = [f"{r['source']}:{r['sid']}" for r in rows]
+    lab = [labels.get(ref) for ref in refs]
+    measured = [{k: v for k, v in r['nut'].items() if k not in r['est'] and k not in r.get('bio0', ())} for r in rows]
+    by_same, by_sim, by_group, by_g = {}, {}, {}, {}
+    for i, l in enumerate(lab):
+        if not l:
+            continue
+        by_same.setdefault(_same_key(l), []).append(i)
+        by_sim.setdefault((l['f'], l['p'], l['d']), []).append(i)
+        if r_ok(rows[i]):
+            by_group.setdefault((l['g'], l['k'], l['d'], l['p']), []).append(i)
+            by_g.setdefault((l['g'], l['k'], l['d']), []).append(i)
+    rt = [retention.factors(retention_table, l, rows[i]['nut'].get('fat')) if l else {} for i, l in enumerate(lab)]
+
+    def ok_donor(i, j, k):
+        if k in FORTIF and _fortified(lab[i]) != _fortified(lab[j]):
+            return False
+        return True
+
+    counts = [0, 0, 0]
+    # Ronde 1 en 2: hetzelfde voedingsmiddel
+    for i, r in enumerate(rows):
+        l = lab[i]
+        # Voedingssupplementen: niets bijschatten, het etiket is de enige waarheid
+        if not l or l['g'] == 'supplement' or not r_ok(r):
+            continue
+        missing = [k for k in ALL_KEYS if k not in r['nut']]
+        if not missing:
+            continue
+        same = [j for j in by_same.get(_same_key(l), ()) if j != i]
+        sim = [j for j in by_sim.get((l['f'], l['p'], l['d']), ()) if j != i and j not in same]
+        for k in missing:
+            donors = [j for j in same if k in measured[j] and ok_donor(i, j, k)]
+            if donors:
+                # Ook bij hetzelfde voedingsmiddel verschillen vet en water (andere stukken vlees, andere
+                # merken): elke meting eerst omrekenen naar dit product, dan de mediaan
+                vals = []
+                for j in donors:
+                    f = 1.0 if k in MACROS else _scale(k, r['nut'], rows[j]['nut'])
+                    if f is not None:
+                        vals.append((measured[j][k] * f, j))
+                if vals:
+                    vals.sort()
+                    r['nut'][k] = statistics.median(v for v, _ in vals)
+                    r['est'][k] = refs[vals[(len(vals) - 1) // 2][1]]
+                    counts[0] += 1
+                    continue
+            if k in MACROS:
+                continue
+            cands = []
+            for j in sim:
+                if k not in measured[j] or not ok_donor(i, j, k):
+                    continue
+                # Zout en jodium hangen af van zouten, pekelen of roken: alleen bij dezelfde bereiding en zoutstatus
+                if k in SALTY and (lab[j]['c'] != l['c'] or ('salted' in lab[j]['fl']) != ('salted' in l['fl'])):
+                    continue
+                f = _scale(k, r['nut'], rows[j]['nut'])
+                if f is None:
+                    continue
+                v = measured[j][k] * f * rt[i].get(k, 1.0) / max(0.3, rt[j].get(k, 1.0))
+                tier = 0 if C_CLASS.get(lab[j]['c'], lab[j]['c']) == C_CLASS.get(l['c'], l['c']) else (1 if lab[j]['c'] in ('raw', 'frozen', 'not applicable') else 2)
+                cands.append((tier, v, j))
+            if cands:
+                best = min(t for t, _, _ in cands)
+                vals = sorted((v, j) for t, v, j in cands if t == best)
+                r['nut'][k] = statistics.median(v for v, _ in vals)
+                r['est'][k] = '~' + refs[vals[(len(vals) - 1) // 2][1]]
+                counts[1] += 1
+    # Ronde 3: de groep (bv. "fish, fillet"), anders de ruimere groep ("fish"), uit alle databanken
+    measured = [{k: v for k, v in r['nut'].items() if k not in r['est'] and k not in r.get('bio0', ())} for r in rows]
+    cache = {}
+
+    def median(table, key, k, fort, minimum):
+        ck = (id(table), key, k, fort)
+        if ck not in cache:
+            vals, top = [], 0.0
+            for j in table.get(key, ()):
+                if k in FORTIF and _fortified(lab[j]) != fort:
+                    continue
+                b = _basis(k, rows[j]['nut'])
+                if k in measured[j] and b and b > (0.5 if k in FATTY or k in AMINO else 3):
+                    vals.append(measured[j][k] / b)
+                    top = max(top, measured[j][k])
+            cache[ck] = (statistics.median(vals), top) if len(vals) >= minimum else None
+        return cache[ck]
+
+    for i, r in enumerate(rows):
+        l = lab[i]
+        if not l or not r_ok(r) or l['g'] == 'supplement':
+            continue
+        missing = [k for k in ALL_KEYS if k not in r['nut'] and k not in MACROS and k not in RARE and k not in r['loq']]
+        fort = _fortified(l)
+        for k in missing:
+            b = _basis(k, r['nut'])
+            if b is None:
+                continue
+            for table, key, minimum, label in ((by_group, (l['g'], l['k'], l['d'], l['p']), 5, f"{l['g']}, {l['p']}"),
+                                               (by_g, (l['g'], l['k'], l['d']), 10, l['g'])):
+                m = median(table, key, k, fort, minimum)
+                if m is not None:
+                    r['nut'][k] = min(m[0] * b, m[1])
+                    r['est'][k] = f'~~group:{label}'
+                    counts[2] += 1
+                    break
+    return counts
+
+
+def r_ok(r):
+    return r['category'] not in SKIP_GROUP_CATEGORIES
+
+
 # Alle voedingsstoffen die aangevuld mogen worden. Energie niet (dat is de controle), en de totalen
 # omega-3 en omega-6 worden daarna opnieuw berekend uit de delen.
 ALL_KEYS = sorted(({k for k in USDA if not k.startswith('_')} | {'carbs', 'chloride'}) - {'energy', 'omega3', 'omega6'})
@@ -941,7 +1251,7 @@ def main(root, target):
         CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     ''')
     rows = []
-    for gen in (ciqual_rows, slv_rows, mvt_rows, usda_rows):
+    for gen in (ciqual_rows, slv_rows, mvt_rows, frida_rows, cofid_rows, usda_rows):
         for source, sid, name, local, category, raw, portions in gen(root):
             loq, retinol = {}, None
             if source.startswith('usda'):
@@ -961,21 +1271,30 @@ def main(root, target):
     print(f'correcties uit {FIXES_FILE.name}: {apply_fixes(rows)} waarden')
     for r in rows:
         validate_measured(r)
-    print(f'plantaardig zonder B12/cholesterol/…: {sum(plant_zeros(r) for r in rows)} waarden op 0')
-
-    before = sum(len(r['nut']) for r in rows)
-    filled = gap_fill(rows)
-    print(f'aangevuld: {filled} waarden ({filled / before * 100:.0f}% extra), '
-          f'{sum(1 for r in rows if r["est"])} van {len(rows)} producten')
-    similar = similar_fill(rows)
-    print(f'aangevuld uit een vergelijkbaar product (geschaald): {similar} waarden')
-    grouped = group_fill(rows)
-    print(f'aangevuld uit het gemiddelde van vergelijkbare producten: {grouped} waarden')
+    labels = load_labels()
+    labelled = sum(1 for r in rows if f"{r['source']}:{r['sid']}" in labels)
+    print(f'labels: {labelled} van {len(rows)} producten')
+    if labelled:
+        import retention
+        table = retention.load(root / 'usda_retention' / 'retn06.txt')
+        print(f'plantaardig zonder B12/cholesterol/…: {label_rules(rows, labels)} waarden op 0')
+        same, sim, grp = label_fill(rows, labels, table)
+        print(f'aangevuld: hetzelfde voedingsmiddel {same}, andere bereiding (met kookverliezen) {sim}, groep {grp}')
+    # Producten zonder label (of zonder labelbestand): de oudere aanvulling op naam
+    if labelled < len(rows):
+        print(f'plantaardig zonder B12/cholesterol/…: {sum(plant_zeros(r) for r in rows)} waarden op 0')
+        before = sum(len(r['nut']) for r in rows)
+        filled = gap_fill(rows)
+        print(f'aangevuld (op naam): {filled} waarden ({filled / before * 100:.0f}% extra)')
+        similar = similar_fill(rows)
+        print(f'aangevuld uit een vergelijkbaar product (op naam): {similar} waarden')
+        grouped = group_fill(rows)
+        print(f'aangevuld uit het gemiddelde van vergelijkbare producten (op naam): {grouped} waarden')
     # Wat onder de meetgrens lag en nergens anders gevonden werd, is praktisch 0
     zero = 0
     for r in rows:
         for k in r['loq']:
-            if k not in r['nut']:
+            if k not in r['nut'] and not k.startswith('_'):
                 r['nut'][k] = 0.0
                 zero += 1
     print(f'onder de meetgrens, op 0 gezet: {zero} waarden')

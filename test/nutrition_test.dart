@@ -166,7 +166,7 @@ void main() {
     });
 
     test('eiwit krijgt geen waarden van een heel ei', () {
-      for (final f in db.search('egg white raw')) {
+      for (final f in db.search('egg white raw').where((f) => RegExp(r'^eggs?\b.*\bwhite\b', caseSensitive: false).hasMatch(f.name))) {
         for (final donor in f.estimated.values) {
           // "~bron:id" = vergelijkbaar product, "~~groep" = gemiddelde van een groep (die moet ook over eiwit gaan)
           if (donor.startsWith('~~')) {

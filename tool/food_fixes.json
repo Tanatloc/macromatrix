@@ -102,7 +102,8 @@
     },
     "ciqual:22002": {
       "iron": null,
-      "_waarom": "Rauwe eidooier: 0,7 mg ijzer is te laag (andere bronnen ~2,7–5,3)"
+      "_waarom": "Rauwe eidooier: 0,7 mg ijzer is te laag (andere bronnen ~2,7–5,3); zinc: egg yolk zinc ~3.8 (vergelijking met andere databanken)",
+      "zinc": 3.8
     },
     "slv:1436": {
       "b9": 230,
@@ -135,6 +136,1266 @@
     "usda_sr:169091": {
       "manganese": null,
       "_waarom": "Gedroogde gezoete mango: 10 mg mangaan is ~30× te hoog (gedroogde mango ~0,3 mg)"
+    },
+    "ciqual:4004": {
+      "b3": 4.7,
+      "_waarom": "b3: Crisps niacin ~4-5 mg, 19.4 is a x4 error (vergelijking met andere databanken)"
+    },
+    "frida:4": {
+      "vit_k": 2.0,
+      "_waarom": "vit_k: Raw potato vitamin K ~1-2 ug (vergelijking met andere databanken)"
+    },
+    "mvt:06.739": {
+      "potassium": 400.0,
+      "_waarom": "potassium: Potato potassium ~370-400 mg, 1113 is x3 typo (vergelijking met andere databanken)"
+    },
+    "frida:1272": {
+      "b9": 0.0,
+      "_waarom": "b9: Potato starch contains no folate (protein 0.5 g) (vergelijking met andere databanken)"
+    },
+    "ciqual:20832": {
+      "fiber": 3.0,
+      "_waarom": "fiber: Cooked sweet potato fibre ~3 g, 9.2 implausible (vergelijking met andere databanken)"
+    },
+    "ciqual:6210": {
+      "cholesterol": 65.0,
+      "_waarom": "cholesterol: Roast beef cholesterol ~65 mg, 18.1 too low (vergelijking met andere databanken)"
+    },
+    "ciqual:7256": {
+      "b3": 2.5,
+      "_waarom": "b3: Whole wheat muffin niacin cannot be lower than white muffin (vergelijking met andere databanken)"
+    },
+    "ciqual:7352": {
+      "b3": 7.0,
+      "_waarom": "b3: Whole grain puffed rice cake niacin ~7 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:8704": {
+      "phosphorus": null,
+      "_waarom": "phosphorus: Phosphorus 27.2 duplicates the calcium value; blood pudding ~90 (vergelijking met andere databanken)"
+    },
+    "ciqual:9080": {
+      "iron": null,
+      "_waarom": "iron: Zero iron/zinc is a missing value for whole wheat (vergelijking met andere databanken); zinc: Zero iron/zinc is a missing value for whole wheat (vergelijking met andere databanken)",
+      "zinc": null
+    },
+    "ciqual:9109": {
+      "b3": 6.0,
+      "_waarom": "b3: Red rice raw niacin ~5-7 mg (vergelijking met andere databanken)"
+    },
+    "frida:282": {
+      "vit_c": 0.0,
+      "_waarom": "vit_c: Popcorn has no vitamin C; 71 mg is wrong (vergelijking met andere databanken)"
+    },
+    "frida:352": {
+      "vit_c": 0.0,
+      "_waarom": "vit_c: Popcorn has no vitamin C; 71 mg is wrong (vergelijking met andere databanken)"
+    },
+    "frida:176": {
+      "copper": 0.45,
+      "_waarom": "copper: Barley copper ~0.4-0.6 mg (vergelijking met andere databanken)"
+    },
+    "frida:409": {
+      "manganese": 0.05,
+      "_waarom": "manganese: Corn starch manganese ~0.05 mg (vergelijking met andere databanken)"
+    },
+    "frida:617": {
+      "vit_k": null,
+      "_waarom": "vit_k: Wheat bran vitamin K ~2 ug; 83 implausible (vergelijking met andere databanken)"
+    },
+    "mvt:05.122": {
+      "vit_e": 1.0,
+      "_waarom": "vit_e: Oat bran vitamin E ~1 mg; 7.5 copies the fat value (vergelijking met andere databanken); b3: Oat bran niacin ~0.9 mg (vergelijking met andere databanken)",
+      "b3": 0.9
+    },
+    "ciqual:9660": {
+      "b2": 0.5,
+      "_waarom": "b2: Wheat germ riboflavin ~0.5 mg (vergelijking met andere databanken); b3: Wheat germ niacin ~6.5 mg (vergelijking met andere databanken)",
+      "b3": 6.5
+    },
+    "cofid:11-726": {
+      "copper": 0.2,
+      "_waarom": "copper: Egg pasta copper ~0.2 mg (vergelijking met andere databanken)"
+    },
+    "slv:852": {
+      "calcium": 30.0,
+      "_waarom": "calcium: Egg pasta calcium ~25-30 mg cooked (vergelijking met andere databanken)"
+    },
+    "slv:848": {
+      "magnesium": 100.0,
+      "_waarom": "magnesium: Wholegrain pasta Mg ~100 mg (vergelijking met andere databanken); phosphorus: Wholegrain pasta phosphorus ~300 mg (vergelijking met andere databanken)",
+      "phosphorus": 300.0
+    },
+    "ciqual:9870": {
+      "b3": 5.5,
+      "_waarom": "b3: Wholewheat pasta niacin ~5.5 mg (vergelijking met andere databanken)"
+    },
+    "usda_fnd:2747671": {
+      "potassium": 240.0,
+      "_waarom": "potassium: Squid potassium ~240 mg, 9.5 is a unit error (vergelijking met andere databanken)"
+    },
+    "mvt:04.387": {
+      "b6": 0.15,
+      "_waarom": "b6: Shrimp B6 ~0.1-0.15 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:11002": {
+      "vit_a": 122.5,
+      "_waarom": "vit_a: Chervil is rich in carotenoids; zero is a missing value (vergelijking met andere databanken); beta_carotene: Chervil is rich in carotenoids; zero is a missing value (vergelijking met andere databanken)",
+      "beta_carotene": 1470.0
+    },
+    "frida:930": {
+      "manganese": 0.3,
+      "_waarom": "manganese: Chives manganese ~0.3 mg (vergelijking met andere databanken)"
+    },
+    "slv:1979": {
+      "fiber": 8.0,
+      "_waarom": "fiber: fresh yeast has ~7-8 g fibre; 0 is missing data (vergelijking met andere databanken)"
+    },
+    "frida:8": {
+      "b2": 0.1,
+      "_waarom": "b2: riboflavin in raw parsley ~0.1 mg, 0.3 is 3x too high (vergelijking met andere databanken)"
+    },
+    "slv:2883": {
+      "b2": 0.0,
+      "_waarom": "b2: salt contains no riboflavin (vergelijking met andere databanken)"
+    },
+    "slv:1966": {
+      "carbs": 0.0,
+      "_waarom": "carbs: vinegar carbs are not 7 g; acetic acid percent entered as carbs (vergelijking met andere databanken)"
+    },
+    "cofid:13-830": {
+      "b9": 47.0,
+      "_waarom": "b9: folate 0 is missing data; garlic powder ~47 ug (vergelijking met andere databanken)"
+    },
+    "usda_sr:170486": {
+      "calcium": 1100.0,
+      "_waarom": "calcium: freeze-dried parsley calcium should be ~1100 mg, similar to dried (vergelijking met andere databanken)"
+    },
+    "cofid:13-845": {
+      "magnesium": 400.0,
+      "_waarom": "magnesium: dried parsley magnesium ~400 mg (vergelijking met andere databanken); copper: dried parsley copper ~0.6-0.8 mg (vergelijking met andere databanken); b2: dried parsley riboflavin ~2.3 mg (vergelijking met andere databanken)",
+      "copper": 0.62,
+      "b2": 2.3
+    },
+    "slv:7197": {
+      "vit_c": 21.0,
+      "_waarom": "vit_c: vit C 0 is missing data; coriander seed ~21 mg (vergelijking met andere databanken)"
+    },
+    "cofid:13-805": {
+      "b2": 1.2,
+      "_waarom": "b2: dried basil riboflavin ~1.2 mg (vergelijking met andere databanken); b9: folate 0 is missing data; dried basil ~310 ug (vergelijking met andere databanken)",
+      "b9": 310.0
+    },
+    "cofid:13-804": {
+      "magnesium": 64.0,
+      "_waarom": "magnesium: fresh basil magnesium ~64 mg (vergelijking met andere databanken); b2: fresh basil riboflavin ~0.08 mg (vergelijking met andere databanken)",
+      "b2": 0.076
+    },
+    "cofid:13-835": {
+      "vit_c": 51.4,
+      "_waarom": "vit_c: vit C 0 is missing data (vergelijking met andere databanken); b6: B6 0 is missing data (vergelijking met andere databanken); b9: folate 0 is missing data (vergelijking met andere databanken)",
+      "b6": 1.19,
+      "b9": 274.0
+    },
+    "mvt:06.169": {
+      "water": 9.3,
+      "_waarom": "water: dried rosemary water cannot be 0 (vergelijking met andere databanken)"
+    },
+    "cofid:13-854": {
+      "manganese": 3.13,
+      "_waarom": "manganese: ground sage manganese ~3 mg (vergelijking met andere databanken); vit_c: vit C 0 is missing data (vergelijking met andere databanken)",
+      "vit_c": 32.4
+    },
+    "cofid:13-852": {
+      "vit_c": 80.8,
+      "_waarom": "vit_c: vit C 0 is missing data for saffron (vergelijking met andere databanken); b9: folate 0 is missing data (vergelijking met andere databanken)",
+      "b9": 93.0
+    },
+    "cofid:17-379": {
+      "b3": 40.0,
+      "_waarom": "b3: dried yeast niacin ~40 mg (vergelijking met andere databanken)"
+    },
+    "slv:1980": {
+      "fiber": 26.9,
+      "_waarom": "fiber: dried yeast fibre ~27 g; 0 is missing data (vergelijking met andere databanken)"
+    },
+    "mvt:12.018": {
+      "water": 5.0,
+      "_waarom": "water: baking powder is a dry powder, water ~5 g (vergelijking met andere databanken)"
+    },
+    "slv:6666": {
+      "b1": 0.35,
+      "_waarom": "b1: nutmeg thiamin ~0.35 mg (vergelijking met andere databanken)"
+    },
+    "frida:1292": {
+      "b9": 82.0,
+      "_waarom": "b9: folate 0 is missing data; poppy seed ~82 ug (vergelijking met andere databanken)"
+    },
+    "mvt:06.173": {
+      "water": 6.0,
+      "_waarom": "water: dried poppy seeds water ~6 g; 18 g makes macros sum >100 (vergelijking met andere databanken)"
+    },
+    "cofid:13-893": {
+      "vit_c": 160.0,
+      "_waarom": "vit_c: fresh thyme vit C ~160 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:11074": {
+      "manganese": 0.23,
+      "_waarom": "manganese: raw ginger manganese ~0.23 mg (vergelijking met andere databanken)"
+    },
+    "mvt:12.026": {
+      "water": 0.2,
+      "_waarom": "water: sea salt water not 100 g (vergelijking met andere databanken)"
+    },
+    "cofid:13-847": {
+      "iron": 7.8,
+      "_waarom": "iron: ground cayenne iron ~7.8 mg (vergelijking met andere databanken); vit_c: vit C 0 is missing data (vergelijking met andere databanken)",
+      "vit_c": 76.4
+    },
+    "slv:1999": {
+      "b1": 0.02,
+      "_waarom": "b1: cream sauce thiamin ~0.02 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:11160": {
+      "b1": 0.04,
+      "_waarom": "b1: mushroom sauce thiamin ~0.04 mg (vergelijking met andere databanken)"
+    },
+    "slv:7032": {
+      "protein": null,
+      "_waarom": "protein: pepper sauce protein ~1.5 g; 12.9 impossible with this energy and water (vergelijking met andere databanken)"
+    },
+    "mvt:06.269": {
+      "b1": 0.05,
+      "_waarom": "b1: thiamin of red pesto ~0.05 mg (vergelijking met andere databanken)"
+    },
+    "slv:105": {
+      "potassium": 187.0,
+      "_waarom": "potassium: potassium and calcium appear swapped in SLV camembert; camembert K ~190 mg (vergelijking met andere databanken); calcium: calcium and potassium appear swapped in SLV camembert; Ca ~700 mg (vergelijking met andere databanken)",
+      "calcium": 720.0
+    },
+    "ciqual:12004": {
+      "b5": 1.36,
+      "_waarom": "b5: camembert pantothenic acid ~1.4 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:12050": {
+      "b2": 0.45,
+      "_waarom": "b2: bloomy rind cheese riboflavin ~0.4 mg, 4.2 is 10x too high (vergelijking met andere databanken)"
+    },
+    "cofid:12-493": {
+      "copper": 0.04,
+      "_waarom": "copper: Emmental copper ~0.04 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:12315": {
+      "calcium": 94.0,
+      "_waarom": "calcium: cream cheese calcium ~90 mg; 772 is a different cheese (vergelijking met andere databanken); zinc: cream cheese zinc ~1 mg (vergelijking met andere databanken)",
+      "zinc": 1.0
+    },
+    "slv:552": {
+      "b6": 0.06,
+      "_waarom": "b6: apricot B6 ~0.05 mg (vergelijking met andere databanken)"
+    },
+    "frida:533": {
+      "zinc": 0.4,
+      "_waarom": "zinc: dried date zinc ~0.4 mg (vergelijking met andere databanken)"
+    },
+    "slv:561": {
+      "vit_c": 2.0,
+      "_waarom": "vit_c: fig vit C ~2 mg (vergelijking met andere databanken)"
+    },
+    "cofid:14-117": {
+      "beta_carotene": 500.0,
+      "_waarom": "beta_carotene: passion fruit beta-carotene ~500 ug; 10 is too low (vergelijking met andere databanken)"
+    },
+    "slv:585": {
+      "vit_c": 40.0,
+      "_waarom": "vit_c: red currant vit C ~40 mg; 134 is black currant range (vergelijking met andere databanken)"
+    },
+    "ciqual:13019": {
+      "b5": 0.064,
+      "_waarom": "b5: red currant pantothenic acid ~0.06 mg (vergelijking met andere databanken)"
+    },
+    "cofid:13-311": {
+      "magnesium": 17.0,
+      "_waarom": "magnesium: unripe papaya magnesium ~17 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:13042": {
+      "b3": 1.8,
+      "_waarom": "b3: dried prune niacin ~1.5-3 mg (vergelijking met andere databanken)"
+    },
+    "slv:558": {
+      "b9": 23.0,
+      "_waarom": "b9: cherimoya folate ~23 ug (vergelijking met andere databanken)"
+    },
+    "slv:572": {
+      "fiber": 2.8,
+      "_waarom": "fiber: lime fibre ~2.8 g (vergelijking met andere databanken)"
+    },
+    "frida:88": {
+      "manganese": 1.5,
+      "_waarom": "manganese: raw coconut manganese ~1.5 mg (vergelijking met andere databanken)"
+    },
+    "frida:704": {
+      "b5": 0.8,
+      "_waarom": "b5: pantothenic acid 0 is missing data; desiccated coconut ~0.8 mg (vergelijking met andere databanken)"
+    },
+    "mvt:06.114": {
+      "b1": 0.08,
+      "_waarom": "b1: value inconsistent with the product and with other databases (vergelijking met andere databanken); b2: value inconsistent with the product and with other databases (vergelijking met andere databanken)",
+      "b2": 0.13
+    },
+    "mvt:05.380": {
+      "water": 6.0,
+      "_waarom": "water: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "cofid:14-847": {
+      "b5": 0.69,
+      "_waarom": "b5: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:1377": {
+      "vit_e": 3.8,
+      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "usda_fnd:790508": {
+      "vit_e": 2.0,
+      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "slv:3": {
+      "vit_e": 0.6,
+      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "slv:41": {
+      "zinc": 0.0,
+      "_waarom": "zinc: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:1483": {
+      "vit_k": 71.3,
+      "_waarom": "vit_k: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:1345": {
+      "vit_k": 24.7,
+      "_waarom": "vit_k: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:1333": {
+      "vit_k": 1.9,
+      "_waarom": "vit_k: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:1467": {
+      "vit_k": 60.2,
+      "_waarom": "vit_k: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "slv:33": {
+      "vit_e": 28.8,
+      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "usda_sr:173544": {
+      "b2": 0.18,
+      "_waarom": "b2: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:511": {
+      "vit_e": 0.5,
+      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken); vit_a: value inconsistent with the product and with other databases (vergelijking met andere databanken)",
+      "vit_a": 280.0
+    },
+    "cofid:12-542": {
+      "cholesterol": null,
+      "_waarom": "cholesterol: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "ciqual:19698": {
+      "b6": 0.05,
+      "_waarom": "b6: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "slv:334": {
+      "iron": 0.9,
+      "_waarom": "iron: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "ciqual:20336": {
+      "potassium": 466.0,
+      "_waarom": "potassium: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "slv:333": {
+      "potassium": 320.0,
+      "_waarom": "potassium: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:1825": {
+      "vit_k": 177.0,
+      "_waarom": "vit_k: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "cofid:13-521": {
+      "vit_e": 2.0,
+      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "ciqual:20156": {
+      "b6": 0.03,
+      "_waarom": "b6: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "ciqual:20099": {
+      "iron": 2.0,
+      "_waarom": "iron: value inconsistent with the product and with other databases (vergelijking met andere databanken); vit_c: value inconsistent with the product and with other databases (vergelijking met andere databanken)",
+      "vit_c": 35.0
+    },
+    "cofid:13-293": {
+      "manganese": 0.11,
+      "_waarom": "manganese: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "slv:2161": {
+      "potassium": 450.0,
+      "_waarom": "potassium: value inconsistent with the product and with other databases (vergelijking met andere databanken); phosphorus: value inconsistent with the product and with other databases (vergelijking met andere databanken)",
+      "phosphorus": 130.0
+    },
+    "slv:410": {
+      "vit_c": 10.0,
+      "_waarom": "vit_c: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "mvt:06.145": {
+      "b1": 0.08,
+      "_waarom": "b1: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "slv:298": {
+      "iron": 0.7,
+      "_waarom": "iron: value inconsistent with the product and with other databases (vergelijking met andere databanken)"
+    },
+    "frida:969": {
+      "potassium": 606,
+      "_waarom": "potassium: unit/typo; cress potassium ~600 (vergelijking met andere databanken); vit_e: vitamin E in cress ~0.7 (vergelijking met andere databanken)",
+      "vit_e": 0.7
+    },
+    "cofid:13-518": {
+      "fiber": 1.5,
+      "_waarom": "fiber: grilled tomato has fiber ~1.5, not 0 (vergelijking met andere databanken)"
+    },
+    "cofid:13-516": {
+      "vit_a": null,
+      "_waarom": "vit_a: carotenoids far lower than all other pak choi values (vergelijking met andere databanken); beta_carotene: carotene far lower than other pak choi values (vergelijking met andere databanken)",
+      "beta_carotene": null
+    },
+    "cofid:13-504": {
+      "b1": 0.06,
+      "_waarom": "b1: broccoli B1 ~0.06 (vergelijking met andere databanken)"
+    },
+    "frida:1811": {
+      "vit_c": 0,
+      "_waarom": "vit_c: cooked kidney beans have ~no vitamin C (vergelijking met andere databanken)"
+    },
+    "mvt:06.091": {
+      "water": 10,
+      "_waarom": "water: dried chickpeas water ~10 (vergelijking met andere databanken)"
+    },
+    "cofid:13-064": {
+      "b5": 0.1,
+      "_waarom": "b5: broad bean B5 ~0.1, value ~50x too high (vergelijking met andere databanken)"
+    },
+    "mvt:06.273": {
+      "b1": 0.23,
+      "_waarom": "b1: zero is implausible; sprouts B1 ~0.23 (vergelijking met andere databanken); b2: sprouts B2 ~0.13 (vergelijking met andere databanken); b3: sprouts B3 ~1.1 (vergelijking met andere databanken); fiber: sprout fiber ~3 (vergelijking met andere databanken)",
+      "b2": 0.13,
+      "b3": 1.1,
+      "fiber": 3.0
+    },
+    "frida:58": {
+      "b5": 1.9,
+      "_waarom": "b5: mung bean B5 ~1.9 (vergelijking met andere databanken)"
+    },
+    "slv:906": {
+      "b9": 250,
+      "_waarom": "b9: soy flour folate ~250-350 (vergelijking met andere databanken)"
+    },
+    "cofid:13-118": {
+      "b6": 0.22,
+      "_waarom": "b6: tempeh B6 ~0.2 (vergelijking met andere databanken)"
+    },
+    "slv:7027": {
+      "fiber": 4.5,
+      "_waarom": "fiber: tempeh fiber ~4-6 (vergelijking met andere databanken)"
+    },
+    "cofid:13-339": {
+      "potassium": 6000,
+      "_waarom": "potassium: dried kombu potassium thousands of mg (vergelijking met andere databanken)"
+    },
+    "ciqual:21508": {
+      "iron": 1.6,
+      "_waarom": "iron: lamb neck iron ~1.6 (vergelijking met andere databanken)"
+    },
+    "usda_sr:172616": {
+      "b5": 0.7,
+      "_waarom": "b5: lamb pantothenic acid ~0.7 (vergelijking met andere databanken)"
+    },
+    "usda_sr:169904": {
+      "phosphorus": 200,
+      "_waarom": "phosphorus: egg phosphorus ~200 (vergelijking met andere databanken); iron: egg iron ~1.8 (vergelijking met andere databanken)",
+      "iron": 1.8
+    },
+    "cofid:12-960": {
+      "b6": 0.036,
+      "_waarom": "b6: dried egg white B6 ~0.03 (vergelijking met andere databanken)"
+    },
+    "ciqual:22009": {
+      "phosphorus": 500,
+      "_waarom": "phosphorus: egg yolk phosphorus ~500 (vergelijking met andere databanken); iron: cooked egg yolk iron ~5.5 (vergelijking met andere databanken)",
+      "iron": 5.5
+    },
+    "ciqual:23493": {
+      "vit_c": 5,
+      "_waarom": "vit_c: baked apple crumble vit C ~5 (vergelijking met andere databanken)"
+    },
+    "ciqual:23525": {
+      "b2": 0.25,
+      "_waarom": "b2: flan B2 ~0.25 (vergelijking met andere databanken)"
+    },
+    "usda_sr:168002": {
+      "protein": 1.0,
+      "_waarom": "protein: wafers cannot have zero protein (vergelijking met andere databanken)"
+    },
+    "cofid:11-843": {
+      "b2": 0.18,
+      "_waarom": "b2: cream pastry B2 ~0.2 (vergelijking met andere databanken)"
+    },
+    "ciqual:25019": {
+      "b1": 0.06,
+      "_waarom": "b1: canned ravioli B1 ~0.05 (vergelijking met andere databanken); b2: canned ravioli B2 ~0.05-0.1 (vergelijking met andere databanken); cholesterol: canned meat ravioli cholesterol ~5-10 (vergelijking met andere databanken)",
+      "b2": 0.08,
+      "cholesterol": 8
+    },
+    "ciqual:25219": {
+      "potassium": 200,
+      "_waarom": "potassium: lasagna potassium ~200 (vergelijking met andere databanken)"
+    },
+    "slv:1102": {
+      "b2": 0.15,
+      "_waarom": "b2: meatball B2 ~0.15 (vergelijking met andere databanken)"
+    },
+    "ciqual:25552": {
+      "calcium": 110,
+      "_waarom": "calcium: crepe with cheese/bechamel calcium ~100+ (vergelijking met andere databanken)"
+    },
+    "frida:1621": {
+      "zinc": 1.2,
+      "_waarom": "zinc: chicken burger zinc ~1.2 (vergelijking met andere databanken)"
+    },
+    "slv:482": {
+      "potassium": 110,
+      "_waarom": "potassium: vegetable soup potassium ~100 (vergelijking met andere databanken)"
+    },
+    "ciqual:25903": {
+      "b1": 0.04,
+      "_waarom": "b1: soup B1 ~0.03 (vergelijking met andere databanken)"
+    },
+    "ciqual:26002": {
+      "vit_e": 2.5,
+      "_waarom": "vit_e: fried fish with 17% fat cannot have 0 vit E (vergelijking met andere databanken)"
+    },
+    "ciqual:26015": {
+      "b1": null,
+      "_waarom": "b1: saithe B1 implausibly low vs coley (vergelijking met andere databanken); b3: saithe niacin implausibly low (vergelijking met andere databanken); b6: saithe B6 implausibly low (vergelijking met andere databanken)",
+      "b3": null,
+      "b6": null
+    },
+    "mvt:04.230": {
+      "cholesterol": 70,
+      "_waarom": "cholesterol: fried mackerel cholesterol ~70-80 (vergelijking met andere databanken)"
+    },
+    "ciqual:26024": {
+      "phosphorus": 200,
+      "_waarom": "phosphorus: cod phosphorus ~200 (vergelijking met andere databanken); b3: cod niacin ~2.5 (vergelijking met andere databanken); sodium: fresh boiled cod has ~60-100 mg sodium; 2320 looks like salted cod (controle meestgegeten voedingsmiddelen)",
+      "b3": 2.5,
+      "sodium": 90
+    },
+    "ciqual:26181": {
+      "carbs": 0,
+      "_waarom": "carbs: tuna has no carbs (vergelijking met andere databanken)"
+    },
+    "ciqual:26048": {
+      "potassium": 330,
+      "_waarom": "potassium: hake potassium ~330 (vergelijking met andere databanken); phosphorus: hake phosphorus ~150 (vergelijking met andere databanken)",
+      "phosphorus": 150
+    },
+    "mvt:04.366": {
+      "potassium": 60,
+      "_waarom": "potassium: surimi potassium far lower (vergelijking met andere databanken); phosphorus: phosphorus 590 impossible for surimi (vergelijking met andere databanken)",
+      "phosphorus": null
+    },
+    "slv:2035": {
+      "calcium": null,
+      "_waarom": "calcium: calcium 124 far above surimi norm (vergelijking met andere databanken); protein: protein 0.8 impossible for surimi (vergelijking met andere databanken)",
+      "protein": null
+    },
+    "frida:661": {
+      "b12": 2.8,
+      "_waarom": "b12: frozen saithe b12 too low (vergelijking met andere databanken)"
+    },
+    "ciqual:26055": {
+      "b1": 0.1,
+      "_waarom": "b1: thiamin 4x too high for plaice (vergelijking met andere databanken)"
+    },
+    "ciqual:26080": {
+      "iron": 0.4,
+      "_waarom": "iron: iron too high for sea bream (vergelijking met andere databanken); b3: niacin too low for fish (vergelijking met andere databanken)",
+      "b3": 6.5
+    },
+    "slv:1289": {
+      "b12": 8.0,
+      "_waarom": "b12: smoked mackerel b12 ~8 (vergelijking met andere databanken)"
+    },
+    "mvt:04.253": {
+      "magnesium": null,
+      "_waarom": "magnesium: Mg too low for dried cod (vergelijking met andere databanken); b1: b1 too low vs dried cod (vergelijking met andere databanken); b6: b6 too low vs dried cod (vergelijking met andere databanken)",
+      "b1": null,
+      "b6": null
+    },
+    "usda_sr:175174": {
+      "b12": 3.5,
+      "_waarom": "b12: canned salmon b12 ~3.5 (vergelijking met andere databanken)"
+    },
+    "ciqual:26146": {
+      "b3": null,
+      "_waarom": "b3: red snapper niacin 6.3 realistic; USDA copies 0.28 implausible (vergelijking met andere databanken)"
+    },
+    "usda_sr:173698": {
+      "b3": null,
+      "_waarom": "b3: red snapper niacin 6.3 realistic; USDA copies 0.28 implausible (vergelijking met andere databanken)"
+    },
+    "ciqual:26166": {
+      "zinc": 2.7,
+      "_waarom": "zinc: zinc too low for garfish (vergelijking met andere databanken); carbs: fish has no carbs (vergelijking met andere databanken)",
+      "carbs": 0
+    },
+    "frida:768": {
+      "vit_e": 0.6,
+      "_waarom": "vit_e: vit E too high for whitefish (vergelijking met andere databanken)"
+    },
+    "slv:532": {
+      "vit_c": 25,
+      "_waarom": "vit_c: vit C too low for greek salad (vergelijking met andere databanken)"
+    },
+    "slv:1248": {
+      "zinc": 2.4,
+      "_waarom": "zinc: eel zinc ~2.4 (vergelijking met andere databanken)"
+    },
+    "cofid:16-154": {
+      "calcium": 10,
+      "_waarom": "calcium: tilapia calcium ~10 (vergelijking met andere databanken)"
+    },
+    "mvt:03.494": {
+      "b2": 0.25,
+      "_waarom": "b2: cooked pork riboflavin ~0.25 (vergelijking met andere databanken)"
+    },
+    "usda_sr:167897": {
+      "choline": null,
+      "_waarom": "choline: choline implausibly low for pork (vergelijking met andere databanken)"
+    },
+    "ciqual:28727": {
+      "b9": 4,
+      "_waarom": "b9: bacon folate ~4; 49.1 looks like placeholder (vergelijking met andere databanken)"
+    },
+    "usda_sr:174611": {
+      "b3": 5.0,
+      "_waarom": "b3: ham niacin too low (vergelijking met andere databanken)"
+    },
+    "ciqual:30789": {
+      "b9": 3.5,
+      "_waarom": "b9: mortadella folate ~3.5; 31.5 placeholder (vergelijking met andere databanken)"
+    },
+    "mvt:09.129": {
+      "water": 3,
+      "_waarom": "water: gum water ~3 (vergelijking met andere databanken)"
+    },
+    "frida:1176": {
+      "vit_k": 0.0,
+      "_waarom": "vit_k: honey has no vit K (vergelijking met andere databanken); b6: honey b6 0.02 (vergelijking met andere databanken)",
+      "b6": 0.02
+    },
+    "frida:1939": {
+      "choline": null,
+      "_waarom": "choline: choline too low for ice cream (vergelijking met andere databanken)"
+    },
+    "ciqual:31054": {
+      "b9": 0,
+      "_waarom": "b9: 31.5 placeholder, gum has no folate (vergelijking met andere databanken)"
+    },
+    "slv:1864": {
+      "calcium": 5,
+      "_waarom": "calcium: boiled sweets calcium ~5 (vergelijking met andere databanken)"
+    },
+    "cofid:17-101": {
+      "water": 2.5,
+      "_waarom": "water: boiled sweets water ~2.5 (vergelijking met andere databanken)"
+    },
+    "mvt:05.544": {
+      "potassium": null,
+      "_waarom": "potassium: 0 = missing, impossible for muesli (vergelijking met andere databanken); magnesium: 0 = missing, impossible (vergelijking met andere databanken); phosphorus: 0 = missing, impossible (vergelijking met andere databanken)",
+      "magnesium": null,
+      "phosphorus": null
+    },
+    "mvt:05.531": {
+      "magnesium": null,
+      "_waarom": "magnesium: Mg 87 inconsistent with P and cornflakes (vergelijking met andere databanken); phosphorus: P 497 impossible for corn flakes (vergelijking met andere databanken)",
+      "phosphorus": null
+    },
+    "usda_sr:174654": {
+      "zinc": 2.5,
+      "_waarom": "zinc: granola zinc ~2.5 (vergelijking met andere databanken)"
+    },
+    "frida:1740": {
+      "b5": 1.1,
+      "_waarom": "b5: chicken b5 ~1.1; 15.55 typo (vergelijking met andere databanken)"
+    },
+    "cofid:18-375": {
+      "b12": 0.4,
+      "_waarom": "b12: goose b12 ~0.4 (vergelijking met andere databanken)"
+    },
+    "cofid:18-376": {
+      "b12": 0.4,
+      "_waarom": "b12: goose b12 ~0.4 (vergelijking met andere databanken)"
+    },
+    "mvt:01.079": {
+      "b6": 0.05,
+      "_waarom": "b6: milkshake b6 ~0.05 (vergelijking met andere databanken)"
+    },
+    "ciqual:39236": {
+      "b6": 0.08,
+      "_waarom": "b6: french toast b6 too high (vergelijking met andere databanken)"
+    },
+    "mvt:01.308": {
+      "potassium": null,
+      "_waarom": "potassium: potassium far too low for ice cream (vergelijking met andere databanken)"
+    },
+    "ciqual:39522": {
+      "b5": 0.4,
+      "_waarom": "b5: cone b5 ~0.4 (vergelijking met andere databanken)"
+    },
+    "ciqual:40106": {
+      "b2": 3.0,
+      "_waarom": "b2: calf liver riboflavin ~3 (vergelijking met andere databanken)"
+    },
+    "slv:6006": {
+      "cholesterol": 290,
+      "_waarom": "cholesterol: cooked liver cholesterol ~290 (vergelijking met andere databanken)"
+    },
+    "slv:1453": {
+      "vit_e": 0.7,
+      "_waarom": "vit_e: chicken liver vit E ~0.6-0.7 mg (vergelijking met andere databanken)"
+    },
+    "frida:673": {
+      "b2": 0.89,
+      "_waarom": "b2: goose liver B2 ~0.9 mg (vergelijking met andere databanken)"
+    },
+    "frida:911": {
+      "b5": 0.65,
+      "_waarom": "b5: ox tongue pantothenic acid ~0.65 (vergelijking met andere databanken)"
+    },
+    "frida:854": {
+      "b5": 0.64,
+      "_waarom": "b5: pig tongue pantothenic acid ~0.64 (vergelijking met andere databanken)"
+    },
+    "usda_sr:174446": {
+      "b2": 0.25,
+      "_waarom": "b2: sweetbread B2 ~0.25 (vergelijking met andere databanken)"
+    },
+    "usda_sr:174445": {
+      "vit_c": null,
+      "_waarom": "vit_c: zero is a missing-value placeholder; others ~20-28 (vergelijking met andere databanken)"
+    },
+    "cofid:18-406": {
+      "b12": 17.0,
+      "_waarom": "b12: pig kidney B12 ~8-17, 40 too high (vergelijking met andere databanken)"
+    },
+    "cofid:18-402": {
+      "b12": 52.0,
+      "_waarom": "b12: lamb kidney B12 ~50 (vergelijking met andere databanken)"
+    },
+    "frida:547": {
+      "carbs": 0.8,
+      "_waarom": "carbs: kidney carbs <1 g (vergelijking met andere databanken)"
+    },
+    "usda_sr:168215": {
+      "b6": 0.3,
+      "_waarom": "b6: plantain B6 ~0.3 (vergelijking met andere databanken)"
+    },
+    "cofid:13-279": {
+      "b9": 22.0,
+      "_waarom": "b9: plantain-type folate ~22 (vergelijking met andere databanken)"
+    },
+    "cofid:13-376": {
+      "b6": 0.28,
+      "_waarom": "b6: taro corm B6 ~0.28 (vergelijking met andere databanken)"
+    },
+    "frida:845": {
+      "vit_e": 0.35,
+      "_waarom": "vit_e: yam vit E ~0.35 (vergelijking met andere databanken)"
+    },
+    "cofid:13-397": {
+      "fiber": 4.1,
+      "_waarom": "fiber: yam fibre ~4 g (vergelijking met andere databanken)"
+    },
+    "cofid:13-811": {
+      "vit_c": 50.0,
+      "_waarom": "vit_c: 0 is a missing placeholder; dried chervil vit C ~50 (vergelijking met andere databanken)"
+    },
+    "cofid:13-858": {
+      "vit_c": 50.0,
+      "_waarom": "vit_c: 0 is a missing placeholder; dried tarragon vit C ~50 (vergelijking met andere databanken); b9: 0 is a missing placeholder; dried tarragon folate 274 (vergelijking met andere databanken)",
+      "b9": 274.0
+    },
+    "usda_sr:167717": {
+      "b6": null,
+      "_waarom": "b6: 0 is a missing placeholder; yeast extract B6 ~1.5 (vergelijking met andere databanken)"
+    },
+    "cofid:14-878": {
+      "vit_e": 6.6,
+      "_waarom": "vit_e: dry-roasted peanut vit E ~6-7 mg (vergelijking met andere databanken)"
+    },
+    "ciqual:18324": {
+      "vit_e": 0.0,
+      "_waarom": "vit_e: energy drink has no vit E (vergelijking met andere databanken)"
+    },
+    "slv:7192": {
+      "iron": 0.8,
+      "_waarom": "iron: pak choi iron ~0.8 (vergelijking met andere databanken); b6: pak choi B6 ~0.19 (vergelijking met andere databanken)",
+      "b6": 0.19
+    },
+    "usda_sr:169262": {
+      "b6": 0.215,
+      "_waarom": "b6: okra B6 ~0.2 (vergelijking met andere databanken)"
+    },
+    "frida:1455": {
+      "protein": 0.0,
+      "_waarom": "protein: tallow has no protein (vergelijking met andere databanken)"
+    },
+    "slv:7252": {
+      "vit_a": 800.0,
+      "_waarom": "vit_a: fortified margarine vit A ~800-900 (vergelijking met andere databanken)"
+    },
+    "slv:2401": {
+      "beta_carotene": 540.0,
+      "_waarom": "beta_carotene: x20 too high; others ~330-540 (vergelijking met andere databanken)"
+    },
+    "mvt:08.259": {
+      "b6": 0.08,
+      "_waarom": "b6: shrimp salad B6 ~0.07 (vergelijking met andere databanken)"
+    },
+    "slv:58": {
+      "vit_e": 2.5,
+      "_waarom": "vit_e: bearnaise vit E ~2-2.5 (vergelijking met andere databanken)"
+    },
+    "frida:418": {
+      "b1": 0.24,
+      "_waarom": "b1: likely x10 typo (vergelijking met andere databanken); b6: likely x10 typo (vergelijking met andere databanken)",
+      "b6": 0.113
+    },
+    "usda_sr:170378": {
+      "copper": null,
+      "_waarom": "copper: broad bean copper ~0.2-0.4 (vergelijking met andere databanken); b6: broad beans B6 ~0.07 (vergelijking met andere databanken)",
+      "b6": 0.07
+    },
+    "cofid:13-240": {
+      "iron": 0.8,
+      "_waarom": "iron: endive iron ~0.8 (vergelijking met andere databanken)"
+    },
+    "frida:169": {
+      "vit_e": null,
+      "_waarom": "vit_e: 0.01 implausible for sun-dried tomato (vergelijking met andere databanken)"
+    },
+    "cofid:13-146": {
+      "magnesium": null,
+      "_waarom": "magnesium: 620 mg Mg implausible for agar (vergelijking met andere databanken)"
+    },
+    "usda_sr:169912": {
+      "b1": 0.04,
+      "_waarom": "b1: melon B1 ~0.04 (vergelijking met andere databanken)"
+    },
+    "slv:580": {
+      "b6": 0.025,
+      "_waarom": "b6: peach B6 ~0.025 (vergelijking met andere databanken)"
+    },
+    "mvt:10.225": {
+      "cholesterol": 12,
+      "_waarom": "cholesterol: x10 too high; cottage cheese ~10 mg/100g (vergelijking met andere databanken)"
+    },
+    "frida:1311": {
+      "zinc": 1.0,
+      "_waarom": "zinc: semolina zinc ~1 mg (vergelijking met andere databanken); manganese: semolina manganese ~0.7 mg (vergelijking met andere databanken)",
+      "manganese": 0.7
+    },
+    "frida:1217": {
+      "zinc": 4.5,
+      "_waarom": "zinc: soybean zinc ~4.5 mg (vergelijking met andere databanken); copper: soybean copper ~1.6 mg (vergelijking met andere databanken)",
+      "copper": 1.6
+    },
+    "mvt:03.459": {
+      "potassium": 300,
+      "_waarom": "potassium: rissole potassium ~300 mg, 980 implausible (vergelijking met andere databanken)"
+    },
+    "mvt:03.134": {
+      "b2": null,
+      "_waarom": "b2: meat loaf riboflavin far too low (vergelijking met andere databanken)"
+    },
+    "mvt:03.008": {
+      "b1": 0.22,
+      "_waarom": "b1: zero thiamin impossible for raw game (vergelijking met andere databanken)"
+    },
+    "usda_sr:171529": {
+      "choline": 70,
+      "_waarom": "choline: choline of turkey breast ~70-80 mg, 6.6 implausible (vergelijking met andere databanken)"
+    },
+    "cofid:17-360": {
+      "copper": null,
+      "_waarom": "copper: gelatin copper inconsistent; 0.05 vs 2.16 elsewhere (vergelijking met andere databanken)"
+    },
+    "frida:611": {
+      "b12": 1.8,
+      "_waarom": "b12: pike B12 ~1.8 ug, 24 is x13 (vergelijking met andere databanken)"
+    },
+    "mvt:04.006": {
+      "cholesterol": 40,
+      "_waarom": "cholesterol: zero cholesterol impossible for fish (vergelijking met andere databanken)"
+    },
+    "slv:1271": {
+      "vit_a": null,
+      "_waarom": "vit_a: vit A 6-10x higher than all others, likely unit/retinol mix-up (vergelijking met andere databanken)"
+    },
+    "slv:1272": {
+      "vit_a": null,
+      "_waarom": "vit_a: vit A 7-13x higher than others (vergelijking met andere databanken)"
+    },
+    "mvt:04.098": {
+      "b6": 0.05,
+      "_waarom": "b6: B6 of canned shrimp ~0.05 (vergelijking met andere databanken)"
+    },
+    "cofid:19-317": {
+      "phosphorus": 150,
+      "_waarom": "phosphorus: liver pate phosphorus ~150, 450 implausible (vergelijking met andere databanken)"
+    },
+    "slv:1519": {
+      "vit_c": 0.0,
+      "_waarom": "vit_c: no vitamin C in fried pork sausage (vergelijking met andere databanken)"
+    },
+    "slv:1576": {
+      "b1": 0.3,
+      "_waarom": "b1: walnut thiamin ~0.3 mg (vergelijking met andere databanken)"
+    },
+    "mvt:12.012": {
+      "zinc": 2.9,
+      "_waarom": "zinc: popcorn zinc ~3 mg (vergelijking met andere databanken); vit_e: popcorn vit E ~2.5 mg (vergelijking met andere databanken)",
+      "vit_e": 2.5
+    },
+    "usda_sr:168774": {
+      "calcium": null,
+      "_waarom": "calcium: zero calcium is label rounding for cocoa (vergelijking met andere databanken)"
+    },
+    "slv:7054": {
+      "b3": 2.2,
+      "_waarom": "b3: cocoa niacin ~2 mg (vergelijking met andere databanken)"
+    },
+    "mvt:09.011": {
+      "water": 4,
+      "_waarom": "water: cocoa powder water ~4 g; 21 inconsistent with macros (vergelijking met andere databanken)"
+    },
+    "slv:1916": {
+      "iron": 0.4,
+      "_waarom": "iron: sherry iron ~0.4 mg (vergelijking met andere databanken)"
+    },
+    "frida:922": {
+      "beta_carotene": 320,
+      "_waarom": "beta_carotene: zero beta-carotene is a missing value; ketchup ~300-600 (vergelijking met andere databanken)"
+    },
+    "cofid:17-709": {
+      "b1": 0.05,
+      "_waarom": "b1: ketchup thiamin ~0.05 mg, 1.0 is x20 (vergelijking met andere databanken)"
+    },
+    "cofid:15-838": {
+      "b12": 0.25,
+      "_waarom": "b12: pesto B12 ~0.2-0.3 ug (vergelijking met andere databanken)"
+    },
+    "slv:2185": {
+      "b6": 0.06,
+      "_waarom": "b6: B6 of melon is ~0.06; 0.39 is a unit/typo error (vergelijking met andere databanken)"
+    },
+    "usda_sr:169051": {
+      "fiber": 0,
+      "_waarom": "fiber: Nonfat mozzarella has no fiber (vergelijking met andere databanken)"
+    },
+    "mvt:06.105": {
+      "b9": null,
+      "_waarom": "b9: Cooked lentils contain ~180 ug folate; 23 far too low (vergelijking met andere databanken)"
+    },
+    "slv:4042": {
+      "magnesium": 14,
+      "_waarom": "magnesium: Water chestnut Mg ~14 mg (vergelijking met andere databanken)"
+    },
+    "cofid:16-382": {
+      "b3": 2.0,
+      "_waarom": "b3: Pangasius niacin ~2 mg (vergelijking met andere databanken)"
+    },
+    "slv:5868": {
+      "b9": 100,
+      "_waarom": "b9: Boiled broad beans have ~100 ug folate, not 0 (vergelijking met andere databanken)"
+    },
+    "slv:7200": {
+      "vit_a": null,
+      "_waarom": "vit_a: Paneer has vitamin A in the hundreds, 0.33 impossible (vergelijking met andere databanken)"
+    },
+    "cofid:15-666": {
+      "b9": null,
+      "_waarom": "b9: Folate 387 implausible for bean burger (vergelijking met andere databanken); b12: Plant bean burger B12 ~0.2 at most (vergelijking met andere databanken)",
+      "b12": 0.2
+    },
+    "mvt:06.067": {
+      "vit_c": 60,
+      "_waarom": "vit_c: Spring greens contain vitamin C, 0 impossible (vergelijking met andere databanken)"
+    },
+    "usda_sr:168765": {
+      "magnesium": null,
+      "_waarom": "magnesium: Chocolate caramels contain magnesium; 0 impossible (vergelijking met andere databanken)"
+    },
+    "mvt:01.202": {
+      "fiber": 0,
+      "_waarom": "fiber: Cheese spread has no fiber (vergelijking met andere databanken)"
+    },
+    "cofid:12-492": {
+      "vit_a": null,
+      "_waarom": "vit_a: Port Salut vitamin A ~250, 14 far too low (vergelijking met andere databanken)"
+    },
+    "cofid:18-292": {
+      "b2": 0.08,
+      "_waarom": "b2: Chicken skin B2 ~0.08 (vergelijking met andere databanken)"
+    },
+    "mvt:09.018": {
+      "water": 2,
+      "_waarom": "water: Milk chocolate with nuts has ~1-2% water (vergelijking met andere databanken)"
+    },
+    "cofid:16-299": {
+      "vit_c": null,
+      "_waarom": "vit_c: Cod roe contains vitamin C (~19 mg); 0 is a missing value (vergelijking met andere databanken)"
+    },
+    "cofid:13-818": {
+      "vit_c": null,
+      "_waarom": "vit_c: Dried coriander is rich in vitamin C; 0 is a missing value (vergelijking met andere databanken); b9: Dried coriander is rich in folate; 0 is a missing value (vergelijking met andere databanken)",
+      "b9": null
+    },
+    "mvt:01.318": {
+      "beta_carotene": null,
+      "_waarom": "beta_carotene: 607 ug beta-carotene in ice cream implausible (vergelijking met andere databanken)"
+    },
+    "mvt:06.125": {
+      "copper": 0.05,
+      "_waarom": "copper: Jalapeno copper ~0.05 mg (vergelijking met andere databanken)"
+    },
+    "mvt:04.229": {
+      "cholesterol": null,
+      "_waarom": "cholesterol: Mackerel always has cholesterol; 0 is a missing value (vergelijking met andere databanken); fat: Mackerel fat 1.6 is far too low for mackerel (vergelijking met andere databanken)",
+      "fat": null
+    },
+    "cofid:12-328": {
+      "b2": 0.14,
+      "_waarom": "b2: Goat milk B2 ~0.14 (vergelijking met andere databanken)"
+    },
+    "mvt:06.557": {
+      "b9": 240,
+      "_waarom": "b9: Raw peanuts have ~240 ug folate (vergelijking met andere databanken)"
+    },
+    "mvt:03.475": {
+      "calcium": 20,
+      "_waarom": "calcium: Pepperoni calcium ~20 mg (vergelijking met andere databanken)"
+    },
+    "mvt:05.194": {
+      "b6": null,
+      "_waarom": "b6: B6 of plain rice cake ~0.15-0.3, 0.61 too high (vergelijking met andere databanken)"
+    },
+    "usda_sr:170191": {
+      "b5": 0.69,
+      "_waarom": "b5: tahini pantothenic acid ~0.7 mg; 0.052 implausibly low (vergelijking met andere databanken)"
+    },
+    "mvt:06.702": {
+      "water": 3.0,
+      "_waarom": "water: tahini water ~3 g/100g; 13 not consistent with a paste of 59% fat (vergelijking met andere databanken)"
+    },
+    "mvt:04.277": {
+      "phosphorus": null,
+      "_waarom": "phosphorus: battered shrimp phosphorus far too low (shrimp ~200) (vergelijking met andere databanken)"
+    },
+    "cofid:13-856": {
+      "potassium": 628.0,
+      "_waarom": "potassium: tamarind potassium ~630 mg, 100 too low (vergelijking met andere databanken)"
+    },
+    "mvt:06.080": {
+      "b1": null,
+      "_waarom": "b1: plain tomato puree thiamin ~0.1 mg; 0.98 unrealistic (vergelijking met andere databanken)"
+    },
+    "cofid:13-531": {
+      "b1": null,
+      "_waarom": "b1: plain tomato puree thiamin ~0.1 mg; 0.98 unrealistic (vergelijking met andere databanken)"
+    },
+    "frida:189": {
+      "vit_k": 1.9,
+      "_waarom": "vit_k: wheat kernel vit K ~1.9 ug, 30 too high (vergelijking met andere databanken)"
+    },
+    "usda_sr:171402": {
+      "b1": 0.01,
+      "_waarom": "b1: thousand island thiamin ~0.01-0.02; 1.445 implausible (vergelijking met andere databanken)"
+    },
+    "usda_sr:173082": {
+      "carbs": 0.0,
+      "_waarom": "carbs: animal fat has no carbohydrate (vergelijking met andere databanken)"
+    },
+    "cofid:18-504": {
+      "b12": null,
+      "_waarom": "b12: B12 of coated chicken ~0.2-0.3, 2.8 implausible (vergelijking met andere databanken)"
+    },
+    "cofid:18-503": {
+      "cholesterol": null,
+      "_waarom": "cholesterol: cholesterol of coated chicken pieces cannot be 4.1 mg (vergelijking met andere databanken)"
+    },
+    "cofid:13-229": {
+      "vit_a": null,
+      "_waarom": "vit_a: dried-cole/collards vit A far too low vs collards (vergelijking met andere databanken); beta_carotene: carotene far too low for cooked collard/cole greens (vergelijking met andere databanken)",
+      "beta_carotene": null
+    },
+    "usda_sr:172614": {
+      "b1": null,
+      "_waarom": "b1: lamb liver thiamin ~0.35, 1.57 too high (vergelijking met andere databanken)"
+    },
+    "cofid:13-288": {
+      "magnesium": 130.0,
+      "_waarom": "magnesium: dried shiitake magnesium ~130 mg (vergelijking met andere databanken)"
+    },
+    "cofid:13-569": {
+      "b6": 0.3,
+      "_waarom": "b6: plantain B6 ~0.3; 1.0 too high (vergelijking met andere databanken)"
+    },
+    "cofid:19-662": {
+      "b1": null,
+      "_waarom": "b1: pork contains thiamin; 0 in CoFID is missing/trace not real (vergelijking met andere databanken)"
+    },
+    "cofid:19-511": {
+      "b1": null,
+      "_waarom": "b1: pork contains thiamin; 0 in CoFID is missing/trace not real (vergelijking met andere databanken)"
+    },
+    "cofid:13-458": {
+      "manganese": null,
+      "_waarom": "manganese: frozen spinach manganese ~0.7-0.9 in other sources (vergelijking met andere databanken)"
+    },
+    "ciqual:28100": {
+      "phosphorus": 210,
+      "_waarom": "phosphorus: pork chop ~200-230 mg; 463 implausible (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:36016": {
+      "iron": 0.9,
+      "_waarom": "iron: chicken meat+skin ~0.8-1 mg; 3.41 far too high (controle meestgegeten voedingsmiddelen); copper: chicken ~0.05-0.07 mg; 0.25 too high (controle meestgegeten voedingsmiddelen); b2: chicken ~0.15-0.2 mg; 0.82 too high (controle meestgegeten voedingsmiddelen)",
+      "copper": 0.06,
+      "b2": 0.16
+    },
+    "ciqual:19415": {
+      "fiber": 0,
+      "_waarom": "fiber: cream contains no fibre (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:4008": {
+      "selenium": 0.3,
+      "_waarom": "selenium: raw potato ~0.3 ug; 22.9 unit/entry slip (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:12810": {
+      "calcium": 350,
+      "_waarom": "calcium: semi-dry goat cheese typically 300-500 mg; 145 inconsistent with phosphorus 375 (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:5214": {
+      "sodium": 5,
+      "_waarom": "sodium: red wine ~4-6 mg; 400 is a slip (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20048": {
+      "b1": 0.04,
+      "_waarom": "b1: canned tomato ~0.03-0.06 mg; 0.58 too high (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:12120": {
+      "copper": 0.04,
+      "_waarom": "copper: parmesan copper ~0.03-0.05 mg; 0.71 too high (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:26010": {
+      "cholesterol": 50,
+      "_waarom": "cholesterol: herring ~50-80 mg; 13 too low (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:13131": {
+      "vit_e": 4,
+      "_waarom": "vit_e: olives ~2-5 mg; 20 too high (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:13040": {
+      "sodium": 1,
+      "_waarom": "sodium: grapefruit ~1 mg; 400 implausible (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20034": {
+      "iron": 0.2,
+      "_waarom": "iron: onion ~0.2 mg; 0.00019 unit slip (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:11008": {
+      "b1": 0.04,
+      "_waarom": "b1: ketchup ~0.03-0.06 mg; 0.24 too high (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20532": {
+      "selenium": 3,
+      "_waarom": "selenium: canned chickpeas ~2-6 ug; 23.3 too high (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:13001": {
+      "beta_carotene": 2160,
+      "_waarom": "beta_carotene: dried apricot has ~2000+ ug beta-carotene; value looks like fresh-fruit-scale slip (controle meestgegeten voedingsmiddelen); vit_a: inconsistent with dried apricot (~180-250 ug RAE) (controle meestgegeten voedingsmiddelen)",
+      "vit_a": 180
+    },
+    "ciqual:20516": {
+      "b9": 557,
+      "_waarom": "b9: dried chickpeas have ~500-560 ug folate (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20014": {
+      "beta_carotene": 670,
+      "_waarom": "beta_carotene: red cabbage ~670 ug beta-carotene (controle meestgegeten voedingsmiddelen); vit_a: follows from beta-carotene, ~28 ug RAE (controle meestgegeten voedingsmiddelen)",
+      "vit_a": 28
+    },
+    "ciqual:36201": {
+      "vit_e": 0.7,
+      "_waarom": "vit_e: duck meat ~0.7 mg vit E; 0.02 implausibly low (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:13063": {
+      "sugars": 8.5,
+      "_waarom": "sugars: sugars far below carbs (9.8) minus fiber; typical ~8-9 g (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20530": {
+      "b9": 625,
+      "_waarom": "b9: dried mung beans ~620 ug folate (controle meestgegeten voedingsmiddelen); vit_k: dried mung beans ~9 ug vit K; 170 implausible (controle meestgegeten voedingsmiddelen)",
+      "vit_k": 9
+    },
+    "ciqual:13713": {
+      "b1": 0.02,
+      "_waarom": "b1: canned apricot thiamin ~0.02 mg; 0.68 impossible (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:26039": {
+      "selenium": 80,
+      "_waarom": "selenium: canned tuna ~65-100 ug selenium (controle meestgegeten voedingsmiddelen)"
+    },
+    "frida:517": {
+      "vit_k": 0.5,
+      "_waarom": "vit_k: cottage cheese has <1 ug vit K (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:10007": {
+      "vit_e": 1.3,
+      "_waarom": "vit_e: shrimp vit E is ~1-2 mg, estimate ~4x too high (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:12060": {
+      "iron": 0.65,
+      "_waarom": "iron: feta iron ~0.6-0.9 mg, estimate ~4x too low (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20502": {
+      "b9": 80,
+      "_waarom": "b9: boiled white beans have ~80-100 ug folate, estimate ~5x too low (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20507": {
+      "b9": 170,
+      "_waarom": "b9: boiled chickpeas ~170 ug folate, estimate ~4x too low (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:16520": {
+      "choline": 1,
+      "_waarom": "choline: pure fat contains ~0-1 mg choline, group estimate wrong (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:20501": {
+      "starch": 35,
+      "_waarom": "starch: dried white beans ~35-40 g starch of 44 g carbs; estimate ~2x too low (controle meestgegeten voedingsmiddelen)"
+    },
+    "ciqual:11063": {
+      "sugars": 5,
+      "_waarom": "sugars: sugars 37.6 g exceed carbs minus fiber plausibility (42.2-13.6); dried dill sugars are low (controle meestgegeten voedingsmiddelen)"
     }
   }
 }

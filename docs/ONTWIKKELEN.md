@@ -69,7 +69,9 @@ de app zonder account.
 - `lib/ui/`: schermen en widgets
 - `tool/build_foods.py`: bouwt `assets/db/foods.db` uit alle bronnen
 - `tool/food_fixes.json`: correcties op fouten in de bronnen zelf, met uitleg per waarde
-- `tool/audit_foods.py`: controleert de database op waarden die niet kunnen kloppen
+- `tool/audit_foods.py`, `tool/consensus.py`: controleren de database op waarden die niet kunnen kloppen
+- `tool/food_labels.jsonl`, `tool/label_fixes.json`: labels per product (zie hieronder)
+- `tool/retention.py`, `tool/xlsx_read.py`: kookverliezen en een kleine Excel-lezer
 - `tool/fetch_slv.py`: haalt de Zweedse database op via hun API
 - `tool/search_probe_test.dart`: toont zoekresultaten voor een paar woorden (`flutter test tool/search_probe_test.dart`)
 - `tool/seed_demo.py`: vult een voorbeelddag in, voor screenshots
@@ -88,20 +90,34 @@ python3 tool/build_foods.py <map> assets/db/foods.db
 python3 tool/audit_foods.py assets/db/foods.db /tmp/audit   # bevindingen.csv + samenvatting.md
 ```
 
+Bronnen: CIQUAL 2025 (en 2020 voor verdwenen producten), Livsmedelsverket, Matvaretabellen, Frida (Denemarken),
+CoFID (VK), USDA SR Legacy en Foundation. Daarnaast `usda_retention/retn06.txt` (USDA-kookverliezen) en
+`langual/LanguaL2017.XML` (alleen voor de hints bij het labelen).
+
 Wat het bouwscript doet met ontbrekende of foute waarden:
 
-1. Correcties uit `tool/food_fixes.json` (eenheidsfouten, tikfouten, een misleidende naam), vóór alles.
-2. Vaste regels: aminozuren die niet bij het eiwit passen vallen weg; een zuiver plantaardig product krijgt
-   B12, cholesterol, vitamine D (behalve paddenstoelen) en EPA/DHA = 0; vitamine A wordt pas uit retinol +
-   bètacaroteen berekend als retinol bekend is.
-3. Aanvullen, in drie rondes, telkens alleen met gemeten waarden (nooit een schatting van een schatting):
-   - hetzelfde voedingsmiddel in een andere bron (zelfde bereiding, naam = verfijning);
-   - een vergelijkbaar product (zelfde hoofdproduct, andere bereiding), geschaald met de vetvrije droge stof,
-     het vet of het eiwit; `~bron:id` in de kolom `estimated`;
-   - het gemiddelde van vergelijkbare producten (zelfde hoofdwoord, anders de categorie), nooit hoger dan het
-     hoogste gemeten product van die groep; `~~head:…` of `~~cat:…`.
-4. Onder de meetgrens (CIQUAL "< x") en nergens anders gevonden: 0.
-5. Geschatte deelwaarden worden ingekort tot ze niet boven het totaal uitkomen.
+1. Correcties uit `tool/food_fixes.json` (eenheidsfouten, tikfouten, een misleidende naam), vóór alles. Elke
+   correctie heeft een reden; een deel komt uit de controle met andere databanken (zie hieronder).
+2. Elk product heeft een label in `tool/food_labels.jsonl` (voedingsmiddel, deel, plant/dier, groep, bereiding,
+   kenmerken, gerecht). Verbeteringen staan in `tool/label_fixes.json`.
+3. Vaste regels: aminozuren die niet bij het eiwit passen vallen weg; zuiver plantaardig (niet verrijkt) krijgt
+   B12, cholesterol, vitamine D en EPA/DHA = 0; vitamine A pas uit retinol + bètacaroteen als retinol bekend is.
+4. Aanvullen, telkens alleen uit gemeten waarden (nooit een schatting van een schatting), omgerekend met vet,
+   eiwit of vetvrije droge stof:
+   - hetzelfde voedingsmiddel (zelfde label, ook bereiding): mediaan van alle databanken;
+   - hetzelfde voedingsmiddel, andere bereiding: plus de kookverliezen (`tool/retention.py`); `~bron:id`;
+   - de groep (bv. "fish, fillet"), anders de ruimere groep, nooit hoger dan het hoogste gemeten product;
+     `~~group:…`. Verrijkt en niet-verrijkt worden voor vitamines en mineralen nooit gemengd.
+5. Onder de meetgrens (CIQUAL "< x") en nergens anders gevonden: 0.
+6. Geschatte deelwaarden worden ingekort tot ze niet boven het totaal uitkomen.
+
+Labels maken (eenmalig, of voor nieuwe producten): `tool/export_for_labels.py` maakt de invoer, het labelen gebeurt
+volgens een vaste opdracht (voedingsmiddel, deel, …), `tool/check_labels.py` controleert op verschoven regels en
+`tool/merge_labels.py` maakt er `tool/food_labels.jsonl` van.
+
+Controle: `tool/audit_foods.py` (regels: energie, sommen, grenzen, plant/dier, uitschieters) en
+`tool/consensus.py` (dezelfde voeding in verschillende databanken). Verdachte waarden worden één voor één
+beoordeeld; `tool/apply_review.py` neemt de uitkomst over in de correctiebestanden.
 
 De app toont elke geschatte waarde met ≈ en de herkomst. Verandert de database, dan werkt de app bij de start
 de dagboekregels van ingebouwde producten bij (tabel `meta`, sleutel `version`).
@@ -112,7 +128,9 @@ gebruikers er niet voor laten betalen).
 
 ## Bronnen en licenties
 
-- ANSES-CIQUAL 2020: Licence Ouverte (Etalab)
+- ANSES-CIQUAL 2025 (en 2020 voor producten die verdwenen): Licence Ouverte 2.0 (Etalab)
+- Frida 6.1, DTU Fødevareinstituttet: vrij te gebruiken met bronvermelding
+- McCance and Widdowson's CoFID 2021 (Public Health England): Open Government Licence v3.0
 - Livsmedelsverket, Livsmedelsdatabasen: CC BY 4.0
 - Matvaretabellen (Mattilsynet): Norwegian Licence for Open Government Data (NLOD)
 - USDA FoodData Central: publiek domein (CC0)

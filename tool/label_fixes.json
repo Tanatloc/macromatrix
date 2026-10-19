@@ -1,0 +1,43 @@
+{
+  "slv:708": {
+    "f": "wheat germ"
+  },
+  "slv:55": {
+    "f": "mayonnaise salad",
+    "p": "product",
+    "c": "prepared",
+    "fl": []
+  },
+  "ciqual:18100": {
+    "f": "cocoa powder",
+    "p": "powder"
+  },
+  "usda_sr:169992": {
+    "f": "chicory greens"
+  },
+  "usda_sr:172428": {
+    "f": "split pea",
+    "p": "seed",
+    "c": "dried"
+  },
+  "usda_sr:172537": {
+    "p": "product"
+  },
+  "usda_sr:169310": {
+    "p": "leaf"
+  },
+  "cofid:11-1045": {
+    "f": "cornstarch"
+  },
+  "usda_sr:174134": {
+    "p": "drink",
+    "c": "prepared"
+  },
+  "usda_sr:174803": {
+    "f": "snack bar",
+    "p": "product"
+  },
+  "usda_sr:170455": {
+    "p": "leaf"
+  }
+}

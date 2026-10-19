@@ -5,9 +5,11 @@ import '../nutrition/values.dart';
 
 /// Herkomst van een voedingsmiddel. De volgorde bepaalt de voorkeur bij zoeken: Europese bronnen eerst.
 enum FoodSource {
-  ciqual('CIQUAL', ('France', 'Frankrijk'), 'ANSES-CIQUAL 2020', european: true),
+  ciqual('CIQUAL', ('France', 'Frankrijk'), 'ANSES-CIQUAL 2025', european: true),
   slv('Livsmedelsverket', ('Sweden', 'Zweden'), 'Livsmedelsverket, Livsmedelsdatabasen', european: true),
   mvt('Matvaretabellen', ('Norway', 'Noorwegen'), 'Matvaretabellen, Mattilsynet', european: true),
+  frida('Frida', ('Denmark', 'Denemarken'), 'Frida, DTU Fødevareinstituttet', european: true),
+  cofid('CoFID', ('UK', 'VK'), "McCance and Widdowson's Composition of Foods Integrated Dataset", european: true),
   usda('USDA', ('US', 'VS'), 'USDA FoodData Central'),
   off('Open Food Facts', null, 'Open Food Facts (ODbL)'),
   custom('Eigen product', null, 'Eigen product'),

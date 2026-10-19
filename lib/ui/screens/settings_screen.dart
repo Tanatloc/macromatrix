@@ -42,6 +42,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .replaceAll('Frankrijk', 'France')
             .replaceAll('Zweden', 'Sweden')
             .replaceAll('Noorwegen', 'Norway')
+            .replaceAll('Denemarken', 'Denmark')
+            .replaceAll('(VK)', '(UK)')
+            .replaceAll('versie', 'version')
+            .replaceAll('vrij te gebruiken met bronvermelding', 'free to use with attribution')
             .replaceAll('(VS)', '(US)')
             .replaceAll('publiek domein', 'public domain');
 

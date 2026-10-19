@@ -121,7 +121,7 @@ def main(db_path, out_dir):
             if g('vit_d') > 1 and not re.search(r'\b(mushrooms?|shiitake|chanterelle|morel|maitake|champignon)\b', name, re.I):
                 flag(f, 'plant', 'vit_d', n['vit_d'], 'vitamine D in plantaardig product (geen paddenstoel)')
             # USDA telt ook alfa-caroteen en cryptoxanthine mee in vitamine A, dus alleen voor de Europese bronnen
-            if f['source'] in ('ciqual', 'slv', 'mvt') and 'vit_a' in n and 'beta_carotene' in n and n['vit_a'] > n['beta_carotene'] / 12 * 1.8 + 30:
+            if f['source'] in ('ciqual', 'slv', 'mvt', 'frida', 'cofid') and 'vit_a' in n and 'beta_carotene' in n and n['vit_a'] > n['beta_carotene'] / 12 * 1.8 + 30:
                 flag(f, 'plant', 'vit_a', n['vit_a'], f'vitamine A veel hoger dan bètacaroteen/12 ({n["beta_carotene"] / 12:.0f}): retinol in plant?')
         elif kd == 'dier':
             if g('fiber') > 0.5:
@@ -147,14 +147,6 @@ def main(db_path, out_dir):
             if ratio > 20 or ratio < 1 / 20:
                 tag = 'geschat' if k in f['est'] else 'uitschieter'
                 flag(f, tag, k, v, f'mediaan groep {med:.3g} (×{ratio:.3g})')
-
-        # Geschatte waarden: past de naam van de donor?
-        for k, donor_ref in f['est'].items():
-            d = by_ref.get(donor_ref)
-            if not d:
-                continue
-            if g('energy') and d['n'].get('energy') and not (1 / 1.5 <= d['n']['energy'] / g('energy') <= 1.5):
-                flag(f, 'geschat', k, n.get(k), f'donor {donor_ref} "{d["name"]}" heeft {d["n"]["energy"]:.0f} kcal')
 
     findings.sort(key=lambda x: (x['check'], x['name']))
     with open(out / 'bevindingen.csv', 'w', newline='') as fh:

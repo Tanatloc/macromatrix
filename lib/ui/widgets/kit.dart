@@ -549,6 +549,8 @@ class SourceBadge extends StatelessWidget {
     FoodSource.ciqual => 'FR',
     FoodSource.slv => 'SE',
     FoodSource.mvt => 'NO',
+    FoodSource.frida => 'DK',
+    FoodSource.cofid => 'UK',
     FoodSource.usda => 'US',
     _ => null,
   };
