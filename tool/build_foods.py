@@ -301,7 +301,12 @@ def ciqual_rows(root):
     if not new and not old:
         print('CIQUAL: niet gevonden, overgeslagen')
         return
-    for code, (name, local, group, values) in {**old, **new}.items():
+    for code in {**old, **new}:
+        # 2025, tenzij daar de energie ontbreekt en 2020 die wel had (anders verdwijnt het product)
+        pick = new.get(code)
+        if pick is None or ('energy' not in pick[3] and code in old and 'energy' in old[code][3]):
+            pick = old[code]
+        name, local, group, values = pick
         yield 'ciqual', code, name, local, group, values, []
 
 
