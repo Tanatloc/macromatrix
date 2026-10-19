@@ -119,6 +119,22 @@ Controle: `tool/audit_foods.py` (regels: energie, sommen, grenzen, plant/dier, u
 `tool/consensus.py` (dezelfde voeding in verschillende databanken). Verdachte waarden worden één voor één
 beoordeeld; `tool/apply_review.py` neemt de uitkomst over in de correctiebestanden.
 
+
+Nauwkeurigheid meten: `HOLDOUT=3000 python3 tool/build_foods.py <map> /tmp/x.db` verbergt 3000 gemeten waarden,
+schat ze opnieuw en vergelijkt. Uitslag op 2026-10-20 (afwijking = |schatting/meting|):
+
+| | aantal | typische afwijking (mediaan) | binnen ±25% | binnen 2× |
+|---|---|---|---|---|
+| ALLES | 2996 | 25% | 50% | 78% |
+| zelfde voeding | 2144 | 21% | 54% | 81% |
+| andere bereiding | 690 | 40% | 43% | 72% |
+| groep | 162 | 68% | 28% | 61% |
+| phosphorus | 185 | 18% | 58% | 85% |
+| calcium | 170 | 28% | 47% | 78% |
+| potassium | 164 | 17% | 59% | 90% |
+| b2 | 158 | 32% | 46% | 80% |
+| b1 | 156 | 30% | 46% | 76% |
+
 De app toont elke geschatte waarde met ≈ en de herkomst. Verandert de database, dan werkt de app bij de start
 de dagboekregels van ingebouwde producten bij (tabel `meta`, sleutel `version`).
 

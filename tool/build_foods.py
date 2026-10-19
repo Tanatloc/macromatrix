@@ -25,6 +25,8 @@ import glob
 import hashlib
 import html
 import json
+import os
+import random
 import re
 import sqlite3
 import statistics
@@ -1126,6 +1128,17 @@ def label_fill(rows, labels, retention_table):
             by_group.setdefault((l['g'], l['k'], l['d'], l['p']), []).append(i)
             by_g.setdefault((l['g'], l['k'], l['d']), []).append(i)
     rt = [retention.factors(retention_table, l, rows[i]['nut'].get('fat')) if l else {} for i, l in enumerate(lab)]
+    words = [name_profile(r['name'])[1] for r in rows]
+
+    def closest(i, donors):
+        if len(donors) <= 1:
+            return donors
+        def sim(j):
+            a, b = words[i], words[j]
+            return len(a & b) / len(a | b) if a | b else 0
+        scored = [(sim(j) + (0.15 if rows[j]['source'][:4] == rows[i]['source'][:4] else 0), j) for j in donors]
+        top = max(x for x, _ in scored)
+        return [j for x, j in scored if x >= top - 0.1]
 
     def ok_donor(i, j, k):
         if k in FORTIF and _fortified(lab[i]) != _fortified(lab[j]):
@@ -1146,6 +1159,9 @@ def label_fill(rows, labels, retention_table):
         sim = [j for j in by_sim.get((l['f'], l['p'], l['d']), ()) if j != i and j not in same]
         for k in missing:
             donors = [j for j in same if k in measured[j] and ok_donor(i, j, k)]
+            # De metingen waarvan de naam het best overeenkomt (vaak een variant uit dezelfde databank, met dezelfde
+            # analyse): die voorspellen het best (gemeten met verborgen waarden, zie holdout)
+            donors = closest(i, donors)
             if donors:
                 # Ook bij hetzelfde voedingsmiddel verschillen vet en water (andere stukken vlees, andere
                 # merken): elke meting eerst omrekenen naar dit product, dan de mediaan
@@ -1177,7 +1193,8 @@ def label_fill(rows, labels, retention_table):
                 cands.append((tier, v, j))
             if cands:
                 best = min(t for t, _, _ in cands)
-                vals = sorted((v, j) for t, v, j in cands if t == best)
+                keep = set(closest(i, [j for t, _, j in cands if t == best]))
+                vals = sorted((v, j) for t, v, j in cands if t == best and j in keep)
                 r['nut'][k] = statistics.median(v for v, _ in vals)
                 r['est'][k] = '~' + refs[vals[(len(vals) - 1) // 2][1]]
                 counts[1] += 1
@@ -1209,6 +1226,25 @@ def label_fill(rows, labels, retention_table):
             b = _basis(k, r['nut'])
             if b is None:
                 continue
+            # Eerst de producten uit de groep waarvan de naam duidelijk lijkt (bv. "pike" voor "pike, smoked")
+            near = []
+            for j in by_group.get((l['g'], l['k'], l['d'], l['p']), ()):
+                if j == i or k not in measured[j] or (k in FORTIF and _fortified(lab[j]) != fort):
+                    continue
+                bj = _basis(k, rows[j]['nut'])
+                if not bj or bj <= (0.5 if k in FATTY or k in AMINO else 3):
+                    continue
+                a, c = words[i], words[j]
+                simil = len(a & c) / len(a | c) if a | c else 0
+                if simil >= 0.34:
+                    near.append((simil, measured[j][k] / bj * b, j))
+            if near:
+                top = max(x for x, _, _ in near)
+                vals = sorted((v, j) for x, v, j in near if x >= top - 0.1)
+                r['nut'][k] = statistics.median(v for v, _ in vals)
+                r['est'][k] = '~' + refs[vals[(len(vals) - 1) // 2][1]]
+                counts[2] += 1
+                continue
             for table, key, minimum, label in ((by_group, (l['g'], l['k'], l['d'], l['p']), 5, f"{l['g']}, {l['p']}"),
                                                (by_g, (l['g'], l['k'], l['d']), 10, l['g'])):
                 m = median(table, key, k, fort, minimum)
@@ -1227,6 +1263,57 @@ def r_ok(r):
 # Alle voedingsstoffen die aangevuld mogen worden. Energie niet (dat is de controle), en de totalen
 # omega-3 en omega-6 worden daarna opnieuw berekend uit de delen.
 ALL_KEYS = sorted(({k for k in USDA if not k.startswith('_')} | {'carbs', 'chloride'}) - {'energy', 'omega3', 'omega6'})
+
+
+# ─────────────────────────── Nauwkeurigheidstest ───────────────────────────
+
+HOLDOUT_KEYS = ['choline', 'b5', 'vit_k', 'iodine', 'selenium', 'vit_d', 'b12', 'manganese', 'copper', 'vit_e', 'b9',
+                'b1', 'b2', 'b3', 'b6', 'vit_c', 'vit_a', 'beta_carotene', 'zinc', 'iron', 'magnesium', 'potassium',
+                'calcium', 'phosphorus', 'lysine', 'cholesterol', 'ala', 'epa', 'dha']
+
+
+def holdout(rows, n):
+    """Verbergt n willekeurige gemeten waarden (> 0) en onthoudt ze."""
+    pool = [(i, k) for i, r in enumerate(rows) for k in HOLDOUT_KEYS
+            if r['nut'].get(k, 0) > 0 and k not in r.get('bio0', ()) and r['category'] not in SKIP_GROUP_CATEGORIES]
+    rng = random.Random(42)
+    picked = rng.sample(pool, min(n, len(pool)))
+    hidden = []
+    for i, k in picked:
+        hidden.append((rows[i], k, rows[i]['nut'].pop(k)))
+    return hidden
+
+
+def holdout_report(hidden):
+    import math
+    by_key, by_tier = {}, {}
+    missing = 0
+    for r, k, truth in hidden:
+        v = r['nut'].get(k)
+        if v is None:
+            missing += 1
+            continue
+        src = r['est'].get(k, '')
+        tier = 'groep' if src.startswith('~~') else 'andere bereiding' if src.startswith('~') else 'zelfde voeding'
+        err = abs(math.log(max(v, 1e-6) / truth))
+        for table, key in ((by_key, k), (by_tier, tier)):
+            table.setdefault(key, []).append((err, v, truth))
+
+    def line(name, items):
+        errs = sorted(e for e, _, _ in items)
+        med = math.exp(errs[len(errs) // 2]) - 1
+        within25 = sum(1 for e in errs if e <= math.log(1.25)) / len(errs)
+        within2 = sum(1 for e in errs if e <= math.log(2)) / len(errs)
+        return f'| {name} | {len(items)} | {med:.0%} | {within25:.0%} | {within2:.0%} |'
+    print(f'verborgen: {len(hidden)}, niet geschat: {missing}')
+    print('| | aantal | typische afwijking (mediaan) | binnen ±25% | binnen 2× |')
+    print('|---|---|---|---|---|')
+    print(line('ALLES', [x for v in by_key.values() for x in v]))
+    for t in ('zelfde voeding', 'andere bereiding', 'groep'):
+        if t in by_tier:
+            print(line(t, by_tier[t]))
+    for k in sorted(by_key, key=lambda k: -len(by_key[k])):
+        print(line(k, by_key[k]))
 
 
 # ─────────────────────────── Samenvoegen ───────────────────────────
@@ -1276,7 +1363,9 @@ def main(root, target):
     print(f'correcties uit {FIXES_FILE.name}: {apply_fixes(rows)} waarden')
     for r in rows:
         validate_measured(r)
-    labels = load_labels()
+    labels = {} if os.environ.get('NOLABELS') else load_labels()
+    # Nauwkeurigheidstest: HOLDOUT=<aantal> verbergt zoveel gemeten waarden, laat ze schatten en vergelijkt
+    hidden = holdout(rows, int(os.environ['HOLDOUT'])) if os.environ.get('HOLDOUT') else []
     labelled = sum(1 for r in rows if f"{r['source']}:{r['sid']}" in labels)
     print(f'labels: {labelled} van {len(rows)} producten')
     if labelled:
@@ -1305,6 +1394,9 @@ def main(root, target):
     print(f'onder de meetgrens, op 0 gezet: {zero} waarden')
     for r in rows:
         consistency(r)
+    if hidden:
+        holdout_report(hidden)
+        return
         bc = r['nut'].get('beta_carotene')
         if r['retinol'] == 'unknown' and bc is not None and kind(r['name'], r['category']) == 'plant':
             # Planten bevatten geen retinol: vitamine A = bètacaroteen / 12
