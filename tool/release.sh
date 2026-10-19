@@ -11,5 +11,7 @@ cp build/app/outputs/flutter-apk/app-release.apk "/tmp/MacroMatrix-$v-universal.
 flutter build apk --release --split-per-abi --target-platform android-arm64,android-arm --dart-define-from-file=supabase.json
 cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "/tmp/MacroMatrix-$v-arm64-v8a.apk"
 cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "/tmp/MacroMatrix-$v-armeabi-v7a.apk"
-gh release create "v$v" "/tmp/MacroMatrix-$v-arm64-v8a.apk" "/tmp/MacroMatrix-$v-armeabi-v7a.apk" "/tmp/MacroMatrix-$v-universal.apk" \
+# Ook onder een vaste naam: de website linkt naar releases/latest/download/MacroMatrix.apk
+cp "/tmp/MacroMatrix-$v-universal.apk" /tmp/MacroMatrix.apk
+gh release create "v$v" "/tmp/MacroMatrix-$v-arm64-v8a.apk" "/tmp/MacroMatrix-$v-armeabi-v7a.apk" "/tmp/MacroMatrix-$v-universal.apk" /tmp/MacroMatrix.apk \
   -R Tanatloc/macromatrix-releases --title "MacroMatrix $v" --notes "${1:-Bug fixes and improvements.}"

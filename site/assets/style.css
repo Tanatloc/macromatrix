@@ -287,3 +287,14 @@ section.block { padding: 88px 0; }
 .riv-row i { font-style: normal; }
 .riv-row .w { color: #62C99E; }
 .riv-row .l { color: #FF8A8A; }
+
+/* Downloadblok */
+.btn .ico { width: 18px; height: 18px; flex: none; }
+.download { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.dl-card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 26px; }
+.dl-card h3 { margin: 0 0 8px; font-size: 20px; }
+.dl-card p { color: var(--ink-2); margin: 0 0 16px; }
+.dl-card .ctas { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.dl-card .small { font-size: 13.5px; color: var(--ink-3); margin: 0; }
+.dl-card code { font-size: 12.5px; word-break: break-all; }
+@media (max-width: 760px) { .download { grid-template-columns: 1fr; } }

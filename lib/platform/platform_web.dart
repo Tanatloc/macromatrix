@@ -4,6 +4,7 @@ library;
 
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:sqlite3/wasm.dart';
@@ -23,8 +24,7 @@ Future<(FoodDb, UserDb)> openDatabases() async {
 
   // Ingebouwde voedingsdatabase: alleen lezen, in het geheugen
   final memory = InMemoryFileSystem(name: 'voeding-mem');
-  final data = await rootBundle.load(FoodDb.asset);
-  memory.fileData['/foods.db'] = Uint8Buffer()..addAll(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+  memory.fileData['/foods.db'] = Uint8Buffer()..addAll(await _foodDbBytes());
   sqlite.registerVirtualFileSystem(memory);
   final foods = FoodDb(sqlite.open('/foods.db', vfs: 'voeding-mem', mode: OpenMode.readOnly));
 
@@ -33,6 +33,27 @@ Future<(FoodDb, UserDb)> openDatabases() async {
   sqlite.registerVirtualFileSystem(idb, makeDefault: true);
   final user = UserDb(sqlite.open('/user.db'));
   return (foods, user);
+}
+
+/// De voedingsdatabase. Op de website staat ze in stukken (Cloudflare Pages: max. 25 MiB per bestand, zie
+/// tool/build_site.sh); lokaal (flutter run) als één bestand.
+Future<Uint8List> _foodDbBytes() async {
+  final base = Uri.base.resolve('assets/${FoodDb.asset}');
+  final parts = await web.window.fetch('$base.parts'.toJS).toDart;
+  if (parts.ok) {
+    final n = int.tryParse((await parts.text().toDart).toDart.trim()) ?? 0;
+    if (n > 0) {
+      final out = BytesBuilder(copy: false);
+      for (var i = 0; i < n; i++) {
+        final r = await web.window.fetch('$base.$i'.toJS).toDart;
+        if (!r.ok) throw StateError('Voedingsdatabase deel $i: HTTP ${r.status}');
+        out.add((await r.arrayBuffer().toDart).toDart.asUint8List());
+      }
+      return out.takeBytes();
+    }
+  }
+  final data = await rootBundle.load(FoodDb.asset);
+  return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
 }
 
 /// Opslag van de gebruiker in de browser. Vroeger heette die "voedingsapp": bestaat de nieuwe nog niet, dan

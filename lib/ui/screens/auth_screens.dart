@@ -186,8 +186,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     Icons.public_rounded,
                     tr('European data first', 'Europese gegevens eerst'),
                     tr(
-                      'Basic foods from French, Swedish and Norwegian databases, branded products via Open Food Facts.',
-                      'Basisproducten uit Franse, Zweedse en Noorse databanken, merkproducten via Open Food Facts.',
+                      'Basic foods from seven official European and US databases, branded products via Open Food Facts.',
+                      'Basisproducten uit zeven officiële Europese en Amerikaanse databanken, merkproducten via Open Food Facts.',
                     ),
                   ),
                   point(

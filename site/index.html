@@ -30,6 +30,7 @@
       <a href="#scan">Scan</a>
       <a href="#friends">Friends</a>
       <a href="#more">More</a>
+      <a href="#download">Download</a>
       <a href="#faq">FAQ</a>
     </nav>
     <div class="header-cta">
@@ -48,7 +49,7 @@
         <p class="lead">See every vitamin and mineral you get, scan products for additives and allergens, and keep each other going with friends, levels, badges and weekly battles.</p>
         <div class="ctas">
           <a class="btn btn-primary" href="/app/?start=register">Create a free account</a>
-          <a class="btn btn-ghost" href="#friends">See the social side</a>
+          <a class="btn btn-ghost" href="#download"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Android</a>
         </div>
         <ul class="pills" aria-label="Highlights">
           <li><span class="dot" style="background:var(--protein)"></span>69 nutrients</li>
@@ -67,7 +68,7 @@
   <div class="stats">
     <div class="wrap">
       <div class="stat"><span class="num">69</span><span>nutrients tracked every day</span></div>
-      <div class="stat"><span class="num">15,166</span><span>basic foods from 4 official databases</span></div>
+      <div class="stat"><span class="num">20,576</span><span>basic foods from 7 official databases</span></div>
       <div class="stat"><span class="num">3M+</span><span>branded products to scan</span></div>
       <div class="stat"><span class="num">727</span><span>additives with an EFSA risk level</span></div>
     </div>
@@ -335,15 +336,17 @@
       </div>
       <div class="split">
         <div class="sources">
-          <div class="source"><span class="badge">FR</span><div><b>ANSES-CIQUAL</b><small>France · Licence Ouverte</small></div><span class="num">2,298</span></div>
+          <div class="source"><span class="badge">FR</span><div><b>ANSES-CIQUAL 2025</b><small>France · Licence Ouverte 2.0</small></div><span class="num">3,465</span></div>
+          <div class="source"><span class="badge">UK</span><div><b>McCance &amp; Widdowson's CoFID</b><small>United Kingdom · Open Government Licence</small></div><span class="num">2,853</span></div>
           <div class="source"><span class="badge">SE</span><div><b>Livsmedelsverket</b><small>Sweden · CC BY 4.0</small></div><span class="num">2,606</span></div>
           <div class="source"><span class="badge">NO</span><div><b>Matvaretabellen</b><small>Norway · NLOD</small></div><span class="num">2,118</span></div>
+          <div class="source"><span class="badge">DK</span><div><b>Frida</b><small>Denmark · DTU Food Institute</small></div><span class="num">1,390</span></div>
           <div class="source"><span class="badge">US</span><div><b>USDA FoodData Central</b><small>United States · public domain</small></div><span class="num">8,144</span></div>
           <div class="source"><span class="badge">OFF</span><div><b>Open Food Facts</b><small>Branded products, barcodes and additives · ODbL</small></div><span class="num">online</span></div>
           <div class="source"><span class="badge">US</span><div><b>USDA Branded Foods</b><small>Barcodes Open Food Facts does not know · public domain</small></div><span class="num">online</span></div>
         </div>
         <div class="aside">
-          <p><b style="color:var(--ink)">Filled in, never averaged.</b> If a value is missing in one database, we take it from the same food in another. Such an estimate gets a <span class="estimate">≈</span> and you always see where it came from.</p>
+          <p><b style="color:var(--ink)">Filled in, carefully.</b> If a value is missing in one database, we take it from the same food in the others, adjusted for its water and fat content and for cooking losses. Such an estimate gets a <span class="estimate">≈</span> and you always see where it came from. Hundreds of errors in the source tables have been checked and corrected.</p>
           <p><b style="color:var(--ink)">Branded products with micronutrients.</b> A label rarely lists vitamins. If a branded product is linked to a basic food, we fill in the missing values from it.</p>
           <p><b style="color:var(--ink)">EFSA reference values</b> for healthy adults, with the safe upper limit. Essential amino acids according to the WHO. This is not medical advice.</p>
         </div>
@@ -367,6 +370,35 @@
     </div>
   </section>
 
+  <section class="block" id="download">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Download</span>
+        <h2>Get MacroMatrix on your phone</h2>
+        <p>The Android app adds the barcode scanner, a home screen widget, reminders and Health Connect. It is free and open source.</p>
+      </div>
+      <div class="download">
+        <div class="dl-card">
+          <h3>Android</h3>
+          <p>Download the app and open the file on your phone. Android asks once to allow installing apps from your browser.</p>
+          <div class="ctas">
+            <a class="btn btn-primary" href="https://github.com/Tanatloc/macromatrix-releases/releases/latest/download/MacroMatrix.apk"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download APK</a>
+            <a class="btn btn-ghost" href="https://github.com/Tanatloc/macromatrix-releases/releases/latest">All versions on GitHub</a>
+          </div>
+          <p class="small">Want automatic updates? Install <a href="https://github.com/ImranR98/Obtainium">Obtainium</a> and add <code>https://github.com/Tanatloc/macromatrix-releases</code>.</p>
+        </div>
+        <div class="dl-card">
+          <h3>Browser</h3>
+          <p>On a computer or iPhone, use the web version. It works in any modern browser, also offline after your first login.</p>
+          <div class="ctas">
+            <a class="btn btn-ghost" href="/app/?start=register">Open the web app</a>
+          </div>
+          <p class="small">Play Store: coming soon.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="block" id="faq" style="padding-top:0">
     <div class="wrap">
       <div class="section-head">
@@ -379,7 +411,7 @@
         <details><summary>What do my friends see?</summary><p>Your chosen name, your avatar or photo, your level, title and showcase badges, and your average Nutrient Score per week. In a battle they also see your points for that week. Never your diary, your weight or your email address.</p></details>
         <details><summary>How do battles work?</summary><p>You challenge a friend for a week. Every day you log, your Nutrient Score for that day adds to your points. Whoever has the most points on Sunday wins. Wins count towards your battle badges and your rivalry record with that friend.</p></details>
         <details><summary>How is the product score calculated?</summary><p>60% comes from the Nutri-Score, 30% from the additives (based on EFSA assessments) and 10% from whether the product is organic. A product with a high-risk additive scores 49 at most.</p></details>
-        <details><summary>Which devices does it work on?</summary><p>In any modern browser, on your computer and on your phone. The Android app with barcode scanner, widget and Health Connect is coming to the Play Store soon.</p></details>
+        <details><summary>Which devices does it work on?</summary><p>In any modern browser, on your computer and on your phone. The Android app (barcode scanner, widget, Health Connect) can be downloaded from <a href="#download">GitHub</a>; the Play Store is coming soon.</p></details>
         <details><summary>Does it work without internet?</summary><p>Yes. After you log in, everything is also stored on your device, including products you scanned before. What you log offline goes to your account once you are back online.</p></details>
         <details><summary>How accurate are the nutrition values?</summary><p>Basic foods come from official food composition tables. Branded products come from Open Food Facts, which is filled in by its users, and USDA; check the label if in doubt. Estimated values are always marked with ≈.</p></details>
         <details><summary>Is this medical advice?</summary><p>No. The targets are general EFSA reference values for healthy adults. If you are pregnant, breastfeeding or have a medical condition, talk to your doctor or dietitian.</p></details>
