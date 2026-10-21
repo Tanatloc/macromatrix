@@ -6,6 +6,7 @@ import '../../nutrition/supplements.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
+import '../widgets/supplement_advice_view.dart';
 import '../../i18n.dart';
 
 /// Je supplementen: toevoegen uit de lijst of zelf samenstellen, en kiezen of ze elke dag vanzelf aangevinkt worden.
@@ -49,6 +50,7 @@ class SupplementsScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 13, height: 1.45, color: pal.ink2),
                   ),
                   const SizedBox(height: 12),
+                  if (s.supplementAdviceList.isNotEmpty) ...[const SupplementAdvicePanel(), const SizedBox(height: 12)],
                   if (list.isEmpty)
                     Panel(
                       shadow: false,
@@ -90,12 +92,16 @@ class SupplementsScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          SwitchListTile(
-                            contentPadding: const EdgeInsets.only(right: 8),
-                            dense: true,
-                            title: Text(tr('Tick automatically every day', 'Elke dag vanzelf aanvinken')),
-                            value: sup.auto,
-                            onChanged: (v) => s.updateSupplement(sup.copyWith(auto: v)),
+                          // Material: anders valt het tikeffect weg achter de kaart
+                          Material(
+                            type: MaterialType.transparency,
+                            child: SwitchListTile(
+                              contentPadding: const EdgeInsets.only(right: 8),
+                              dense: true,
+                              title: Text(tr('Tick automatically every day', 'Elke dag vanzelf aanvinken')),
+                              value: sup.auto,
+                              onChanged: (v) => s.updateSupplement(sup.copyWith(auto: v)),
+                            ),
                           ),
                         ],
                       ),
@@ -131,10 +137,12 @@ class _CatalogScreenState extends State<_CatalogScreen> {
     for (final x in context.watch<AppState>().supplements) {
       mine[x.baseId] = (mine[x.baseId] ?? 0) + 1;
     }
+    // Wat bij je bloedwaarden past, bovenaan
+    final advised = {for (final a in context.watch<AppState>().supplementAdviceList) ?a.catalogId};
     final list = [
       for (final x in localizedCatalog)
         if (x.name.toLowerCase().contains(_q.toLowerCase()) || x.summary.toLowerCase().contains(_q.toLowerCase())) x,
-    ];
+    ]..sort((a, b) => (advised.contains(a.id) ? 0 : 1) - (advised.contains(b.id) ? 0 : 1));
     return Scaffold(
       appBar: AppBar(title: Text(tr('Add supplement', 'Supplement toevoegen'))),
       body: Narrow(
@@ -168,10 +176,13 @@ class _CatalogScreenState extends State<_CatalogScreen> {
                 children: [
                   for (final x in list)
                     ListTile(
+                      leading: advised.contains(x.id) ? Icon(Icons.bloodtype_rounded, color: pal.high) : null,
                       title: Text(x.name),
                       subtitle: Text(
                         [
-                          if (mine[x.id] case final n?) n == 1 ? tr('already in your list', 'staat al in je lijst') : tr('$n× in your list', '$n× in je lijst'),
+                          if (advised.contains(x.id)) tr('fits your blood values', 'past bij je bloedwaarden'),
+                          if (mine[x.id] case final n?)
+                            n == 1 ? tr('already in your list', 'staat al in je lijst') : tr('$n× in your list', '$n× in je lijst'),
                           x.dose,
                           if (x.summary.isNotEmpty) x.summary,
                         ].join(' · '),
@@ -179,7 +190,11 @@ class _CatalogScreenState extends State<_CatalogScreen> {
                       trailing: mine.containsKey(x.id)
                           ? Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: [Icon(Icons.check_rounded, color: pal.ok), const SizedBox(width: 4), const Icon(Icons.add_rounded)],
+                              children: [
+                                Icon(Icons.check_rounded, color: pal.ok),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.add_rounded),
+                              ],
                             )
                           : const Icon(Icons.add_rounded),
                       onTap: () => Navigator.pop(context, x),

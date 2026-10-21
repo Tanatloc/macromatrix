@@ -11,6 +11,7 @@ import '../../nutrition/insights.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
+import '../widgets/supplement_advice_view.dart';
 
 Level _level(int status) => switch (status) {
   -1 => Level.low,
@@ -173,6 +174,7 @@ class LabsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (s.supplementAdviceList.isNotEmpty) ...[const SizedBox(height: 10), const SupplementAdvicePanel()],
                     for (final g in LabGroup.values)
                       if (latest.values.where((r) => r.value.marker!.group == g).toList() case final rows when rows.isNotEmpty) ...[
                         const SizedBox(height: 10),

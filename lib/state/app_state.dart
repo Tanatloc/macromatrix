@@ -16,6 +16,7 @@ import '../data/product_info.dart';
 import '../data/user_db.dart';
 import '../import/importer.dart';
 import '../labs/lab_report.dart';
+import '../labs/supplement_advice.dart';
 import '../nutrition/estimate.dart';
 import '../nutrition/allergens.dart';
 import '../nutrition/badges.dart';
@@ -657,6 +658,9 @@ class AppState extends ChangeNotifier {
   ];
 
   // ── Supplementen ──
+
+  /// Supplementen afgestemd op je laatste bloedwaarden, en of ze samen onder de bovengrenzen blijven.
+  List<SupplementAdvice> get supplementAdviceList => supplementAdvice(labs: latestLabs(), supplements: supplements);
 
   /// Je eigen supplementen (bewaard bij je account).
   List<Supplement> get supplements => [
