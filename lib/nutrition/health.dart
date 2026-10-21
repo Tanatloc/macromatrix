@@ -46,6 +46,8 @@ class HealthFactor {
     this.note,
     this.tips = const [],
     this.weight = 1,
+    this.impact,
+    this.gain = 0,
   });
 
   final String key, title;
@@ -69,6 +71,26 @@ class HealthFactor {
 
   /// Gewicht in het eindoordeel: de grote risicofactoren tellen dubbel.
   final double weight;
+
+  /// Wat dit ongeveer betekent voor je gezondheid, in cijfers uit grote studies (zie [healthImpact]).
+  final String? impact;
+
+  /// Hoeveel je ongeveer wint door dit te verbeteren (procent minder risico), om de grootste winst te kiezen.
+  final double gain;
+
+  HealthFactor withImpact(String? impact, double gain) => HealthFactor(
+    key: key,
+    title: title,
+    value: value,
+    rating: rating,
+    effect: effect,
+    advice: advice,
+    note: note,
+    tips: tips,
+    weight: weight,
+    impact: impact,
+    gain: gain,
+  );
 }
 
 class HealthCheck {
@@ -81,6 +103,15 @@ class HealthCheck {
   /// 0–100.
   final int score;
   final HealthRating rating;
+
+  /// Het punt waar je het meest wint, of null als alles goed is.
+  HealthFactor? get biggestGain {
+    final open = [
+      for (final f in factors)
+        if (f.gain > 0 && f.impact != null && (f.rating == HealthRating.ok || f.rating == HealthRating.poor)) f,
+    ]..sort((a, b) => b.gain.compareTo(a.gain));
+    return open.firstOrNull;
+  }
 
   /// Ook beweging beoordeeld (stappen of activiteiten).
   bool get hasActivity => factors.any((f) => activityFactors.contains(f.key));
@@ -509,6 +540,8 @@ HealthCheck? healthCheck(
 
   // ── Beweging (WHO 2020): 150–300 minuten matig of 75–150 minuten intensief per week, 2 dagen spierversterkend ──
   final days7 = 7 / activity.days.clamp(1, 7);
+  double? exerciseMinutes, stepsPerDay;
+  int? strengthDayCount;
   final running = activity.days < 7
       ? tr(
           ' This week is still running: counted as if the rest goes the same way.',
@@ -526,6 +559,7 @@ HealthCheck? healthCheck(
       minutes += m * (met >= 6 ? 2 : (met >= 3 ? 1 : 0));
     }
     minutes *= days7;
+    exerciseMinutes = minutes;
     factors.add(
       factor(
         'exercise',
@@ -558,6 +592,7 @@ HealthCheck? healthCheck(
       for (final e in activity.exercises)
         if (e.strength) e.day,
     }.length;
+    strengthDayCount = strengthDays;
     factors.add(
       factor(
         'strength',
@@ -588,6 +623,7 @@ HealthCheck? healthCheck(
     // Paluch e.a. (Lancet Public Health 2022): het voordeel vlakt af rond 8000–10 000 stappen, vanaf 60 jaar rond 6000–8000
     final older = age != null && age >= 60;
     final steps = activity.steps.reduce((a, b) => a + b) / activity.steps.length;
+    stepsPerDay = steps;
     factors.add(
       factor(
         'steps',
@@ -618,6 +654,22 @@ HealthCheck? healthCheck(
     );
   }
 
+  final impacts = healthImpact(
+    salt: sodium * 2.5 / 1000,
+    sfa: sfa,
+    fiber: fiber,
+    potassium: potassium,
+    epaDha: epaDha,
+    glasses: glasses,
+    exerciseMinutes: exerciseMinutes,
+    strengthDays: strengthDayCount,
+    steps: stepsPerDay,
+  );
+  for (final (i, f) in factors.indexed) {
+    if (f.rating == HealthRating.unknown) continue;
+    if (impacts[f.key] case (final text, final gain)) factors[i] = f.withImpact(text, gain);
+  }
+
   final rated = factors.where((f) => f.rating != HealthRating.unknown);
   final totalWeight = rated.fold(0.0, (s, f) => s + f.weight);
   final score = totalWeight == 0 ? 0 : (rated.fold(0.0, (s, f) => s + f.points) / totalWeight / 2 * 100).round();
@@ -639,4 +691,206 @@ HealthCheck? healthCheck(
 
 extension on HealthFactor {
   double get points => rating.points * weight;
+}
+
+/// Wat je gewoonten ongeveer betekenen, in cijfers uit grote studies. Per punt (tekst, winst in procent minder risico
+/// als je de richtlijn haalt). Het zijn gemiddelden over grote groepen mensen en meestal verbanden: ze tonen wat
+/// ongeveer op het spel staat, geen voorspelling voor één persoon.
+///
+/// Bronnen: Arem e.a. 2015 (JAMA Intern Med, beweging), Paluch e.a. 2022 (Lancet Public Health, stappen), Momma e.a.
+/// 2022 (Br J Sports Med, krachttraining), Reynolds e.a. 2019 (Lancet, vezels), Strazzullo e.a. 2009 (BMJ, zout),
+/// Hooper e.a. 2020 (Cochrane, verzadigd vet), Aburto e.a. 2013 (BMJ, kalium), Mozaffarian & Rimm 2006 (JAMA, vis),
+/// Wood e.a. 2018 (Lancet, alcohol).
+Map<String, (String, double)> healthImpact({
+  required double salt,
+  required double sfa,
+  required double fiber,
+  required double potassium,
+  required double epaDha,
+  required double glasses,
+  double? exerciseMinutes,
+  int? strengthDays,
+  double? steps,
+}) {
+  String pct(double v) => '${(v / 5).round() * 5}%';
+  final out = <String, (String, double)>{};
+
+  // Beweging: minder kans op vroegtijdig overlijden dan wie niet beweegt (Arem 2015)
+  if (exerciseMinutes case final m?) {
+    final r = m <= 0 ? 0.0 : (m < 150 ? 20.0 : (m < 300 ? 31.0 : (m < 450 ? 37.0 : 39.0)));
+    out['exercise'] = m >= 150
+        ? (
+            tr(
+              'About ${pct(r)} less chance of dying early than people who do not exercise.',
+              'Ongeveer ${pct(r)} minder kans om vroegtijdig te overlijden dan wie niet beweegt.',
+            ),
+            0,
+          )
+        : (
+            m <= 0
+                ? tr(
+                    '150 minutes a week means about 30% less chance of dying early.',
+                    '150 minuten per week betekent ongeveer 30% minder kans om vroegtijdig te overlijden.',
+                  )
+                : tr(
+                    'Now about ${pct(r)} less chance of dying early than people who do not exercise; with 150 minutes a week about 30%.',
+                    'Nu ongeveer ${pct(r)} minder kans om vroegtijdig te overlijden dan wie niet beweegt; met 150 minuten per week ongeveer 30%.',
+                  ),
+            31 - r,
+          );
+  }
+
+  // Stappen: tegenover ongeveer 3500 per dag (Paluch 2022: 3500 → 5800 → 7800 → 10 900 stappen = 0, 40, 45, 53%)
+  if (steps case final st?) {
+    double at(double x) {
+      const pts = [(3500.0, 0.0), (5800.0, 40.0), (7800.0, 45.0), (10900.0, 53.0)];
+      if (x <= pts.first.$1) return 0;
+      if (x >= pts.last.$1) return pts.last.$2;
+      for (var i = 1; i < pts.length; i++) {
+        if (x <= pts[i].$1) return pts[i - 1].$2 + (x - pts[i - 1].$1) / (pts[i].$1 - pts[i - 1].$1) * (pts[i].$2 - pts[i - 1].$2);
+      }
+      return 0;
+    }
+
+    final r = at(st);
+    out['steps'] = r >= 40
+        ? (
+            tr(
+              'About ${pct(r)} less chance of dying early than people who walk around 3500 steps a day.',
+              'Ongeveer ${pct(r)} minder kans om vroegtijdig te overlijden dan wie rond 3500 stappen per dag blijft.',
+            ),
+            0,
+          )
+        : (
+            tr(
+              'Going to 6000 steps a day goes with about 40% less chance of dying early than staying around 3500.',
+              'Naar 6000 stappen per dag gaan hangt samen met ongeveer 40% minder kans om vroegtijdig te overlijden dan rond 3500 blijven.',
+            ),
+            at(6000) - r,
+          );
+  }
+
+  // Krachttraining: 30–60 minuten per week, 10 à 20% minder sterfte, hart- en vaatziekten en diabetes (Momma 2022)
+  if (strengthDays case final d?) {
+    out['strength'] = d >= 1
+        ? (
+            tr(
+              'Strength training goes with 10 to 20% less chance of dying early, heart disease and diabetes.',
+              'Krachttraining hangt samen met 10 à 20% minder kans op vroegtijdig overlijden, hart- en vaatziekten en diabetes.',
+            ),
+            d >= 2 ? 0 : 5,
+          )
+        : (
+            tr(
+              '30 to 60 minutes of strength training a week goes with 10 to 20% less chance of dying early, heart disease and diabetes.',
+              '30 à 60 minuten krachttraining per week hangt samen met 10 à 20% minder kans op vroegtijdig overlijden, hart- en vaatziekten en diabetes.',
+            ),
+            15,
+          );
+  }
+
+  // Vezels: 25–29 g tegenover minder dan 15 g, 15 à 30% minder sterfte en hart- en vaatziekten (Reynolds 2019)
+  out['fiber'] = fiber >= 25
+      ? (
+          tr(
+            'About 15 to 30% less chance of dying of heart disease than people under 15 g a day.',
+            'Ongeveer 15 à 30% minder kans om te overlijden aan hart- en vaatziekten dan wie onder 15 g per dag blijft.',
+          ),
+          0,
+        )
+      : (
+          tr(
+            'Going to 25 g a day goes with up to 15 to 30% less chance of heart disease, type 2 diabetes and bowel cancer.',
+            'Naar 25 g per dag gaan hangt samen met tot 15 à 30% minder kans op hart- en vaatziekten, diabetes type 2 en darmkanker.',
+          ),
+          fiber < 15 ? 20 : 10,
+        );
+
+  // Zout: 5 g per dag meer = 23% meer beroertes (Strazzullo 2009), dus ongeveer 5% per gram
+  out['sodium'] = salt > 5
+      ? (
+          tr(
+            'Your ${fmtNum(salt - 5)} g of salt a day above 5 g means about ${pct((salt - 5) * 4.6)} more chance of a stroke.',
+            'Je ${fmtNum(salt - 5)} g zout per dag boven 5 g betekent ongeveer ${pct((salt - 5) * 4.6)} meer kans op een beroerte.',
+          ),
+          ((salt - 5) * 4.6).clamp(0, 40).toDouble(),
+        )
+      : (
+          tr(
+            'Every gram of salt a day less means about 5% less chance of a stroke.',
+            'Elke gram zout per dag minder betekent ongeveer 5% minder kans op een beroerte.',
+          ),
+          0,
+        );
+
+  // Verzadigd vet minder en vervangen door onverzadigd: 17% minder hart- en vaatziekten (Hooper 2020)
+  out['sfa'] = sfa > 10
+      ? (
+          tr(
+            'Less saturated fat, replaced by unsaturated fat, goes with about 17% fewer heart and vascular events.',
+            'Minder verzadigd vet, vervangen door onverzadigd vet, geeft ongeveer 17% minder hart- en vaatziekten.',
+          ),
+          sfa > 12 ? 17 : 8,
+        )
+      : (
+          tr(
+            'Keeping saturated fat low goes with about 17% fewer heart and vascular events than eating a lot of it.',
+            'Weinig verzadigd vet geeft ongeveer 17% minder hart- en vaatziekten dan veel.',
+          ),
+          0,
+        );
+
+  // Kalium: meer kalium, 24% minder beroertes (Aburto 2013)
+  out['potassium'] = potassium >= 3500
+      ? (tr('About 24% less chance of a stroke than with little potassium.', 'Ongeveer 24% minder kans op een beroerte dan met weinig kalium.'), 0)
+      : (
+          tr('More potassium goes with up to 24% less chance of a stroke.', 'Meer kalium hangt samen met tot 24% minder kans op een beroerte.'),
+          ((3500 - potassium) / 1500 * 24).clamp(0, 24).toDouble(),
+        );
+
+  // Vis: 250 mg EPA + DHA per dag, 36% minder sterfte aan hartziekten (Mozaffarian 2006)
+  final fish = (epaDha.clamp(0, 250) / 250 * 36).toDouble();
+  out['epa_dha'] = epaDha >= 250
+      ? (
+          tr(
+            'About 36% less chance of dying of heart disease than people who eat no fish.',
+            'Ongeveer 36% minder kans om te overlijden aan hartziekten dan wie geen vis eet.',
+          ),
+          0,
+        )
+      : (
+          tr(
+            'Fish once or twice a week (250 mg EPA + DHA a day) goes with about 36% less chance of dying of heart disease.',
+            'Vis 1 à 2 keer per week (250 mg EPA + DHA per dag) hangt samen met ongeveer 36% minder kans om te overlijden aan hartziekten.',
+          ),
+          36 - fish,
+        );
+
+  // Alcohol en levensverwachting op 40 jaar, tegenover minder dan 10 glazen per week (Wood 2018)
+  out['alcohol'] = glasses < 10
+      ? (
+          tr(
+            'Under 10 drinks a week large studies see no measurable loss of life expectancy, though every drink slightly raises your cancer risk.',
+            'Onder 10 glazen per week zien grote studies geen meetbaar verlies aan levensverwachting, al verhoogt elk glas je kans op kanker licht.',
+          ),
+          0,
+        )
+      : (
+          glasses < 20
+              ? tr(
+                  'At this level, life expectancy is about 6 months shorter.',
+                  'Bij deze hoeveelheid is de levensverwachting ongeveer 6 maanden korter.',
+                )
+              : (glasses < 35
+                    ? tr(
+                        'At this level, life expectancy is about 1 to 2 years shorter.',
+                        'Bij deze hoeveelheid is de levensverwachting ongeveer 1 à 2 jaar korter.',
+                      )
+                    : tr(
+                        'At this level, life expectancy is about 4 to 5 years shorter.',
+                        'Bij deze hoeveelheid is de levensverwachting ongeveer 4 à 5 jaar korter.',
+                      )),
+          glasses < 20 ? 5 : (glasses < 35 ? 15 : 30),
+        );
+  return out;
 }

@@ -105,13 +105,41 @@ class HealthPanel extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(c.summary, style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink)),
+          if (c.biggestGain case final g?) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(color: p.brandSoft, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.trending_up_rounded, size: 20, color: p.brand),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${tr('Biggest gain', 'Grootste winst')}: ${g.title.toLowerCase()}. ',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          TextSpan(text: g.impact),
+                        ],
+                      ),
+                      style: TextStyle(fontSize: 13, height: 1.4, color: p.ink),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           for (final f in c.factors) _FactorRow(f),
           const SizedBox(height: 10),
           Text(
             tr(
-              'Based on ${c.days} fully logged days and the guidelines of EFSA, the WHO and the Belgian Superior Health Council. Not medical advice.',
-              'Op basis van ${c.days} volledig gelogde dagen en de richtlijnen van EFSA, de WHO en de Hoge Gezondheidsraad. Geen medisch advies.',
+              'Based on ${c.days} fully logged days and the guidelines of EFSA, the WHO and the Belgian Superior Health Council. The impact figures come from large studies: averages and associations that show roughly what is at stake, not a prediction for you. Not medical advice.',
+              'Op basis van ${c.days} volledig gelogde dagen en de richtlijnen van EFSA, de WHO en de Hoge Gezondheidsraad. De cijfers over impact komen uit grote studies: gemiddelden en verbanden die tonen wat ongeveer op het spel staat, geen voorspelling voor jou. Geen medisch advies.',
             ),
             style: TextStyle(fontSize: 11.5, color: p.ink3),
           ),
@@ -196,6 +224,20 @@ class _FactorRowState extends State<_FactorRow> {
               padding: const EdgeInsets.only(left: 20, top: 4),
               child: Text(f.effect, style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2)),
             ),
+            if (f.impact != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 20, top: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.insights_rounded, size: 15, color: p.brand),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(f.impact!, style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink)),
+                    ),
+                  ],
+                ),
+              ),
             if (_open) ...[
               if (f.advice != null)
                 Padding(
