@@ -72,6 +72,13 @@ void main() {
     expect(db.biometricHistory('weight').single.value, 78.4);
     db.addExercise(day: '2026-10-15', name: 'Hardlopen', kcal: 450, minutes: 40);
     expect(db.exerciseKcalBetween('2026-10-01', '2026-10-31')['2026-10-15'], 450);
+    db.updateExercise(db.exerciseFor('2026-10-15').single.id, name: 'Hardlopen (10 km/u)', kcal: 505, minutes: 45);
+    final run = db.exerciseFor('2026-10-15').single;
+    expect(run.name, 'Hardlopen (10 km/u)');
+    expect(run.kcal, 505);
+    expect(run.minutes, 45);
+    db.deleteExercise(run.id);
+    expect(db.exerciseFor('2026-10-15'), isEmpty);
     db.setNote('2026-10-15', 'Slecht geslapen');
     expect(db.note('2026-10-15'), 'Slecht geslapen');
     db.startFast(DateTime(2026, 10, 15, 20), 16);

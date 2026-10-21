@@ -708,6 +708,10 @@ class UserDb {
     return true;
   }
 
+  void updateExercise(String id, {required String name, required double kcal, double? minutes}) {
+    _db.execute('UPDATE exercise SET name = ?, minutes = ?, kcal = ?, updated_at = ? WHERE id = ?', [name, minutes, kcal, _now(), id]);
+  }
+
   void deleteExercise(String id) => _db.execute('UPDATE exercise SET deleted = 1, updated_at = ? WHERE id = ?', [_now(), id]);
 
   // ── Vasten ──

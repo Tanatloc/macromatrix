@@ -20,6 +20,7 @@ import '../nutrition/allergens.dart';
 import '../nutrition/badges.dart';
 import '../nutrition/bioavailability.dart';
 import '../nutrition/gap_plan.dart';
+import '../nutrition/health.dart';
 import '../nutrition/insights.dart';
 import '../nutrition/quick_parse.dart';
 import '../nutrition/report.dart';
@@ -394,16 +395,30 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  static final _strength = RegExp(r'kracht|gewicht|fitness|strength|weight|crossfit', caseSensitive: false);
+
+  /// Train je in de week van [monday]: veel sport in je profiel, of krachttraining gelogd.
+  bool _trainsIn(DateTime monday) {
+    if (_profile.activity.index >= Activity.moderate.index) return true;
+    for (var i = 0; i < 7; i++) {
+      final day = dayKey(DateTime(monday.year, monday.month, monday.day + i));
+      if (user.exerciseFor(day).any((e) => _strength.hasMatch(e.name))) return true;
+    }
+    return false;
+  }
+
   /// Weekrapport voor de week die op [monday] begint (null als je die week niets logde).
   WeeklyReport? weeklyReport(DateTime monday) {
-    ({int score, int days, Map<String, double> avg})? week(DateTime m) {
+    ({int score, int days, Map<String, double> avg, HealthCheck? health})? week(DateTime m) {
       final end = DateTime(m.year, m.month, m.day + 6);
       final daily = dailyTotals(m, end);
       if (daily.isEmpty) return null;
       final scores = <int>[];
       final sums = <String, double>{};
+      final withTargets = <(NutrientTotals, Map<String, Target>)>[];
       for (final e in daily.entries) {
         final t = targetsForDate(DateTime.parse(e.key));
+        withTargets.add((e.value, t));
         scores.add(completenessScore(e.value.values, t));
         for (final k in stripKeys) {
           final g = t[k]?.goal;
@@ -414,6 +429,7 @@ class AppState extends ChangeNotifier {
         score: (scores.reduce((a, b) => a + b) / scores.length).round(),
         days: scores.length,
         avg: {for (final e in sums.entries) e.key: e.value / daily.length},
+        health: healthCheck(withTargets, weightKg: currentWeight, age: _profile.ageIn(m.year), heightCm: _profile.heightCm, trains: _trainsIn(m)),
       );
     }
 
@@ -448,6 +464,8 @@ class AppState extends ChangeNotifier {
       best: [for (final e in ranked.take(3)) (nutrientByKey[e.key]!, e.value)],
       worst: [for (final e in worst) (nutrientByKey[e.key]!, e.value)],
       tip: tip,
+      health: now.health,
+      prevHealthScore: prev?.health?.score,
     );
   }
 
@@ -756,6 +774,11 @@ class AppState extends ChangeNotifier {
 
   void addExercise(String name, double kcal, {double? minutes}) {
     user.addExercise(day: day, name: name, kcal: kcal, minutes: minutes);
+    _refresh();
+  }
+
+  void updateExercise(Exercise e, {required String name, required double kcal, double? minutes}) {
+    user.updateExercise(e.id, name: name, kcal: kcal, minutes: minutes);
     _refresh();
   }
 

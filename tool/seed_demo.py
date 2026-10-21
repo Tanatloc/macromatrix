@@ -67,7 +67,7 @@ def main(user_db, foods_db, days):
     print(f'{days} dagen ingevuld tot en met {today}')
     profile = {'sex': 'male', 'birthYear': 1998, 'weightKg': 78, 'heightCm': 182, 'activity': 'moderate', 'goal': 'maintain',
                'proteinPct': 25, 'carbsPct': 45, 'fatPct': 30, 'energyOverride': None}
-    user.execute('INSERT OR REPLACE INTO settings VALUES (?,?,?)', ('profile', json.dumps(profile), now))
+    user.execute('INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?,?,?)', ('profile', json.dumps(profile), now))
     user.commit()
 
 

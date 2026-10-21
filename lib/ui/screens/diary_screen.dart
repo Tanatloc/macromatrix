@@ -21,6 +21,7 @@ import 'weekly_report_screen.dart';
 import '../../nutrition/allergens.dart';
 import '../widgets/allergen_picker.dart';
 import '../widgets/bio_tips_view.dart';
+import '../widgets/exercise_view.dart';
 import '../widgets/gap_plan_view.dart';
 import '../../i18n.dart';
 
@@ -238,6 +239,10 @@ class _EnergyCard extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (burned > 0) ...[
+                          _BurnedPill(burned: burned),
+                          const SizedBox(height: 3),
+                        ],
                         Text(fmtInt(left.abs()), style: numStyle(30, color: over ? p.high : p.ink, height: 1)),
                         const SizedBox(height: 4),
                         Text(
@@ -254,7 +259,11 @@ class _EnergyCard extends StatelessWidget {
                 child: Column(
                   children: [
                     ledger(tr('Goal', 'Doel'), fmtInt(budget - burned)),
-                    if (burned > 0) ledger(tr('Exercise', 'Beweging'), '+${fmtInt(burned)}', dot: p.brand, color: p.brand),
+                    if (burned > 0)
+                      InkWell(
+                        onTap: () => openDayExercise(context),
+                        child: ledger(tr('Exercise', 'Beweging'), '+${fmtInt(burned)}', dot: p.brand, color: p.brand),
+                      ),
                     ledger(tr('Eaten', 'Gegeten'), '−${fmtInt(eaten)}', dot: p.ink),
                     Divider(height: 10, color: p.line),
                     ledger(over ? tr('Over goal', 'Te veel') : tr('Left', 'Over'), fmtInt(left.abs()), strong: true, color: over ? p.high : null),
@@ -335,6 +344,36 @@ class _MacroLine extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "+337" in de ring: wat beweging vandaag bij je budget legt. Tik erop voor de activiteiten.
+class _BurnedPill extends StatelessWidget {
+  const _BurnedPill({required this.burned});
+  final double burned;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Material(
+      color: p.brandSoft,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: () => openDayExercise(context),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 2, 7, 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.local_fire_department_rounded, size: 12, color: p.brand),
+              const SizedBox(width: 2),
+              Text('+${fmtInt(burned)}', style: numStyle(11.5, color: p.brand)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1221,36 +1260,8 @@ class _ExerciseCard extends StatelessWidget {
           ),
           for (final e in s.exercise)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          e.name,
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
-                        ),
-                        if (e.minutes != null)
-                          Text(
-                            '${e.minutes!.round()} min',
-                            style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    '${fmtInt(e.kcal)} kcal',
-                    style: numStyle(12.5, weight: FontWeight.w400, color: p.ink2),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close_rounded, size: 18, color: p.ink3),
-                    tooltip: tr('Remove', 'Verwijderen'),
-                    onPressed: () => s.deleteExercise(e),
-                  ),
-                ],
-              ),
+              padding: const EdgeInsets.only(right: 4),
+              child: ExerciseRow(e),
             ),
           if (s.adaptiveTdee != null && s.exercise.isNotEmpty)
             Padding(

@@ -9,9 +9,11 @@ import '../../state/app_state.dart';
 import '../../sync/friends.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import '../widgets/health_view.dart';
 import '../widgets/kit.dart';
 
-/// Weekrapport: je gemiddelde Nutrient Score tegenover vorige week, beste en zwakste stoffen, battles en een tip.
+/// Weekrapport: je gemiddelde Nutrient Score tegenover vorige week, een gezondheidsoordeel, beste en zwakste stoffen,
+/// battles en een tip.
 class WeeklyReportScreen extends StatelessWidget {
   const WeeklyReportScreen({super.key, required this.monday});
   final DateTime monday;
@@ -31,6 +33,8 @@ class WeeklyReportScreen extends StatelessWidget {
         'Nutrient Score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change t.o.v. vorige week)'}',
       ),
       tr('Days logged: ${r.days}/7 · streak: $streak', 'Gelogde dagen: ${r.days}/7 · reeks: $streak'),
+      if (r.health != null)
+        tr('Health: ${r.health!.rating.label} (${r.health!.score}/100)', 'Gezondheid: ${r.health!.rating.label} (${r.health!.score}/100)'),
       tr('Best: ${r.best.map((b) => b.$1.name).join(', ')}', 'Best: ${r.best.map((b) => b.$1.name).join(', ')}'),
       'app.divinenet.online',
     ].join('\n');
@@ -145,6 +149,8 @@ class WeeklyReportScreen extends StatelessWidget {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        HealthPanel(check: r.health, change: r.healthChange),
                         const SizedBox(height: 10),
                         Panel(
                           shadow: false,
@@ -294,9 +300,10 @@ class WeeklyReportCard extends StatelessWidget {
                 ),
                 Text(
                   tr(
-                    'Nutrient Score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} days logged',
-                    'Nutrient Score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} dagen gelogd',
-                  ),
+                        'Nutrient Score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} days logged',
+                        'Nutrient Score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} dagen gelogd',
+                      ) +
+                      (r.health == null ? '' : ' · ${tr('health', 'gezondheid')}: ${r.health!.rating.label.toLowerCase()}'),
                   style: TextStyle(fontSize: 12.5, color: p.ink2),
                 ),
               ],

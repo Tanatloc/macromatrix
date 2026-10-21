@@ -3,6 +3,7 @@
 library;
 
 import '../data/food.dart';
+import 'health.dart';
 import 'nutrients.dart';
 
 class WeeklyTip {
@@ -27,6 +28,8 @@ class WeeklyReport {
     required this.best,
     required this.worst,
     this.tip,
+    this.health,
+    this.prevHealthScore,
   });
 
   final DateTime monday;
@@ -36,6 +39,12 @@ class WeeklyReport {
   /// (stof, gemiddeld deel van het doel per gelogde dag).
   final List<(Nutrient, double)> best, worst;
   final WeeklyTip? tip;
+
+  /// Gezondheidscheck, of null bij minder dan [healthMinDays] volledig gelogde dagen.
+  final HealthCheck? health;
+  final int? prevHealthScore;
+
+  int? get healthChange => health == null || prevHealthScore == null ? null : health!.score - prevHealthScore!;
 
   int? get change => prevScore == null ? null : score - prevScore!;
 }
