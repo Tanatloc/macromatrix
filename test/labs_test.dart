@@ -231,6 +231,21 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('afwijkend zonder uitleg over eten: niet "in orde"', (tester) async {
+      final s = await pump(tester, const LabsScreen(), withLabs: false);
+      s.saveLabs(
+        DateTime(2026, 2, 3),
+        parseLabReport([
+          ['Fosfor', '-', '0,63', 'mmol/L', '0,810 - 1,450'],
+        ]).values,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Fosfor'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('bespreek ze met je arts'), findsOneWidget);
+      expect(find.text('Je laatste waarde is in orde.'), findsNothing);
+    });
+
     testWidgets('leeg: uitleg en knoppen', (tester) async {
       await pump(tester, const LabsScreen(), withLabs: false);
       expect(find.text('PDF inlezen'), findsOneWidget);

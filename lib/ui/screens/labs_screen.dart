@@ -398,10 +398,15 @@ class _MarkerSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: p.softOf(_level(last.status)), borderRadius: BorderRadius.circular(12)),
-                child: Text(
-                  text == null ? tr('Your last value is within range.', 'Je laatste waarde is in orde.') : tr(text.$1, text.$2),
-                  style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink),
-                ),
+                child: Text(switch ((last.status, text)) {
+                  (0, _) => tr('Your last value is within range.', 'Je laatste waarde is in orde.'),
+                  (_, final t?) => tr(t.$1, t.$2),
+                  // Afwijkend, maar zonder duidelijk verband met eten
+                  _ => tr(
+                    'This value is outside your lab\'s reference range. It has no clear link with eating: discuss it with your doctor.',
+                    'Deze waarde valt buiten de normaalwaarden van je labo. Ze heeft geen duidelijk verband met eten: bespreek ze met je arts.',
+                  ),
+                }, style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink)),
               ),
             const SizedBox(height: 12),
             PanelTitle(tr('History', 'Verloop')),
