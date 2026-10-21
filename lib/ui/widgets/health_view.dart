@@ -30,7 +30,12 @@ class HealthPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final c = check;
-    final title = PanelTitle(tr('Health', 'Gezondheid'), subtitle: tr('How your eating affects your health', 'Hoe je eten je gezondheid beïnvloedt'));
+    final title = PanelTitle(
+      tr('Health', 'Gezondheid'),
+      subtitle: c != null && c.hasActivity
+          ? tr('How your eating and exercise affect your health', 'Hoe je eten en bewegen je gezondheid beïnvloeden')
+          : tr('How your eating affects your health', 'Hoe je eten je gezondheid beïnvloedt'),
+    );
     if (c == null) {
       return Panel(
         shadow: false,

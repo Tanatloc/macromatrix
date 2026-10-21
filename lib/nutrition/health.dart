@@ -82,18 +82,21 @@ class HealthCheck {
   final int score;
   final HealthRating rating;
 
+  /// Ook beweging beoordeeld (stappen of activiteiten).
+  bool get hasActivity => factors.any((f) => activityFactors.contains(f.key));
+
   String get summary => switch (rating) {
     HealthRating.good => tr(
-      'You ate healthily this week. Keep it up: this pattern protects your heart, blood vessels and gut in the long run.',
-      'Je at deze week gezond. Ga zo door: dit eetpatroon beschermt op termijn je hart, je bloedvaten en je darmen.',
+      'A healthy week. Keep it up: this protects your heart, blood vessels and gut in the long run.',
+      'Een gezonde week. Ga zo door: dit beschermt op termijn je hart, je bloedvaten en je darmen.',
     ),
     HealthRating.ok => tr(
       'Okay, but there is room for improvement. Below you can see what is going well and what would make the biggest difference.',
       'Oké, maar het kan beter. Hieronder zie je wat goed gaat en wat het meeste verschil zou maken.',
     ),
     HealthRating.poor => tr(
-      'Not good this week. If you keep eating like this, it raises your risk of heart and vascular disease and diabetes. Start with the first point below.',
-      'Niet goed deze week. Als je zo blijft eten, verhoogt dat je kans op hart- en vaatziekten en diabetes. Begin met het eerste punt hieronder.',
+      'Not a good week. If you carry on like this, it raises your risk of heart and vascular disease and diabetes. Start with the first point below.',
+      'Geen goede week. Als je zo verdergaat, verhoogt dat je kans op hart- en vaatziekten en diabetes. Begin met het eerste punt hieronder.',
     ),
     HealthRating.unknown => '',
   };
@@ -102,6 +105,23 @@ class HealthCheck {
 /// Lost op in water: een overschot plas je uit, dus het vult geen andere dag aan. Foliumzuur (B9) en B12 slaat de
 /// lever wel op.
 const washesOut = {'vit_c', 'b1', 'b2', 'b3', 'b5', 'b6', 'b7', 'choline', 'potassium'};
+
+const activityFactors = {'exercise', 'steps', 'strength'};
+
+/// Beweging in een week, voor wie stappen of activiteiten bijhoudt.
+class ActivityWeek {
+  const ActivityWeek({this.steps = const [], this.exercises = const [], this.days = 7, this.tracksExercise = false});
+
+  /// Stappen per dag, alleen dagen met gegevens.
+  final List<double> steps;
+  final List<({String day, double? minutes, double kcal, bool strength})> exercises;
+
+  /// Dagen van de week die al bezig of voorbij zijn (1–7): een lopende week wordt naar 7 dagen omgerekend.
+  final int days;
+
+  /// Je houdt activiteiten bij (deze of de vorige weken, of via Health Connect), dus 0 minuten is echt niet bewogen.
+  final bool tracksExercise;
+}
 
 /// Minstens zoveel volledig gelogde dagen voor een oordeel.
 const healthMinDays = 3;
@@ -119,6 +139,7 @@ HealthCheck? healthCheck(
   double? heightCm,
   bool trains = false,
   Map<String, LabResult> labs = const {},
+  ActivityWeek activity = const ActivityWeek(),
 }) {
   final full = [
     for (final d in days)
@@ -485,6 +506,117 @@ HealthCheck? healthCheck(
       note: tr('One drink = 10 g of alcohol.', 'Eén glas = 10 g alcohol.'),
     ),
   ];
+
+  // ── Beweging (WHO 2020): 150–300 minuten matig of 75–150 minuten intensief per week, 2 dagen spierversterkend ──
+  final days7 = 7 / activity.days.clamp(1, 7);
+  final running = activity.days < 7
+      ? tr(
+          ' This week is still running: counted as if the rest goes the same way.',
+          ' Deze week loopt nog: omgerekend alsof de rest net zo verloopt.',
+        )
+      : '';
+  if (activity.tracksExercise || activity.exercises.isNotEmpty) {
+    // Intensiteit uit de verbrande energie: MET = kcal per minuut × 200 / (3,5 × kg). Intensief (≥ 6 MET) telt dubbel,
+    // licht (< 3 MET) niet mee
+    var minutes = 0.0;
+    for (final e in activity.exercises) {
+      final m = e.minutes;
+      if (m == null || m <= 0) continue;
+      final met = weightKg > 0 ? e.kcal / m * 200 / (3.5 * weightKg) : 4;
+      minutes += m * (met >= 6 ? 2 : (met >= 3 ? 1 : 0));
+    }
+    minutes *= days7;
+    factors.add(
+      factor(
+        'exercise',
+        tr('Exercise', 'Bewegen'),
+        tr('${fmtNum(minutes, 0)} min per week', '${fmtNum(minutes, 0)} min per week'),
+        rateUp(minutes, 150, 75),
+        weight: 2,
+        good: tr(
+          'Enough exercise: that lowers your risk of heart disease, type 2 diabetes, some cancers and depression, and you sleep better.',
+          'Genoeg beweging: dat verlaagt je kans op hart- en vaatziekten, diabetes type 2, sommige kankers en depressie, en je slaapt beter.',
+        ),
+        ok: tr('Somewhat little exercise. Every extra 10 minutes already counts.', 'Wat weinig beweging. Elke 10 minuten extra telt al.'),
+        poor: tr(
+          'Too little exercise. That is one of the biggest risks for heart disease and type 2 diabetes.',
+          'Te weinig beweging. Dat is een van de grootste risico\'s voor hart- en vaatziekten en diabetes type 2.',
+        ),
+        advice: tr(
+          'Aim for at least 150 minutes a week of moderate exercise (brisk walking, cycling) or 75 minutes of intense exercise (running, swimming).',
+          'Mik op minstens 150 minuten per week matig intensief bewegen (stevig wandelen, fietsen) of 75 minuten intensief (lopen, zwemmen).',
+        ),
+        note:
+            tr(
+              'Intense exercise counts double, as in the WHO guideline; the app estimates the intensity from the energy you burned.',
+              'Intensief bewegen telt dubbel, zoals in de WHO-richtlijn; de app schat de intensiteit uit de verbrande energie.',
+            ) +
+            running,
+      ),
+    );
+    final strengthDays = {
+      for (final e in activity.exercises)
+        if (e.strength) e.day,
+    }.length;
+    factors.add(
+      factor(
+        'strength',
+        tr('Strength training', 'Krachttraining'),
+        tr('$strengthDays ${strengthDays == 1 ? 'day' : 'days'} per week', '$strengthDays ${strengthDays == 1 ? 'dag' : 'dagen'} per week'),
+        strengthDays >= 2 ? HealthRating.good : (strengthDays == 1 ? HealthRating.ok : HealthRating.poor),
+        good: tr(
+          'Enough strength training: strong muscles and bones, better blood sugar, and less risk of falling as you get older.',
+          'Genoeg krachttraining: sterke spieren en botten, een betere bloedsuiker, en minder kans om te vallen als je ouder wordt.',
+        ),
+        ok: tr('Strength training once. Twice a week is the advice.', 'Eén keer krachttraining. Twee keer per week is het advies.'),
+        poor: tr(
+          'No strength training this week. Muscle strength protects your bones, your blood sugar and your independence later in life.',
+          'Geen krachttraining deze week. Spierkracht beschermt je botten, je bloedsuiker en je zelfstandigheid op latere leeftijd.',
+        ),
+        advice: tr(
+          'Twice a week, train all large muscle groups: with weights, bands or your own body weight (squats, push-ups).',
+          'Train 2 keer per week alle grote spiergroepen: met gewichten, elastieken of je eigen lichaamsgewicht (squats, push-ups).',
+        ),
+        note: tr(
+          'The app recognises strength training by its name (strength training, fitness, weightlifting, ...).',
+          'De app herkent krachttraining aan de naam (krachttraining, fitness, gewichtheffen, ...).',
+        ),
+      ),
+    );
+  }
+  if (activity.steps.length >= 3) {
+    // Paluch e.a. (Lancet Public Health 2022): het voordeel vlakt af rond 8000–10 000 stappen, vanaf 60 jaar rond 6000–8000
+    final older = age != null && age >= 60;
+    final steps = activity.steps.reduce((a, b) => a + b) / activity.steps.length;
+    factors.add(
+      factor(
+        'steps',
+        tr('Steps', 'Stappen'),
+        '${fmtNum(steps, 0)} $perDay',
+        rateUp(steps, older ? 6000 : 8000, older ? 4000 : 5000),
+        good: tr(
+          'Enough steps: people who walk this much every day live longer and healthier on average.',
+          'Genoeg stappen: wie elke dag zoveel stapt, leeft gemiddeld langer en gezonder.',
+        ),
+        ok: tr(
+          'A bit too few steps. Every 1000 steps a day more goes with a lower risk of heart disease.',
+          'Iets te weinig stappen. Elke 1000 stappen per dag meer hangt samen met minder kans op hart- en vaatziekten.',
+        ),
+        poor: tr(
+          'Few steps. Sitting a lot raises your risk of heart disease and type 2 diabetes, even if you exercise.',
+          'Weinig stappen. Veel stilzitten verhoogt je kans op hart- en vaatziekten en diabetes type 2, ook als je sport.',
+        ),
+        advice: tr(
+          'Walk 10 minutes after a meal, take the stairs, get off a stop earlier or walk while you call.',
+          'Wandel 10 minuten na het eten, neem de trap, stap een halte vroeger af of bel al wandelend.',
+        ),
+        note: tr(
+          'Goal: ${older ? '6000' : '8000'} steps a day${older ? ' from 60' : ''}. Average of the ${activity.steps.length} days with step data.',
+          'Doel: ${older ? '6000' : '8000'} stappen per dag${older ? ' vanaf 60 jaar' : ''}. Gemiddelde van de ${activity.steps.length} dagen met stappen.',
+        ),
+      ),
+    );
+  }
 
   final rated = factors.where((f) => f.rating != HealthRating.unknown);
   final totalWeight = rated.fold(0.0, (s, f) => s + f.weight);

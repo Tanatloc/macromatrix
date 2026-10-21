@@ -452,6 +452,34 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
+  /// Stappen en activiteiten in de week van [monday], tot en met vandaag.
+  ActivityWeek _activityIn(DateTime monday) {
+    final today = _dateOnly(DateTime.now());
+    final sunday = DateTime(monday.year, monday.month, monday.day + 6);
+    final last = sunday.isAfter(today) ? today : sunday;
+    final days = last.difference(monday).inDays + 1;
+    if (days <= 0) return const ActivityWeek();
+    final exercises = [
+      for (var i = 0; i < days; i++)
+        for (final e in user.exerciseFor(dayKey(DateTime(monday.year, monday.month, monday.day + i))))
+          (day: e.day, minutes: e.minutes, kcal: e.kcal, strength: _strength.hasMatch(e.name)),
+    ];
+    // Houdt je activiteiten bij? Dan telt een week zonder ook mee (anders weet de app niet of je bewoog)
+    var tracks = exercises.isNotEmpty || user.setting('_health')?['on'] == true;
+    for (var i = 1; !tracks && i <= 28; i++) {
+      tracks = user.exerciseFor(dayKey(DateTime(monday.year, monday.month, monday.day - i))).isNotEmpty;
+    }
+    return ActivityWeek(
+      steps: [
+        for (final b in user.biometricHistory('steps', from: dayKey(monday)))
+          if (b.day.compareTo(dayKey(last)) <= 0 && b.value > 0) b.value,
+      ],
+      exercises: exercises,
+      days: days,
+      tracksExercise: tracks,
+    );
+  }
+
   /// Weekrapport voor de week die op [monday] begint (null als je die week niets logde).
   WeeklyReport? weeklyReport(DateTime monday) {
     ({int score, int days, Map<String, double> avg, HealthCheck? health})? week(DateTime m) {
@@ -481,6 +509,7 @@ class AppState extends ChangeNotifier {
           heightCm: _profile.heightCm,
           trains: _trainsIn(m),
           labs: latestLabs(at: end),
+          activity: _activityIn(m),
         ),
       );
     }
