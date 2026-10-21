@@ -181,7 +181,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
       final candidates = [
         for (final food in s.recentFoods())
           if ((withDerived(food.per100g)[n.key] ?? 0) > 0) food,
-        for (final r in s.richestFor(n.key, limit: 10)) r.$1,
+        for (final r in s.richestFor(n.key, limit: 10, advice: true)) r.$1,
       ];
       for (final food in candidates) {
         final per100 = withDerived(food.per100g)[n.key] ?? 0;

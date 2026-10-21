@@ -50,6 +50,53 @@ class Portion {
   factory Portion.fromJson(Map<String, Object?> j) => Portion(j['label'] as String, (j['grams'] as num).toDouble());
 }
 
+/// Label van een product uit de ingebouwde databank (tool/food_labels.jsonl): wat het is, los van de naam.
+class FoodLabel {
+  const FoodLabel({
+    required this.food,
+    required this.group,
+    required this.part,
+    required this.kind,
+    required this.state,
+    this.flags = const [],
+    this.dish = false,
+    this.spread = 1,
+  });
+
+  factory FoodLabel.fromJson(Map<String, Object?> j) => FoodLabel(
+    food: j['f'] as String,
+    group: j['g'] as String,
+    part: j['p'] as String,
+    kind: j['k'] as String,
+    state: j['c'] as String,
+    flags: [...?(j['fl'] as List?)?.cast<String>()],
+    dish: j['d'] == 1,
+    spread: (j['n'] as num?)?.toInt() ?? 1,
+  );
+
+  /// Het voedingsmiddel zelf, bv. `spinach`, `egg`, `gouda cheese`.
+  final String food;
+
+  /// Voedingsgroep, bv. `vegetable`, `fish`, `processed meat`.
+  final String group;
+
+  /// Deel of vorm, bv. `leaf`, `fillet`, `powder`, `liver`.
+  final String part;
+
+  /// `plant`, `animal`, `fungus`, `algae`, `mixed` of `other`.
+  final String kind;
+
+  /// Bereiding, bv. `raw`, `boiled`, `dried`.
+  final String state;
+  final List<String> flags;
+
+  /// Samengesteld gerecht.
+  final bool dish;
+
+  /// In hoeveel databanken dit voedingsmiddel voorkomt (1–7): hoe meer, hoe gewoner.
+  final int spread;
+}
+
 /// Een voedingsmiddel uit een van de bronnen, met voedingswaarden per 100 g.
 class Food {
   const Food({
@@ -67,7 +114,11 @@ class Food {
     this.allergenTags = const [],
     this.traceTags = const [],
     this.ingredients,
+    this.label,
   });
+
+  /// Alleen bij producten uit de ingebouwde databank.
+  final FoodLabel? label;
 
   /// Van het etiket (Open Food Facts): allergenen, "kan sporen bevatten" en de ingrediëntenlijst.
   final List<String> allergenTags, traceTags;
@@ -110,6 +161,7 @@ class Food {
     allergenTags: allergenTags,
     traceTags: traceTags,
     ingredients: ingredients,
+    label: label,
   );
 
   double get kcalPer100g => per100g['energy'] ?? 0;

@@ -247,9 +247,11 @@ class AppState extends ChangeNotifier {
 
   /// Rijkste bronnen van een voedingsstof die bij je voorkeuren passen.
   /// Supplementen en (mineraal)zout horen niet thuis tussen de rijkste bronnen, behalve zout voor natrium en chloride.
-  List<(Food, double)> richestFor(String key, {bool perKcal = false, int limit = 40}) => [
-    for (final r in foods.richestIn(key, perKcal: perKcal, limit: limit * 3))
-      if (fitsPreferences(r.$1, _preferences) &&
+  /// [advice]: alleen gewone voedingsmiddelen die je kunt aanraden (zie [isAdviceFood]); dan wordt dieper gezocht.
+  List<(Food, double)> richestFor(String key, {bool perKcal = false, int limit = 40, bool advice = false}) => [
+    for (final r in foods.richestIn(key, perKcal: perKcal, limit: advice ? math.max(300, limit * 15) : limit * 3))
+      if ((!advice || isAdviceFood(r.$1)) &&
+          fitsPreferences(r.$1, _preferences) &&
           !containsAllergen(r.$1, allergies) &&
           !(r.$1.category ?? '').toLowerCase().contains('supplement') &&
           (key == 'sodium' || key == 'chloride' || !_salt.hasMatch(r.$1.name)))
@@ -282,9 +284,13 @@ class AppState extends ChangeNotifier {
     final mine = recentFoods();
     for (final (n, before, _) in lows) {
       final t = _targets[n.key]!;
-      final candidates = [...mine, for (final r in richestFor(n.key, perKcal: true, limit: 40)) r.$1];
+      final candidates = [...mine, for (final r in richestFor(n.key, perKcal: true, limit: 40, advice: true)) r.$1];
       for (final f in candidates) {
-        if (f.source == FoodSource.recipe || _notAFood.hasMatch(f.name) || !fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) {
+        if (f.source == FoodSource.recipe ||
+            !isAdviceFood(f) ||
+            _notAFood.hasMatch(f.name) ||
+            !fitsPreferences(f, _preferences) ||
+            containsAllergen(f, allergies)) {
           continue;
         }
         final v = withDerived(f.per100g);
@@ -444,8 +450,8 @@ class AppState extends ChangeNotifier {
       final goal = _targets[w.key]?.goal;
       if (goal == null) continue;
       final upper = _targets[w.key]?.upper;
-      for (final (f, per100) in richestFor(w.key, limit: 40)) {
-        if (!isEverydayFood(f)) continue;
+      for (final (f, per100) in richestFor(w.key, limit: 40, advice: true)) {
+        if (!isAdviceFood(f)) continue;
         // Een gewone portie (of 100 g) die een flink deel van je doel geeft, zonder de bovengrens te halen
         final portion = f.portions.where((p) => p.grams >= 30 && p.grams <= 250).firstOrNull;
         final grams = portion?.grams ?? 100;
@@ -557,7 +563,7 @@ class AppState extends ChangeNotifier {
       for (final f in [
         ...mine,
         for (final k in gaps.take(6))
-          for (final r in richestFor(k, perKcal: true, limit: 25)) r.$1,
+          for (final r in richestFor(k, perKcal: true, limit: 25, advice: true)) r.$1,
       ])
         if (seen.add(f.ref)) f,
     ];

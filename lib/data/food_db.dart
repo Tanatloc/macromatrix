@@ -41,6 +41,10 @@ class FoodDb {
       source: FoodSource.fromDb(r['source'] as String),
       per100g: decodeNutrients(r['nutrients'] as String),
       estimated: (jsonDecode(r['estimated'] as String) as Map).cast<String, String>(),
+      label: switch (r.containsKey('label') ? r['label'] : null) {
+        final String l when l.isNotEmpty => FoodLabel.fromJson((jsonDecode(l) as Map).cast<String, Object?>()),
+        _ => null,
+      },
       portions: [
         for (final row in _db.select('SELECT label, grams FROM portions WHERE food_id = ? ORDER BY rowid', [r['id']]))
           Portion(row['label'] as String, (row['grams'] as num).toDouble()),

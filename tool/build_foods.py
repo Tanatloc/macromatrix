@@ -1335,6 +1335,7 @@ def main(root, target):
           category TEXT NOT NULL,
           nutrients TEXT NOT NULL,
           estimated TEXT NOT NULL,
+          label TEXT NOT NULL DEFAULT '',
           UNIQUE (source, source_id)
         );
         CREATE TABLE portions (food_id INTEGER NOT NULL, label TEXT NOT NULL, grams REAL NOT NULL);
@@ -1408,15 +1409,33 @@ def main(root, target):
             r['nut']['vit_a'] = r['retinol'] + bc / 12
             r['est']['vit_a'] = r['est']['beta_carotene']
 
+    # Het label gaat mee naar de app (voor advies en voedingsgroepen), met n = in hoeveel bronnen dit voedingsmiddel
+    # voorkomt: hoe meer landen het in hun tabel hebben, hoe gewoner het is
+    spread = {}
+    for ref, x in labels.items():
+        spread.setdefault(x['f'], set()).add(ref.split(':')[0])
+
+    def app_label(r):
+        x = labels.get(f"{r['source']}:{r['sid']}")
+        if not x:
+            return ''
+        out = {k: x[k] for k in ('f', 'g', 'p', 'k', 'c')}
+        if x.get('fl'):
+            out['fl'] = x['fl']
+        if x.get('d'):
+            out['d'] = 1
+        out['n'] = len(spread[x['f']])
+        return json.dumps(out, separators=(',', ':'), ensure_ascii=False)
+
     counts = {}
     for r in rows:
         nut, est = r['nut'], r['est']
         derive(nut, est)
         cur = db.execute(
-            'INSERT INTO foods (source, source_id, name, name_local, search, category, nutrients, estimated) VALUES (?,?,?,?,?,?,?,?)',
+            'INSERT INTO foods (source, source_id, name, name_local, search, category, nutrients, estimated, label) VALUES (?,?,?,?,?,?,?,?,?)',
             (r['source'], r['sid'], r['name'], r['local'], f"{r['name']} {r['local']}".lower(), r['category'],
              json.dumps({k: sig(v) for k, v in nut.items()}, separators=(',', ':'), ensure_ascii=False),
-             json.dumps(est, separators=(',', ':'))),
+             json.dumps(est, separators=(',', ':')), app_label(r)),
         )
         for label, grams in dict.fromkeys(r['portions']):
             db.execute('INSERT INTO portions VALUES (?,?,?)', (cur.lastrowid, label, grams))

@@ -66,6 +66,84 @@ bool _isHerb(Food f) =>
 bool isEverydayFood(Food f) =>
     f.source != FoodSource.recipe && !_notAFood.hasMatch(f.name) && !_isHerb(f) && !_rawAnimal.hasMatch(f.name) && !_unprepared.hasMatch(f.name);
 
+/// Groepen die je als advies kunt krijgen: gewone voedingsmiddelen, geen snoep, sauzen, dranken, gerechten of
+/// vleeswaren.
+const _adviceGroups = {
+  'dairy',
+  'egg',
+  'meat',
+  'poultry',
+  'fish',
+  'shellfish',
+  'cereal',
+  'bread',
+  'pasta',
+  'rice',
+  'breakfast cereal',
+  'legume',
+  'soy product',
+  'nut/seed',
+  'vegetable',
+  'potato/tuber',
+  'fruit',
+  'mushroom',
+  'meat substitute',
+};
+
+/// Delen die je niet als eten aanraadt: poeders, bloem, olie, sap en orgaanvlees.
+const _adviceSkipParts = {
+  'powder',
+  'concentrate',
+  'flour',
+  'bran',
+  'germ',
+  'starch',
+  'syrup',
+  'oil',
+  'fat',
+  'skin',
+  'blood',
+  'peel',
+  'juice',
+  'bone/broth',
+  'liver',
+  'kidney',
+  'heart',
+  'tongue',
+  'brain',
+  'other offal',
+  'tripe',
+  'gizzard',
+  'yolk',
+  'white',
+};
+
+/// Staat wel in een paar tabellen, maar ligt hier zelden in de winkel.
+final _exotic = RegExp(
+  r'\b(amaranth|rose ?hip|acerola|fenugreek|dock|sorrel|jute|taro|cassava|moringa|purslane|epazote|kantola|bitter gourd|balsam|jujube|sea lion|seal|whale|walrus|caribou|tunicate)\b',
+);
+final _unusual = RegExp(r'Alaska Native|ultraviolet', caseSensitive: false);
+
+/// Wat je niet rauw eet (of droog, zoals ongekookte peulvruchten en pasta).
+const _cookFirst = {'meat', 'poultry', 'fish', 'shellfish', 'egg', 'legume', 'cereal', 'rice', 'pasta', 'potato/tuber'};
+
+/// Iets wat je als advies kunt krijgen: een gewoon, bereid voedingsmiddel dat in minstens 4 databanken in de tabel
+/// staat. Geen agar, gist, kauwgom, energiedrank of zeeleeuwlever. Producten zonder label (gescand, eigen
+/// producten) volgen [isEverydayFood].
+bool isAdviceFood(Food f) {
+  final l = f.label;
+  if (l == null) return isEverydayFood(f);
+  if (!_adviceGroups.contains(l.group) || _adviceSkipParts.contains(l.part) || l.dish) return false;
+  if (l.kind == 'algae' || l.kind == 'other' || l.food.contains('yeast') || l.flags.contains('infant')) return false;
+  // Oesters eet je wel rauw
+  if (_cookFirst.contains(l.group) && (l.state == 'raw' || l.state == 'dried' || l.state == 'frozen') && l.food != 'oyster') return false;
+  if (l.state == 'dried' && l.group != 'fruit' && l.group != 'nut/seed') return false;
+  if (_exotic.hasMatch(l.food) || _unusual.hasMatch(f.name)) return false;
+  // Rauwe kiemen van bonen (behalve taugé en soja) bevatten giftige lectines
+  if (l.part == 'sprout' && l.state == 'raw' && l.food.contains('bean') && !RegExp('mung|soy').hasMatch(l.food)) return false;
+  return l.spread >= 4 && !_notAFood.hasMatch(f.name) && !_unprepared.hasMatch(f.name);
+}
+
 /// Hoeveelheden om te proberen: een herkenbare portie, en 100 g of 50 g.
 List<(double, Portion?)> _amounts(Food f) {
   final portion = f.portions.where((p) => p.grams >= 30 && p.grams <= 250 && !_measure.hasMatch(p.label)).firstOrNull;
@@ -96,14 +174,15 @@ GapPlan? planGaps({
   final used = <String>{};
   final pool = [
     for (final f in candidates)
-      if (isEverydayFood(f)) f,
+      if (isAdviceFood(f)) f,
   ];
 
   for (var round = 0; round < maxItems; round++) {
     (Food, double, Portion?, double, NutrientMap)? best;
     var bestScore = 0.0;
     for (final f in pool) {
-      if (used.contains(f.ref)) continue;
+      // Niet twee keer hetzelfde voedingsmiddel (rauwe en gekookte spinazie)
+      if (used.contains(f.ref) || used.contains(f.label?.food)) continue;
       final v = withDerived(f.per100g);
       for (final (g, portion) in _amounts(f)) {
         final kcal = (v['energy'] ?? 0) * g / 100;
@@ -146,6 +225,7 @@ GapPlan? planGaps({
     }
     items.add(PlanItem(food: f, grams: g, portion: portion, kcal: kcal, fills: fills.take(3).toList()));
     used.add(f.ref);
+    if (f.label != null) used.add(f.label!.food);
     budget -= kcal;
   }
   if (items.isEmpty) return null;
