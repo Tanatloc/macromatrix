@@ -15,6 +15,7 @@ import '../data/fdc_client.dart';
 import '../data/product_info.dart';
 import '../data/user_db.dart';
 import '../import/importer.dart';
+import '../labs/lab_report.dart';
 import '../nutrition/estimate.dart';
 import '../nutrition/allergens.dart';
 import '../nutrition/badges.dart';
@@ -155,6 +156,7 @@ class AppState extends ChangeNotifier {
 
   void _load() {
     _estimated = false;
+    _labs = null;
     _suggested = false;
     // Terugkerende items alleen tot en met vandaag invullen, niet voor dagen in de toekomst
     if (!_date.isAfter(_dateOnly(DateTime.now()))) user.applyRepeats(day, _date);
@@ -395,6 +397,43 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Bloedwaarden (alleen op dit toestel) ──
+
+  List<LabResult>? _labs;
+
+  /// Alle uitslagen, nieuwste afname eerst.
+  List<LabResult> get labResults => _labs ??= user.labs();
+
+  /// De laatste uitslag per stof die de app kent, van de afgelopen [months] maanden.
+  Map<String, LabResult> latestLabs({int months = 18, DateTime? at}) {
+    final now = at ?? DateTime.now();
+    final from = dayKey(DateTime(now.year, now.month - months, now.day));
+    final out = <String, LabResult>{};
+    for (final r in labResults) {
+      final k = r.value.marker?.key;
+      if (k != null && r.day.compareTo(from) >= 0 && r.day.compareTo(dayKey(now)) <= 0) out.putIfAbsent(k, () => r);
+    }
+    return out;
+  }
+
+  void saveLabs(DateTime day, List<LabValue> values) {
+    user.saveLabs(dayKey(day), values);
+    _labs = null;
+    notifyListeners();
+  }
+
+  void deleteLab(String id) {
+    user.deleteLab(id);
+    _labs = null;
+    notifyListeners();
+  }
+
+  void deleteLabDay(String day) {
+    user.deleteLabDay(day);
+    _labs = null;
+    notifyListeners();
+  }
+
   /// Weekrapport gezien of weggeklikt (alleen op dit toestel).
   void markReportSeen(String week) {
     user.setSetting('_report_seen', {'week': week});
@@ -435,7 +474,14 @@ class AppState extends ChangeNotifier {
         score: (scores.reduce((a, b) => a + b) / scores.length).round(),
         days: scores.length,
         avg: {for (final e in sums.entries) e.key: e.value / daily.length},
-        health: healthCheck(withTargets, weightKg: currentWeight, age: _profile.ageIn(m.year), heightCm: _profile.heightCm, trains: _trainsIn(m)),
+        health: healthCheck(
+          withTargets,
+          weightKg: currentWeight,
+          age: _profile.ageIn(m.year),
+          heightCm: _profile.heightCm,
+          trains: _trainsIn(m),
+          labs: latestLabs(at: end),
+        ),
       );
     }
 

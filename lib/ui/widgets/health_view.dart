@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../i18n.dart';
 import '../../nutrition/health.dart';
 import '../../nutrition/insights.dart';
+import '../screens/labs_screen.dart';
 import '../theme.dart';
 import 'kit.dart';
 
@@ -16,8 +17,11 @@ Level levelOfRating(HealthRating r) => switch (r) {
 
 /// Gezondheidsdeel van het weekrapport: eindoordeel, score en per factor wat het met je gezondheid doet.
 class HealthPanel extends StatelessWidget {
-  const HealthPanel({super.key, required this.check, this.change});
+  const HealthPanel({super.key, required this.check, this.change, this.hasLabs});
   final HealthCheck? check;
+
+  /// Of je bloedwaarden hebt ingevuld; null = geen knop naar de bloedwaarden.
+  final bool? hasLabs;
 
   /// Verschil in score met vorige week.
   final int? change;
@@ -106,6 +110,20 @@ class HealthPanel extends StatelessWidget {
             ),
             style: TextStyle(fontSize: 11.5, color: p.ink3),
           ),
+          if (hasLabs != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                icon: const Icon(Icons.bloodtype_outlined, size: 18),
+                label: Text(
+                  !hasLabs!
+                      ? tr('Add your blood values for advice that fits your blood', 'Voeg je bloedwaarden toe voor advies dat bij je bloed past')
+                      : tr('Your blood values', 'Je bloedwaarden'),
+                ),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LabsScreen())),
+              ),
+            ),
         ],
       ),
     );

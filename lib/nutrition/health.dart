@@ -6,6 +6,7 @@ library;
 import 'dart:math' as math;
 
 import '../i18n.dart';
+import '../labs/lab_report.dart';
 import 'insights.dart';
 import 'nutrients.dart';
 import 'targets.dart';
@@ -109,13 +110,15 @@ const healthMinDays = 3;
 bool isFullDay(NutrientTotals t, Map<String, Target> targets) => t['energy'] >= math.max(800, (targets['energy']?.goal ?? 0) * 0.5);
 
 /// Gezondheidscheck over [days] (totalen en doelen per dag). [weightKg] voor eiwit per kilo; [age], [heightCm] en
-/// [trains] (krachttraining of veel sport) geven persoonlijk advies. Null als er te weinig volledig gelogde dagen zijn.
+/// [trains] (krachttraining of veel sport) geven persoonlijk advies, net als [labs]: je laatste bloedwaarden per stof
+/// (zie lib/labs/markers.dart). Null als er te weinig volledig gelogde dagen zijn.
 HealthCheck? healthCheck(
   List<(NutrientTotals, Map<String, Target>)> days, {
   required double weightKg,
   int? age,
   double? heightCm,
   bool trains = false,
+  Map<String, LabResult> labs = const {},
 }) {
   final full = [
     for (final d in days)
@@ -261,6 +264,23 @@ HealthCheck? healthCheck(
     }
   }
 
+  // Bloedwaarden: wat afwijkt, met de uitleg bij die stof (alleen als advies; het oordeel blijft de richtlijn)
+  String? lab(String key) {
+    final r = labs[key];
+    if (r == null || r.value.status == 0) return null;
+    final v = r.value, m = v.marker!;
+    final text = v.status < 0 ? m.lowText : m.highText;
+    if (text == null) return null;
+    final d = r.day.split('-').reversed.join('/');
+    final shown = '${v.comparator ?? ''}${fmtNum(v.value, m.decimals)} ${v.unit ?? m.unit}';
+    final word = v.status < 0 ? tr('low', 'laag') : tr('high', 'hoog');
+    return '${tr('Blood test', 'Bloedafname')} $d: ${m.name} $shown ($word). ${tr(text.$1, text.$2)}';
+  }
+
+  List<String> labTips(List<String> keys) => [for (final k in keys) ?lab(k)];
+  // Verminderde nierfunctie: dan geen advies om meer eiwit te eten
+  final kidneys = labs['egfr']?.value.status == -1;
+
   final factors = [
     factor(
       'sodium',
@@ -288,6 +308,7 @@ HealthCheck? healthCheck(
       rateDown(sfa, 10, 12),
       weight: 2,
       isKnown: known('sfa'),
+      tips: labTips(['ldl', 'non_hdl', 'hdl']),
       good: tr(
         'Little saturated fat: that keeps your LDL cholesterol low and protects your heart and blood vessels.',
         'Weinig verzadigd vet: dat houdt je LDL-cholesterol laag en beschermt je hart en bloedvaten.',
@@ -312,7 +333,14 @@ HealthCheck? healthCheck(
       rateUp(fiber, 25, 18),
       weight: 2,
       isKnown: known('fiber'),
-      tips: fiberTips,
+      tips: [
+        ...fiberTips,
+        if (labs['ldl']?.value.status == 1 || labs['non_hdl']?.value.status == 1)
+          tr(
+            'Your cholesterol was high: soluble fibre (oats, barley, legumes, apples) lowers LDL by itself.',
+            'Je cholesterol was hoog: oplosbare vezels (havermout, gerst, peulvruchten, appels) verlagen je LDL op zich al.',
+          ),
+      ],
       good: tr(
         'Enough fibre: good for your gut and blood sugar, and it lowers your risk of heart disease, type 2 diabetes and bowel cancer.',
         'Genoeg vezels: goed voor je darmen en je bloedsuiker, en het verlaagt je kans op hart- en vaatziekten, diabetes type 2 en darmkanker.',
@@ -336,7 +364,10 @@ HealthCheck? healthCheck(
       'Nutrient Score ${micro.round()}',
       rateUp(micro, 85, 70),
       weight: 2,
-      tips: microTips,
+      tips: [
+        ...microTips,
+        ...labTips(['vit_d', 'ferritin', 'transferrin_sat', 'b12', 'folate', 'hemoglobin', 'magnesium']),
+      ],
       note: tr(
         'Counted over the week: your body stores most vitamins and minerals. Extra vitamin C, B vitamins or potassium is harmless, but you pass it out, so it counts for at most twice your goal per day.',
         'Over de week geteld: je lichaam bewaart de meeste vitaminen en mineralen. Extra vitamine C, B-vitaminen of kalium is onschadelijk, maar je plast het uit, dus het telt per dag hooguit voor twee keer je doel.',
@@ -361,6 +392,7 @@ HealthCheck? healthCheck(
       '${fmtNum(sugars, 0)}% $ofEnergy',
       rateDown(sugars, 15, 20),
       isKnown: known('sugars'),
+      tips: labTips(['hba1c', 'glucose', 'triglycerides']),
       good: tr('Little sugar: good for your teeth, weight and blood sugar.', 'Weinig suiker: goed voor je tanden, je gewicht en je bloedsuiker.'),
       ok: tr(
         'Quite a lot of sugar. Sugar from fruit and milk is fine, added sugar is not.',
@@ -419,7 +451,7 @@ HealthCheck? healthCheck(
       '${fmtNum(protein)} g ${tr('per kg', 'per kg')}',
       rateUp(protein, 0.83, 0.66),
       isKnown: weightKg > 0,
-      tips: proteinTips,
+      tips: kidneys ? labTips(['egfr']) : proteinTips,
       good: tr('Enough protein to maintain your muscles.', 'Genoeg eiwit om je spieren te onderhouden.'),
       ok: tr('Slightly too little protein.', 'Net wat te weinig eiwit.'),
       poor: tr(
@@ -436,6 +468,7 @@ HealthCheck? healthCheck(
       tr('Alcohol', 'Alcohol'),
       tr('${fmtNum(glasses)} drinks per week', '${fmtNum(glasses)} glazen per week'),
       rateDown(glasses, 1, 7),
+      tips: labTips(['ggt', 'alt', 'uric_acid']),
       good: tr('Little or no alcohol: the best for your health.', 'Weinig of geen alcohol: het beste voor je gezondheid.'),
       ok: tr(
         'Some alcohol. There is no safe amount: the less, the better.',

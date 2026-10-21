@@ -150,7 +150,7 @@ class WeeklyReportScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        HealthPanel(check: r.health, change: r.healthChange),
+                        HealthPanel(check: r.health, change: r.healthChange, hasLabs: s.labResults.isNotEmpty),
                         const SizedBox(height: 10),
                         Panel(
                           shadow: false,

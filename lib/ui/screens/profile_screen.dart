@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../nutrition/nutrients.dart';
@@ -13,6 +14,7 @@ import '../widgets/level_card.dart';
 import '../widgets/weight_goal.dart';
 import 'nutrient_detail_screen.dart';
 import 'body_screen.dart';
+import 'labs_screen.dart';
 import 'settings_screen.dart';
 import '../../i18n.dart';
 
@@ -213,6 +215,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 Text(
                                   tr('Weight, fasting, blood pressure and more', 'Gewicht, vasten, bloeddruk en meer'),
+                                  style: TextStyle(fontSize: 12.5, color: pal.ink2),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded, color: pal.ink3),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Panel(
+                      shadow: false,
+                      radius: 16,
+                      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LabsScreen())),
+                      child: Row(
+                        children: [
+                          Icon(Icons.bloodtype_outlined, color: pal.brand),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  tr('Blood values', 'Bloedwaarden'),
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
+                                ),
+                                Text(
+                                  s.labResults.isEmpty
+                                      ? tr('Read your lab report and get advice that fits', 'Lees je labo-verslag in en krijg advies dat erbij past')
+                                      : tr(
+                                          'Last blood test: ${DateFormat('d MMM yyyy', appLocale).format(DateTime.parse(s.labResults.first.day))}',
+                                          'Laatste bloedafname: ${DateFormat('d MMM yyyy', appLocale).format(DateTime.parse(s.labResults.first.day))}',
+                                        ),
                                   style: TextStyle(fontSize: 12.5, color: pal.ink2),
                                 ),
                               ],

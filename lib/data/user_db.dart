@@ -15,6 +15,8 @@ import 'food.dart';
 import 'off_client.dart' show checkEnergy;
 import '../i18n.dart';
 import '../import/importer.dart';
+import '../labs/lab_report.dart';
+import '../labs/markers.dart';
 import 'models.dart';
 
 enum Meal {
@@ -172,6 +174,16 @@ class UserDb {
       sql.writeln('PRAGMA user_version = 3;');
       _db.execute(sql.toString());
     }
+    if (version < 4) {
+      // Bloedwaarden: alleen op dit toestel (niet in [syncTables]), want het zijn gevoelige gezondheidsgegevens
+      _db.execute('''
+        CREATE TABLE labs (id TEXT PRIMARY KEY, day TEXT NOT NULL, name TEXT NOT NULL, marker TEXT, value REAL NOT NULL,
+          unit TEXT, comparator TEXT, low REAL, high REAL, flag INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL,
+          deleted INTEGER NOT NULL DEFAULT 0);
+        CREATE INDEX labs_marker ON labs(marker, day);
+        PRAGMA user_version = 4;
+      ''');
+    }
   }
 
   // ── Synchronisatie ──
@@ -238,6 +250,7 @@ class UserDb {
     for (final t in syncTables) {
       _db.execute(t.name == 'settings' ? "DELETE FROM settings WHERE key NOT IN ('ui', '_session')" : 'DELETE FROM ${t.name}');
     }
+    _db.execute('DELETE FROM labs');
   });
 
   /// Gegevens uit een andere app bewaren. Regels die er al zijn (zelfde vaste id) worden overgeslagen; notities
@@ -667,6 +680,46 @@ class UserDb {
 
   /// Soorten metingen die de gebruiker ooit gebruikte (voor eigen metingen).
   List<String> biometricTypesUsed() => [for (final r in _db.select('SELECT DISTINCT type FROM biometrics WHERE deleted = 0')) r['type'] as String];
+
+  // ── Bloedwaarden ──
+
+  /// Uitslagen van één afname bewaren. Dezelfde uitslag opnieuw inlezen vervangt de oude (vaste id per dag, naam
+  /// en eenheid), dus een verslag twee keer inlezen geeft geen dubbels.
+  void saveLabs(String day, List<LabValue> values) => transaction(() {
+    final now = _now();
+    for (final v in values) {
+      _db.execute(
+        'INSERT OR REPLACE INTO labs (id, day, name, marker, value, unit, comparator, low, high, flag, updated_at, deleted) '
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?,0)',
+        [labId(day, v), day, v.name, v.marker?.key, v.value, v.unit, v.comparator, v.low, v.high, v.flag, now],
+      );
+    }
+  });
+
+  static String labId(String day, LabValue v) => '$day:${normalizeLabName(v.name)}:${v.unit ?? ''}';
+
+  void deleteLab(String id) => _db.execute('UPDATE labs SET deleted = 1, updated_at = ? WHERE id = ?', [_now(), id]);
+
+  void deleteLabDay(String day) => _db.execute('UPDATE labs SET deleted = 1, updated_at = ? WHERE day = ?', [_now(), day]);
+
+  /// Alle uitslagen, nieuwste afname eerst.
+  List<LabResult> labs() => [
+    for (final r in _db.select('SELECT * FROM labs WHERE deleted = 0 ORDER BY day DESC, rowid'))
+      LabResult(
+        id: r['id'] as String,
+        day: r['day'] as String,
+        value: LabValue(
+          name: r['name'] as String,
+          marker: labMarkerByKey[r['marker']],
+          value: (r['value'] as num).toDouble(),
+          unit: r['unit'] as String?,
+          comparator: r['comparator'] as String?,
+          low: (r['low'] as num?)?.toDouble(),
+          high: (r['high'] as num?)?.toDouble(),
+          flag: r['flag'] as int,
+        ),
+      ),
+  ];
 
   // ── Notities ──
 
