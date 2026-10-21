@@ -197,7 +197,7 @@ void main() {
           ),
         ),
       );
-      expect(find.textContaining('afgestemd op je bloedafname van 03/02/2026'), findsOneWidget);
+      expect(find.text('Met je bloedafname van 03/02/2026'), findsOneWidget);
       expect(find.byIcon(Icons.bloodtype_rounded), findsNWidgets(5)); // bovenaan + 4 punten
       await tester.tap(find.textContaining('Verzadigd vet', findRichText: true));
       await tester.pump();

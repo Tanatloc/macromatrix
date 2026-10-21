@@ -239,10 +239,20 @@ void main() {
     expect(find.text('Gezondheid'), findsOneWidget);
     expect(find.textContaining('Zout  ', findRichText: true), findsOneWidget);
     expect(find.textContaining('▼ 4'), findsOneWidget);
+    // Dicht: geen uitleg, impact of advies; open: alles; nog eens tikken sluit weer
     expect(find.textContaining('kruid met kruiden'), findsNothing);
+    expect(find.textContaining('beroerte', findRichText: true), findsOneWidget); // alleen de grootste winst bovenaan
+    expect(find.text('Geen medisch advies.', findRichText: true), findsNothing);
     await tester.tap(find.textContaining('Zout  ', findRichText: true));
     await tester.pump();
     expect(find.textContaining('kruid met kruiden'), findsOneWidget);
+    expect(find.textContaining('beroerte', findRichText: true), findsNWidgets(3)); // + uitleg en impact bij het punt
+    await tester.tap(find.textContaining('Zout  ', findRichText: true));
+    await tester.pump();
+    expect(find.textContaining('kruid met kruiden'), findsNothing);
+    await tester.tap(find.text('Over deze cijfers'));
+    await tester.pump();
+    expect(find.textContaining('Geen medisch advies'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

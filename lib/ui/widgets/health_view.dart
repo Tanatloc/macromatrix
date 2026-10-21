@@ -144,10 +144,7 @@ class HealthPanel extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    tr(
-                      'Advice matched to your blood test of ${_day(c.labDay!)}: look for the drop.',
-                      'Advies afgestemd op je bloedafname van ${_day(c.labDay!)}: kijk naar het druppeltje.',
-                    ),
+                    tr('Includes your blood test of ${_day(c.labDay!)}', 'Met je bloedafname van ${_day(c.labDay!)}'),
                     style: TextStyle(fontSize: 12.5, color: p.ink2),
                   ),
                 ),
@@ -155,13 +152,16 @@ class HealthPanel extends StatelessWidget {
             ),
           ],
           for (final f in c.factors) _FactorRow(f, labDay: c.labDay == null ? null : _day(c.labDay!)),
-          const SizedBox(height: 10),
-          Text(
-            tr(
-              'Based on ${c.days} fully logged days and the guidelines of EFSA, the WHO and the Belgian Superior Health Council. The impact figures come from large studies: averages and associations that show roughly what is at stake, not a prediction for you. Not medical advice.',
-              'Op basis van ${c.days} volledig gelogde dagen en de richtlijnen van EFSA, de WHO en de Hoge Gezondheidsraad. De cijfers over impact komen uit grote studies: gemiddelden en verbanden die tonen wat ongeveer op het spel staat, geen voorspelling voor jou. Geen medisch advies.',
+          const SizedBox(height: 6),
+          _MoreInfo(
+            title: tr('About these figures', 'Over deze cijfers'),
+            child: Text(
+              tr(
+                'Based on ${c.days} fully logged days and the guidelines of EFSA, the WHO and the Belgian Superior Health Council. The impact figures come from large studies: averages and associations that show roughly what is at stake, not a prediction for you. Not medical advice.',
+                'Op basis van ${c.days} volledig gelogde dagen en de richtlijnen van EFSA, de WHO en de Hoge Gezondheidsraad. De cijfers over impact komen uit grote studies: gemiddelden en verbanden die tonen wat ongeveer op het spel staat, geen voorspelling voor jou. Geen medisch advies.',
+              ),
+              style: TextStyle(fontSize: 11.5, color: p.ink3),
             ),
-            style: TextStyle(fontSize: 11.5, color: p.ink3),
           ),
           if (hasLabs != null)
             Align(
@@ -203,9 +203,9 @@ class _FactorRowState extends State<_FactorRow> {
     final p = context.pal;
     final f = widget.f;
     final level = levelOfRating(f.rating);
-    final more = f.advice != null || f.note != null || f.tips.isNotEmpty || f.bloodTips.isNotEmpty;
     return InkWell(
-      onTap: more ? () => setState(() => _open = !_open) : null,
+      // Dicht: één regel per punt; open: uitleg, impact, advies en wat voor jou geldt
+      onTap: () => setState(() => _open = !_open),
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -249,28 +249,28 @@ class _FactorRowState extends State<_FactorRow> {
                       child: Icon(Icons.bloodtype_rounded, size: 16, color: p.high),
                     ),
                   ),
-                if (more) Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: p.ink3),
+                Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: p.ink3),
               ],
             ),
-            Padding(
-              padding: const EdgeInsets.only(left: 20, top: 4),
-              child: Text(f.effect, style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2)),
-            ),
-            if (f.impact != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 20, top: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.insights_rounded, size: 15, color: p.brand),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(f.impact!, style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink)),
-                    ),
-                  ],
-                ),
-              ),
             if (_open) ...[
+              Padding(
+                padding: const EdgeInsets.only(left: 20, top: 4),
+                child: Text(f.effect, style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2)),
+              ),
+              if (f.impact != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, top: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.insights_rounded, size: 15, color: p.brand),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(f.impact!, style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink)),
+                      ),
+                    ],
+                  ),
+                ),
               if (f.advice != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 20, top: 8),
@@ -332,6 +332,49 @@ class _FactorRowState extends State<_FactorRow> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Een kopje dat je openklapt voor extra uitleg.
+class _MoreInfo extends StatefulWidget {
+  const _MoreInfo({required this.title, required this.child});
+  final String title;
+  final Widget child;
+
+  @override
+  State<_MoreInfo> createState() => _MoreInfoState();
+}
+
+class _MoreInfoState extends State<_MoreInfo> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _open = !_open),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 15, color: p.ink3),
+                const SizedBox(width: 6),
+                Text(
+                  widget.title,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.ink3),
+                ),
+                Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 16, color: p.ink3),
+              ],
+            ),
+          ),
+        ),
+        if (_open) widget.child,
+      ],
     );
   }
 }
