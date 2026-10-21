@@ -19,6 +19,7 @@ import 'package:macromatrix/nutrition/values.dart';
 import 'package:macromatrix/state/app_state.dart';
 import 'package:macromatrix/ui/screens/labs_screen.dart';
 import 'package:macromatrix/ui/theme.dart';
+import 'package:macromatrix/ui/widgets/health_view.dart';
 
 /// Een verslag zoals Helena het geeft (verzonnen persoon en waarden), als regels met kolommen.
 const _report = [
@@ -174,11 +175,34 @@ void main() {
     test('afwijkende waarden geven advies bij het juiste punt, het oordeel blijft', () {
       final c = healthCheck(week, weightKg: 75, labs: labs(_report))!;
       expect(factor(c, 'sfa').rating, HealthRating.good);
-      expect(factor(c, 'sfa').tips.join(), allOf(contains('LDL-cholesterol 131'), contains('HDL-cholesterol 35')));
-      expect(factor(c, 'fiber').tips.join(), contains('havermout'));
-      expect(factor(c, 'micro').tips.join(), allOf(contains('Ferritine 18'), contains('Vitamine D')));
-      expect(factor(c, 'alcohol').tips.join(), contains('ALT'));
-      expect(factor(c, 'sodium').tips, isEmpty);
+      expect(factor(c, 'sfa').bloodTips.join(), allOf(contains('LDL-cholesterol 131'), contains('HDL-cholesterol 35')));
+      expect(factor(c, 'sfa').tips, isEmpty);
+      expect(c.labDay, '2026-02-03');
+      expect(factor(c, 'fiber').bloodTips.join(), contains('havermout'));
+      expect(factor(c, 'micro').bloodTips.join(), allOf(contains('Ferritine 18'), contains('Vitamine D')));
+      expect(factor(c, 'alcohol').bloodTips.join(), contains('ALT'));
+      expect(factor(c, 'sodium').bloodTips, isEmpty);
+    });
+
+    testWidgets('in het rapport: druppeltje en de datum van de bloedafname', (tester) async {
+      tester.view.physicalSize = const Size(340, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = healthCheck(week, weightKg: 75, labs: labs(_report))!;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(Brightness.light),
+          home: Scaffold(
+            body: SingleChildScrollView(child: HealthPanel(check: c)),
+          ),
+        ),
+      );
+      expect(find.textContaining('afgestemd op je bloedafname van 03/02/2026'), findsOneWidget);
+      expect(find.byIcon(Icons.bloodtype_rounded), findsNWidgets(5)); // bovenaan + 4 punten
+      await tester.tap(find.textContaining('Verzadigd vet', findRichText: true));
+      await tester.pump();
+      expect(find.text('Op basis van je bloedafname van 03/02/2026'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     test('verminderde nierfunctie: geen advies om meer eiwit te eten', () {
@@ -186,7 +210,8 @@ void main() {
         ['eGFR (CKD-EPI)', '-', '48', 'mL/min/1,73 m2', '> 60'],
       ]);
       final c = healthCheck(week, weightKg: 75, age: 70, trains: true, labs: kidneys)!;
-      expect(factor(c, 'protein').tips.single, contains('nierfunctie'));
+      expect(factor(c, 'protein').bloodTips.single, contains('nierfunctie'));
+      expect(factor(c, 'protein').tips, isEmpty);
     });
 
     test('alles in orde: geen extra advies', () {
@@ -197,7 +222,7 @@ void main() {
           ['Ferritine', '120', 'µg/L', '30 - 400'],
         ]),
       )!;
-      expect(factor(c, 'micro').tips, isEmpty);
+      expect(factor(c, 'micro').bloodTips, isEmpty);
     });
   });
 

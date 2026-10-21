@@ -45,6 +45,7 @@ class HealthFactor {
     this.advice,
     this.note,
     this.tips = const [],
+    this.bloodTips = const [],
     this.weight = 1,
     this.impact,
     this.gain = 0,
@@ -69,6 +70,9 @@ class HealthFactor {
   /// Het oordeel zelf volgt altijd de algemene richtlijn.
   final List<String> tips;
 
+  /// Advies op basis van je bloedwaarden (zie [HealthCheck.labDay]).
+  final List<String> bloodTips;
+
   /// Gewicht in het eindoordeel: de grote risicofactoren tellen dubbel.
   final double weight;
 
@@ -87,6 +91,7 @@ class HealthFactor {
     advice: advice,
     note: note,
     tips: tips,
+    bloodTips: bloodTips,
     weight: weight,
     impact: impact,
     gain: gain,
@@ -94,7 +99,10 @@ class HealthFactor {
 }
 
 class HealthCheck {
-  const HealthCheck({required this.days, required this.factors, required this.score, required this.rating});
+  const HealthCheck({required this.days, required this.factors, required this.score, required this.rating, this.labDay});
+
+  /// Dag (jjjj-mm-dd) van de bloedafname waarop het advies steunt, of null zonder bloedwaarden.
+  final String? labDay;
 
   /// Volledig gelogde dagen waarop het oordeel steunt.
   final int days;
@@ -201,6 +209,7 @@ HealthCheck? healthCheck(
     required String advice,
     String? note,
     List<String> tips = const [],
+    List<String> bloodTips = const [],
     double weight = 1,
     bool isKnown = true,
   }) {
@@ -222,6 +231,7 @@ HealthCheck? healthCheck(
       advice: r == HealthRating.ok || r == HealthRating.poor ? advice : null,
       note: note,
       tips: r == HealthRating.unknown ? const [] : tips,
+      bloodTips: bloodTips,
       weight: weight,
     );
   }
@@ -323,10 +333,9 @@ HealthCheck? healthCheck(
     final v = r.value, m = v.marker!;
     final text = v.status < 0 ? m.lowText : m.highText;
     if (text == null) return null;
-    final d = r.day.split('-').reversed.join('/');
     final shown = '${v.comparator ?? ''}${fmtNum(v.value, m.decimals)} ${v.unit ?? m.unit}';
     final word = v.status < 0 ? tr('low', 'laag') : tr('high', 'hoog');
-    return '${tr('Blood test', 'Bloedafname')} $d: ${m.name} $shown ($word). ${tr(text.$1, text.$2)}';
+    return '${m.name} $shown ($word). ${tr(text.$1, text.$2)}';
   }
 
   List<String> labTips(List<String> keys) => [for (final k in keys) ?lab(k)];
@@ -360,7 +369,7 @@ HealthCheck? healthCheck(
       rateDown(sfa, 10, 12),
       weight: 2,
       isKnown: known('sfa'),
-      tips: labTips(['ldl', 'non_hdl', 'hdl']),
+      bloodTips: labTips(['ldl', 'non_hdl', 'hdl']),
       good: tr(
         'Little saturated fat: that keeps your LDL cholesterol low and protects your heart and blood vessels.',
         'Weinig verzadigd vet: dat houdt je LDL-cholesterol laag en beschermt je hart en bloedvaten.',
@@ -385,8 +394,8 @@ HealthCheck? healthCheck(
       rateUp(fiber, 25, 18),
       weight: 2,
       isKnown: known('fiber'),
-      tips: [
-        ...fiberTips,
+      tips: fiberTips,
+      bloodTips: [
         if (labs['ldl']?.value.status == 1 || labs['non_hdl']?.value.status == 1)
           tr(
             'Your cholesterol was high: soluble fibre (oats, barley, legumes, apples) lowers LDL by itself.',
@@ -416,10 +425,8 @@ HealthCheck? healthCheck(
       'Nutrient Score ${micro.round()}',
       rateUp(micro, 85, 70),
       weight: 2,
-      tips: [
-        ...microTips,
-        ...labTips(['vit_d', 'ferritin', 'transferrin_sat', 'b12', 'folate', 'hemoglobin', 'magnesium']),
-      ],
+      tips: microTips,
+      bloodTips: labTips(['vit_d', 'ferritin', 'transferrin_sat', 'b12', 'folate', 'hemoglobin', 'magnesium']),
       note: tr(
         'Counted over the week: your body stores most vitamins and minerals. Extra vitamin C, B vitamins or potassium is harmless, but you pass it out, so it counts for at most twice your goal per day.',
         'Over de week geteld: je lichaam bewaart de meeste vitaminen en mineralen. Extra vitamine C, B-vitaminen of kalium is onschadelijk, maar je plast het uit, dus het telt per dag hooguit voor twee keer je doel.',
@@ -444,7 +451,7 @@ HealthCheck? healthCheck(
       '${fmtNum(sugars, 0)}% $ofEnergy',
       rateDown(sugars, 15, 20),
       isKnown: known('sugars'),
-      tips: labTips(['hba1c', 'glucose', 'triglycerides']),
+      bloodTips: labTips(['hba1c', 'glucose', 'triglycerides']),
       good: tr('Little sugar: good for your teeth, weight and blood sugar.', 'Weinig suiker: goed voor je tanden, je gewicht en je bloedsuiker.'),
       ok: tr(
         'Quite a lot of sugar. Sugar from fruit and milk is fine, added sugar is not.',
@@ -503,7 +510,8 @@ HealthCheck? healthCheck(
       '${fmtNum(protein)} g ${tr('per kg', 'per kg')}',
       rateUp(protein, 0.83, 0.66),
       isKnown: weightKg > 0,
-      tips: kidneys ? labTips(['egfr']) : proteinTips,
+      tips: kidneys ? const [] : proteinTips,
+      bloodTips: labTips(['egfr']),
       good: tr('Enough protein to maintain your muscles.', 'Genoeg eiwit om je spieren te onderhouden.'),
       ok: tr('Slightly too little protein.', 'Net wat te weinig eiwit.'),
       poor: tr(
@@ -520,7 +528,7 @@ HealthCheck? healthCheck(
       tr('Alcohol', 'Alcohol'),
       tr('${fmtNum(glasses)} drinks per week', '${fmtNum(glasses)} glazen per week'),
       rateDown(glasses, 1, 7),
-      tips: labTips(['ggt', 'alt', 'uric_acid']),
+      bloodTips: labTips(['ggt', 'alt', 'uric_acid']),
       good: tr('Little or no alcohol: the best for your health.', 'Weinig of geen alcohol: het beste voor je gezondheid.'),
       ok: tr(
         'Some alcohol. There is no safe amount: the less, the better.',
@@ -683,6 +691,7 @@ HealthCheck? healthCheck(
   factors.sort((a, b) => order(a) != order(b) ? order(a) - order(b) : b.weight.compareTo(a.weight));
   return HealthCheck(
     days: n,
+    labDay: labs.values.map((r) => r.day).fold<String?>(null, (a, d) => a == null || d.compareTo(a) > 0 ? d : a),
     factors: factors,
     score: score,
     rating: score >= 80 ? HealthRating.good : (score >= 50 ? HealthRating.ok : HealthRating.poor),

@@ -15,6 +15,8 @@ Level levelOfRating(HealthRating r) => switch (r) {
   HealthRating.unknown => Level.none,
 };
 
+String _day(String day) => day.split('-').reversed.join('/');
+
 /// Gezondheidsdeel van het weekrapport: eindoordeel, score en per factor wat het met je gezondheid doet.
 class HealthPanel extends StatelessWidget {
   const HealthPanel({super.key, required this.check, this.change, this.hasLabs});
@@ -134,7 +136,25 @@ class HealthPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 8),
-          for (final f in c.factors) _FactorRow(f),
+          if (c.labDay != null && c.factors.any((f) => f.bloodTips.isNotEmpty)) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.bloodtype_rounded, size: 16, color: p.high),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    tr(
+                      'Advice matched to your blood test of ${_day(c.labDay!)}: look for the drop.',
+                      'Advies afgestemd op je bloedafname van ${_day(c.labDay!)}: kijk naar het druppeltje.',
+                    ),
+                    style: TextStyle(fontSize: 12.5, color: p.ink2),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          for (final f in c.factors) _FactorRow(f, labDay: c.labDay == null ? null : _day(c.labDay!)),
           const SizedBox(height: 10),
           Text(
             tr(
@@ -165,8 +185,11 @@ class HealthPanel extends StatelessWidget {
 
 /// Eén factor: naam, waarde en oordeel; aantikken toont wat je kunt doen.
 class _FactorRow extends StatefulWidget {
-  const _FactorRow(this.f);
+  const _FactorRow(this.f, {this.labDay});
   final HealthFactor f;
+
+  /// Datum van de bloedafname, al opgemaakt (bv. 20/10/2025).
+  final String? labDay;
 
   @override
   State<_FactorRow> createState() => _FactorRowState();
@@ -180,7 +203,7 @@ class _FactorRowState extends State<_FactorRow> {
     final p = context.pal;
     final f = widget.f;
     final level = levelOfRating(f.rating);
-    final more = f.advice != null || f.note != null || f.tips.isNotEmpty;
+    final more = f.advice != null || f.note != null || f.tips.isNotEmpty || f.bloodTips.isNotEmpty;
     return InkWell(
       onTap: more ? () => setState(() => _open = !_open) : null,
       borderRadius: BorderRadius.circular(10),
@@ -217,6 +240,15 @@ class _FactorRowState extends State<_FactorRow> {
                   f.rating.label,
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.textOf(level)),
                 ),
+                // Advies uit je bloedwaarden: zichtbaar zonder het punt te openen
+                if (f.bloodTips.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Tooltip(
+                      message: tr('Advice based on your blood test', 'Advies op basis van je bloedafname'),
+                      child: Icon(Icons.bloodtype_rounded, size: 16, color: p.high),
+                    ),
+                  ),
                 if (more) Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: p.ink3),
               ],
             ),
@@ -253,6 +285,30 @@ class _FactorRowState extends State<_FactorRow> {
                     ],
                   ),
                 ),
+              if (f.bloodTips.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, top: 10),
+                  child: Row(
+                    children: [
+                      Icon(Icons.bloodtype_rounded, size: 16, color: p.high),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          widget.labDay == null
+                              ? tr('Based on your blood test', 'Op basis van je bloedafname')
+                              : tr('Based on your blood test of ${widget.labDay}', 'Op basis van je bloedafname van ${widget.labDay}'),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.ink2),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                for (final t in f.bloodTips)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 42, top: 4),
+                    child: Text(t, style: TextStyle(fontSize: 13, height: 1.4, color: p.ink)),
+                  ),
+              ],
               for (final t in f.tips)
                 Padding(
                   padding: const EdgeInsets.only(left: 20, top: 8),
