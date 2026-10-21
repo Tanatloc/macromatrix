@@ -7,6 +7,7 @@ import '../../data/food.dart';
 import '../../data/models.dart';
 import '../../data/off_client.dart';
 import '../../data/user_db.dart';
+import '../../nutrition/food_groups.dart';
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
 import '../../nutrition/values.dart';
@@ -264,6 +265,9 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: _ResultCard(food: f, lows: lows, onTap: () => _open(f)),
     );
+    // Hetzelfde voedingsmiddel uit verschillende landen: één resultaat, de rest onder "Andere bronnen"
+    final grouped = _scope == _Scope.all || _scope == _Scope.basic;
+    final groups = grouped ? groupFoods(results) : const <FoodGroup>[];
 
     return Scaffold(
       body: SafeArea(
@@ -442,7 +446,14 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                             ],
                           ),
                         ),
-                      for (final f in results) card(f),
+                      if (grouped)
+                        for (final g in groups)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _GroupCard(group: g, lows: lows, onOpen: _open),
+                          )
+                      else
+                        for (final f in results) card(f),
                       if (results.isEmpty && !_loadingOnline)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -689,6 +700,76 @@ String shortName(Nutrient n) {
   final base = n.name.replaceAll(RegExp(r'\s*\(.*\)'), '');
   if (base.startsWith('Vitamin ')) return 'Vit. ${base.substring(8)}';
   return base.startsWith('Vitamine ') ? 'Vit. ${base.substring(9)}' : base;
+}
+
+/// Eén zoekresultaat met eronder, open te klappen, hetzelfde voedingsmiddel uit andere bronnen.
+class _GroupCard extends StatefulWidget {
+  const _GroupCard({required this.group, required this.lows, required this.onOpen});
+  final FoodGroup group;
+  final List<Nutrient> lows;
+  final void Function(Food) onOpen;
+
+  @override
+  State<_GroupCard> createState() => _GroupCardState();
+}
+
+class _GroupCardState extends State<_GroupCard> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final g = widget.group;
+    final card = _ResultCard(food: g.main, lows: widget.lows, onTap: () => widget.onOpen(g.main));
+    if (g.others.isEmpty) return card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        card,
+        InkWell(
+          onTap: () => setState(() => _open = !_open),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 8, 2),
+            child: Row(
+              children: [
+                Text(
+                  tr('Other sources (${g.others.length})', 'Andere bronnen (${g.others.length})'),
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.ink2),
+                ),
+                Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: p.ink3),
+              ],
+            ),
+          ),
+        ),
+        if (_open)
+          for (final f in g.others)
+            InkWell(
+              onTap: () => widget.onOpen(f),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                child: Row(
+                  children: [
+                    SourceBadge(f.source),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        f.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: p.ink),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('${fmtInt(f.kcalPer100g)} kcal', style: numStyle(12.5, color: p.ink2)),
+                  ],
+                ),
+              ),
+            ),
+      ],
+    );
+  }
 }
 
 class _ResultCard extends StatelessWidget {
