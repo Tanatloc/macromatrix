@@ -239,10 +239,7 @@ class _EnergyCard extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (burned > 0) ...[
-                          _BurnedPill(burned: burned),
-                          const SizedBox(height: 3),
-                        ],
+                        if (burned > 0) ...[_BurnedPill(burned: burned), const SizedBox(height: 3)],
                         Text(fmtInt(left.abs()), style: numStyle(30, color: over ? p.high : p.ink, height: 1)),
                         const SizedBox(height: 4),
                         Text(
@@ -1071,14 +1068,14 @@ class _EntryRow extends StatelessWidget {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-          SnackBar(
-            content: Text(tr('${e.name} removed', '${e.name} verwijderd')),
-            // Met een knop blijft een SnackBar standaard staan tot je tikt; deze moet vanzelf verdwijnen
-            persist: false,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(label: tr('Undo', 'Ongedaan maken'), onPressed: () => s.restoreEntry(e)),
-          ),
-        );
+            SnackBar(
+              content: Text(tr('${e.name} removed', '${e.name} verwijderd')),
+              // Met een knop blijft een SnackBar standaard staan tot je tikt; deze moet vanzelf verdwijnen
+              persist: false,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(label: tr('Undo', 'Ongedaan maken'), onPressed: () => s.restoreEntry(e)),
+            ),
+          );
       },
       child: InkWell(
         onTap: () => Navigator.of(context).push(
@@ -1258,11 +1255,7 @@ class _ExerciseCard extends StatelessWidget {
                   : null,
             ),
           ),
-          for (final e in s.exercise)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: ExerciseRow(e),
-            ),
+          for (final e in s.exercise) Padding(padding: const EdgeInsets.only(right: 4), child: ExerciseRow(e)),
           if (s.adaptiveTdee != null && s.exercise.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4, right: 10),
@@ -1427,14 +1420,18 @@ class _SupplementCard extends StatelessWidget {
             ],
           ),
           for (final sup in list)
-            CheckboxListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.only(right: 8),
-              controlAffinity: ListTileControlAffinity.leading,
-              value: s.supplementTaken(sup),
-              onChanged: (v) => s.setSupplementTaken(sup, v ?? false),
-              title: Text(sup.name, style: TextStyle(fontSize: 14, color: p.ink)),
-              subtitle: Text(sup.dose, style: TextStyle(fontSize: 12, color: p.ink3)),
+            // Material: anders valt het tikeffect weg achter de kaart
+            Material(
+              type: MaterialType.transparency,
+              child: CheckboxListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.only(right: 8),
+                controlAffinity: ListTileControlAffinity.leading,
+                value: s.supplementTaken(sup),
+                onChanged: (v) => s.setSupplementTaken(sup, v ?? false),
+                title: Text(sup.name, style: TextStyle(fontSize: 14, color: p.ink)),
+                subtitle: Text(sup.dose, style: TextStyle(fontSize: 12, color: p.ink3)),
+              ),
             ),
         ],
       ),

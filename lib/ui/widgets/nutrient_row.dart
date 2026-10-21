@@ -86,7 +86,8 @@ class NutrientRow extends StatelessWidget {
                 children: [
                   Text(
                     nutrient.name,
-                    maxLines: 1,
+                    // Twee regels: "Enkelvoudig onverzadigd" past niet op één
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 13, fontWeight: sub ? FontWeight.w400 : FontWeight.w500, color: sub ? p.ink2 : p.ink),
                   ),
@@ -160,6 +161,7 @@ class NutrientPanel extends StatelessWidget {
     this.groups,
     this.onTapNutrient,
     this.hidden = const {},
+    this.collapseAmino = true,
   });
 
   final NutrientMap values;
@@ -183,6 +185,32 @@ class NutrientPanel extends StatelessWidget {
 
   /// Niet tonen (bv. water als je dat niet bijhoudt).
   final Set<String> hidden;
+
+  /// Aminozuren inklappen tot één regel zolang ze allemaal op doel zitten (bijna altijd, en dan is het ruis).
+  final bool collapseAmino;
+
+  Widget row(int i, Nutrient n) => NutrientRow(
+    first: i == 0,
+    nutrient: n,
+    amount: values[n.key],
+    target: targets[n.key],
+    complete: !incomplete.contains(n.key),
+    estimate: estimates[n.key],
+    single: single,
+    onTap: onTapNutrient == null ? null : () => onTapNutrient!(n),
+  );
+
+  /// Aminozuren met een doel (de groep eiwit zonder eiwit zelf).
+  List<Nutrient> _amino(List<Nutrient> list) => [
+    for (final n in list)
+      if (n.key != 'protein' && targets[n.key]?.goal != null) n,
+  ];
+
+  bool _aminoCollapsed(NutrientGroup g, List<Nutrient> list) {
+    if (!collapseAmino || single || g != NutrientGroup.protein || list.first.key != 'protein') return false;
+    final amino = _amino(list);
+    return amino.isNotEmpty && amino.every((n) => (values[n.key] ?? 0) >= targets[n.key]!.goal!);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -215,17 +243,17 @@ class NutrientPanel extends StatelessWidget {
                               ),
                       ),
                     ),
-                    for (final (i, n) in list.indexed)
-                      NutrientRow(
-                        first: i == 0,
-                        nutrient: n,
-                        amount: values[n.key],
-                        target: targets[n.key],
-                        complete: !incomplete.contains(n.key),
-                        estimate: estimates[n.key],
-                        single: single,
-                        onTap: onTapNutrient == null ? null : () => onTapNutrient!(n),
+                    if (_aminoCollapsed(g, list)) ...[
+                      row(0, list.first),
+                      _Collapsed(
+                        label: tr(
+                          'All ${_amino(list).length} essential amino acids on target',
+                          'Alle ${_amino(list).length} essentiële aminozuren op doel',
+                        ),
+                        children: [for (final (i, n) in list.skip(1).indexed) row(i + 1, n)],
                       ),
+                    ] else
+                      for (final (i, n) in list.indexed) row(i, n),
                   ],
                 ),
               ),
@@ -243,5 +271,46 @@ class NutrientPanel extends StatelessWidget {
       if (levelOf(values[n.key] ?? 0, t) == Level.ok) ok++;
     }
     return total == 0 ? '' : tr('$ok / $total on target', '$ok / $total op doel');
+  }
+}
+
+/// Eén regel die openklapt (bv. de aminozuren als ze allemaal op doel zitten).
+class _Collapsed extends StatefulWidget {
+  const _Collapsed({required this.label, required this.children});
+  final String label;
+  final List<Widget> children;
+
+  @override
+  State<_Collapsed> createState() => _CollapsedState();
+}
+
+class _CollapsedState extends State<_Collapsed> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                const StatusMark(Level.ok),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(widget.label, style: TextStyle(fontSize: 13, color: p.ink2)),
+                ),
+                Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: p.ink3),
+              ],
+            ),
+          ),
+        ),
+        if (_open) ...widget.children,
+      ],
+    );
   }
 }

@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
+import '../../nutrition/targets.dart';
+import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/bio_tips_view.dart';
@@ -14,6 +16,7 @@ import 'nutrient_detail_screen.dart';
 import '../../i18n.dart';
 
 enum _Filter {
+  key('Important', 'Belangrijk', null),
   all('All', 'Alles', null),
   macro('Macro', 'Macro', [NutrientGroup.general, NutrientGroup.carbs]),
   vitamins('Vitamins', 'Vitaminen', [NutrientGroup.vitamins]),
@@ -38,7 +41,7 @@ class DayNutrients extends StatefulWidget {
 }
 
 class _DayNutrientsState extends State<DayNutrients> {
-  _Filter _filter = _Filter.all;
+  _Filter _filter = _Filter.key;
 
   @override
   Widget build(BuildContext context) {
@@ -110,14 +113,24 @@ class _DayNutrientsState extends State<DayNutrients> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  NutrientPanel(
-                    values: s.totals.values,
-                    targets: s.targets,
-                    incomplete: s.totals.incomplete,
-                    groups: _filter.groups,
-                    hidden: s.hiddenNutrients,
-                    onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
-                  ),
+                  if (_filter == _Filter.key)
+                    KeyNutrients(
+                      values: s.totals.values,
+                      targets: s.targets,
+                      incomplete: s.totals.incomplete,
+                      hidden: s.hiddenNutrients,
+                      onShowAll: () => setState(() => _filter = _Filter.all),
+                    )
+                  else
+                    NutrientPanel(
+                      values: s.totals.values,
+                      targets: s.targets,
+                      incomplete: s.totals.incomplete,
+                      groups: _filter.groups,
+                      hidden: s.hiddenNutrients,
+                      collapseAmino: _filter != _Filter.amino,
+                      onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
+                    ),
                   const SizedBox(height: 4),
                   Text(
                     tr(
@@ -137,6 +150,97 @@ class _DayNutrientsState extends State<DayNutrients> {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// Wat er echt toe doet: energie, macro's, vezels, verzadigd vet, zout, en de vitaminen en mineralen waarvan je
+/// vandaag het minst hebt (hooguit 10, alleen wat onder je doel zit).
+class KeyNutrients extends StatelessWidget {
+  const KeyNutrients({super.key, required this.values, required this.targets, this.incomplete = const {}, this.hidden = const {}, this.onShowAll});
+
+  final NutrientMap values;
+  final Map<String, Target> targets;
+  final Set<String> incomplete;
+  final Set<String> hidden;
+  final VoidCallback? onShowAll;
+
+  static const basics = ['energy', 'protein', 'carbs', 'fat', 'fiber', 'sfa', 'sodium'];
+
+  /// De vitaminen en mineralen onder je doel, de grootste tekorten eerst.
+  static List<String> shortfalls(NutrientMap values, Map<String, Target> targets, {int limit = 10}) {
+    final low = [
+      for (final k in stripKeys)
+        if (!basics.contains(k))
+          if (targets[k]?.goal case final g? when g > 0 && (values[k] ?? 0) < g) (k, (values[k] ?? 0) / g),
+    ]..sort((a, b) => a.$2.compareTo(b.$2));
+    return [for (final (k, _) in low.take(limit)) k];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final low = shortfalls(values, targets);
+    void open(Nutrient n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n)));
+    Widget row(int i, String k) => NutrientRow(
+      first: i == 0,
+      nutrient: nutrientByKey[k]!,
+      amount: values[k],
+      target: targets[k],
+      complete: !incomplete.contains(k),
+      onTap: () => open(nutrientByKey[k]!),
+    );
+    final basics = [
+      for (final k in KeyNutrients.basics)
+        if (!hidden.contains(k)) k,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Panel(
+          shadow: false,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [PanelTitle(tr('The basics', 'De basis')), const SizedBox(height: 4), for (final (i, k) in basics.indexed) row(i, k)],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Panel(
+          shadow: false,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PanelTitle(
+                tr('Still short today', 'Vandaag nog te weinig'),
+                subtitle: low.isEmpty ? null : tr('Vitamins and minerals under your goal', 'Vitaminen en mineralen onder je doel'),
+              ),
+              const SizedBox(height: 4),
+              if (low.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    tr('You reach all your vitamins and minerals today.', 'Je haalt vandaag al je vitaminen en mineralen.'),
+                    style: TextStyle(fontSize: 13.5, color: p.ink2),
+                  ),
+                )
+              else
+                for (final (i, k) in low.indexed) row(i, k),
+            ],
+          ),
+        ),
+        if (onShowAll != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.list_rounded, size: 18),
+              label: Text(tr('Show all nutrients', 'Alle voedingsstoffen tonen')),
+              onPressed: onShowAll,
+            ),
+          ),
+        const SizedBox(height: 6),
       ],
     );
   }
