@@ -9,6 +9,7 @@ import '../../nutrition/targets.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/processing_card.dart';
 import '../widgets/bio_tips_view.dart';
 import '../widgets/kit.dart';
 import '../widgets/nutrient_row.dart';
@@ -77,7 +78,14 @@ class _DayNutrientsState extends State<DayNutrients> {
                       const Expanded(child: _ScoreCard()),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
+                            const SizedBox(height: 10),
+                            ProcessingCard(share: s.processingOf(s.entries)),
+                          ],
+                        ),
                       ),
                     ],
                   )
@@ -87,6 +95,8 @@ class _DayNutrientsState extends State<DayNutrients> {
                       const _ScoreCard(),
                       const SizedBox(height: 10),
                       _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
+                      const SizedBox(height: 10),
+                      ProcessingCard(share: s.processingOf(s.entries)),
                       const SizedBox(height: 4),
                     ],
                   ),

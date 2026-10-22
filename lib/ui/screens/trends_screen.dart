@@ -10,6 +10,7 @@ import '../../nutrition/targets.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/processing_card.dart';
 import '../widgets/day_charts.dart';
 import '../widgets/kit.dart';
 import '../widgets/nutrient_row.dart';
@@ -40,6 +41,8 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     // Doelen per dag met de beweging van die dag erbij, zoals op Vandaag
     final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
     final targets = {for (final k in keys) k: s.targetsForDate(parseDay(k), burned: burned[k] ?? 0)};
+
+    final processing = ProcessingCard(share: s.processingBetween(from, to), period: true);
 
     Widget pair(Widget a, Widget b) => Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,6 +78,8 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 pair(_energy(s, p, keys, daily, targets, from), _macros(s, p, keys, daily, from)),
                 const SizedBox(height: 12),
                 pair(_heatmap(p, keys, daily, targets), _weight(s, p, keys, from)),
+                const SizedBox(height: 12),
+                pair(processing, const SizedBox()),
                 const SizedBox(height: 18),
                 _averages(s, p, daily, columns: 2),
               ] else ...[
@@ -85,6 +90,8 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 _macros(s, p, keys, daily, from),
                 const SizedBox(height: 10),
                 _heatmap(p, keys, daily, targets),
+                const SizedBox(height: 10),
+                processing,
                 const SizedBox(height: 18),
                 _averages(s, p, daily),
               ],

@@ -20,7 +20,7 @@ import '../i18n.dart';
 
 const _userAgent = 'MacroMatrix/0.1 (https://app.divinenet.online)';
 const _fields =
-    'code,product_name,product_name_nl,product_name_en,generic_name,brands,quantity,serving_size,serving_quantity,nutriments,categories_properties,allergens_tags,traces_tags,ingredients_text,ingredients_text_nl,ingredients_text_en';
+    'code,product_name,product_name_nl,product_name_en,generic_name,brands,quantity,serving_size,serving_quantity,nutriments,categories_properties,allergens_tags,traces_tags,ingredients_text,ingredients_text_nl,ingredients_text_en,nova_group';
 
 /// OFF-veld -> (sleutel in de app, factor van de OFF-eenheid naar de app-eenheid).
 /// OFF bewaart massa's in gram per 100 g; energie in kcal.
@@ -152,6 +152,7 @@ Food? foodFromOff(Map<String, Object?> p) {
     allergenTags: [for (final x in (p['allergens_tags'] as List?) ?? const []) '$x'],
     traceTags: [for (final x in (p['traces_tags'] as List?) ?? const []) '$x'],
     ingredients: text(p['ingredients_text_nl']) ?? text(p['ingredients_text']) ?? text(p['ingredients_text_en']),
+    nova: (p['nova_group'] as num?)?.toInt(),
   );
 }
 

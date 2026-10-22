@@ -496,12 +496,15 @@ class UserDb {
       portions: decodePortions(r['portions'] as String?),
       proxyRef: extra['proxy'] as String?,
       estimated: ((extra['estimated'] as Map?) ?? const {}).cast<String, String>(),
+      nova: (extra['nova'] as num?)?.toInt(),
     );
   }
 
   /// Bewaart een product (eigen product of opgezocht in Open Food Facts), zodat het offline blijft werken.
   void saveFood(Food f) {
-    final extra = f.proxyRef == null && f.estimated.isEmpty ? null : jsonEncode({'proxy': f.proxyRef, 'estimated': f.estimated});
+    final extra = f.proxyRef == null && f.estimated.isEmpty && f.nova == null
+        ? null
+        : jsonEncode({'proxy': f.proxyRef, 'estimated': f.estimated, if (f.nova != null) 'nova': f.nova});
     _db.execute(
       'INSERT OR REPLACE INTO foods (id, source, name, brand, barcode, nutrients, portions, extra, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,?,0)',
       [f.ref, f.source.name, f.name, f.brand, f.barcode, encodeNutrients(f.per100g), encodePortions(f.portions), extra, _now()],

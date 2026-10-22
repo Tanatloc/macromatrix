@@ -31,6 +31,7 @@ import '../nutrition/report.dart';
 import '../nutrition/levels.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/preferences.dart';
+import '../nutrition/processing.dart';
 import '../nutrition/supplements.dart';
 import '../nutrition/targets.dart';
 import '../nutrition/values.dart';
@@ -660,6 +661,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _refresh() {
+    _novaCache.clear();
     _load();
     notifyListeners();
   }
@@ -1160,6 +1162,39 @@ class AppState extends ChangeNotifier {
     final source = ref.startsWith('usda') || ref.startsWith('fdc:') ? FoodSource.usda : (ref.startsWith('off:') ? FoodSource.off : FoodSource.custom);
     return found ?? Food(ref: ref, name: e.name, brand: e.brand, source: source, per100g: e.per100g);
   }
+
+  final _novaCache = <String, Nova?>{};
+
+  /// NOVA-groep van een voedingsmiddel; een recept volgt uit zijn ingrediënten.
+  Nova? novaFor(String ref, {Food? food}) {
+    if (_novaCache.containsKey(ref)) return _novaCache[ref];
+    _novaCache[ref] = null; // tegen recepten die zichzelf bevatten
+    Nova? n;
+    final recipe = ref.startsWith('recipe:') ? user.recipe(ref) : null;
+    if (recipe != null) {
+      n = novaOfRecipe([for (final i in recipe.ingredients) (novaFor(i.foodRef, food: i.toFood()), i.kcal)]);
+    } else {
+      final f = FoodDb.isDbRef(ref) ? foods.byRef(ref) : user.food(ref);
+      n = novaOf(f ?? food ?? Food(ref: ref, name: '', source: FoodSource.custom, per100g: const {}));
+    }
+    return _novaCache[ref] = n;
+  }
+
+  /// Hoeveel van je energie uit onbewerkt tot ultrabewerkt eten komt, voor een reeks dagboekregels.
+  ProcessingShare processingOf(Iterable<DiaryEntry> entries) => ProcessingShare.of([
+    for (final e in entries)
+      if (!e.foodRef.startsWith('supp:'))
+        (
+          novaFor(
+            e.foodRef,
+            food: Food(ref: e.foodRef, name: e.name, source: FoodSource.custom, per100g: e.per100g),
+          ),
+          e.kcal,
+        ),
+  ]);
+
+  /// Bewerkingsgraad over een periode (bv. de grafiekperiode in Trends).
+  ProcessingShare processingBetween(DateTime from, DateTime to) => processingOf(user.entriesBetween(dayKey(from), dayKey(to)));
 
   List<Food> recentFoods() => [for (final e in user.recent()) foodFor(e)];
 

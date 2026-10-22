@@ -115,7 +115,11 @@ class Food {
     this.traceTags = const [],
     this.ingredients,
     this.label,
+    this.nova,
   });
+
+  /// NOVA-groep van het etiket (Open Food Facts, 1 = onbewerkt … 4 = ultrabewerkt), als die bekend is.
+  final int? nova;
 
   /// Alleen bij producten uit de ingebouwde databank.
   final FoodLabel? label;
@@ -162,6 +166,7 @@ class Food {
     traceTags: traceTags,
     ingredients: ingredients,
     label: label,
+    nova: nova,
   );
 
   double get kcalPer100g => per100g['energy'] ?? 0;
