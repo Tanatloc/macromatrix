@@ -8,6 +8,7 @@ import '../../data/models.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
+import '../../nutrition/values.dart' show formatAmount;
 import '../../platform/platform.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
@@ -37,17 +38,23 @@ class DiaryScreen extends StatelessWidget {
   final VoidCallback? onOpenProfile;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder(valueListenable: _selection, builder: (context, _, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final s = context.watch<AppState>();
     final empty = !s.entries.any((e) => !e.foodRef.startsWith('supp:'));
     if (isDesktop(context)) return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile);
+    final selected = _selectedIn(s);
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'add',
-        onPressed: () => openAddFood(context, Meal.forHour(DateTime.now().hour)),
-        icon: const Icon(Icons.add_rounded),
-        label: Text(tr('Add', 'Toevoegen')),
-      ),
+      floatingActionButton: selected.isNotEmpty
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'add',
+              onPressed: () => openAddFood(context, Meal.forHour(DateTime.now().hour)),
+              icon: const Icon(Icons.add_rounded),
+              label: Text(tr('Add', 'Toevoegen')),
+            ),
+      bottomNavigationBar: selected.isEmpty ? null : _SelectionBar(entries: selected),
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -61,7 +68,13 @@ class DiaryScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (!s.hasProfile) ...[_ProfileHint(onOpenProfile: onOpenProfile), const SizedBox(height: 12)],
-                    if (empty) ...[const _BudgetCard(), const SizedBox(height: 12), const _StartCard()] else ...[const _EnergyCard()],
+                    if (empty) ...[
+                      const _BudgetCard(),
+                      const SizedBox(height: 12),
+                      const _StartCard(),
+                    ] else ...[
+                      _SummaryPager(onOpenNutrients: onOpenNutrients),
+                    ],
                     if (s.note.trim().isNotEmpty) ...[const SizedBox(height: 12), const _NoteCard()],
                     if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const SizedBox(height: 12), const _AllergyAsk()],
                     if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[const SizedBox(height: 12), const WeeklyReportCard()],
@@ -104,7 +117,9 @@ class _DesktopDiary extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     const gap = SizedBox(height: 12);
+    final selected = _selectedIn(s);
     return Scaffold(
+      bottomNavigationBar: selected.isEmpty ? null : _SelectionBar(entries: selected),
       body: LayoutBuilder(
         builder: (context, c) {
           final two = c.maxWidth >= twoColumnWidth;
@@ -352,7 +367,10 @@ class _ProfileHint extends StatelessWidget {
 // ── Energie ──
 
 class _EnergyCard extends StatelessWidget {
-  const _EnergyCard();
+  const _EnergyCard({this.bare = false});
+
+  /// Zonder kaart eromheen (als pagina in de samenvatting).
+  final bool bare;
 
   @override
   Widget build(BuildContext context) {
@@ -386,74 +404,90 @@ class _EnergyCard extends StatelessWidget {
       ),
     );
 
-    return Panel(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 124,
-                height: 124,
-                child: CustomPaint(
-                  painter: _EnergyRing(eaten: eaten, budget: budget, burned: burned, p: p),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (burned > 0) ...[_BurnedPill(burned: burned), const SizedBox(height: 3)],
-                        Text(fmtInt(left.abs()), style: numStyle(30, color: over ? p.high : p.ink, height: 1)),
-                        const SizedBox(height: 4),
-                        Text(
-                          over ? tr('kcal over goal', 'kcal te veel') : tr('kcal left', 'kcal over'),
-                          style: TextStyle(fontSize: 12, color: p.ink2),
-                        ),
-                      ],
-                    ),
+    final remaining = s.macrosRemaining;
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 124,
+              height: 124,
+              child: CustomPaint(
+                painter: _EnergyRing(eaten: eaten, budget: budget, burned: burned, p: p),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (burned > 0) ...[_BurnedPill(burned: burned), const SizedBox(height: 3)],
+                      Text(fmtInt(left.abs()), style: numStyle(30, color: over ? p.high : p.ink, height: 1)),
+                      const SizedBox(height: 4),
+                      Text(over ? tr('kcal over goal', 'kcal te veel') : tr('kcal left', 'kcal over'), style: TextStyle(fontSize: 12, color: p.ink2)),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  children: [
-                    ledger(tr('Goal', 'Doel'), fmtInt(budget - burned)),
-                    if (burned > 0)
-                      InkWell(
-                        onTap: () => openDayExercise(context),
-                        child: ledger(tr('Exercise', 'Beweging'), '+${fmtInt(burned)}', dot: p.brand, color: p.brand),
-                      ),
-                    ledger(tr('Eaten', 'Gegeten'), '−${fmtInt(eaten)}', dot: p.ink),
-                    Divider(height: 10, color: p.line),
-                    ledger(over ? tr('Over goal', 'Te veel') : tr('Left', 'Over'), fmtInt(left.abs()), strong: true, color: over ? p.high : null),
-                  ],
-                ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                children: [
+                  ledger(tr('Goal', 'Doel'), fmtInt(budget - burned)),
+                  if (burned > 0)
+                    InkWell(
+                      onTap: () => openDayExercise(context),
+                      child: ledger(tr('Exercise', 'Beweging'), '+${fmtInt(burned)}', dot: p.brand, color: p.brand),
+                    ),
+                  ledger(tr('Eaten', 'Gegeten'), '−${fmtInt(eaten)}', dot: p.ink),
+                  Divider(height: 10, color: p.line),
+                  ledger(over ? tr('Over goal', 'Te veel') : tr('Left', 'Over'), fmtInt(left.abs()), strong: true, color: over ? p.high : null),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Divider(color: p.line),
-          const SizedBox(height: 12),
-          for (final (key, name) in [
-            ('protein', tr('Protein', 'Eiwit')),
-            ('carbs', tr('Carbs', 'Koolhydr.')),
-            ('fat', tr('Fat', 'Vet')),
-            ('fiber', tr('Fiber', 'Vezels')),
-          ])
-            _MacroLine(name: name, amount: s.totals[key], goal: s.targets[key]?.goal ?? 0, color: p.macro(key)),
-        ],
-      ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Divider(color: p.line),
+        const SizedBox(height: 4),
+        // Gegeten of nog te gaan: één tik wisselt (en blijft onthouden)
+        Row(
+          children: [
+            Expanded(child: Eyebrow(tr('Macros', 'Macro\'s'))),
+            SizedBox(
+              width: 156,
+              child: Segmented<bool>(
+                height: 26,
+                fontSize: 11.5,
+                items: [(false, tr('Eaten', 'Gegeten')), (true, tr('To go', 'Nog te gaan'))],
+                selected: remaining,
+                onChanged: s.setMacrosRemaining,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (final (key, name) in [
+          ('protein', tr('Protein', 'Eiwit')),
+          ('carbs', tr('Carbs', 'Koolhydr.')),
+          ('fat', tr('Fat', 'Vet')),
+          ('fiber', tr('Fiber', 'Vezels')),
+        ])
+          _MacroLine(name: name, amount: s.totals[key], goal: s.targets[key]?.goal ?? 0, color: p.macro(key), remaining: remaining),
+      ],
     );
+    return bare ? body : Panel(padding: const EdgeInsets.fromLTRB(18, 18, 18, 16), child: body);
   }
 }
 
 class _MacroLine extends StatelessWidget {
-  const _MacroLine({required this.name, required this.amount, required this.goal, required this.color});
+  const _MacroLine({required this.name, required this.amount, required this.goal, required this.color, this.remaining = false});
   final String name;
   final double amount;
   final double goal;
   final Color color;
+
+  /// Toon wat er nog bij mag in plaats van wat je at.
+  final bool remaining;
 
   @override
   Widget build(BuildContext context) {
@@ -468,9 +502,13 @@ class _MacroLine extends StatelessWidget {
               children: [
                 LegendItem.box(color, w: 7, h: 7),
                 const SizedBox(width: 7),
-                Text(
-                  name,
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
+                Flexible(
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
+                  ),
                 ),
               ],
             ),
@@ -482,15 +520,25 @@ class _MacroLine extends StatelessWidget {
           SizedBox(
             width: 86,
             child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: fmtInt(amount),
-                    style: TextStyle(color: p.ink, fontWeight: FontWeight.w500),
-                  ),
-                  TextSpan(text: ' / ${fmtInt(goal)} g'),
-                ],
-              ),
+              remaining
+                  ? TextSpan(
+                      children: [
+                        TextSpan(
+                          text: amount > goal ? '+${fmtInt(amount - goal)}' : fmtInt(goal - amount),
+                          style: TextStyle(color: amount > goal ? p.high : p.ink, fontWeight: FontWeight.w500),
+                        ),
+                        TextSpan(text: amount > goal ? tr(' g over', ' g te veel') : tr(' g to go', ' g nog')),
+                      ],
+                    )
+                  : TextSpan(
+                      children: [
+                        TextSpan(
+                          text: fmtInt(amount),
+                          style: TextStyle(color: p.ink, fontWeight: FontWeight.w500),
+                        ),
+                        TextSpan(text: ' / ${fmtInt(goal)} g'),
+                      ],
+                    ),
               textAlign: TextAlign.right,
               style: numStyle(12.5, weight: FontWeight.w400, color: p.ink2),
             ),
@@ -1048,7 +1096,7 @@ class _MealCard extends StatefulWidget {
 }
 
 class _MealCardState extends State<_MealCard> {
-  bool _open = false;
+  bool _open = true;
 
   Meal get meal => widget.meal;
 
@@ -1071,6 +1119,9 @@ class _MealCardState extends State<_MealCard> {
           );
         }
       }
+    }
+    if (v == 'select') {
+      _selection.value = {..._selection.value, for (final e in s.entriesFor(meal)) e.id};
     }
     if (v == 'copy' && mounted) {
       final n = s.copyMealFromYesterday(meal);
@@ -1100,6 +1151,7 @@ class _MealCardState extends State<_MealCard> {
       itemBuilder: (_) => [
         PopupMenuItem(value: 'copy', child: Text(tr('Copy from yesterday', 'Kopieer van gisteren'))),
         if (entries.isNotEmpty) PopupMenuItem(value: 'save', child: Text(tr('Save as meal', 'Opslaan als maaltijd'))),
+        if (entries.isNotEmpty) PopupMenuItem(value: 'select', child: Text(tr('Select all', 'Alles selecteren'))),
       ],
     );
 
@@ -1164,19 +1216,27 @@ class _MealCardState extends State<_MealCard> {
                         fmtInt(kcal),
                         style: numStyle(13.5, weight: FontWeight.w500, color: p.ink),
                       ),
+                      IconButton(
+                        tooltip: tr('Add to ${meal.label.toLowerCase()}', 'Toevoegen aan ${meal.label.toLowerCase()}'),
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(Icons.add_circle_outline_rounded, size: 20, color: p.brand),
+                        onPressed: () => openAddFood(context, meal),
+                      ),
                       menu,
                     ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: Text(
-                      entries.map((e) => e.name).join(' · '),
-                      maxLines: _open ? 3 : 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12.5, color: p.ink2),
+                  if (!_open) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Text(
+                        entries.map((e) => e.name).join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, color: p.ink2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 8),
+                  ],
                   Padding(padding: const EdgeInsets.only(right: 10), child: MacroSplitBar(split)),
                 ],
               ),
@@ -1217,70 +1277,80 @@ class _EntryRow extends StatelessWidget {
     final s = context.read<AppState>();
     final p = context.pal;
     final e = entry;
+    final selecting = _selection.value.isNotEmpty;
+    final selected = _selection.value.contains(e.id);
+    void toggle() => _toggleSelected(e.id);
+
+    final row = InkWell(
+      onTap: selecting
+          ? toggle
+          : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => FoodDetailScreen(food: s.foodFor(e), meal: e.meal, entry: e),
+              ),
+            ),
+      onLongPress: toggle,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(selecting ? 4 : 14, 9, 16, 9),
+        decoration: BoxDecoration(
+          color: selected ? p.brandSoft : null,
+          border: Border(top: BorderSide(color: p.line)),
+        ),
+        child: Row(
+          children: [
+            if (selecting) Checkbox(value: selected, visualDensity: VisualDensity.compact, onChanged: (_) => toggle()),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
+                  ),
+                  Text(
+                    [?e.time, ?e.brand, _amountLabel(e)].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              fmtInt(e.kcal),
+              style: numStyle(12.5, weight: FontWeight.w400, color: p.ink2),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selecting) return row;
+
+    // Veeg naar links: verwijderen. Veeg naar rechts: acties (verplaatsen, kopiëren, favoriet ...).
     return Dismissible(
       key: ValueKey(e.id),
-      direction: DismissDirection.endToStart,
       background: Container(
+        color: p.brandSoft,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: Icon(Icons.more_horiz_rounded, color: p.brand),
+      ),
+      secondaryBackground: Container(
         color: p.highSoft,
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         child: Icon(Icons.delete_outline_rounded, color: p.high),
       ),
-      onDismissed: (_) {
-        s.deleteEntry(e);
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(tr('${e.name} removed', '${e.name} verwijderd')),
-              // Met een knop blijft een SnackBar standaard staan tot je tikt; deze moet vanzelf verdwijnen
-              persist: false,
-              duration: const Duration(seconds: 5),
-              action: SnackBarAction(label: tr('Undo', 'Ongedaan maken'), onPressed: () => s.restoreEntry(e)),
-            ),
-          );
+      confirmDismiss: (dir) async {
+        if (dir == DismissDirection.endToStart) return true;
+        await _entryActions(context, [e]);
+        return false;
       },
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => FoodDetailScreen(food: s.foodFor(e), meal: e.meal, entry: e),
-          ),
-        ),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 9, 16, 9),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: p.line)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      e.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
-                    ),
-                    Text(
-                      [?e.time, ?e.brand, _amountLabel(e)].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                fmtInt(e.kcal),
-                style: numStyle(12.5, weight: FontWeight.w400, color: p.ink2),
-              ),
-            ],
-          ),
-        ),
-      ),
+      onDismissed: (_) => _deleteWithUndo(context, [e]),
+      child: row,
     );
   }
 
@@ -1870,6 +1940,573 @@ class _ForTodayCard extends StatelessWidget {
             if (s.isToday && hasTips) Divider(height: 1, indent: 14, endIndent: 14, color: p.line),
             if (hasTips) const BioTipLine(bare: true),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Samenvatting bovenaan (zoals Cronometer): veeg tussen energie, uitgelichte stoffen en je score ──
+
+class _SummaryPager extends StatelessWidget {
+  const _SummaryPager({this.onOpenNutrients});
+  final VoidCallback? onOpenNutrients;
+
+  static List<String> get _labels => [tr('Energy', 'Energie'), tr('Highlighted', 'Uitgelicht'), tr('Score', 'Score')];
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final page = s.summaryPage.clamp(0, 2);
+    void go(int i) => s.setSummaryPage((i + 3) % 3);
+    final body = switch (page) {
+      1 => const _HighlightedPage(),
+      2 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const ScoreCard(bare: true),
+          const SizedBox(height: 12),
+          for (final (i, k) in KeyNutrients.shortfalls(s.totals.values, s.targets, limit: 3).indexed)
+            NutrientRow(
+              first: i == 0,
+              nutrient: nutrientByKey[k]!,
+              amount: s.totals.values[k],
+              target: s.targets[k],
+              complete: !s.totals.incomplete.contains(k),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: nutrientByKey[k]!))),
+            ),
+          if (onOpenNutrients != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.dashboard_outlined, size: 18),
+                label: Text(tr('All nutrients', 'Alle voedingsstoffen')),
+                onPressed: onOpenNutrients,
+              ),
+            ),
+        ],
+      ),
+      _ => const _EnergyCard(bare: true),
+    };
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragEnd: (d) {
+          final v = d.primaryVelocity ?? 0;
+          if (v.abs() < 200) return;
+          go(page + (v < 0 ? 1 : -1));
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: KeyedSubtree(key: ValueKey(page), child: body),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                for (final (i, label) in _labels.indexed)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => go(i),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: i == page ? 18 : 6,
+                            height: 6,
+                            decoration: BoxDecoration(color: i == page ? p.ink : p.lineStrong, borderRadius: BorderRadius.circular(3)),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: i == page ? FontWeight.w600 : FontWeight.w400,
+                              color: i == page ? p.ink : p.ink3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 8 voedingsstoffen die je zelf kiest, compact in twee kolommen.
+class _HighlightedPage extends StatelessWidget {
+  const _HighlightedPage();
+
+  Future<void> _choose(BuildContext context) async {
+    final s = context.read<AppState>();
+    final chosen = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _HighlightPicker(initial: s.highlighted),
+    );
+    if (chosen != null) s.setHighlighted(chosen);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final keys = s.highlighted;
+    Widget cell(String k) {
+      final n = nutrientByKey[k]!;
+      final t = s.targets[k];
+      final v = s.totals.values[k] ?? 0;
+      final goal = t?.goal ?? t?.upper;
+      final level = levelOf(v, t);
+      return InkWell(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      n.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: p.ink),
+                    ),
+                  ),
+                  Text(goal == null || goal <= 0 ? '–' : fmtPct(v / goal), style: numStyle(12, color: p.fillOf(level))),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Bar(fraction: goal == null || goal <= 0 ? 0 : v / goal, color: p.fillOf(level)),
+              const SizedBox(height: 2),
+              Text(
+                '${formatAmount(v, n)} ${n.unit}',
+                style: numStyle(10.5, weight: FontWeight.w400, color: p.ink3),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                tr('Highlighted nutrients', 'Uitgelichte voedingsstoffen'),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+              ),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 28)),
+              onPressed: () => _choose(context),
+              child: Text(tr('Choose', 'Kiezen')),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        for (var i = 0; i < keys.length; i += 2)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: cell(keys[i])),
+              const SizedBox(width: 18),
+              Expanded(child: i + 1 < keys.length ? cell(keys[i + 1]) : const SizedBox()),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _HighlightPicker extends StatefulWidget {
+  const _HighlightPicker({required this.initial});
+  final List<String> initial;
+
+  @override
+  State<_HighlightPicker> createState() => _HighlightPickerState();
+}
+
+class _HighlightPickerState extends State<_HighlightPicker> {
+  late final _chosen = [...widget.initial];
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.8,
+      maxChildSize: 0.95,
+      builder: (context, controller) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tr('Highlighted nutrients', 'Uitgelichte voedingsstoffen'),
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.ink),
+                      ),
+                      Text(
+                        tr('Choose up to 8 (${_chosen.length}/8)', 'Kies er tot 8 (${_chosen.length}/8)'),
+                        style: TextStyle(fontSize: 12.5, color: p.ink2),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton(onPressed: () => Navigator.pop(context, _chosen), child: Text(tr('Save', 'Opslaan'))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              controller: controller,
+              children: [
+                for (final n in nutrients)
+                  if (n.key != 'energy')
+                    CheckboxListTile(
+                      dense: true,
+                      value: _chosen.contains(n.key),
+                      title: Text(n.name),
+                      subtitle: Text(n.group.label, style: TextStyle(fontSize: 11.5, color: p.ink3)),
+                      onChanged: (v) => setState(() {
+                        if (v == true && _chosen.length < 8) _chosen.add(n.key);
+                        if (v == false) _chosen.remove(n.key);
+                      }),
+                    ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Selectie en acties op regels ──
+
+/// Geselecteerde dagboekregels (lang drukken op een regel), om ze samen te verplaatsen, kopiëren of verwijderen.
+final _selection = ValueNotifier<Set<String>>(const {});
+
+void _toggleSelected(String id) {
+  final now = {..._selection.value};
+  if (!now.remove(id)) now.add(id);
+  _selection.value = now;
+}
+
+/// Geselecteerde regels die op de getoonde dag staan (een andere dag kiezen laat de selectie vallen).
+List<DiaryEntry> _selectedIn(AppState s) {
+  if (_selection.value.isEmpty) return const [];
+  final list = [
+    for (final e in s.entries)
+      if (_selection.value.contains(e.id)) e,
+  ];
+  if (list.isEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _selection.value = const {});
+  return list;
+}
+
+void _deleteWithUndo(BuildContext context, List<DiaryEntry> entries) {
+  final s = context.read<AppState>();
+  s.deleteEntries(entries);
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(
+          entries.length == 1
+              ? tr('${entries.first.name} removed', '${entries.first.name} verwijderd')
+              : tr('${entries.length} items removed', '${entries.length} items verwijderd'),
+        ),
+        // Met een knop blijft een SnackBar standaard staan tot je tikt; deze moet vanzelf verdwijnen
+        persist: false,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(label: tr('Undo', 'Ongedaan maken'), onPressed: () => s.restoreEntries(entries)),
+      ),
+    );
+}
+
+Future<Meal?> _pickMeal(BuildContext context, {required String title}) => showModalBottomSheet<Meal>(
+  context: context,
+  builder: (ctx) => SafeArea(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListTile(
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        for (final m in Meal.values)
+          ListTile(leading: const Icon(Icons.restaurant_outlined), title: Text(m.label), onTap: () => Navigator.pop(ctx, m)),
+      ],
+    ),
+  ),
+);
+
+Future<void> _copyToDay(BuildContext context, List<DiaryEntry> entries) async {
+  final s = context.read<AppState>();
+  final today = logicalNow();
+  final day = await showDatePicker(
+    context: context,
+    initialDate: s.date,
+    firstDate: DateTime(today.year - 2),
+    lastDate: DateTime(today.year, today.month, today.day + 30),
+    helpText: tr('Copy to which day?', 'Naar welke dag kopiëren?'),
+  );
+  if (day == null || !context.mounted) return;
+  final n = s.copyEntriesTo(entries, day);
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        tr('$n copied to ${DateFormat('d MMMM', appLocale).format(day)}.', '$n gekopieerd naar ${DateFormat('d MMMM', appLocale).format(day)}.'),
+      ),
+    ),
+  );
+}
+
+Future<void> _move(BuildContext context, List<DiaryEntry> entries) async {
+  final s = context.read<AppState>();
+  final meal = await _pickMeal(context, title: tr('Move to', 'Verplaatsen naar'));
+  if (meal == null) return;
+  s.moveEntries(entries, meal);
+  _selection.value = const {};
+}
+
+Future<void> _saveAsMeal(BuildContext context, List<DiaryEntry> entries) async {
+  final s = context.read<AppState>();
+  final name = await _askName(context, entries.first.meal);
+  if (name == null || name.isEmpty || !context.mounted) return;
+  s.saveMealFromEntries(name, entries);
+  _selection.value = const {};
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(tr('"$name" saved under Add → Saved meals.', '"$name" opgeslagen bij Toevoegen → Opgeslagen maaltijden.'))));
+}
+
+/// Wat een selectie bijdraagt: kcal, macro's en de belangrijkste stoffen tegenover je dagdoel.
+Future<void> _nutritionOf(BuildContext context, List<DiaryEntry> entries) {
+  final s = context.read<AppState>();
+  final totals = s.totalsOf(entries);
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      builder: (ctx, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          Text(
+            entries.length == 1 ? entries.first.name : tr('${entries.length} items', '${entries.length} items'),
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: ctx.pal.ink),
+          ),
+          Text(
+            tr('${fmtInt(totals['energy'])} kcal · share of your daily goal', '${fmtInt(totals['energy'])} kcal · deel van je dagdoel'),
+            style: TextStyle(fontSize: 13, color: ctx.pal.ink2),
+          ),
+          const SizedBox(height: 12),
+          KeyNutrients(values: totals.values, targets: s.targets, incomplete: totals.incomplete),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Acties voor één regel (veeg naar rechts) of een selectie.
+Future<void> _entryActions(BuildContext context, List<DiaryEntry> entries) async {
+  final s = context.read<AppState>();
+  final single = entries.length == 1 ? entries.first : null;
+  final food = single == null ? null : s.foodFor(single);
+  final v = await showModalBottomSheet<String>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                single?.name ?? tr('${entries.length} items', '${entries.length} items'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text('${fmtInt(entries.fold(0.0, (a, e) => a + e.kcal))} kcal'),
+            ),
+            if (single != null)
+              ListTile(leading: const Icon(Icons.edit_outlined), title: Text(tr('Edit', 'Bewerken')), onTap: () => Navigator.pop(ctx, 'edit')),
+            ListTile(
+              leading: const Icon(Icons.drive_file_move_outline),
+              title: Text(tr('Move to another meal', 'Naar andere maaltijd')),
+              onTap: () => Navigator.pop(ctx, 'move'),
+            ),
+            if (!s.isToday)
+              ListTile(
+                leading: const Icon(Icons.today_outlined),
+                title: Text(tr('Copy to today', 'Kopiëren naar vandaag')),
+                onTap: () => Navigator.pop(ctx, 'today'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: Text(tr('Copy to another day', 'Kopiëren naar andere dag')),
+              onTap: () => Navigator.pop(ctx, 'copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.insights_outlined),
+              title: Text(tr('Nutrition', 'Voedingswaarden')),
+              onTap: () => Navigator.pop(ctx, 'info'),
+            ),
+            if (single == null)
+              ListTile(
+                leading: const Icon(Icons.bookmark_add_outlined),
+                title: Text(tr('Save as meal', 'Opslaan als maaltijd')),
+                onTap: () => Navigator.pop(ctx, 'save'),
+              ),
+            if (food != null)
+              ListTile(
+                leading: Icon(s.isFavorite(food.ref) ? Icons.star_rounded : Icons.star_outline_rounded),
+                title: Text(
+                  s.isFavorite(food.ref) ? tr('Remove from favourites', 'Uit favorieten') : tr('Add to favourites', 'Aan favorieten toevoegen'),
+                ),
+                onTap: () => Navigator.pop(ctx, 'fav'),
+              ),
+            if (single != null)
+              ListTile(
+                leading: const Icon(Icons.checklist_rounded),
+                title: Text(tr('Select more', 'Meer selecteren')),
+                onTap: () => Navigator.pop(ctx, 'select'),
+              ),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded, color: ctx.pal.high),
+              title: Text(tr('Remove', 'Verwijderen'), style: TextStyle(color: ctx.pal.high)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (v == null || !context.mounted) return;
+  switch (v) {
+    case 'edit':
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => FoodDetailScreen(food: food!, meal: single!.meal, entry: single),
+        ),
+      );
+    case 'move':
+      await _move(context, entries);
+    case 'today':
+      final n = s.copyEntriesTo(entries, logicalNow());
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('$n copied to today.', '$n gekopieerd naar vandaag.'))));
+    case 'copy':
+      await _copyToDay(context, entries);
+    case 'info':
+      await _nutritionOf(context, entries);
+    case 'save':
+      await _saveAsMeal(context, entries);
+    case 'fav':
+      s.toggleFavorite(food!);
+    case 'select':
+      _toggleSelected(single!.id);
+    case 'delete':
+      _selection.value = const {};
+      _deleteWithUndo(context, entries);
+  }
+}
+
+/// Onderaan zolang je regels geselecteerd hebt: hoeveel, samen hoeveel kcal, en de acties.
+class _SelectionBar extends StatelessWidget {
+  const _SelectionBar({required this.entries});
+  final List<DiaryEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final kcal = entries.fold(0.0, (a, e) => a + e.kcal);
+    Widget action(IconData icon, String label, VoidCallback onTap) => Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: p.ink),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: p.ink2),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return Material(
+      color: p.surface,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: tr('Stop selecting', 'Selectie stoppen'),
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => _selection.value = const {},
+                  ),
+                  Expanded(
+                    child: Text(
+                      tr('${entries.length} selected · ${fmtInt(kcal)} kcal', '${entries.length} geselecteerd · ${fmtInt(kcal)} kcal'),
+                      style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: p.ink),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  action(Icons.insights_outlined, tr('Nutrition', 'Waarden'), () => _nutritionOf(context, entries)),
+                  action(Icons.drive_file_move_outline, tr('Move', 'Verplaatsen'), () => _move(context, entries)),
+                  action(Icons.copy_rounded, tr('Copy', 'Kopiëren'), () => _copyToDay(context, entries)),
+                  action(Icons.bookmark_add_outlined, tr('Save meal', 'Als maaltijd'), () => _saveAsMeal(context, entries)),
+                  action(Icons.delete_outline_rounded, tr('Remove', 'Verwijderen'), () {
+                    _selection.value = const {};
+                    _deleteWithUndo(context, entries);
+                  }),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

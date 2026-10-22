@@ -1019,6 +1019,80 @@ class AppState extends ChangeNotifier {
 
   List<SavedMeal> savedMeals() => user.savedMeals();
 
+  // ── Meerdere regels tegelijk (selectie in het dagboek) ──
+
+  /// Regels naar een andere maaltijd verplaatsen (zelfde dag).
+  void moveEntries(Iterable<DiaryEntry> entries, Meal meal) {
+    for (final e in entries) {
+      user.updateEntry(e.id, meal: meal, grams: e.grams, quantity: e.quantity, portionLabel: e.portionLabel, time: e.time);
+    }
+    _refresh();
+  }
+
+  /// Regels kopiëren naar een dag, bij dezelfde maaltijd of bij [meal]. Geeft het aantal terug.
+  int copyEntriesTo(Iterable<DiaryEntry> entries, DateTime day, {Meal? meal}) {
+    var n = 0;
+    for (final e in entries) {
+      user.addTemplate(dayKey(day), meal ?? e.meal, templateOf(e));
+      n++;
+    }
+    _refresh();
+    return n;
+  }
+
+  void deleteEntries(Iterable<DiaryEntry> entries) {
+    for (final e in entries) {
+      user.deleteEntry(e.id);
+    }
+    _refresh();
+  }
+
+  void restoreEntries(Iterable<DiaryEntry> entries) {
+    for (final e in entries) {
+      user.restoreEntry(e.id);
+    }
+    _refresh();
+  }
+
+  void saveMealFromEntries(String name, Iterable<DiaryEntry> entries) {
+    user.saveMeal(name, [for (final e in entries) templateOf(e)]);
+    notifyListeners();
+  }
+
+  /// Totalen van een selectie regels.
+  NutrientTotals totalsOf(Iterable<DiaryEntry> entries) => NutrientTotals.sumOf(entries.map((e) => withDerived(e.amounts)));
+
+  // ── Uitgelichte voedingsstoffen (bovenaan het dagboek, zelf te kiezen) ──
+
+  static const defaultHighlighted = ['vit_d', 'b12', 'iron', 'magnesium', 'calcium', 'zinc', 'potassium', 'epa_dha'];
+
+  List<String> get highlighted {
+    final saved = (user.setting('ui')?['highlighted'] as List?)?.cast<String>();
+    return [
+      for (final k in saved ?? defaultHighlighted)
+        if (nutrientByKey.containsKey(k)) k,
+    ];
+  }
+
+  void setHighlighted(List<String> keys) {
+    user.setSetting('ui', {...?user.setting('ui'), 'highlighted': keys.take(8).toList()});
+    notifyListeners();
+  }
+
+  /// Bovenaan het dagboek: welke pagina van de samenvatting je laatst bekeek en of macro's als "nog te gaan" staan.
+  int get summaryPage => (user.setting('ui')?['summaryPage'] as num?)?.toInt() ?? 0;
+  bool get macrosRemaining => user.setting('ui')?['macrosRemaining'] == true;
+
+  void setSummaryPage(int i) {
+    user.setSetting('ui', {...?user.setting('ui'), 'summaryPage': i});
+    notifyListeners();
+  }
+
+  void setMacrosRemaining(bool v) {
+    user.setSetting('ui', {...?user.setting('ui'), 'macrosRemaining': v});
+    notifyListeners();
+  }
+
   void saveMealFromDiary(String name, Meal meal) {
     user.saveMeal(name, [for (final e in entriesFor(meal)) templateOf(e)]);
     notifyListeners();

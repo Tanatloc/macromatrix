@@ -79,7 +79,7 @@ class _DayNutrientsState extends State<DayNutrients> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const _ScoreCard(),
+                            const ScoreCard(),
                             const SizedBox(height: 10),
                             ProcessingCard(share: s.processingOf(s.entries)),
                           ],
@@ -94,7 +94,7 @@ class _DayNutrientsState extends State<DayNutrients> {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const _ScoreCard(),
+                      const ScoreCard(),
                       const SizedBox(height: 10),
                       _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
                       const SizedBox(height: 10),
@@ -305,8 +305,10 @@ class KeyNutrients extends StatelessWidget {
   }
 }
 
-class _ScoreCard extends StatelessWidget {
-  const _ScoreCard();
+/// Nutrient Score met de verdeling op doel / tekort / te veel. [bare]: zonder kaart eromheen.
+class ScoreCard extends StatelessWidget {
+  const ScoreCard({super.key, this.bare = false});
+  final bool bare;
 
   @override
   Widget build(BuildContext context) {
@@ -321,92 +323,91 @@ class _ScoreCard extends StatelessWidget {
     int count(Level l) => levels.where((x) => x == l).length;
     final coverage = dataCoverage(s.totals);
 
-    return Panel(
-      child: Row(
-        children: [
-          SizedBox(
-            width: 84,
-            height: 84,
-            child: CustomPaint(
-              painter: _ScoreRing(score / 100, p),
-              child: Center(child: Text('$score', style: numStyle(24))),
-            ),
+    final body = Row(
+      children: [
+        SizedBox(
+          width: 84,
+          height: 84,
+          child: CustomPaint(
+            painter: _ScoreRing(score / 100, p),
+            child: Center(child: Text('$score', style: numStyle(24))),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      tr('Nutrient Score', 'Nutrient Score'),
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    tr('Nutrient Score', 'Nutrient Score'),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                  ),
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    triggerMode: TooltipTriggerMode.tap,
+                    message: tr(
+                      'How close you are to your goal for ${stripKeys.length} vitamins and minerals, on average. '
+                          'Each nutrient counts up to 100%; above an upper limit the score drops.',
+                      'Hoe dicht je bij je doel zit voor ${stripKeys.length} vitaminen en mineralen, gemiddeld. '
+                          'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score.',
                     ),
-                    const SizedBox(width: 4),
-                    Tooltip(
-                      triggerMode: TooltipTriggerMode.tap,
-                      message: tr(
-                        'How close you are to your goal for ${stripKeys.length} vitamins and minerals, on average. '
-                            'Each nutrient counts up to 100%; above an upper limit the score drops.',
-                        'Hoe dicht je bij je doel zit voor ${stripKeys.length} vitaminen en mineralen, gemiddeld. '
-                            'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score.',
-                      ),
-                      child: Icon(Icons.info_outline_rounded, size: 15, color: p.ink3),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: SizedBox(
-                    height: 6,
-                    child: Row(
-                      children: [
-                        for (final l in [Level.ok, Level.low, Level.high])
-                          if (count(l) > 0)
-                            Expanded(
-                              flex: count(l),
-                              child: Container(color: p.fillOf(l), margin: const EdgeInsets.only(right: 2)),
-                            ),
-                      ],
-                    ),
+                    child: Icon(Icons.info_outline_rounded, size: 15, color: p.ink3),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: SizedBox(
+                  height: 6,
+                  child: Row(
+                    children: [
+                      for (final l in [Level.ok, Level.low, Level.high])
+                        if (count(l) > 0)
+                          Expanded(
+                            flex: count(l),
+                            child: Container(color: p.fillOf(l), margin: const EdgeInsets.only(right: 2)),
+                          ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 12,
-                  children: [
-                    for (final (l, label) in [
-                      (Level.ok, tr('on target', 'op doel')),
-                      (Level.low, tr('short', 'tekort')),
-                      (Level.high, tr('too much', 'te veel')),
-                    ])
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '${count(l)}',
-                              style: TextStyle(color: p.ink, fontWeight: FontWeight.w600),
-                            ),
-                            TextSpan(text: ' $label'),
-                          ],
-                        ),
-                        style: numStyle(11.5, weight: FontWeight.w400, color: p.ink2),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                children: [
+                  for (final (l, label) in [
+                    (Level.ok, tr('on target', 'op doel')),
+                    (Level.low, tr('short', 'tekort')),
+                    (Level.high, tr('too much', 'te veel')),
+                  ])
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${count(l)}',
+                            style: TextStyle(color: p.ink, fontWeight: FontWeight.w600),
+                          ),
+                          TextSpan(text: ' $label'),
+                        ],
                       ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  tr('Data complete for ${fmtPct(coverage)} of your kcal', 'Gegevens compleet voor ${fmtPct(coverage)} van je kcal'),
-                  style: TextStyle(fontSize: 11.5, color: p.ink3),
-                ),
-              ],
-            ),
+                      style: numStyle(11.5, weight: FontWeight.w400, color: p.ink2),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                tr('Data complete for ${fmtPct(coverage)} of your kcal', 'Gegevens compleet voor ${fmtPct(coverage)} van je kcal'),
+                style: TextStyle(fontSize: 11.5, color: p.ink3),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
+    return bare ? body : Panel(child: body);
   }
 }
 

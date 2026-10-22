@@ -8,7 +8,6 @@ import '../../data/user_db.dart';
 import '../../i18n.dart';
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
-import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';

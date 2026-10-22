@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../data/plan.dart';
 import '../../i18n.dart';
-import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
