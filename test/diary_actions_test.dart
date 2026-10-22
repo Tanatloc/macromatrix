@@ -66,15 +66,19 @@ void main() {
 
   testWidgets('summary pages and macros to go', (tester) async {
     final s = await pump(tester);
-    await tester.tap(find.text('Nog te gaan'));
+    expect(find.text('DOELEN'), findsOneWidget);
+    await tester.tap(find.text('GEGETEN'));
     await tester.pump();
     expect(s.macrosRemaining, isTrue);
-    expect(find.textContaining(' g nog'), findsWidgets);
-    await tester.tap(find.text('Uitgelicht'));
+    expect(find.textContaining('nog '), findsWidgets);
+    await tester.tap(find.bySemanticsLabel('Uitgelicht'));
     await tester.pumpAndSettle();
-    expect(find.text('Uitgelichte voedingsstoffen'), findsOneWidget);
-    await tester.tap(find.text('Score').last);
+    expect(find.text('Kiezen'), findsOneWidget);
+    await tester.tap(find.byTooltip('Volgende'));
     await tester.pumpAndSettle();
     expect(find.text('Nutrient Score'), findsOneWidget);
+    await tester.tap(find.byTooltip('Volgende'));
+    await tester.pumpAndSettle();
+    expect(find.text('DOELEN'), findsOneWidget);
   });
 }

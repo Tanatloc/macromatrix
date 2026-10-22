@@ -345,7 +345,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_food.name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontSize: 26)),
+                          Text(_food.name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontSize: 22)),
                           if (_food.brand != null && _food.brand!.isNotEmpty) Text(_food.brand!, style: TextStyle(fontSize: 14, color: p.ink2)),
                           if (_food.localName != null) Text(_food.localName!, style: TextStyle(fontSize: 13.5, color: p.ink2)),
                           const SizedBox(height: 8),
@@ -402,9 +402,10 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                     const SizedBox(height: 12),
                     AllergenBanner(food: _food),
                     const SizedBox(height: 4),
-                    _MacroTiles(amounts: amounts, targets: s.targets),
-                    const SizedBox(height: 10),
+                    // Zoals Cronometer: eerst hoeveel en bij welke maaltijd, daarna wat het bijdraagt
                     _amountPanel(p),
+                    const SizedBox(height: 10),
+                    _MacroTiles(amounts: amounts, targets: s.targets),
                     if (!widget.pickOnly) ...[const SizedBox(height: 10), _ImpactPanel(added: amounts, editing: widget.entry)],
                     const SizedBox(height: 10),
                     _ValuesPanel(

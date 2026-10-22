@@ -39,9 +39,12 @@ enum _Scope {
 /// Zoeken en toevoegen: recent gegeten, maaltijden, recepten, eigen producten, de ingebouwde database en
 /// Open Food Facts. Met [pickOnly] om een ingrediënt te kiezen (geeft een [ItemTemplate] terug).
 class AddFoodScreen extends StatefulWidget {
-  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false, this.forPlan = false});
+  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false, this.forPlan = false, this.scan = false});
   final Meal meal;
   final bool pickOnly;
+
+  /// Meteen de camera openen om een barcode te scannen.
+  final bool scan;
 
   /// Met [pickOnly]: kiezen voor de planner (in plaats van voor een recept).
   final bool forPlan;
@@ -66,6 +69,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   void initState() {
     super.initState();
     _focus.addListener(() => setState(() {}));
+    if (widget.scan) WidgetsBinding.instance.addPostFrameCallback((_) => _scan());
   }
 
   @override

@@ -8,7 +8,6 @@ import '../../data/models.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
-import '../../nutrition/values.dart' show formatAmount;
 import '../../platform/platform.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
@@ -45,8 +44,48 @@ class DiaryScreen extends StatelessWidget {
     final empty = !s.entries.any((e) => !e.foodRef.startsWith('supp:'));
     if (isDesktop(context)) return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile);
     final selected = _selectedIn(s);
+    final size = MediaQuery.sizeOf(context);
+    // Zoals Cronometer: de kop en de samenvatting blijven staan, alleen het dagboek eronder scrolt. Op een lage
+    // schermhoogte (liggende gsm) zou er te weinig plaats overblijven; dan scrolt alles mee.
+    final sticky = size.height >= 620;
+    // Op een gsm zit de +-knop in de navigatie onderaan; op een tablet is er geen, dus daar een zwevende knop.
+    final fab = size.width >= 800 && selected.isEmpty;
+    const gap = SizedBox(height: 12);
+    final summary = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: _SummaryPager(onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile),
+    );
+    final list = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!s.hasProfile) ...[_ProfileHint(onOpenProfile: onOpenProfile), gap],
+          if (empty && s.isToday) ...[const _StartCard(), gap],
+          if (s.note.trim().isNotEmpty) ...[const _NoteCard(), gap],
+          if (s.planFor(s.day).isNotEmpty) ...[const _PlanCard(), gap],
+          if (s.isToday) const _UsualStrip(),
+          for (final meal in Meal.values) ...[_MealCard(key: ValueKey('${s.day}-${meal.name}'), meal: meal), const SizedBox(height: 8)],
+          const SizedBox(height: 4),
+          const _SupplementCard(),
+          const SizedBox(height: 8),
+          const _ExerciseCard(),
+          // Alles wat geen loggen is, komt onder de maaltijden
+          if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const SizedBox(height: 20), const _AllergyAsk()],
+          if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[gap, const WeeklyReportCard()],
+          if (s.isToday && RecapCard.due(s) != null) ...[gap, const RecapCard()],
+          if (!empty) ...[
+            const SizedBox(height: 20),
+            const _ForTodayCard(),
+            if (s.isToday && s.suggestion != null) ...[gap, _SuggestionCard(suggestion: s.suggestion!)],
+            gap,
+            const _WeekCard(),
+          ],
+        ],
+      ),
+    );
     return Scaffold(
-      floatingActionButton: selected.isNotEmpty
+      floatingActionButton: !fab
           ? null
           : FloatingActionButton.extended(
               heroTag: 'add',
@@ -57,52 +96,121 @@ class DiaryScreen extends StatelessWidget {
       bottomNavigationBar: selected.isEmpty ? null : _SelectionBar(entries: selected),
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 104),
-          children: [
-            const Narrow(child: _Header()),
-            Narrow(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!s.hasProfile) ...[_ProfileHint(onOpenProfile: onOpenProfile), const SizedBox(height: 12)],
-                    if (empty) ...[
-                      const _BudgetCard(),
-                      const SizedBox(height: 12),
-                      const _StartCard(),
-                    ] else ...[
-                      _SummaryPager(onOpenNutrients: onOpenNutrients),
-                    ],
-                    if (s.note.trim().isNotEmpty) ...[const SizedBox(height: 12), const _NoteCard()],
-                    if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const SizedBox(height: 12), const _AllergyAsk()],
-                    if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[const SizedBox(height: 12), const WeeklyReportCard()],
-                    if (s.isToday && RecapCard.due(s) != null) ...[const SizedBox(height: 12), const RecapCard()],
-                    if (!empty) ...[const SizedBox(height: 12), const _ForTodayCard()],
-                    if (s.planFor(s.day).isNotEmpty) ...[const SizedBox(height: 12), const _PlanCard()],
-                    if (s.isToday) const _UsualStrip(),
-                    const SizedBox(height: 16),
-                    SectionHeader(tr('Meals', 'Maaltijden'), trailing: empty ? null : '${fmtInt(s.totals['energy'])} kcal'),
-                    for (final meal in Meal.values) ...[_MealCard(key: ValueKey('${s.day}-${meal.name}'), meal: meal), const SizedBox(height: 8)],
-                    const SizedBox(height: 8),
-                    const _SupplementCard(),
-                    const SizedBox(height: 10),
-                    const _ExerciseCard(),
-                    if (!empty) ...[
-                      if (s.isToday && s.suggestion != null) ...[const SizedBox(height: 16), _SuggestionCard(suggestion: s.suggestion!)],
-                      const SizedBox(height: 12),
-                      const _WeekCard(),
-                    ],
-                  ],
+        child: Narrow(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _DayBar(),
+              if (sticky) summary,
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.only(top: sticky ? 2 : 0, bottom: fab ? 96 : 24),
+                  children: [if (!sticky) summary, list],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Kop van het dagboek op een gsm, zoals bij Cronometer: ‹ dag › in het midden. Tik op de dag voor de kalender;
+/// links je reeks, rechts de notitie.
+class _DayBar extends StatelessWidget {
+  const _DayBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final now = logicalNow();
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = (s.date.difference(today).inHours / 24).round();
+    final title = switch (diff) {
+      0 => tr('Today', 'Vandaag'),
+      -1 => tr('Yesterday', 'Gisteren'),
+      1 => tr('Tomorrow', 'Morgen'),
+      _ => toBeginningOfSentenceCase(DateFormat(s.date.year == today.year ? 'EEE d MMM' : 'd MMM yyyy', appLocale).format(s.date)),
+    };
+    final hasNote = s.note.trim().isNotEmpty;
+    return SizedBox(
+      height: 58,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 88,
+            child: diff == 0
+                ? const Padding(
+                    padding: EdgeInsets.only(left: 16),
+                    child: Align(alignment: Alignment.centerLeft, child: StreakFlame()),
+                  )
+                : null,
+          ),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: tr('Previous day', 'Vorige dag'),
+                  icon: Icon(Icons.chevron_left_rounded, color: p.ink),
+                  onPressed: () => s.shiftDay(-1),
+                ),
+                Flexible(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => pickDay(context),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: p.ink, letterSpacing: -0.3),
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: tr('Next day', 'Volgende dag'),
+                  icon: Icon(Icons.chevron_right_rounded, color: p.ink),
+                  onPressed: () => s.shiftDay(1),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 88,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  tooltip: tr('Note for this day', 'Notitie bij deze dag'),
+                  icon: Icon(hasNote ? Icons.sticky_note_2_rounded : Icons.sticky_note_2_outlined, color: hasNote ? p.brand : p.ink2),
+                  onPressed: () => editNote(context),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kalender om naar een andere dag te springen.
+Future<void> pickDay(BuildContext context) async {
+  final s = context.read<AppState>();
+  final now = logicalNow();
+  final picked = await showDatePicker(
+    context: context,
+    initialDate: s.date,
+    firstDate: DateTime(2000),
+    lastDate: DateTime(now.year + 1, now.month, now.day),
+  );
+  if (picked != null) s.setDate(picked);
 }
 
 /// Vandaag op een pc: links wat je logt (maaltijden, supplementen, beweging), rechts hoe je dag ervoor staat
@@ -304,19 +412,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 6),
           SquareButton(icon: Icons.chevron_left_rounded, tooltip: tr('Previous day', 'Vorige dag'), onPressed: () => s.shiftDay(-1)),
           const SizedBox(width: 6),
-          SquareButton(
-            icon: Icons.calendar_today_outlined,
-            tooltip: tr('Pick a day', 'Kies een dag'),
-            onPressed: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: s.date,
-                firstDate: DateTime(2000),
-                lastDate: today.add(const Duration(days: 365)),
-              );
-              if (picked != null) s.setDate(picked);
-            },
-          ),
+          SquareButton(icon: Icons.calendar_today_outlined, tooltip: tr('Pick a day', 'Kies een dag'), onPressed: () => pickDay(context)),
           const SizedBox(width: 6),
           SquareButton(icon: Icons.chevron_right_rounded, tooltip: tr('Next day', 'Volgende dag'), onPressed: () => s.shiftDay(1)),
           if (add != null) ...[const SizedBox(width: 12), SizedBox(height: 40, child: add)],
@@ -367,10 +463,13 @@ class _ProfileHint extends StatelessWidget {
 // ── Energie ──
 
 class _EnergyCard extends StatelessWidget {
-  const _EnergyCard({this.bare = false});
+  const _EnergyCard({this.bare = false, this.macros = true});
 
   /// Zonder kaart eromheen (als pagina in de samenvatting).
   final bool bare;
+
+  /// Met de macro's eronder (de samenvatting op een gsm toont die op een eigen pagina).
+  final bool macros;
 
   @override
   Widget build(BuildContext context) {
@@ -446,33 +545,35 @@ class _EnergyCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        Divider(color: p.line),
-        const SizedBox(height: 4),
-        // Gegeten of nog te gaan: één tik wisselt (en blijft onthouden)
-        Row(
-          children: [
-            Expanded(child: Eyebrow(tr('Macros', 'Macro\'s'))),
-            SizedBox(
-              width: 156,
-              child: Segmented<bool>(
-                height: 26,
-                fontSize: 11.5,
-                items: [(false, tr('Eaten', 'Gegeten')), (true, tr('To go', 'Nog te gaan'))],
-                selected: remaining,
-                onChanged: s.setMacrosRemaining,
+        if (macros) ...[
+          const SizedBox(height: 16),
+          Divider(color: p.line),
+          const SizedBox(height: 4),
+          // Gegeten of nog te gaan: één tik wisselt (en blijft onthouden)
+          Row(
+            children: [
+              Expanded(child: Eyebrow(tr('Macros', 'Macro\'s'))),
+              SizedBox(
+                width: 156,
+                child: Segmented<bool>(
+                  height: 26,
+                  fontSize: 11.5,
+                  items: [(false, tr('Eaten', 'Gegeten')), (true, tr('To go', 'Nog te gaan'))],
+                  selected: remaining,
+                  onChanged: s.setMacrosRemaining,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        for (final (key, name) in [
-          ('protein', tr('Protein', 'Eiwit')),
-          ('carbs', tr('Carbs', 'Koolhydr.')),
-          ('fat', tr('Fat', 'Vet')),
-          ('fiber', tr('Fiber', 'Vezels')),
-        ])
-          _MacroLine(name: name, amount: s.totals[key], goal: s.targets[key]?.goal ?? 0, color: p.macro(key), remaining: remaining),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (final (key, name) in [
+            ('protein', tr('Protein', 'Eiwit')),
+            ('carbs', tr('Carbs', 'Koolhydr.')),
+            ('fat', tr('Fat', 'Vet')),
+            ('fiber', tr('Fiber', 'Vezels')),
+          ])
+            _MacroLine(name: name, amount: s.totals[key], goal: s.targets[key]?.goal ?? 0, color: p.macro(key), remaining: remaining),
+        ],
       ],
     );
     return bare ? body : Panel(padding: const EdgeInsets.fromLTRB(18, 18, 18, 16), child: body);
@@ -1279,7 +1380,11 @@ class _EntryRow extends StatelessWidget {
     final e = entry;
     final selecting = _selection.value.isNotEmpty;
     final selected = _selection.value.contains(e.id);
-    void toggle() => _toggleSelected(e.id);
+    void toggle() {
+      // Een melding onderaan zou over de selectiebalk vallen
+      if (!selecting) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      _toggleSelected(e.id);
+    }
 
     final row = InkWell(
       onTap: selecting
@@ -1386,84 +1491,85 @@ Future<String?> _askName(BuildContext context, Meal meal) {
 // ── Beweging en notitie ──
 
 /// Beweging van de dag: verbrande energie telt (standaard) mee in je energiedoel.
-class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard();
+/// Beweging toevoegen aan de gekozen dag: een activiteit en de duur, of zelf de kcal.
+Future<void> addExercise(BuildContext context) async {
+  final s = context.read<AppState>();
+  ExerciseType? type = exerciseTypes.first;
+  final minutes = TextEditingController(text: '30');
+  final kcal = TextEditingController();
+  final name = TextEditingController();
+  double? parse(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
+  double estimate() => (type?.met ?? 0) * s.currentWeight * (parse(minutes) ?? 0) / 60;
 
-  Future<void> _add(BuildContext context) async {
-    final s = context.read<AppState>();
-    ExerciseType? type = exerciseTypes.first;
-    final minutes = TextEditingController(text: '30');
-    final kcal = TextEditingController();
-    final name = TextEditingController();
-    double? parse(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
-    double estimate() => (type?.met ?? 0) * s.currentWeight * (parse(minutes) ?? 0) / 60;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) => AlertDialog(
-          title: Text(tr('Add exercise', 'Beweging toevoegen')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DropdownButtonFormField<ExerciseType?>(
-                initialValue: type,
-                isExpanded: true,
-                decoration: InputDecoration(labelText: tr('Activity', 'Activiteit')),
-                items: [
-                  for (final t in exerciseTypes)
-                    DropdownMenuItem(
-                      value: t,
-                      child: Text(t.name, overflow: TextOverflow.ellipsis),
-                    ),
-                  DropdownMenuItem(value: null, child: Text(tr('Other (enter kcal yourself)', 'Andere (zelf kcal invullen)'))),
-                ],
-                onChanged: (t) => setD(() => type = t),
-              ),
-              const SizedBox(height: 12),
-              if (type == null) ...[
-                TextField(
-                  controller: name,
-                  decoration: InputDecoration(labelText: tr('Name, e.g. "Spinning"', 'Naam, bv. "Spinning"')),
-                ),
-                const SizedBox(height: 12),
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setD) => AlertDialog(
+        title: Text(tr('Add exercise', 'Beweging toevoegen')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DropdownButtonFormField<ExerciseType?>(
+              initialValue: type,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: tr('Activity', 'Activiteit')),
+              items: [
+                for (final t in exerciseTypes)
+                  DropdownMenuItem(
+                    value: t,
+                    child: Text(t.name, overflow: TextOverflow.ellipsis),
+                  ),
+                DropdownMenuItem(value: null, child: Text(tr('Other (enter kcal yourself)', 'Andere (zelf kcal invullen)'))),
               ],
+              onChanged: (t) => setD(() => type = t),
+            ),
+            const SizedBox(height: 12),
+            if (type == null) ...[
               TextField(
-                controller: minutes,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
-                onChanged: (_) => setD(() {}),
+                controller: name,
+                decoration: InputDecoration(labelText: tr('Name, e.g. "Spinning"', 'Naam, bv. "Spinning"')),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: kcal,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: tr('Burned (empty = estimate)', 'Verbrand (leeg = schatting)'),
-                  suffixText: 'kcal',
-                  helperText: type == null
-                      ? null
-                      : tr(
-                          'Estimate: ${estimate().round()} kcal (at ${s.currentWeight.round()} kg)',
-                          'Schatting: ${estimate().round()} kcal (bij ${s.currentWeight.round()} kg)',
-                        ),
-                ),
-              ),
             ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Add', 'Toevoegen'))),
+            TextField(
+              controller: minutes,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
+              onChanged: (_) => setD(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: kcal,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: tr('Burned (empty = estimate)', 'Verbrand (leeg = schatting)'),
+                suffixText: 'kcal',
+                helperText: type == null
+                    ? null
+                    : tr(
+                        'Estimate: ${estimate().round()} kcal (at ${s.currentWeight.round()} kg)',
+                        'Schatting: ${estimate().round()} kcal (bij ${s.currentWeight.round()} kg)',
+                      ),
+              ),
+            ),
           ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Add', 'Toevoegen'))),
+        ],
       ),
-    );
-    if (ok != true) return;
-    final burned = parse(kcal) ?? estimate();
-    final label = type?.name ?? (name.text.trim().isEmpty ? tr('Exercise', 'Beweging') : name.text.trim());
-    if (burned > 0) s.addExercise(label, burned, minutes: parse(minutes));
-  }
+    ),
+  );
+  if (ok != true) return;
+  final burned = parse(kcal) ?? estimate();
+  final label = type?.name ?? (name.text.trim().isEmpty ? tr('Exercise', 'Beweging') : name.text.trim());
+  if (burned > 0) s.addExercise(label, burned, minutes: parse(minutes));
+}
+
+class _ExerciseCard extends StatelessWidget {
+  const _ExerciseCard();
 
   @override
   Widget build(BuildContext context) {
@@ -1504,7 +1610,7 @@ class _ExerciseCard extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6)),
-              onPressed: () => _add(context),
+              onPressed: () => addExercise(context),
               icon: const Icon(Icons.add_rounded, size: 18),
               label: Text(tr('Add exercise', 'Voeg beweging toe')),
             ),
@@ -1657,7 +1763,6 @@ class _SupplementCard extends StatelessWidget {
             Material(
               type: MaterialType.transparency,
               child: CheckboxListTile(
-                dense: true,
                 contentPadding: const EdgeInsets.only(right: 8),
                 controlAffinity: ListTileControlAffinity.leading,
                 value: s.supplementTaken(sup),
@@ -1949,48 +2054,34 @@ class _ForTodayCard extends StatelessWidget {
 // ── Samenvatting bovenaan (zoals Cronometer): veeg tussen energie, uitgelichte stoffen en je score ──
 
 class _SummaryPager extends StatelessWidget {
-  const _SummaryPager({this.onOpenNutrients});
+  const _SummaryPager({this.onOpenNutrients, this.onOpenProfile});
   final VoidCallback? onOpenNutrients;
+  final VoidCallback? onOpenProfile;
 
-  static List<String> get _labels => [tr('Energy', 'Energie'), tr('Highlighted', 'Uitgelicht'), tr('Score', 'Score')];
+  static const pages = 4;
+
+  /// Alle pagina's even hoog, zodat het dagboek eronder niet verspringt als je veegt.
+  static const height = 198.0;
+
+  static List<String> get _labels => [tr('Goals', 'Doelen'), tr('Energy', 'Energie'), tr('Highlighted', 'Uitgelicht'), tr('Score', 'Score')];
 
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final page = s.summaryPage.clamp(0, 2);
-    void go(int i) => s.setSummaryPage((i + 3) % 3);
+    final page = s.summaryPage.clamp(0, pages - 1);
+    void go(int i) => s.setSummaryPage((i + pages) % pages);
     final body = switch (page) {
-      1 => const _HighlightedPage(),
-      2 => Column(
+      1 => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const ScoreCard(bare: true),
-          const SizedBox(height: 12),
-          for (final (i, k) in KeyNutrients.shortfalls(s.totals.values, s.targets, limit: 3).indexed)
-            NutrientRow(
-              first: i == 0,
-              nutrient: nutrientByKey[k]!,
-              amount: s.totals.values[k],
-              target: s.targets[k],
-              complete: !s.totals.incomplete.contains(k),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: nutrientByKey[k]!))),
-            ),
-          if (onOpenNutrients != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                icon: const Icon(Icons.dashboard_outlined, size: 18),
-                label: Text(tr('All nutrients', 'Alle voedingsstoffen')),
-                onPressed: onOpenNutrients,
-              ),
-            ),
-        ],
+        children: [_PageTitle(tr('Energy balance', 'Energiebalans')), const SizedBox(height: 14), const _EnergyCard(bare: true, macros: false)],
       ),
-      _ => const _EnergyCard(bare: true),
+      2 => const _HighlightedPage(),
+      3 => _ScorePage(onOpenNutrients: onOpenNutrients),
+      _ => _GoalsPage(onOpenProfile: onOpenProfile),
     };
     return Panel(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onHorizontalDragEnd: (d) {
@@ -2001,47 +2092,205 @@ class _SummaryPager extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: KeyedSubtree(key: ValueKey(page), child: body),
+            SizedBox(
+              // Groter lettertype: meer plaats; wat dan nog niet past, valt weg in plaats van over de rand te lopen
+              height: MediaQuery.textScalerOf(context).scale(height),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+                child: SingleChildScrollView(key: ValueKey(page), physics: const NeverScrollableScrollPhysics(), child: body),
+              ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              alignment: WrapAlignment.center,
+            // ‹ ● ● ● ● ›, met de naam van de pagina erbij
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (final (i, label) in _labels.indexed)
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => go(i),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            width: i == page ? 18 : 6,
-                            height: 6,
-                            decoration: BoxDecoration(color: i == page ? p.ink : p.lineStrong, borderRadius: BorderRadius.circular(3)),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: i == page ? FontWeight.w600 : FontWeight.w400,
-                              color: i == page ? p.ink : p.ink3,
-                            ),
-                          ),
-                        ],
+                IconButton(
+                  tooltip: tr('Previous', 'Vorige'),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.chevron_left_rounded, size: 20, color: p.ink3),
+                  onPressed: () => go(page - 1),
+                ),
+                for (var i = 0; i < pages; i++)
+                  Semantics(
+                    button: true,
+                    label: _labels[i],
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => go(i),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: i == page ? 18 : 7,
+                          height: 7,
+                          decoration: BoxDecoration(color: i == page ? p.ink : p.lineStrong, borderRadius: BorderRadius.circular(4)),
+                        ),
                       ),
                     ),
                   ),
+                IconButton(
+                  tooltip: tr('Next', 'Volgende'),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.chevron_right_rounded, size: 20, color: p.ink3),
+                  onPressed: () => go(page + 1),
+                ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Kopregel van een pagina in de samenvatting: een label in hoofdletters links, iets rechts.
+class _PageTitle extends StatelessWidget {
+  const _PageTitle(this.label, {this.onTap, this.trailing});
+  final String label;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return SizedBox(
+      height: 30,
+      child: Row(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: onTap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Eyebrow(label),
+                if (onTap != null) Icon(Icons.chevron_right_rounded, size: 16, color: p.ink3),
+              ],
+            ),
+          ),
+          const Spacer(),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+/// Doelen: energie en de drie macro's als "Eiwit - 105 / 205 g … 51%" met een balk eronder (zoals Cronometer).
+/// Rechtsboven wissel je tussen wat je at en wat er nog bij mag.
+class _GoalsPage extends StatelessWidget {
+  const _GoalsPage({this.onOpenProfile});
+  final VoidCallback? onOpenProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final remaining = s.macrosRemaining;
+    Widget row(String key, String name, String unit, Color color) {
+      final v = s.totals[key];
+      final goal = s.targets[key]?.goal ?? 0;
+      final over = goal > 0 && v > goal;
+      final value = !remaining
+          ? '${fmtInt(v)} / ${fmtInt(goal)} $unit'
+          : over
+          ? tr('${fmtInt(v - goal)} $unit over', '${fmtInt(v - goal)} $unit te veel')
+          : tr('${fmtInt(goal - v)} $unit to go', 'nog ${fmtInt(goal - v)} $unit');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: name,
+                          style: TextStyle(fontWeight: FontWeight.w600, color: p.ink),
+                        ),
+                        TextSpan(
+                          text: '  $value',
+                          style: numStyle(13, weight: FontWeight.w400, color: remaining && over ? p.high : p.ink2),
+                        ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13.5),
+                  ),
+                ),
+                Text(
+                  goal <= 0 ? '' : fmtPct(v / goal),
+                  style: numStyle(12.5, weight: FontWeight.w500, color: over ? p.high : p.ink2),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Bar(fraction: goal <= 0 ? 0 : v / goal, color: over ? p.highFill : color, height: 8),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PageTitle(
+          tr('Goals', 'Doelen'),
+          onTap: onOpenProfile,
+          trailing: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => s.setMacrosRemaining(!remaining),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Eyebrow(remaining ? tr('To go', 'Nog te gaan') : tr('Eaten', 'Gegeten')),
+                  const SizedBox(width: 4),
+                  Icon(Icons.swap_horiz_rounded, size: 16, color: p.brand),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        row('energy', tr('Energy', 'Energie'), 'kcal', p.ink),
+        row('protein', tr('Protein', 'Eiwit'), 'g', p.macro('protein')),
+        row('carbs', tr('Carbs', 'Koolhydraten'), 'g', p.macro('carbs')),
+        row('fat', tr('Fat', 'Vet'), 'g', p.macro('fat')),
+      ],
+    );
+  }
+}
+
+/// Score: je Nutrient Score en de twee stoffen waar je het verst onder zit.
+class _ScorePage extends StatelessWidget {
+  const _ScorePage({this.onOpenNutrients});
+  final VoidCallback? onOpenNutrients;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const ScoreCard(bare: true),
+        const SizedBox(height: 6),
+        for (final (i, k) in KeyNutrients.shortfalls(s.totals.values, s.targets, limit: 2).indexed)
+          NutrientRow(
+            first: i == 0,
+            nutrient: nutrientByKey[k]!,
+            amount: s.totals.values[k],
+            target: s.targets[k],
+            complete: !s.totals.incomplete.contains(k),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: nutrientByKey[k]!))),
+          ),
+      ],
     );
   }
 }
@@ -2074,7 +2323,7 @@ class _HighlightedPage extends StatelessWidget {
       return InkWell(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: 5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -2093,11 +2342,6 @@ class _HighlightedPage extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Bar(fraction: goal == null || goal <= 0 ? 0 : v / goal, color: p.fillOf(level)),
-              const SizedBox(height: 2),
-              Text(
-                '${formatAmount(v, n)} ${n.unit}',
-                style: numStyle(10.5, weight: FontWeight.w400, color: p.ink3),
-              ),
             ],
           ),
         ),
@@ -2107,22 +2351,14 @@ class _HighlightedPage extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                tr('Highlighted nutrients', 'Uitgelichte voedingsstoffen'),
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
-              ),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 28)),
-              onPressed: () => _choose(context),
-              child: Text(tr('Choose', 'Kiezen')),
-            ),
-          ],
+        _PageTitle(
+          tr('Highlighted', 'Uitgelicht'),
+          trailing: TextButton(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 28)),
+            onPressed: () => _choose(context),
+            child: Text(tr('Choose', 'Kiezen')),
+          ),
         ),
-        const SizedBox(height: 4),
         for (var i = 0; i < keys.length; i += 2)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2187,7 +2423,6 @@ class _HighlightPickerState extends State<_HighlightPicker> {
                 for (final n in nutrients)
                   if (n.key != 'energy')
                     CheckboxListTile(
-                      dense: true,
                       value: _chosen.contains(n.key),
                       title: Text(n.name),
                       subtitle: Text(n.group.label, style: TextStyle(fontSize: 11.5, color: p.ink3)),

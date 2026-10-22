@@ -64,7 +64,10 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
     final s = context.watch<AppState>();
     final p = context.pal;
     final scans = s.scans;
+    // Op een gsm geopend vanuit het +-menu: dan met een terugknop
+    final pushed = ModalRoute.of(context)?.canPop ?? false;
     return Scaffold(
+      appBar: pushed ? AppBar() : null,
       body: SafeArea(
         bottom: false,
         child: ListView(

@@ -58,10 +58,21 @@ void main() {
     expect(find.text('SNEL NAAR'), findsOneWidget);
   });
 
-  testWidgets('gsm: navigatie onderaan, zoals voorheen', (tester) async {
+  testWidgets('gsm: navigatie onderaan met een + in het midden die het toevoegmenu opent', (tester) async {
     await pumpShell(tester, const Size(412, 915));
-    expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.text('SNEL NAAR'), findsNothing);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.text('Dashboard'), findsOneWidget);
+    await tester.tap(find.byTooltip('Toevoegen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Eten toevoegen'), findsOneWidget);
+    expect(find.text('Barcode scannen'), findsOneWidget);
+    expect(find.text('Product checken'), findsOneWidget);
+  });
+
+  testWidgets('tablet: rail links en een zwevende knop om toe te voegen', (tester) async {
+    await pumpShell(tester, const Size(900, 1000));
+    expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 }

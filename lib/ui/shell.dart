@@ -23,6 +23,7 @@ import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/supplements_screen.dart';
 import 'theme.dart';
+import 'widgets/add_menu.dart';
 import 'widgets/avatar.dart';
 import 'widgets/kit.dart';
 import 'widgets/logo.dart';
@@ -251,17 +252,87 @@ class _ShellState extends State<Shell> {
         ),
       );
     }
+    // Gsm: zoals Cronometer een ronde + in het midden (in plaats van het tabblad Scan, dat in het +-menu zit)
     return Scaffold(
       body: body,
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: p.line)),
+      bottomNavigationBar: _PhoneBar(
+        items: [
+          for (final i in [0, 1, 3, 4]) (i, _items[i]),
+        ],
+        index: _index,
+        icon: icon,
+        onSelect: _go,
+        onAdd: () {
+          if (_index != 0) _go(0);
+          showAddMenu(context);
+        },
+      ),
+    );
+  }
+}
+
+/// Navigatie onderaan op een gsm: twee tabbladen, de +-knop, twee tabbladen.
+class _PhoneBar extends StatelessWidget {
+  const _PhoneBar({required this.items, required this.index, required this.icon, required this.onSelect, required this.onAdd});
+  final List<(int, (IconData, IconData, String))> items;
+  final int index;
+  final Widget Function(int i, IconData d) icon;
+  final void Function(int) onSelect;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    Widget tab((int, (IconData, IconData, String)) item) {
+      final (i, (o, sel, label)) = item;
+      final on = i == index;
+      return Expanded(
+        child: Semantics(
+          selected: on,
+          button: true,
+          child: InkWell(
+            onTap: () => onSelect(i),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconTheme(
+                  data: IconThemeData(size: 24, color: on ? p.ink : p.ink3),
+                  child: icon(i, on ? sel : o),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.5, fontWeight: on ? FontWeight.w600 : FontWeight.w500, color: on ? p.ink : p.ink3),
+                ),
+              ],
+            ),
+          ),
         ),
-        child: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _go,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [for (final (i, (o, s, l)) in _items.indexed) NavigationDestination(icon: icon(i, o), selectedIcon: icon(i, s), label: l)],
+      );
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border(top: BorderSide(color: p.line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 66,
+          child: Row(
+            children: [
+              tab(items[0]),
+              tab(items[1]),
+              Expanded(
+                child: Center(child: AddButton(onPressed: onAdd)),
+              ),
+              tab(items[2]),
+              tab(items[3]),
+            ],
+          ),
         ),
       ),
     );

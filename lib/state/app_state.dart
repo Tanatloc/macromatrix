@@ -1080,11 +1080,11 @@ class AppState extends ChangeNotifier {
   }
 
   /// Bovenaan het dagboek: welke pagina van de samenvatting je laatst bekeek en of macro's als "nog te gaan" staan.
-  int get summaryPage => (user.setting('ui')?['summaryPage'] as num?)?.toInt() ?? 0;
+  int get summaryPage => (user.setting('ui')?['summaryTab'] as num?)?.toInt() ?? 0;
   bool get macrosRemaining => user.setting('ui')?['macrosRemaining'] == true;
 
   void setSummaryPage(int i) {
-    user.setSetting('ui', {...?user.setting('ui'), 'summaryPage': i});
+    user.setSetting('ui', {...?user.setting('ui'), 'summaryTab': i});
     notifyListeners();
   }
 
