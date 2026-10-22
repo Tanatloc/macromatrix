@@ -49,17 +49,9 @@ void main() {
       ),
     );
     final p = tester.element(find.byType(EnergyBars)).pal;
-    Color? colorOf(int i) =>
-        ((tester
-                    .widgetList<Container>(find.byType(Container))
-                    .where((c) => c.decoration is BoxDecoration && (c.decoration! as BoxDecoration).borderRadius != null)
-                    .elementAt(i)
-                    .decoration!)
-                as BoxDecoration)
-            .color;
-    expect(colorOf(0), p.okFill);
-    expect(colorOf(1), p.okFill);
-    expect(colorOf(2), p.highFill);
+    expect(energyColor(p, 2000, 2000), p.okFill);
+    expect(energyColor(p, 2400, 2500), p.okFill);
+    expect(energyColor(p, 2400, 2000), p.highFill);
     expect(find.text('doel incl. beweging'), findsOneWidget);
   });
 }

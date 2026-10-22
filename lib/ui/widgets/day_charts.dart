@@ -522,6 +522,9 @@ class EnergyBars extends StatelessWidget {
 
 Color _below(Palette p) => p.lowFill.withValues(alpha: 0.55);
 
+/// Kleur van een dag tegenover zijn doel: groen binnen ±10%, rood erboven, zand eronder.
+Color energyColor(Palette p, double kcal, double goal) => (kcal - goal).abs() <= goal * 0.1 ? p.okFill : (kcal > goal ? p.highFill : _below(p));
+
 class _EnergyPainter extends CustomPainter {
   _EnergyPainter({
     required this.values,
@@ -560,7 +563,7 @@ class _EnergyPainter extends CustomPainter {
         continue;
       }
       final g = goals[i];
-      final c = (v - g).abs() <= g * 0.1 ? p.okFill : (v > g ? p.highFill : _below(p));
+      final c = energyColor(p, v, g);
       canvas.drawRRect(
         RRect.fromRectAndCorners(Rect.fromLTRB(x, math.min(y(v), base - 2), x + bw, base), topLeft: r, topRight: r),
         Paint()..color = today[i] ? c.withValues(alpha: c.a * 0.55) : c,
