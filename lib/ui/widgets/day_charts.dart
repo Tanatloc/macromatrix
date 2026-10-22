@@ -530,7 +530,7 @@ class _EnergyBarsState extends State<EnergyBars> {
           runSpacing: 4,
           children: [
             LegendItem(swatch: LegendItem.box(p.okFill, w: 10, h: 10, radius: 3), label: tr('within ±10%', 'binnen ±10%')),
-            LegendItem(swatch: LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), label: tr('above goal', 'boven doel')),
+            LegendItem(swatch: LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), label: tr('too much', 'te veel')),
             LegendItem(swatch: LegendItem.box(_below(p), w: 10, h: 10, radius: 3), label: tr('below goal', 'onder doel')),
             LegendItem(
               swatch: LegendItem.box(p.track, w: 10, h: 10, radius: 3),
@@ -628,11 +628,22 @@ class _EnergyPainter extends CustomPainter {
       // Achter elke balk een lichte kolom tot het doel van die dag (met beweging erbij is die hoger)
       final col = RRect.fromRectAndCorners(Rect.fromLTRB(x, y(g), x + bw, base), topLeft: r, topRight: r);
       canvas.drawRRect(col, Paint()..color = p.track);
-      final c = energyColor(p, v, g);
-      canvas.drawRRect(
-        RRect.fromRectAndCorners(Rect.fromLTRB(x, math.min(y(v), base - 2), x + bw, base), topLeft: r, topRight: r),
-        Paint()..color = today[i] ? c.withValues(alpha: c.a * 0.55) : c,
-      );
+      Color dim(Color c) => today[i] ? c.withValues(alpha: c.a * 0.55) : c;
+      if (v <= g) {
+        canvas.drawRRect(
+          RRect.fromRectAndCorners(Rect.fromLTRB(x, math.min(y(v), base - 2), x + bw, base), topLeft: r, topRight: r),
+          Paint()..color = dim(energyColor(p, v, g)),
+        );
+      } else {
+        // Boven het doel: tot het doel groen, wat je te veel at erbovenop, met een naad op de hoogte van het doel
+        final gap = n <= 10 ? 2.0 : 1.0;
+        canvas.save();
+        canvas.clipRRect(RRect.fromRectAndCorners(Rect.fromLTRB(x, y(v), x + bw, base), topLeft: r, topRight: r));
+        canvas.drawRect(Rect.fromLTRB(x, y(g), x + bw, base), Paint()..color = dim(p.okFill));
+        final over = energyColor(p, v, g) == p.highFill ? p.highFill : p.okFill.withValues(alpha: 0.55);
+        canvas.drawRect(Rect.fromLTRB(x, y(v), x + bw, y(g) - gap), Paint()..color = dim(over));
+        canvas.restore();
+      }
       // De aangetikte dag: de rand van zijn doelkolom, zodat je ziet waar het doel lag
       if (i == selected) {
         canvas.drawRRect(
@@ -649,7 +660,12 @@ class _EnergyPainter extends CustomPainter {
           text: TextSpan(
             text: fmtInt(v),
             style: font.merge(numStyle(10.5, weight: today[i] ? FontWeight.w600 : FontWeight.w500, color: today[i] ? p.ink : p.ink2)),
-            children: [TextSpan(text: '\n/ ${fmtInt(g)}', style: font.merge(numStyle(9.5, weight: FontWeight.w400, color: p.ink3)))],
+            children: [
+              TextSpan(
+                text: '\n/ ${fmtInt(g)}',
+                style: font.merge(numStyle(9.5, weight: FontWeight.w400, color: p.ink3)),
+              ),
+            ],
           ),
           textAlign: TextAlign.center,
           textDirection: TextDirection.ltr,
