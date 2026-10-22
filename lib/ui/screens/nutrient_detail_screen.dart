@@ -14,6 +14,7 @@ import '../theme.dart';
 import '../widgets/day_charts.dart';
 import '../widgets/kit.dart';
 import 'food_detail_screen.dart';
+import 'oracle_screen.dart';
 import '../../i18n.dart';
 
 /// Eén voedingsstof in detail: stand van de dag, verloop, waar het vandaan kwam, de rijkste bronnen ("Oracle")
@@ -523,6 +524,14 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             ),
           const SizedBox(height: 4),
           for (final (f, v) in list) _sourceRow(p, f, v, top, recentRefs.contains(f.ref)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.travel_explore_rounded, size: 18),
+              label: Text(tr('More in the Oracle', 'Meer in het Orakel')),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => OracleScreen(nutrient: n.key))),
+            ),
+          ),
           if (list.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),

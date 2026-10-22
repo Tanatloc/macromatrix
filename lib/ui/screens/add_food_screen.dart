@@ -39,9 +39,12 @@ enum _Scope {
 /// Zoeken en toevoegen: recent gegeten, maaltijden, recepten, eigen producten, de ingebouwde database en
 /// Open Food Facts. Met [pickOnly] om een ingrediënt te kiezen (geeft een [ItemTemplate] terug).
 class AddFoodScreen extends StatefulWidget {
-  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false});
+  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false, this.forPlan = false});
   final Meal meal;
   final bool pickOnly;
+
+  /// Met [pickOnly]: kiezen voor de planner (in plaats van voor een recept).
+  final bool forPlan;
 
   @override
   State<AddFoodScreen> createState() => _AddFoodScreenState();
@@ -180,7 +183,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     }
     final result = await Navigator.of(context).push<Object>(
       MaterialPageRoute(
-        builder: (_) => FoodDetailScreen(food: food, meal: widget.meal, pickOnly: widget.pickOnly),
+        builder: (_) => FoodDetailScreen(food: food, meal: widget.meal, pickOnly: widget.pickOnly, forPlan: widget.forPlan),
       ),
     );
     if (!mounted) return;
@@ -284,9 +287,15 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Eyebrow(widget.pickOnly ? tr('Recipe', 'Recept') : tr('Add to', 'Toevoegen aan')),
+                          Eyebrow(
+                            widget.forPlan
+                                ? tr('Plan', 'Plannen')
+                                : widget.pickOnly
+                                ? tr('Recipe', 'Recept')
+                                : tr('Add to', 'Toevoegen aan'),
+                          ),
                           Text(
-                            widget.pickOnly ? tr('Choose ingredient', 'Ingrediënt kiezen') : widget.meal.label,
+                            widget.pickOnly && !widget.forPlan ? tr('Choose ingredient', 'Ingrediënt kiezen') : widget.meal.label,
                             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.25, color: p.ink),
                           ),
                         ],
@@ -386,7 +395,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   children: [
                     for (final sc in _Scope.values)
-                      if (!(widget.pickOnly && sc == _Scope.recipes))
+                      if (!(widget.pickOnly && !widget.forPlan && sc == _Scope.recipes))
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: PillChip(label: sc.label, selected: _scope == sc, onTap: () => _setScope(sc)),

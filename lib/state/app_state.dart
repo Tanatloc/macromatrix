@@ -12,6 +12,7 @@ import '../data/food.dart';
 import '../i18n.dart';
 import '../data/food_db.dart';
 import '../data/models.dart';
+import '../data/plan.dart';
 import '../data/off_client.dart';
 import '../data/fdc_client.dart';
 import '../data/product_info.dart';
@@ -23,6 +24,7 @@ import '../nutrition/estimate.dart';
 import '../nutrition/allergens.dart';
 import '../nutrition/badges.dart';
 import '../nutrition/bioavailability.dart';
+import '../nutrition/food_groups.dart';
 import '../nutrition/gap_plan.dart';
 import '../nutrition/health.dart';
 import '../nutrition/insights.dart';
@@ -70,6 +72,17 @@ String dayKey(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toS
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
 DateTime parseDay(String day) => DateTime.parse(day);
+
+/// Rangschikking in het Orakel.
+enum OracleRank {
+  per100g('per 100 g', 'per 100 g'),
+  per100kcal('per 100 kcal', 'per 100 kcal'),
+  perPortion('per serving', 'per portie');
+
+  const OracleRank(this.en, this.nl);
+  final String en, nl;
+  String get label => tr(en, nl);
+}
 
 class AppState extends ChangeNotifier {
   AppState({required this.foods, required this.user, OffClient? off, FdcClient? fdc}) : off = off ?? OffClient(), fdc = fdc ?? FdcClient() {
@@ -273,6 +286,53 @@ class AppState extends ChangeNotifier {
           (key == 'sodium' || key == 'chloride' || !_salt.hasMatch(r.$1.name)))
         r,
   ].take(limit).toList();
+
+  /// "Orakel": de [limit] rijkste voedingsmiddelen voor een stof, gerangschikt per 100 g, per 100 kcal of per
+  /// portie, eventueel alleen uit bepaalde voedingsgroepen ([groups], leeg = alles) en alleen gewone producten
+  /// ([everyday]). Hetzelfde voedingsmiddel uit verschillende databanken telt één keer.
+  List<(Food, double)> oracle(
+    String key, {
+    OracleRank rank = OracleRank.per100g,
+    int limit = 25,
+    Set<String> groups = const {},
+    bool everyday = false,
+  }) {
+    final candidates = foods.richestIn(key, perKcal: rank == OracleRank.per100kcal, limit: math.max(1500, limit * 30));
+    final kept = <Food, double>{};
+    // Uitschieters: een waarde die meer dan 3× hoger ligt dan hetzelfde voedingsmiddel in minstens twee andere
+    // databanken is bijna altijd een tikfout (bv. gebraden gans met 3600 mg kalium). Alleen nagaan voor de kop.
+    final head = candidates.take(math.min(candidates.length, limit * 6)).toList();
+    final siblings = foods.siblingValues(key, {for (final (f, _) in head) ?f.label?.food});
+    bool outlier(Food f) {
+      final l = f.label;
+      if (l == null) return false;
+      final own = withDerived(f.per100g)[key];
+      final fortified = l.flags.contains('fortified');
+      final others = [
+        for (final (ref, v, flags) in siblings['${l.food}|${l.group}|${l.state}'] ?? const <(String, double, List<String>)>[])
+          if (ref != f.ref && flags.contains('fortified') == fortified) v,
+      ]..sort();
+      if (own == null || others.length < 2) return false;
+      final median = others[others.length ~/ 2];
+      return median > 0 && own > 3 * median;
+    }
+
+    for (final (f, v) in candidates) {
+      if (outlier(f)) continue;
+      if (groups.isNotEmpty && !groups.contains(f.label?.group)) continue;
+      if (everyday && !isAdviceFood(f)) continue;
+      if (!fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) continue;
+      if ((f.category ?? '').toLowerCase().contains('supplement') || f.label?.group == 'supplement') continue;
+      if (key != 'sodium' && key != 'chloride' && _salt.hasMatch(f.name)) continue;
+      kept[f] = rank == OracleRank.perPortion ? v * oraclePortion(f) / 100 : v;
+    }
+    final one = [for (final g in groupFoods(kept.keys.toList())) g.main];
+    final ranked = [for (final f in one) (f, kept[f]!)]..sort((a, b) => b.$2.compareTo(a.$2));
+    return ranked.take(limit).toList();
+  }
+
+  /// Portie voor de rangschikking "per portie": de eerste herkenbare portie (5–400 g), anders 100 g.
+  static double oraclePortion(Food f) => f.portions.where((p) => p.grams >= 5 && p.grams <= 400).firstOrNull?.grams ?? 100;
 
   static final _salt = RegExp(r'^(mineral salt|salt, (mineral|table|iodized|sea))|\btable salt\b', caseSensitive: false);
 
@@ -637,11 +697,14 @@ class AppState extends ChangeNotifier {
   }
 
   /// "Wat moet ik nog eten?": 2 à 3 producten die je grootste tekorten van vandaag samen aanvullen.
-  GapPlan? gapPlan() {
+  GapPlan? gapPlan() => gapPlanFor(_totals.values, _targets);
+
+  /// Zelfde voor andere totalen, bv. een plan voor morgen.
+  GapPlan? gapPlanFor(NutrientMap totals, Map<String, Target> targets) {
     final gaps = [
       for (final k in stripKeys)
-        if (_targets[k]?.goal != null && (_totals.values[k] ?? 0) < _targets[k]!.goal! * 0.85) k,
-    ]..sort((a, b) => ((_totals.values[a] ?? 0) / _targets[a]!.goal!).compareTo((_totals.values[b] ?? 0) / _targets[b]!.goal!));
+        if (targets[k]?.goal != null && (totals[k] ?? 0) < targets[k]!.goal! * 0.85) k,
+    ]..sort((a, b) => ((totals[a] ?? 0) / targets[a]!.goal!).compareTo((totals[b] ?? 0) / targets[b]!.goal!));
     if (gaps.isEmpty) return null;
     final mine = [
       for (final f in recentFoods())
@@ -656,8 +719,135 @@ class AppState extends ChangeNotifier {
       ])
         if (seen.add(f.ref)) f,
     ];
-    final kcalLeft = (_targets['energy']?.goal ?? 2000) - (_totals.values['energy'] ?? 0);
-    return planGaps(totals: _totals.values, targets: _targets, kcalLeft: kcalLeft, candidates: candidates, mine: {for (final f in mine) f.ref});
+    final kcalLeft = (targets['energy']?.goal ?? 2000) - (totals['energy'] ?? 0);
+    return planGaps(totals: totals, targets: targets, kcalLeft: kcalLeft, candidates: candidates, mine: {for (final f in mine) f.ref});
+  }
+
+  // ── Planner ──
+
+  /// Geplande maaltijden per dag ("jjjj-mm-dd"), bewaard in de instellingen (en dus gesynchroniseerd).
+  Map<String, List<PlannedItem>> get _plans {
+    final raw = user.setting('plan') ?? const {};
+    return {
+      for (final e in raw.entries)
+        if (e.value is List) e.key: [for (final x in e.value as List) PlannedItem.fromJson((x as Map).cast<String, Object?>())],
+    };
+  }
+
+  void _savePlans(Map<String, List<PlannedItem>> plans) {
+    // Oude plannen (meer dan een week geleden) opruimen
+    final oldest = dayKey(_dateOnly(logicalNow()).subtract(const Duration(days: 7)));
+    user.setSetting('plan', {
+      for (final e in plans.entries)
+        if (e.value.isNotEmpty && e.key.compareTo(oldest) >= 0) e.key: [for (final i in e.value) i.toJson()],
+    });
+    notifyListeners();
+  }
+
+  List<PlannedItem> planFor(String day) => _plans[day] ?? const [];
+
+  /// Dagen met een plan, vanaf vandaag.
+  List<String> get plannedDays {
+    final today = dayKey(_dateOnly(logicalNow()));
+    return [
+      for (final e in _plans.entries)
+        if (e.value.isNotEmpty && e.key.compareTo(today) >= 0) e.key,
+    ]..sort();
+  }
+
+  void addToPlan(String day, Meal meal, ItemTemplate item) {
+    final plans = _plans;
+    plans[day] = [...?plans[day], PlannedItem(meal, item)];
+    _savePlans(plans);
+  }
+
+  void removeFromPlan(String day, int index) {
+    final plans = _plans;
+    final list = [...?plans[day]]..removeAt(index);
+    plans[day] = list;
+    _savePlans(plans);
+  }
+
+  void clearPlan(String day) {
+    final plans = _plans..remove(day);
+    _savePlans(plans);
+  }
+
+  /// Alles van een plan in het dagboek van die dag zetten; het plan is daarna leeg. Geeft het aantal regels terug.
+  int logPlan(String day) {
+    final items = planFor(day);
+    for (final i in items) {
+      user.addTemplate(day, i.meal, i.item);
+    }
+    final plans = _plans..remove(day);
+    _savePlans(plans);
+    _targetsVersion++;
+    _refresh();
+    return items.length;
+  }
+
+  /// Totalen van een plan, met de doelen van die dag.
+  NutrientTotals planTotals(String day) => NutrientTotals.sumOf([for (final i in planFor(day)) withDerived(scale(i.item.per100g, i.item.grams))]);
+
+  // ── Boodschappenlijst ──
+
+  List<ShoppingItem> get shopping => [
+    for (final x in (user.setting('shopping')?['items'] as List?) ?? const []) ShoppingItem.fromJson((x as Map).cast<String, Object?>()),
+  ];
+
+  void saveShopping(List<ShoppingItem> items) {
+    user.setSetting('shopping', {
+      'items': [for (final i in items) i.toJson()],
+    });
+    notifyListeners();
+  }
+
+  /// Iets op de lijst zetten; staat het er al (zelfde naam, nog niet afgevinkt), dan telt de hoeveelheid erbij.
+  void addShopping(String name, {double? grams, String? reason}) {
+    final items = shopping;
+    final i = items.indexWhere((x) => !x.done && x.name.toLowerCase() == name.toLowerCase());
+    if (i >= 0) {
+      final old = items[i];
+      items[i] = ShoppingItem(name: old.name, grams: grams == null ? old.grams : (old.grams ?? 0) + grams, reason: old.reason ?? reason);
+    } else {
+      items.add(ShoppingItem(name: name, grams: grams, reason: reason));
+    }
+    saveShopping(items);
+  }
+
+  /// Alles uit de plannen van [days] op de lijst, per product opgeteld. Geeft het aantal producten terug.
+  int shoppingFromPlans(Iterable<String> days) {
+    final grams = <String, double>{};
+    for (final d in days) {
+      for (final i in planFor(d)) {
+        grams[i.item.name] = (grams[i.item.name] ?? 0) + i.item.grams;
+      }
+    }
+    for (final e in grams.entries) {
+      addShopping(e.key, grams: e.value);
+    }
+    return grams.length;
+  }
+
+  /// Stoffen die je de laatste 14 dagen vaak te weinig binnenkreeg (gemiddeld onder 70% van je doel), het
+  /// grootste tekort eerst, met voor elk een paar gewone producten die er rijk aan zijn.
+  List<(Nutrient, double, List<Food>)> shoppingTips({int limit = 4}) {
+    final today = _dateOnly(logicalNow());
+    final daily = dailyTotals(today.subtract(const Duration(days: 14)), today.subtract(const Duration(days: 1)));
+    if (daily.length < 3) return const [];
+    final avg = <String, double>{};
+    for (final e in daily.entries) {
+      final t = targetsForDate(parseDay(e.key));
+      for (final k in stripKeys) {
+        final g = t[k]?.goal;
+        if (g != null && g > 0) avg[k] = (avg[k] ?? 0) + (e.value.values[k] ?? 0) / g / daily.length;
+      }
+    }
+    final low = avg.entries.where((e) => e.value < 0.7).toList()..sort((a, b) => a.value.compareTo(b.value));
+    return [
+      for (final e in low.take(limit))
+        if (nutrientByKey[e.key] case final n?) (n, e.value, [for (final r in richestFor(e.key, perKcal: true, limit: 3, advice: true)) r.$1]),
+    ];
   }
 
   void _refresh() {

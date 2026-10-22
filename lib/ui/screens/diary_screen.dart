@@ -16,6 +16,7 @@ import 'add_food_screen.dart';
 import 'food_detail_screen.dart';
 import 'nutrient_detail_screen.dart';
 import 'nutrients_screen.dart';
+import 'planner_screen.dart';
 import 'scan_screen.dart';
 import 'supplements_screen.dart';
 import 'recap_screen.dart';
@@ -66,6 +67,7 @@ class DiaryScreen extends StatelessWidget {
                     if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[const SizedBox(height: 12), const WeeklyReportCard()],
                     if (s.isToday && RecapCard.due(s) != null) ...[const SizedBox(height: 12), const RecapCard()],
                     if (!empty) ...[const SizedBox(height: 12), const _ForTodayCard()],
+                    if (s.planFor(s.day).isNotEmpty) ...[const SizedBox(height: 12), const _PlanCard()],
                     if (s.isToday) const _UsualStrip(),
                     const SizedBox(height: 16),
                     SectionHeader(tr('Meals', 'Maaltijden'), trailing: empty ? null : '${fmtInt(s.totals['energy'])} kcal'),
@@ -112,6 +114,7 @@ class _DesktopDiary extends StatelessWidget {
             if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[const WeeklyReportCard(), gap],
             if (s.isToday && RecapCard.due(s) != null) ...[const RecapCard(), gap],
             if (s.note.trim().isNotEmpty) ...[const _NoteCard(), gap],
+            if (s.planFor(s.day).isNotEmpty) ...[const _PlanCard(), gap],
             SectionHeader(tr('Meals', 'Maaltijden'), trailing: empty ? null : '${fmtInt(s.totals['energy'])} kcal'),
             if (s.isToday) ...[const _UsualStrip(), const SizedBox(height: 8)],
             for (final meal in Meal.values) ...[_MealCard(key: ValueKey('${s.day}-${meal.name}'), meal: meal), const SizedBox(height: 8)],
@@ -1600,6 +1603,60 @@ class _SupplementCard extends StatelessWidget {
 }
 
 /// "Usually for breakfast": wat je meestal eet op dit moment van de dag, met één tik toe te voegen.
+/// Er staat een plan klaar voor deze dag: met één tik in het dagboek.
+class _PlanCard extends StatelessWidget {
+  const _PlanCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final items = s.planFor(s.day);
+    final kcal = items.fold(0.0, (a, i) => a + i.item.kcal);
+    return Panel(
+      shadow: false,
+      color: p.brandSoft,
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.event_note_outlined, size: 20, color: p.brand),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  tr(
+                    'Planned for this day: ${items.length} items, ${fmtInt(kcal)} kcal',
+                    'Gepland voor deze dag: ${items.length} items, ${fmtInt(kcal)} kcal',
+                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
+                ),
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 4,
+            children: [
+              TextButton(
+                onPressed: () {
+                  final n = s.logPlan(s.day);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('$n items added.', '$n items toegevoegd.'))));
+                },
+                child: Text(tr('Put in diary', 'In dagboek zetten')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlannerScreen(day: s.date))),
+                child: Text(tr('View plan', 'Plan bekijken')),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UsualStrip extends StatelessWidget {
   const _UsualStrip();
 

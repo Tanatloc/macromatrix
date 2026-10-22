@@ -27,6 +27,7 @@ class FoodDetailScreen extends StatefulWidget {
     required this.meal,
     this.entry,
     this.pickOnly = false,
+    this.forPlan = false,
     this.initialGrams,
     this.initialPortion,
   });
@@ -39,6 +40,9 @@ class FoodDetailScreen extends StatefulWidget {
 
   /// Niet in het dagboek zetten maar de gekozen hoeveelheid teruggeven als [ItemTemplate].
   final bool pickOnly;
+
+  /// Met [pickOnly]: kiezen voor de planner.
+  final bool forPlan;
 
   /// Voorgestelde hoeveelheid (bv. vanuit een suggestie).
   final double? initialGrams;
@@ -244,7 +248,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     };
     final measured = _food.per100g.keys.where((k) => k != 'energy' && !_food.estimated.containsKey(k)).length;
 
-    final ctaLabel = widget.pickOnly
+    final ctaLabel = widget.forPlan
+        ? tr('Add to plan (${_meal.label.toLowerCase()})', 'In plan zetten (${_meal.label.toLowerCase()})')
+        : widget.pickOnly
         ? tr('Add to recipe', 'Toevoegen aan recept')
         : editing
         ? tr('Save', 'Opslaan')

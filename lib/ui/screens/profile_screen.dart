@@ -15,6 +15,9 @@ import '../widgets/weight_goal.dart';
 import 'nutrient_detail_screen.dart';
 import 'body_screen.dart';
 import 'labs_screen.dart';
+import 'oracle_screen.dart';
+import 'planner_screen.dart';
+import 'shopping_screen.dart';
 import 'settings_screen.dart';
 import '../../i18n.dart';
 
@@ -203,6 +206,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Panel(
                       shadow: false,
                       radius: 16,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        children: [
+                          for (final (icon, title, sub, screen) in [
+                            (
+                              Icons.event_note_outlined,
+                              tr('Meal planner', 'Maaltijdplanner'),
+                              tr('Plan tomorrow and see your score in advance', 'Plan morgen en zie vooraf je score'),
+                              const PlannerScreen() as Widget,
+                            ),
+                            (
+                              Icons.shopping_cart_outlined,
+                              tr('Shopping list', 'Boodschappenlijst'),
+                              tr('From your plans and for your shortfalls', 'Uit je plannen en voor je tekorten'),
+                              const ShoppingScreen(),
+                            ),
+                            (
+                              Icons.travel_explore_rounded,
+                              tr('Ask the Oracle', 'Vraag het Orakel'),
+                              tr('Foods richest in a nutrient', 'Voeding die het rijkst is aan een stof'),
+                              const OracleScreen(),
+                            ),
+                          ])
+                            ListTile(
+                              leading: Icon(icon, color: pal.brand),
+                              title: Text(
+                                title,
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
+                              ),
+                              subtitle: Text(sub, style: TextStyle(fontSize: 12.5, color: pal.ink2)),
+                              trailing: Icon(Icons.chevron_right_rounded, color: pal.ink3),
+                              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen)),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Panel(
+                      shadow: false,
+                      radius: 16,
                       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BodyScreen())),
                       child: Row(
@@ -323,8 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Wat het plan nog vraagt: doelgewicht, datum, wat er rest en het tempo van vandaag.
   Widget _planBox(Palette pal, Profile p) {
     final left = p.targetWeightKg! - p.weightKg;
-    final now = logicalNow();
-    final days = p.targetDate!.difference(DateTime(now.year, now.month, now.day)).inDays;
+    final days = daysBetween(logicalNow(), p.targetDate!);
     final need = p.planRate ?? 0;
     final done = need == 0;
     final String status;

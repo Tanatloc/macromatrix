@@ -129,6 +129,27 @@ class FoodDb {
     return [for (final r in rows) (_food(r), (r['score'] as num).toDouble())];
   }
 
+  /// Waarden van een voedingsstof per 100 g voor alle producten met dit label-voedingsmiddel ([FoodLabel.food]),
+  /// per "voedingsmiddel|groep|bereiding". Om uitschieters (tikfouten in een databank) te herkennen.
+  Map<String, List<(String, double, List<String>)>> siblingValues(String key, Set<String> labelFoods) {
+    if (labelFoods.isEmpty || !RegExp(r'^[a-z0-9_]+$').hasMatch(key)) return const {};
+    final value = _valueSql(key);
+    final rows = _db.select('''
+      SELECT source, source_id, label, $value AS v FROM foods
+      WHERE label != '' AND json_extract(label, '\$.f') IN (${List.filled(labelFoods.length, '?').join(',')})
+        AND $value IS NOT NULL AND json_extract(estimated, '\$.$key') IS NULL''', labelFoods.toList());
+    final out = <String, List<(String, double, List<String>)>>{};
+    for (final r in rows) {
+      final l = (jsonDecode(r['label'] as String) as Map).cast<String, Object?>();
+      out.putIfAbsent('${l['f']}|${l['g']}|${l['c']}', () => []).add((
+        '${r['source']}:${r['source_id']}',
+        (r['v'] as num).toDouble(),
+        [...?(l['fl'] as List?)?.cast<String>()],
+      ));
+    }
+    return out;
+  }
+
   /// Bronnen met hun bronvermelding en aantal producten (voor de schermen "Bronnen").
   List<(String, String, int)> sources() => [
     for (final r in _db.select('SELECT source, description, foods FROM sources ORDER BY rowid'))

@@ -75,17 +75,19 @@ class _DayNutrientsState extends State<DayNutrients> {
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Expanded(child: _ScoreCard()),
-                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
+                            const _ScoreCard(),
                             const SizedBox(height: 10),
                             ProcessingCard(share: s.processingOf(s.entries)),
                           ],
                         ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
                       ),
                     ],
                   )

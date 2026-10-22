@@ -36,7 +36,7 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
     return DateTime(n.year, n.month, n.day);
   }
 
-  static int _weeksUntil(DateTime d) => (d.difference(_today).inDays / 7).round().clamp(1, 156);
+  static int _weeksUntil(DateTime d) => (daysBetween(_today, d) / 7).round().clamp(1, 156);
 
   static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : v.toStringAsFixed(1).dec;
   static double? _parse(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
@@ -55,9 +55,9 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
     final now = _parse(_now.text), target = _parse(_target.text), span = _parse(_span.text);
     final t = _today;
     final ok = span != null && span > 0 && span <= (_weeks ? 156 : 36);
-    final reached = !ok ? null : (_weeks ? t.add(Duration(days: (span * 7).round())) : DateTime(t.year, t.month + span.round(), t.day));
+    final reached = !ok ? null : (_weeks ? DateTime(t.year, t.month, t.day + (span * 7).round()) : DateTime(t.year, t.month + span.round(), t.day));
     // Zelfde rekenwijze als het plan in je profiel: weken tot de datum
-    final months = reached == null ? null : reached.difference(t).inDays / 7 * 12 / 52;
+    final months = reached == null ? null : daysBetween(t, reached) / 7 * 12 / 52;
     final valid = now != null && target != null && months != null && now >= 30 && target >= 30 && months > 0;
     final plan = valid ? WeightPlan.of(current: now, target: target, months: months, tdee: widget.tdee, bmr: widget.bmr, male: widget.male) : null;
     final same = plan != null && (target! - now!).abs() < 0.1;

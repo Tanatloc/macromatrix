@@ -10,6 +10,9 @@ import 'widgets/quick_log.dart';
 import '../state/app_state.dart';
 import '../sync/friends.dart';
 
+import 'screens/oracle_screen.dart';
+import 'screens/planner_screen.dart';
+import 'screens/shopping_screen.dart';
 import 'screens/body_screen.dart';
 import 'screens/diary_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -197,6 +200,9 @@ class _ShellState extends State<Shell> {
               icon: icon,
               onSelect: _go,
               shortcuts: [
+                (Icons.event_note_outlined, tr('Meal planner', 'Maaltijdplanner'), () => _open(const PlannerScreen())),
+                (Icons.shopping_cart_outlined, tr('Shopping list', 'Boodschappenlijst'), () => _open(const ShoppingScreen())),
+                (Icons.travel_explore_rounded, tr('Oracle', 'Orakel'), () => _open(const OracleScreen())),
                 (Icons.monitor_weight_outlined, tr('Body', 'Lichaam'), () => _open(const BodyScreen())),
                 (Icons.bloodtype_outlined, tr('Blood values', 'Bloedwaarden'), () => _open(const LabsScreen())),
                 (Icons.medication_outlined, tr('Supplements', 'Supplementen'), () => _open(const SupplementsScreen())),

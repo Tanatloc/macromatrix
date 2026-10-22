@@ -101,8 +101,7 @@ class Profile {
     if (!hasPlan) return null;
     final left = targetWeightKg! - weightKg;
     if (goal == Goal.lose ? left > -0.05 : left < 0.05) return 0;
-    final now = logicalNow();
-    final days = targetDate!.difference(DateTime(now.year, now.month, now.day)).inDays;
+    final days = daysBetween(logicalNow(), targetDate!);
     return left / (days < 7 ? 1 : days / 7);
   }
 
