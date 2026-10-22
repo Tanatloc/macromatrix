@@ -44,6 +44,53 @@ class Narrow extends StatelessWidget {
   );
 }
 
+/// Vanaf deze vensterbreedte krijgt de app een pc-indeling: een zijbalk met namen, en schermen in kolommen.
+const desktopWidth = 1000.0;
+
+/// Pc-indeling (zie [desktopWidth])?
+bool isDesktop(BuildContext context) => MediaQuery.sizeOf(context).width >= desktopWidth;
+
+/// Vanaf deze breedte van de inhoud zetten schermen kaarten naast elkaar.
+const twoColumnWidth = 940.0;
+
+/// Breedste inhoud op een pc: ruim genoeg voor twee of drie kolommen, maar niet uitgerekt op een ultrabreed scherm.
+const wideMaxWidth = 1280.0;
+
+/// Twee kolommen naast elkaar als er plaats is (pc), anders [left] boven [right].
+class SplitColumns extends StatelessWidget {
+  const SplitColumns({super.key, required this.left, required this.right, this.gap = 10, this.leftFlex = 1, this.rightFlex = 1});
+  final List<Widget> left, right;
+  final double gap;
+  final int leftFlex, rightFlex;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, c) => c.maxWidth >= twoColumnWidth
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: leftFlex,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: left),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: rightFlex,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: right),
+              ),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ...left,
+              SizedBox(height: gap),
+              ...right,
+            ],
+          ),
+  );
+}
+
 /// Kaart: wit vlak, dunne lijn, ronde hoeken (20) en een zachte schaduw.
 class Panel extends StatelessWidget {
   const Panel({
@@ -74,12 +121,11 @@ class Panel extends StatelessWidget {
     final p = context.pal;
     final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
     Widget body = Padding(padding: padding, child: child);
-    if (onTap != null) {
-      body = Material(
-        type: MaterialType.transparency,
-        child: InkWell(onTap: onTap, customBorder: shape, child: body),
-      );
-    }
+    // Altijd een eigen (doorzichtige) Material: anders vallen tikeffecten van lijstregels in de kaart weg achter de achtergrond
+    body = Material(
+      type: MaterialType.transparency,
+      child: onTap == null ? body : InkWell(onTap: onTap, customBorder: shape, child: body),
+    );
     if (dashed) {
       return CustomPaint(
         painter: _DashedBorder(color: borderColor ?? p.lineStrong, radius: radius),

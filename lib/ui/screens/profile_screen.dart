@@ -171,6 +171,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.only(bottom: 32),
           children: [
             Narrow(
+              maxWidth: isDesktop(context) ? wideMaxWidth : 760,
               child: PageHeader(
                 eyebrow: tr('Your goals and level', 'Je doelen en level'),
                 title: tr('Profile', 'Profiel'),
@@ -187,11 +188,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             Narrow(
+              maxWidth: isDesktop(context) ? wideMaxWidth : 760,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+                // Op een pc: links je level, badges en metingen, rechts je doelen
+                child: SplitColumns(
+                  leftFlex: 4,
+                  rightFlex: 5,
+                  left: [
                     const LevelCard(),
                     const SizedBox(height: 10),
                     const BadgesCard(),
@@ -258,7 +262,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                  ],
+                  right: [
                     _energyCard(s, pal, p),
                     const SizedBox(height: 10),
                     _macroCard(s, pal, p),

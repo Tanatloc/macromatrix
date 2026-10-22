@@ -10,16 +10,24 @@ import 'widgets/quick_log.dart';
 import '../state/app_state.dart';
 import '../sync/friends.dart';
 
+import 'screens/body_screen.dart';
 import 'screens/diary_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/product_scan_screen.dart';
+import 'screens/labs_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/supplements_screen.dart';
 import 'theme.dart';
 import 'widgets/avatar.dart';
+import 'widgets/kit.dart';
+import 'widgets/logo.dart';
 import '../i18n.dart';
 
-/// Hoofdscherm met vijf tabbladen (Lichaam zit onder Profiel). Op een smal scherm (gsm) onderaan, op een breed scherm (pc) links.
+/// Hoofdscherm met vijf tabbladen (Lichaam zit onder Profiel). Op een gsm onderaan, op een tablet als smalle rail
+/// links, en op een pc als zijbalk met namen en snelkoppelingen. Op een pc opent alles binnen het tabblad, zodat de
+/// zijbalk blijft staan.
 class Shell extends StatefulWidget {
   const Shell({super.key});
 
@@ -60,7 +68,7 @@ class _ShellState extends State<Shell> {
   /// Geopend via het widget: "Snel loggen" of gewoon Vandaag.
   void _fromWidget(Uri? uri) {
     if (uri == null || !mounted) return;
-    setState(() => _index = 0);
+    setState(() => _index = _tab.value = 0);
     if (uri.host == 'quicklog') showQuickLog(context);
   }
 
@@ -72,6 +80,7 @@ class _ShellState extends State<Shell> {
     _state.removeListener(_updateWidget);
     _widgetClicks?.cancel();
     _widgetTimer?.cancel();
+    _tab.dispose();
     super.dispose();
   }
 
@@ -139,26 +148,85 @@ class _ShellState extends State<Shell> {
     (Icons.person_outline_rounded, Icons.person_rounded, tr('Profile', 'Profiel')),
   ];
 
-  void _go(int i) => setState(() => _index = i);
+  /// Eén navigator per tabblad op een pc, zodat schermen die je opent naast de zijbalk blijven.
+  final _navigators = [for (var i = 0; i < 5; i++) GlobalKey<NavigatorState>()];
+
+  /// Het actieve tabblad voor de schermen in die navigators: die bouwen niet mee als de shell herbouwt.
+  late final _tab = ValueNotifier(_index);
+
+  void _go(int i) {
+    // Nog eens op het tabblad waar je al bent: terug naar het begin ervan
+    if (i == _index) _navigators[i].currentState?.popUntil((r) => r.isFirst);
+    setState(() => _index = _tab.value = i);
+  }
+
+  /// Snelkoppeling in de zijbalk: opent het scherm in het tabblad Profiel.
+  void _open(Widget screen) {
+    setState(() => _index = _tab.value = 4);
+    final nav = _navigators[4].currentState;
+    nav?.popUntil((r) => r.isFirst);
+    nav?.push(MaterialPageRoute(builder: (_) => screen));
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final pages = [
+    List<Widget> pagesFor(int index) => [
       DiaryScreen(onOpenNutrients: () => _go(1), onOpenProfile: () => _go(4)),
       const DashboardScreen(),
       const ProductScanScreen(),
-      FriendsScreen(active: _index == 3),
+      FriendsScreen(active: index == 3),
       const ProfileScreen(),
     ];
+    final pages = pagesFor(_index);
     // Openstaande vriendschapsverzoeken en uitdagingen als bolletje op het tabblad Vrienden
     final requests = context.select<Friends, int>(
       (f) => f.list.where((x) => x.state == FriendState.incoming).length + f.battles.where((b) => b.pending && !b.challengedByMe).length,
     );
     Widget icon(int i, IconData d) => i == 3 && requests > 0 ? Badge(label: Text('$requests'), child: Icon(d)) : Icon(d);
-    final wide = MediaQuery.sizeOf(context).width >= 800;
-    final body = IndexedStack(index: _index, children: pages);
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 800;
 
+    if (width >= desktopWidth) {
+      return Scaffold(
+        body: Row(
+          children: [
+            _SideBar(
+              items: _items,
+              index: _index,
+              icon: icon,
+              onSelect: _go,
+              shortcuts: [
+                (Icons.monitor_weight_outlined, tr('Body', 'Lichaam'), () => _open(const BodyScreen())),
+                (Icons.bloodtype_outlined, tr('Blood values', 'Bloedwaarden'), () => _open(const LabsScreen())),
+                (Icons.medication_outlined, tr('Supplements', 'Supplementen'), () => _open(const SupplementsScreen())),
+                (Icons.settings_outlined, tr('Settings', 'Instellingen'), () => _open(const SettingsScreen())),
+              ],
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _index,
+                children: [
+                  for (var i = 0; i < pages.length; i++)
+                    // Een tabblad dat niet zichtbaar is, mag geen sneltoetsen of focus pakken
+                    TickerMode(
+                      enabled: i == _index,
+                      child: Navigator(
+                        key: _navigators[i],
+                        onGenerateRoute: (_) => MaterialPageRoute(
+                          builder: (_) => ValueListenableBuilder(valueListenable: _tab, builder: (_, tab, _) => pagesFor(tab)[i]),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final body = IndexedStack(index: _index, children: pages);
     if (wide) {
       return Scaffold(
         body: Row(
@@ -188,6 +256,150 @@ class _ShellState extends State<Shell> {
           onDestinationSelected: _go,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [for (final (i, (o, s, l)) in _items.indexed) NavigationDestination(icon: icon(i, o), selectedIcon: icon(i, s), label: l)],
+        ),
+      ),
+    );
+  }
+}
+
+/// Zijbalk op een pc: logo, de vijf tabbladen met hun naam, snelkoppelingen, en onderaan je level en reeks.
+class _SideBar extends StatelessWidget {
+  const _SideBar({required this.items, required this.index, required this.icon, required this.onSelect, required this.shortcuts});
+
+  final List<(IconData, IconData, String)> items;
+  final int index;
+  final Widget Function(int i, IconData d) icon;
+  final void Function(int) onSelect;
+  final List<(IconData, String, VoidCallback)> shortcuts;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final s = context.watch<AppState>();
+    final level = s.level.level;
+    final streak = s.streak.current;
+    return Container(
+      width: 236,
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border(right: BorderSide(color: p.line)),
+      ),
+      child: SafeArea(
+        right: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 22, 16, 22),
+              child: Row(
+                children: [
+                  const MatrixLogo(size: 34),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'MacroMatrix',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: p.ink, letterSpacing: -0.3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            for (final (i, (o, sel, label)) in items.indexed)
+              _SideItem(icon: icon(i, i == index ? sel : o), label: label, selected: i == index, onTap: () => onSelect(i)),
+            Padding(padding: const EdgeInsets.fromLTRB(22, 22, 16, 8), child: Eyebrow(tr('Shortcuts', 'Snel naar'))),
+            for (final (ic, label, onTap) in shortcuts) _SideItem(icon: Icon(ic), label: label, selected: false, onTap: onTap, small: true),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Material(
+                color: p.surface2,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => onSelect(4),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(
+                      children: [
+                        LevelAvatar(avatar: s.avatar, level: level, size: 38),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Level $level',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
+                              ),
+                              Text(
+                                streak > 0
+                                    ? tr('$streak days in a row', '$streak dagen op rij')
+                                    : tr('Log today to start a streak', 'Log vandaag voor een reeks'),
+                                style: TextStyle(fontSize: 12, color: p.ink2),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (streak > 0) const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF8A00), size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SideItem extends StatelessWidget {
+  const _SideItem({required this.icon, required this.label, required this.selected, required this.onTap, this.small = false});
+  final Widget icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool small;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1.5),
+      child: Material(
+        color: selected ? p.sunken : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: SizedBox(
+            height: small ? 38 : 44,
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                IconTheme(
+                  data: IconThemeData(size: small ? 20 : 22, color: selected ? p.ink : p.ink2),
+                  child: icon,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: small ? 13.5 : 14.5,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected ? p.ink : p.ink2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

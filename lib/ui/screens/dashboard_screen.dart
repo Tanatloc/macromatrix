@@ -88,48 +88,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final canNext = _period == _Period.day ? !s.isToday : !_atToday;
     final (from, to) = _range;
 
+    final segmented = Segmented<_Period>(
+      items: [(_Period.day, tr('Day', 'Dag')), (_Period.week, 'Week'), (_Period.month, tr('Month', 'Maand'))],
+      selected: _period,
+      onChanged: (v) => setState(() {
+        _period = v;
+        _anchor = _period == _Period.day ? _today() : s.date;
+      }),
+    );
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 32),
-          children: [
-            Narrow(
-              child: PageHeader(
-                eyebrow: _label(s),
-                title: 'Dashboard',
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SquareButton(icon: Icons.chevron_left_rounded, tooltip: tr('Previous', 'Vorige'), onPressed: () => _shift(s, -1)),
-                    const SizedBox(width: 6),
-                    SquareButton(icon: Icons.chevron_right_rounded, tooltip: tr('Next', 'Volgende'), onPressed: canNext ? () => _shift(s, 1) : null),
-                  ],
-                ),
-              ),
-            ),
-            Narrow(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Segmented<_Period>(
-                      items: [(_Period.day, tr('Day', 'Dag')), (_Period.week, 'Week'), (_Period.month, tr('Month', 'Maand'))],
-                      selected: _period,
-                      onChanged: (v) => setState(() {
-                        _period = v;
-                        _anchor = _period == _Period.day ? _today() : s.date;
-                      }),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            // Op een pc: breder, met dag/week/maand naast de titel
+            final wide = c.maxWidth >= twoColumnWidth;
+            final mw = wide ? wideMaxWidth : 760.0;
+            return ListView(
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [
+                Narrow(
+                  maxWidth: mw,
+                  child: PageHeader(
+                    eyebrow: _label(s),
+                    title: 'Dashboard',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (wide) ...[SizedBox(width: 340, child: segmented), const SizedBox(width: 12)],
+                        SquareButton(icon: Icons.chevron_left_rounded, tooltip: tr('Previous', 'Vorige'), onPressed: () => _shift(s, -1)),
+                        const SizedBox(width: 6),
+                        SquareButton(
+                          icon: Icons.chevron_right_rounded,
+                          tooltip: tr('Next', 'Volgende'),
+                          onPressed: canNext ? () => _shift(s, 1) : null,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            Narrow(
-              child: _period == _Period.day
-                  ? const DayNutrients()
-                  : Column(
+                if (!wide)
+                  Narrow(
+                    child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 10), child: segmented),
+                  ),
+                if (_period == _Period.day)
+                  const DayNutrients()
+                else
+                  Narrow(
+                    maxWidth: mw,
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (_period == _Period.month)
@@ -161,17 +169,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         if (_period == _Period.week)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.insights_rounded, size: 18),
-                              label: Text(tr('Weekly report', 'Weekrapport')),
-                              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => WeeklyReportScreen(monday: from))),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              // Op een gsm over de hele breedte, op een pc gewoon een knop
+                              child: SizedBox(
+                                width: wide ? null : double.infinity,
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.insights_rounded, size: 18),
+                                  label: Text(tr('Weekly report', 'Weekrapport')),
+                                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => WeeklyReportScreen(monday: from))),
+                                ),
+                              ),
                             ),
                           ),
                         PeriodTrends(key: ValueKey('$from'), from: from, to: to),
                       ],
                     ),
-            ),
-          ],
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

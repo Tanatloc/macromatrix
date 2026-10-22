@@ -162,6 +162,7 @@ class NutrientPanel extends StatelessWidget {
     this.onTapNutrient,
     this.hidden = const {},
     this.collapseAmino = true,
+    this.columns = 1,
   });
 
   final NutrientMap values;
@@ -189,6 +190,11 @@ class NutrientPanel extends StatelessWidget {
   /// Aminozuren inklappen tot één regel zolang ze allemaal op doel zitten (bijna altijd, en dan is het ruis).
   final bool collapseAmino;
 
+  /// Twee kolommen (pc): links de macro's, vetten en eiwitten, rechts de vitaminen, mineralen en de rest.
+  final int columns;
+
+  static const _macroGroups = {NutrientGroup.general, NutrientGroup.carbs, NutrientGroup.fats, NutrientGroup.protein};
+
   Widget row(int i, Nutrient n) => NutrientRow(
     first: i == 0,
     nutrient: n,
@@ -215,10 +221,10 @@ class NutrientPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return Column(
+    Widget panels(Iterable<NutrientGroup> shown) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final g in groups ?? NutrientGroup.values)
+        for (final g in shown)
           if (nutrients
                   .where((n) => n.group == g && n.key != 'energy' && !hidden.contains(n.key) && (!onlyWithData || values.containsKey(n.key)))
                   .toList()
@@ -258,6 +264,17 @@ class NutrientPanel extends StatelessWidget {
                 ),
               ),
             ),
+      ],
+    );
+    final all = groups ?? NutrientGroup.values;
+    final left = all.where(_macroGroups.contains), right = all.where((g) => !_macroGroups.contains(g));
+    if (columns < 2 || left.isEmpty || right.isEmpty) return panels(all);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: panels(left)),
+        const SizedBox(width: 12),
+        Expanded(child: panels(right)),
       ],
     );
   }

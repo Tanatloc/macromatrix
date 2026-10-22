@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../data/models.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/insights.dart';
+import '../../nutrition/nutrients.dart';
 import '../../platform/platform.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
@@ -14,6 +15,7 @@ import '../widgets/kit.dart';
 import 'add_food_screen.dart';
 import 'food_detail_screen.dart';
 import 'nutrient_detail_screen.dart';
+import 'nutrients_screen.dart';
 import 'scan_screen.dart';
 import 'supplements_screen.dart';
 import 'recap_screen.dart';
@@ -23,6 +25,7 @@ import '../widgets/allergen_picker.dart';
 import '../widgets/bio_tips_view.dart';
 import '../widgets/exercise_view.dart';
 import '../widgets/gap_plan_view.dart';
+import '../widgets/nutrient_row.dart';
 import '../../i18n.dart';
 
 /// Vandaag: energie en macro's, de 25 vitaminen en mineralen, wat aandacht vraagt, een suggestie,
@@ -36,6 +39,7 @@ class DiaryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final empty = !s.entries.any((e) => !e.foodRef.startsWith('supp:'));
+    if (isDesktop(context)) return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile);
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add',
@@ -48,7 +52,7 @@ class DiaryScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 104),
           children: [
-            Narrow(child: _Header()),
+            const Narrow(child: _Header()),
             Narrow(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -86,6 +90,156 @@ class DiaryScreen extends StatelessWidget {
   }
 }
 
+/// Vandaag op een pc: links wat je logt (maaltijden, supplementen, beweging), rechts hoe je dag ervoor staat
+/// (energie, tips, wat je nog tekortkomt en je week). Toevoegen staat bovenaan in plaats van als zwevende knop.
+class _DesktopDiary extends StatelessWidget {
+  const _DesktopDiary({required this.empty, this.onOpenNutrients, this.onOpenProfile});
+  final bool empty;
+  final VoidCallback? onOpenNutrients;
+  final VoidCallback? onOpenProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    const gap = SizedBox(height: 12);
+    return Scaffold(
+      body: LayoutBuilder(
+        builder: (context, c) {
+          final two = c.maxWidth >= twoColumnWidth;
+          final log = <Widget>[
+            if (!s.hasProfile) ...[_ProfileHint(onOpenProfile: onOpenProfile), gap],
+            if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const _AllergyAsk(), gap],
+            if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[const WeeklyReportCard(), gap],
+            if (s.isToday && RecapCard.due(s) != null) ...[const RecapCard(), gap],
+            if (s.note.trim().isNotEmpty) ...[const _NoteCard(), gap],
+            SectionHeader(tr('Meals', 'Maaltijden'), trailing: empty ? null : '${fmtInt(s.totals['energy'])} kcal'),
+            if (s.isToday) ...[const _UsualStrip(), const SizedBox(height: 8)],
+            for (final meal in Meal.values) ...[_MealCard(key: ValueKey('${s.day}-${meal.name}'), meal: meal), const SizedBox(height: 8)],
+            const SizedBox(height: 8),
+            const _SupplementCard(),
+            const SizedBox(height: 10),
+            const _ExerciseCard(),
+            if (!empty && s.isToday && s.suggestion != null) ...[const SizedBox(height: 16), _SuggestionCard(suggestion: s.suggestion!)],
+          ];
+          final status = <Widget>[
+            if (empty) ...[
+              const _BudgetCard(),
+              gap,
+              const _StartCard(),
+            ] else ...[
+              const _EnergyCard(),
+              gap,
+              const _ForTodayCard(),
+              gap,
+              _ShortfallCard(onOpenNutrients: onOpenNutrients),
+              gap,
+              const _WeekCard(),
+            ],
+          ];
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 40),
+            children: [
+              Narrow(
+                maxWidth: wideMaxWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Header(
+                      add: FilledButton.icon(
+                        onPressed: () => openAddFood(context, Meal.forHour(DateTime.now().hour)),
+                        icon: const Icon(Icons.add_rounded),
+                        label: Text(tr('Add food', 'Eten toevoegen')),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: two
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 7,
+                                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: log),
+                                ),
+                                const SizedBox(width: 20),
+                                Expanded(
+                                  flex: 5,
+                                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: status),
+                                ),
+                              ],
+                            )
+                          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...status, gap, ...log]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Op een pc naast je dagboek: je Nutrient Score en de vitaminen en mineralen waar je vandaag nog onder zit.
+class _ShortfallCard extends StatelessWidget {
+  const _ShortfallCard({this.onOpenNutrients});
+  final VoidCallback? onOpenNutrients;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final v = s.totals.values;
+    final low = KeyNutrients.shortfalls(v, s.targets, limit: 8);
+    final score = completenessScore(v, s.targets);
+    return Panel(
+      shadow: false,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Still short today', 'Vandaag nog te weinig'),
+            trailing: Text(
+              'Nutrient Score $score',
+              style: numStyle(12, weight: FontWeight.w600, color: p.ink2),
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (low.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                tr('You reach all your vitamins and minerals today.', 'Je haalt vandaag al je vitaminen en mineralen.'),
+                style: TextStyle(fontSize: 13.5, color: p.ink2),
+              ),
+            )
+          else
+            for (final (i, k) in low.indexed)
+              NutrientRow(
+                first: i == 0,
+                nutrient: nutrientByKey[k]!,
+                amount: v[k],
+                target: s.targets[k],
+                complete: !s.totals.incomplete.contains(k),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: nutrientByKey[k]!))),
+              ),
+          if (onOpenNutrients != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.dashboard_outlined, size: 18),
+                label: Text(tr('All nutrients', 'Alle voedingsstoffen')),
+                onPressed: onOpenNutrients,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 Future<void> openAddFood(BuildContext context, Meal meal) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddFoodScreen(meal: meal)));
 
 /// ISO-weeknummer.
@@ -97,6 +251,11 @@ int isoWeek(DateTime d) {
 }
 
 class _Header extends StatelessWidget {
+  const _Header({this.add});
+
+  /// Knop om eten toe te voegen (op een pc, in plaats van de zwevende knop).
+  final Widget? add;
+
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
@@ -142,6 +301,7 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           SquareButton(icon: Icons.chevron_right_rounded, tooltip: tr('Next day', 'Volgende dag'), onPressed: () => s.shiftDay(1)),
+          if (add != null) ...[const SizedBox(width: 12), SizedBox(height: 40, child: add)],
         ],
       ),
     );

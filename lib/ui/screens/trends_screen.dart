@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -39,36 +41,58 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
     final targets = {for (final k in keys) k: s.targetsForDate(parseDay(k), burned: burned[k] ?? 0)};
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (daily.isEmpty)
-            Panel(
-              child: Text(
-                tr(
-                  'Nothing logged in this period yet. Once you track a few days, you will see your progress here.',
-                  'Nog niets gelogd in deze periode. Zodra je een paar dagen bijhoudt, zie je hier je verloop.',
-                ),
-                style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
-              ),
-            )
-          else ...[
-            _minis(p, keys, daily, targets),
-            const SizedBox(height: 10),
-            _energy(s, p, keys, daily, targets, from),
-            const SizedBox(height: 10),
-            _macros(s, p, keys, daily, from),
-            const SizedBox(height: 10),
-            _heatmap(p, keys, daily, targets),
-            const SizedBox(height: 18),
-            _averages(s, p, daily),
-          ],
-          const SizedBox(height: 10),
-          _weight(s, p, keys, from),
-        ],
-      ),
+    Widget pair(Widget a, Widget b) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: a),
+        const SizedBox(width: 12),
+        Expanded(child: b),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Op een pc: kaarten twee aan twee, en de gemiddelden in twee kolommen
+        final wide = c.maxWidth >= twoColumnWidth;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (daily.isEmpty)
+                Panel(
+                  child: Text(
+                    tr(
+                      'Nothing logged in this period yet. Once you track a few days, you will see your progress here.',
+                      'Nog niets gelogd in deze periode. Zodra je een paar dagen bijhoudt, zie je hier je verloop.',
+                    ),
+                    style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
+                  ),
+                )
+              else if (wide) ...[
+                _minis(p, keys, daily, targets),
+                const SizedBox(height: 12),
+                pair(_energy(s, p, keys, daily, targets, from), _macros(s, p, keys, daily, from)),
+                const SizedBox(height: 12),
+                pair(_heatmap(p, keys, daily, targets), _weight(s, p, keys, from)),
+                const SizedBox(height: 18),
+                _averages(s, p, daily, columns: 2),
+              ] else ...[
+                _minis(p, keys, daily, targets),
+                const SizedBox(height: 10),
+                _energy(s, p, keys, daily, targets, from),
+                const SizedBox(height: 10),
+                _macros(s, p, keys, daily, from),
+                const SizedBox(height: 10),
+                _heatmap(p, keys, daily, targets),
+                const SizedBox(height: 18),
+                _averages(s, p, daily),
+              ],
+              if (daily.isEmpty || !wide) ...[const SizedBox(height: 10), _weight(s, p, keys, from)],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -548,7 +572,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 const SizedBox(height: 8),
                 LayoutBuilder(
                   builder: (context, c) {
-                    final size = (c.maxWidth - (perRow - 1) * 3) / perRow;
+                    final size = math.min(22.0, (c.maxWidth - (perRow - 1) * 3) / perRow);
                     return Wrap(
                       spacing: 3,
                       runSpacing: 3,
@@ -576,7 +600,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
   }
 
   /// Daggemiddelde van alle voedingsstoffen over de gelogde dagen.
-  Widget _averages(AppState s, Palette p, Map<String, NutrientTotals> daily) {
+  Widget _averages(AppState s, Palette p, Map<String, NutrientTotals> daily, {int columns = 1}) {
     final logged = daily.length;
     final averages = <String, double>{};
     final incomplete = <String>{};
@@ -608,6 +632,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           targets: s.targetsForDate(logicalNow()),
           incomplete: incomplete,
           hidden: s.hiddenNutrients,
+          columns: columns,
           onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
         ),
       ],

@@ -47,10 +47,17 @@ class _DayNutrientsState extends State<DayNutrients> {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
+    // Op een pc: alles breder, de score en de balans naast elkaar, en de voedingsstoffen in twee kolommen
+    return LayoutBuilder(builder: (context, c) => _build(context, s, p, c.maxWidth >= twoColumnWidth));
+  }
+
+  Widget _build(BuildContext context, AppState s, Palette p, bool wide) {
+    final mw = wide ? wideMaxWidth : 760.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Narrow(
+          maxWidth: mw,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: s.entries.isEmpty
@@ -62,6 +69,17 @@ class _DayNutrientsState extends State<DayNutrients> {
                       ),
                       style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
                     ),
+                  )
+                : wide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Expanded(child: _ScoreCard()),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
+                      ),
+                    ],
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -76,6 +94,7 @@ class _DayNutrientsState extends State<DayNutrients> {
         ),
         if (s.entries.isNotEmpty) ...[
           Narrow(
+            maxWidth: mw,
             child: SizedBox(
               height: 50,
               child: ListView(
@@ -92,6 +111,7 @@ class _DayNutrientsState extends State<DayNutrients> {
             ),
           ),
           Narrow(
+            maxWidth: mw,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
               child: Wrap(
@@ -108,6 +128,7 @@ class _DayNutrientsState extends State<DayNutrients> {
             ),
           ),
           Narrow(
+            maxWidth: mw,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -119,6 +140,7 @@ class _DayNutrientsState extends State<DayNutrients> {
                       targets: s.targets,
                       incomplete: s.totals.incomplete,
                       hidden: s.hiddenNutrients,
+                      columns: wide ? 2 : 1,
                       onShowAll: () => setState(() => _filter = _Filter.all),
                     )
                   else
@@ -129,6 +151,7 @@ class _DayNutrientsState extends State<DayNutrients> {
                       groups: _filter.groups,
                       hidden: s.hiddenNutrients,
                       collapseAmino: _filter != _Filter.amino,
+                      columns: wide ? 2 : 1,
                       onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
                     ),
                   const SizedBox(height: 4),
@@ -158,13 +181,24 @@ class _DayNutrientsState extends State<DayNutrients> {
 /// Wat er echt toe doet: energie, macro's, vezels, verzadigd vet, zout, en de vitaminen en mineralen waarvan je
 /// vandaag het minst hebt (hooguit 10, alleen wat onder je doel zit).
 class KeyNutrients extends StatelessWidget {
-  const KeyNutrients({super.key, required this.values, required this.targets, this.incomplete = const {}, this.hidden = const {}, this.onShowAll});
+  const KeyNutrients({
+    super.key,
+    required this.values,
+    required this.targets,
+    this.incomplete = const {},
+    this.hidden = const {},
+    this.onShowAll,
+    this.columns = 1,
+  });
 
   final NutrientMap values;
   final Map<String, Target> targets;
   final Set<String> incomplete;
   final Set<String> hidden;
   final VoidCallback? onShowAll;
+
+  /// Twee kolommen (pc): de basis en de tekorten naast elkaar.
+  final int columns;
 
   static const basics = ['energy', 'protein', 'carbs', 'fat', 'fiber', 'sfa', 'sodium'];
 
@@ -195,42 +229,55 @@ class KeyNutrients extends StatelessWidget {
       for (final k in KeyNutrients.basics)
         if (!hidden.contains(k)) k,
     ];
+    final basicsPanel = Panel(
+      shadow: false,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [PanelTitle(tr('The basics', 'De basis')), const SizedBox(height: 4), for (final (i, k) in basics.indexed) row(i, k)],
+      ),
+    );
+    final lowPanel = Panel(
+      shadow: false,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Still short today', 'Vandaag nog te weinig'),
+            subtitle: low.isEmpty ? null : tr('Vitamins and minerals under your goal', 'Vitaminen en mineralen onder je doel'),
+          ),
+          const SizedBox(height: 4),
+          if (low.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                tr('You reach all your vitamins and minerals today.', 'Je haalt vandaag al je vitaminen en mineralen.'),
+                style: TextStyle(fontSize: 13.5, color: p.ink2),
+              ),
+            )
+          else
+            for (final (i, k) in low.indexed) row(i, k),
+        ],
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Panel(
-          shadow: false,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [PanelTitle(tr('The basics', 'De basis')), const SizedBox(height: 4), for (final (i, k) in basics.indexed) row(i, k)],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Panel(
-          shadow: false,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        if (columns > 1)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              PanelTitle(
-                tr('Still short today', 'Vandaag nog te weinig'),
-                subtitle: low.isEmpty ? null : tr('Vitamins and minerals under your goal', 'Vitaminen en mineralen onder je doel'),
-              ),
-              const SizedBox(height: 4),
-              if (low.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    tr('You reach all your vitamins and minerals today.', 'Je haalt vandaag al je vitaminen en mineralen.'),
-                    style: TextStyle(fontSize: 13.5, color: p.ink2),
-                  ),
-                )
-              else
-                for (final (i, k) in low.indexed) row(i, k),
+              Expanded(child: basicsPanel),
+              const SizedBox(width: 12),
+              Expanded(child: lowPanel),
             ],
-          ),
-        ),
+          )
+        else ...[
+          basicsPanel,
+          const SizedBox(height: 10),
+          lowPanel,
+        ],
         if (onShowAll != null)
           Align(
             alignment: Alignment.centerLeft,
