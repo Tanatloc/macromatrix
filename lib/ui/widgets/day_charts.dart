@@ -40,6 +40,45 @@ class DayAxis extends StatelessWidget {
   }
 }
 
+/// Breedte van een staaf per dag: breed bij een week, smal bij een maand. Dezelfde maat in elke grafiek,
+/// zodat de staven van energie en macro's onder elkaar staan.
+double dayBarWidth(double step, int days) => days <= 10 ? math.min(44.0, step * 0.56) : math.max(2.0, math.min(12.0, step * 0.62));
+
+/// Onder een grafiek: bij een week elke weekdag (vandaag vet), bij een langere periode begin, midden en einde.
+class DayLabels extends StatelessWidget {
+  const DayLabels({super.key, required this.days});
+  final List<DateTime> days;
+
+  @override
+  Widget build(BuildContext context) {
+    if (days.isEmpty) return const SizedBox.shrink();
+    if (days.length > 10) return DayAxis(from: days.first, days: days.length);
+    final p = context.pal;
+    final now = logicalNow();
+    bool isToday(DateTime d) => d.year == now.year && d.month == now.month && d.day == now.day;
+    final style = numStyle(10.5, weight: FontWeight.w400, color: p.ink3);
+    final wd = DateFormat('E', appLocale);
+    return Row(
+      children: [
+        for (final d in days)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                isToday(d) ? tr('today', 'vandaag') : wd.format(d),
+                textAlign: TextAlign.center,
+                style: isToday(d) ? style.copyWith(color: p.ink, fontWeight: FontWeight.w600) : style,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Een dag zonder gegevens: een stipje op de basislijn, zodat een lege plek bewust oogt.
+void _emptyDot(Canvas canvas, double cx, double base, Palette p) => canvas.drawCircle(Offset(cx, base - 3), 1.8, Paint()..color = p.lineStrong);
+
 /// Voortschrijdend gemiddelde over [window] dagen (alleen dagen met een waarde; minstens 3 nodig).
 List<double?> movingAverage(List<double?> values, {int window = 7}) => [
   for (var i = 0; i < values.length; i++)
@@ -205,27 +244,39 @@ class _SplitPainter extends CustomPainter {
     final n = splits.length;
     if (n == 0) return;
     final step = size.width / n;
-    final bw = math.min(12.0, math.max(2.0, step * 0.66));
+    final bw = dayBarWidth(step, n);
     final h = size.height;
+    final r = Radius.circular(math.min(6, bw / 2));
+    // Een smalle naad tussen de lagen, in de kleur van de kaart
+    final gap = n <= 10 ? 2.0 : 1.0;
     for (final (i, s) in splits.indexed) {
       final x = i * step + (step - bw) / 2;
       if (s == null) {
-        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x, 0, bw, h), const Radius.circular(2)), Paint()..color = p.track);
+        _emptyDot(canvas, x + bw / 2, h, p);
         continue;
       }
+      final bar = RRect.fromRectAndCorners(Rect.fromLTWH(x, 0, bw, h), topLeft: r, topRight: r);
+      canvas.save();
+      canvas.clipRRect(bar);
       final yp = h - s.$1 * h, yc = yp - s.$2 * h;
       canvas.drawRect(Rect.fromLTRB(x, yp, x + bw, h), Paint()..color = p.protein);
-      canvas.drawRect(Rect.fromLTRB(x, yc, x + bw, yp), Paint()..color = p.carbs);
-      canvas.drawRect(Rect.fromLTRB(x, 0, x + bw, yc), Paint()..color = p.fat);
+      canvas.drawRect(Rect.fromLTRB(x, yc, x + bw, yp - gap), Paint()..color = p.carbs);
+      canvas.drawRect(Rect.fromLTRB(x, 0, x + bw, yc - gap), Paint()..color = p.fat);
+      canvas.restore();
     }
     if (target != null) {
+      // Doelverdeling als korte streepjes over elke staaf
       final dash = Paint()
         ..color = p.surface
         ..strokeWidth = 1.5;
       for (final f in [target!.$1, target!.$1 + target!.$2]) {
         final ty = h - f * h;
-        for (var x = 0.0; x < size.width; x += 7) {
-          canvas.drawLine(Offset(x, ty), Offset(math.min(x + 4, size.width), ty), dash);
+        for (final (i, s) in splits.indexed) {
+          if (s == null) continue;
+          final x = i * step + (step - bw) / 2;
+          for (var dx = x; dx < x + bw; dx += 6) {
+            canvas.drawLine(Offset(dx, ty), Offset(math.min(dx + 3, x + bw), ty), dash);
+          }
         }
       }
     }
@@ -410,8 +461,9 @@ class ChartLegend extends StatelessWidget {
   );
 }
 
-/// Energie per dag als balken tegenover je doel. Kleur: groen binnen ±10%, oranje erboven, grijs eronder.
-/// Bij een week ([showValues]) staan de kcal boven elke balk en de weekdag eronder.
+/// Energie per dag als balken tegenover je doel. Kleur: groen binnen ±10%, rood erboven, zand eronder; vandaag (nog
+/// bezig) iets lichter. Het doel is een stippellijn die op dagen met beweging mee omhoog gaat.
+/// Bij een week ([days] ≤ 10) staan de kcal boven elke balk en de weekdag eronder.
 class EnergyBars extends StatelessWidget {
   const EnergyBars({super.key, required this.days, required this.values, required this.goal, this.goals, this.height = 150});
 
@@ -419,137 +471,134 @@ class EnergyBars extends StatelessWidget {
   final List<double?> values;
   final double goal;
 
-  /// Doel per dag, met de beweging van die dag erbij. Een dag met een hoger doel krijgt een eigen streepje,
-  /// en wordt daartegen beoordeeld in plaats van tegen [goal].
+  /// Doel per dag, met de beweging van die dag erbij. Een dag met een hoger doel wordt daartegen beoordeeld.
   final List<double>? goals;
   final double height;
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final showValues = days.length <= 10;
-    final known = values.whereType<double>();
-    double goalOf(int i) => goals?[i] ?? goal;
-    final topGoal = goals == null || goals!.isEmpty ? goal : math.max(goal, goals!.reduce(math.max));
-    final maxV = math.max(known.isEmpty ? topGoal : known.reduce(math.max), topGoal) * 1.15;
-    final anyExtra = [for (var i = 0; i < days.length; i++) goalOf(i) > goal + 1].contains(true);
-    final today = logicalNow();
-    bool isToday(DateTime d) => d.year == today.year && d.month == today.month && d.day == today.day;
-    Color colorOf(double v, double goal) => (v - goal).abs() <= goal * 0.1 ? p.okFill : (v > goal ? p.highFill : p.lowFill.withValues(alpha: 0.55));
-    final valueStyle = numStyle(10.5, weight: FontWeight.w500, color: p.ink2);
-    final axisStyle = numStyle(10.5, weight: FontWeight.w400, color: p.ink3);
-    final wd = DateFormat('E', appLocale);
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final barArea = height - (showValues ? 16 : 0);
-        final goalY = barArea - goal / maxV * barArea;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    final anyExtra = goals != null && goals!.any((g) => g > goal + 1);
+    final now = logicalNow();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: height,
+          width: double.infinity,
+          child: CustomPaint(
+            painter: _EnergyPainter(
+              values: values,
+              goal: goal,
+              goals: [for (var i = 0; i < values.length; i++) goals?[i] ?? goal],
+              today: [for (final d in days) d.year == now.year && d.month == now.month && d.day == now.day],
+              labels: days.length <= 10,
+              // Een painter erft het lettertype van de app niet vanzelf
+              font: DefaultTextStyle.of(context).style,
+              p: p,
+            ),
+          ),
+        ),
+        DayLabels(days: days),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 14,
+          runSpacing: 4,
           children: [
-            SizedBox(
-              height: height,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // Doellijn met label
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: goalY + (showValues ? 16 : 0),
-                    child: CustomPaint(size: Size(c.maxWidth, 1), painter: _DashPainter(p.ink2)),
-                  ),
-                  Positioned(
-                    right: 0,
-                    top: goalY + (showValues ? 16 : 0) - 15,
-                    child: Container(
-                      color: p.surface,
-                      padding: const EdgeInsets.only(left: 4),
-                      child: Text(
-                        '${tr('goal', 'doel')} ${fmtInt(goal)}',
-                        style: numStyle(10, weight: FontWeight.w500, color: p.ink2),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      for (final (i, v) in values.indexed)
-                        Expanded(
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  if (showValues && v != null && v > 0) Text(fmtInt(v), style: valueStyle, maxLines: 1),
-                                  // Het getal boven het doelstreepje als dat hoger ligt dan het staafje
-                                  SizedBox(
-                                    height: 2 + (v != null && goalOf(i) > goal + 1 && goalOf(i) > v ? (goalOf(i) - v) / maxV * barArea + 3 : 0),
-                                  ),
-                                  Container(
-                                    height: v == null || v <= 0 ? 0 : (v / maxV * barArea).clamp(2.0, barArea),
-                                    margin: EdgeInsets.symmetric(horizontal: showValues ? 7 : 1.5),
-                                    decoration: BoxDecoration(
-                                      color: v == null ? null : colorOf(v, goalOf(i)),
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                      border: isToday(days[i]) ? Border.all(color: p.ink, width: 1.5) : null,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              // Hoger doel door beweging die dag
-                              if (goalOf(i) > goal + 1)
-                                Positioned(
-                                  left: showValues ? 3 : 0,
-                                  right: showValues ? 3 : 0,
-                                  bottom: goalOf(i) / maxV * barArea - 1,
-                                  child: Container(height: 2, color: p.ink),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+            LegendItem(swatch: LegendItem.box(p.okFill, w: 10, h: 10, radius: 3), label: tr('within ±10%', 'binnen ±10%')),
+            LegendItem(swatch: LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), label: tr('above goal', 'boven doel')),
+            LegendItem(swatch: LegendItem.box(_below(p), w: 10, h: 10, radius: 3), label: tr('below goal', 'onder doel')),
+            LegendItem(
+              swatch: SizedBox(width: 14, height: 2, child: CustomPaint(painter: _DashPainter(p.ink2))),
+              label: tr('goal', 'doel'),
             ),
-            Container(height: 1, color: p.lineStrong),
-            if (showValues)
-              Row(
-                children: [
-                  for (final d in days)
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                          isToday(d) ? tr('today', 'vandaag') : wd.format(d),
-                          textAlign: TextAlign.center,
-                          style: isToday(d) ? axisStyle.copyWith(color: p.ink, fontWeight: FontWeight.w600) : axisStyle,
-                        ),
-                      ),
-                    ),
-                ],
-              )
-            else
-              DayAxis(from: days.first, days: days.length),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 14,
-              runSpacing: 4,
-              children: [
-                LegendItem(swatch: LegendItem.box(p.okFill, w: 10, h: 10, radius: 3), label: tr('within ±10%', 'binnen ±10%')),
-                LegendItem(swatch: LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), label: tr('above goal', 'boven doel')),
-                LegendItem(swatch: LegendItem.box(p.lowFill.withValues(alpha: 0.55), w: 10, h: 10, radius: 3), label: tr('below goal', 'onder doel')),
-                if (anyExtra)
-                  LegendItem(swatch: LegendItem.box(p.ink, w: 12, h: 2, radius: 1), label: tr('goal incl. exercise', 'doel incl. beweging')),
-              ],
-            ),
+            if (anyExtra) LegendItem(swatch: LegendItem.box(p.ink3, w: 12, h: 2, radius: 1), label: tr('goal incl. exercise', 'doel incl. beweging')),
           ],
-        );
-      },
+        ),
+      ],
     );
   }
+}
+
+Color _below(Palette p) => p.lowFill.withValues(alpha: 0.55);
+
+class _EnergyPainter extends CustomPainter {
+  _EnergyPainter({
+    required this.values,
+    required this.goal,
+    required this.goals,
+    required this.today,
+    required this.labels,
+    required this.font,
+    required this.p,
+  });
+  final TextStyle font;
+  final List<double?> values;
+  final double goal;
+  final List<double> goals;
+  final List<bool> today;
+  final bool labels;
+  final Palette p;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = values.length;
+    if (n == 0) return;
+    final known = values.whereType<double>();
+    final top = math.max(known.isEmpty ? 0.0 : known.reduce(math.max), goals.reduce(math.max)) * 1.08;
+    final head = labels ? 18.0 : 4.0;
+    final base = size.height - 1;
+    double y(double v) => base - v / top * (base - head);
+    final step = size.width / n;
+    final bw = dayBarWidth(step, n);
+    final r = Radius.circular(math.min(6, bw / 2));
+
+    for (final (i, v) in values.indexed) {
+      final x = i * step + (step - bw) / 2;
+      if (v == null || v <= 0) {
+        _emptyDot(canvas, x + bw / 2, base, p);
+        continue;
+      }
+      final g = goals[i];
+      final c = (v - g).abs() <= g * 0.1 ? p.okFill : (v > g ? p.highFill : _below(p));
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(Rect.fromLTRB(x, math.min(y(v), base - 2), x + bw, base), topLeft: r, topRight: r),
+        Paint()..color = today[i] ? c.withValues(alpha: c.a * 0.55) : c,
+      );
+      if (labels) {
+        final t = TextPainter(
+          text: TextSpan(
+            text: fmtInt(v),
+            style: font.merge(numStyle(10.5, weight: today[i] ? FontWeight.w600 : FontWeight.w500, color: today[i] ? p.ink : p.ink2)),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        t.paint(canvas, Offset(i * step + (step - t.width) / 2, y(v) - t.height - 3));
+      }
+    }
+
+    // Doel als stippellijn; op dagen met beweging ligt het doel hoger: dan een kort streepje boven die balk
+    final dash = Paint()
+      ..color = p.ink2
+      ..strokeWidth = 1.2;
+    final gy = y(goal);
+    for (var x = 0.0; x < size.width; x += 6) {
+      canvas.drawLine(Offset(x, gy), Offset(math.min(x + 3, size.width), gy), dash);
+    }
+    final extra = Paint()
+      ..color = p.ink3
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < n; i++) {
+      if (goals[i] <= goal + 1) continue;
+      final x = i * step + (step - bw) / 2;
+      canvas.drawLine(Offset(x + 1, y(goals[i])), Offset(x + bw - 1, y(goals[i])), extra);
+    }
+    canvas.drawLine(Offset(0, base + 0.5), Offset(size.width, base + 0.5), Paint()..color = p.lineStrong);
+  }
+
+  @override
+  bool shouldRepaint(_EnergyPainter old) => true;
 }
 
 class _DashPainter extends CustomPainter {

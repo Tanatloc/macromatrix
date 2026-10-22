@@ -177,7 +177,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           ),
           const SizedBox(height: 12),
           SplitBarsChart(splits: splits, target: (prof.proteinPct / 100, prof.carbsPct / 100)),
-          DayAxis(from: from, days: keys.length),
+          DayLabels(days: [for (final k in keys) parseDay(k)]),
           const SizedBox(height: 12),
           Row(
             children: [
