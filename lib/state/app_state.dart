@@ -223,8 +223,8 @@ class AppState extends ChangeNotifier {
 
   // ── Weergave ──
 
-  /// Licht, donker of zoals het toestel (opgeslagen als "light", "dark" of "system").
-  String get themeMode => (user.setting('ui')?['theme'] as String?) ?? 'system';
+  /// Licht, donker of zoals het toestel (opgeslagen als "light", "dark" of "system"); standaard licht.
+  String get themeMode => (user.setting('ui')?['theme'] as String?) ?? 'light';
 
   /// Taal van de app (alleen op dit toestel).
   void setLanguage(AppLang lang) {
