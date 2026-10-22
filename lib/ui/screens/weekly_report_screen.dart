@@ -256,7 +256,7 @@ class WeeklyReportCard extends StatelessWidget {
   const WeeklyReportCard({super.key});
 
   static DateTime lastMonday() {
-    final m = mondayOf(DateTime.now());
+    final m = mondayOf(logicalNow());
     return DateTime(m.year, m.month, m.day - 7);
   }
 

@@ -301,8 +301,9 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
       return vals.isEmpty ? null : vals.reduce((a, b) => a + b) / vals.length;
     }
 
+    final burned = s.user.exerciseKcalBetween(dayKey(to.subtract(const Duration(days: 29))), dayKey(to));
+    final ok = daily.entries.where((e) => levelOf(e.value[n.key], _targetOn(s, e.key, burned)) == Level.ok).length;
     final target = s.targetsForDate(to)[n.key];
-    final ok = daily.values.where((t) => levelOf(t[n.key], target) == Level.ok).length;
     return Row(
       children: [
         Expanded(
@@ -320,12 +321,17 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     );
   }
 
+  /// Doel op een dag; voor energie met de beweging van die dag erbij, zoals op Vandaag.
+  Target? _targetOn(AppState s, String day, Map<String, double> burned) => s.targetsForDate(parseDay(day), burned: burned[day] ?? 0)[n.key];
+
   Widget _history(AppState s, Palette p, Target? target) {
     final to = s.date;
     final from = to.subtract(Duration(days: _days - 1));
     final daily = s.dailyTotals(from, to);
-    final values = [for (var i = 0; i < _days; i++) daily[dayKey(from.add(Duration(days: i)))]?[n.key]];
+    final keys = [for (var i = 0; i < _days; i++) dayKey(from.add(Duration(days: i)))];
+    final values = [for (final k in keys) daily[k]?[n.key]];
     final t = s.targetsForDate(to)[n.key];
+    final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
 
     return Panel(
       shadow: false,
@@ -361,7 +367,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               values: values,
               goal: t?.goal ?? t?.upper,
               highlightLast: s.isToday,
-              colorOf: (v) => switch (levelOf(v, t)) {
+              colorOf: (v, i) => switch (levelOf(v, _targetOn(s, keys[i], burned))) {
                 Level.ok => p.okFill,
                 Level.high => p.highFill,
                 Level.low => p.lowFill.withValues(alpha: 0.55),

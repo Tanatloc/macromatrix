@@ -9,6 +9,8 @@ library;
 
 import 'dart:math' as math;
 
+import '../day_clock.dart';
+
 /// Reeks vanaf deze lengte geeft extra XP.
 const streakBonusDays = 7;
 const streakBonus = 1.5;
@@ -79,6 +81,6 @@ LevelInfo levelFromScores(Map<String, int> scores, {int bonus = 0}) {
 bool countsForXp({required String id, required String day, required int createdAtMs}) {
   if (id.startsWith('import-')) return false;
   final d = DateTime.parse(day);
-  final deadline = DateTime(d.year, d.month, d.day + 2).millisecondsSinceEpoch;
+  final deadline = DateTime(d.year, d.month, d.day + 2, dayStartHour).millisecondsSinceEpoch;
   return createdAtMs < deadline;
 }

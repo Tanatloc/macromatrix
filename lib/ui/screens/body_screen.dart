@@ -158,7 +158,7 @@ class _BodyScreenState extends State<BodyScreen> {
       ),
     );
 
-    final now = DateTime.now();
+    final now = logicalNow();
     final diff = (s.date.difference(DateTime(now.year, now.month, now.day)).inHours / 24).round();
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(

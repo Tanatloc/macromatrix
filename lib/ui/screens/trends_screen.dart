@@ -35,7 +35,9 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final days = DateTime.utc(to.year, to.month, to.day).difference(DateTime.utc(from.year, from.month, from.day)).inDays + 1;
     final keys = [for (var i = 0; i < days; i++) dayKey(DateTime(from.year, from.month, from.day + i))];
     final daily = s.dailyTotals(from, to);
-    final targets = {for (final k in keys) k: s.targetsForDate(parseDay(k))};
+    // Doelen per dag met de beweging van die dag erbij, zoals op Vandaag
+    final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
+    final targets = {for (final k in keys) k: s.targetsForDate(parseDay(k), burned: burned[k] ?? 0)};
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -55,7 +57,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           else ...[
             _minis(p, keys, daily, targets),
             const SizedBox(height: 10),
-            _energy(p, keys, daily, targets, from),
+            _energy(s, p, keys, daily, targets, from),
             const SizedBox(height: 10),
             _macros(s, p, keys, daily, from),
             const SizedBox(height: 10),
@@ -70,11 +72,19 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     );
   }
 
-  Widget _energy(Palette p, List<String> keys, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets, DateTime from) {
+  Widget _energy(
+    AppState s,
+    Palette p,
+    List<String> keys,
+    Map<String, NutrientTotals> daily,
+    Map<String, Map<String, Target>> targets,
+    DateTime from,
+  ) {
     final values = [for (final k in keys) daily[k]?['energy']];
-    final goal = targets[keys.last]!['energy']?.goal ?? 2000;
+    // Basisdoel zonder beweging; dagen met beweging hebben hun eigen, hoger doel
+    final goal = s.targetsForDate(parseDay(keys.last))['energy']?.goal ?? 2000;
     // Vandaag is nog bezig: telt niet mee in het gemiddelde
-    final today = dayKey(DateTime.now());
+    final today = dayKey(logicalNow());
     final done = [
       for (final k in keys)
         if (k != today && daily[k] != null) (daily[k]!['energy'], targets[k]!['energy']?.goal ?? goal),
@@ -103,7 +113,12 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             ],
           ),
           const SizedBox(height: 12),
-          EnergyBars(days: [for (final k in keys) parseDay(k)], values: values, goal: goal),
+          EnergyBars(
+            days: [for (final k in keys) parseDay(k)],
+            values: values,
+            goal: goal,
+            goals: [for (final k in keys) targets[k]!['energy']?.goal ?? goal],
+          ),
         ],
       ),
     );
@@ -544,7 +559,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                             height: size,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: daily.containsKey(k) ? (k == dayKey(DateTime.now()) ? p.ink : p.brand) : Colors.transparent,
+                              color: daily.containsKey(k) ? (k == dayKey(logicalNow()) ? p.ink : p.brand) : Colors.transparent,
                               border: daily.containsKey(k) ? null : Border.all(color: p.lineStrong, width: 1.5),
                             ),
                           ),
@@ -590,7 +605,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
         ),
         NutrientPanel(
           values: averages,
-          targets: s.targetsForDate(DateTime.now()),
+          targets: s.targetsForDate(logicalNow()),
           incomplete: incomplete,
           hidden: s.hiddenNutrients,
           onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),

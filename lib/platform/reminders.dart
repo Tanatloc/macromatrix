@@ -93,7 +93,7 @@ class Reminders {
   }
 
   /// Vandaag al eten gelogd (supplementen tellen niet)?
-  bool get _loggedToday => state.user.loggedDays().contains(dayKey(DateTime.now()));
+  bool get _loggedToday => state.user.loggedDays().contains(dayKey(logicalNow()));
 
   static const _details = NotificationDetails(
     android: AndroidNotificationDetails(

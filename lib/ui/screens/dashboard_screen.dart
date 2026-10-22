@@ -26,7 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   DateTime _anchor = _today();
 
   static DateTime _today() {
-    final n = DateTime.now();
+    final n = logicalNow();
     return DateTime(n.year, n.month, n.day);
   }
 
@@ -75,7 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final thisWeek = _atToday && today.difference(from).inDays < 7;
         return thisWeek ? tr('This week', 'Deze week') : '${f.format(from)} – ${f.format(end)}';
       case _Period.month:
-        final now = DateTime.now();
+        final now = logicalNow();
         return _anchor.year == now.year && _anchor.month == now.month
             ? tr('This month', 'Deze maand')
             : toBeginningOfSentenceCase(DateFormat(_anchor.year == now.year ? 'MMMM' : 'MMMM yyyy', appLocale).format(_anchor));

@@ -6,6 +6,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../day_clock.dart';
+export '../day_clock.dart';
 import '../data/food.dart';
 import '../i18n.dart';
 import '../data/food_db.dart';
@@ -80,6 +82,7 @@ class AppState extends ChangeNotifier {
     _hasProfile = saved != null;
     final ts = user.setting('targets');
     _settings = ts == null ? const TargetSettings() : TargetSettings.fromJson(ts);
+    dayStartHour = ((user.setting('ui')?['dayStart'] as num?)?.toInt() ?? 3).clamp(0, 5);
     _preferences = {for (final n in ((user.setting('preferences')?['list'] as List?) ?? const [])) ?DietPref.values.asNameMap()[n]};
   }
 
@@ -117,10 +120,10 @@ class AppState extends ChangeNotifier {
   final OffClient off;
   final FdcClient fdc;
 
-  DateTime _date = _dateOnly(DateTime.now());
+  DateTime _date = _dateOnly(logicalNow());
   DateTime get date => _date;
   String get day => dayKey(_date);
-  bool get isToday => _date == _dateOnly(DateTime.now());
+  bool get isToday => _date == _dateOnly(logicalNow());
 
   List<DiaryEntry> _entries = const [];
   List<DiaryEntry> get entries => _entries;
@@ -160,9 +163,9 @@ class AppState extends ChangeNotifier {
     _labs = null;
     _suggested = false;
     // Terugkerende items alleen tot en met vandaag invullen, niet voor dagen in de toekomst
-    if (!_date.isAfter(_dateOnly(DateTime.now()))) user.applyRepeats(day, _date);
+    if (!_date.isAfter(_dateOnly(logicalNow()))) user.applyRepeats(day, _date);
     // Automatische supplementen: alleen vandaag aanvinken, en nooit opnieuw als je ze zelf afvinkte
-    if (_date == _dateOnly(DateTime.now())) {
+    if (_date == _dateOnly(logicalNow())) {
       for (final sup in supplements) {
         if (sup.auto && day.compareTo(sup.since ?? day) >= 0 && !user.hasSupplementRow(day, sup)) user.setSupplementTaken(day, sup, true);
       }
@@ -203,7 +206,7 @@ class AppState extends ChangeNotifier {
   /// Geschat verbruik over de laatste 28 volledige dagen (null = te weinig gegevens).
   EnergyEstimate? get energyEstimate {
     if (_estimated) return _estimate;
-    final today = _dateOnly(DateTime.now());
+    final today = _dateOnly(logicalNow());
     final to = today.subtract(const Duration(days: 1));
     final from = to.subtract(const Duration(days: 27));
     final days = [for (var i = 0; i < 28; i++) dayKey(from.add(Duration(days: i)))];
@@ -227,6 +230,15 @@ class AppState extends ChangeNotifier {
   void setLanguage(AppLang lang) {
     user.setSetting('ui', {...?user.setting('ui'), 'lang': lang.name});
     setAppLang(lang);
+  }
+
+  /// Uur waarop een nieuwe dag begint; wie op "vandaag" stond, blijft op de dag die nu vandaag is.
+  void setDayStart(int hour) {
+    final wasToday = isToday;
+    user.setSetting('ui', {...?user.setting('ui'), 'dayStart': hour});
+    dayStartHour = hour;
+    if (wasToday) _date = _dateOnly(logicalNow());
+    _refresh();
   }
 
   void setThemeMode(String mode) {
@@ -325,7 +337,7 @@ class AppState extends ChangeNotifier {
 
   /// Maand- of jaaroverzicht van [from] tot en met [to] (niet later dan vandaag). Null als je niets logde.
   Recap? recap(DateTime from, DateTime to, {required bool year}) {
-    final today = _dateOnly(DateTime.now());
+    final today = _dateOnly(logicalNow());
     final end = to.isAfter(today) ? today : to;
     if (end.isBefore(from)) return null;
     final entries = [
@@ -455,7 +467,7 @@ class AppState extends ChangeNotifier {
 
   /// Stappen en activiteiten in de week van [monday], tot en met vandaag.
   ActivityWeek _activityIn(DateTime monday) {
-    final today = _dateOnly(DateTime.now());
+    final today = _dateOnly(logicalNow());
     final sunday = DateTime(monday.year, monday.month, monday.day + 6);
     final last = sunday.isAfter(today) ? today : sunday;
     final days = last.difference(monday).inDays + 1;
@@ -678,7 +690,7 @@ class AppState extends ChangeNotifier {
     for (var n = 2; taken.contains(id); n++) {
       id = '${sup.baseId}~$n';
     }
-    _saveSupplements([...list, sup.copyWith(id: id, since: dayKey(_dateOnly(DateTime.now())))]);
+    _saveSupplements([...list, sup.copyWith(id: id, since: dayKey(_dateOnly(logicalNow())))]);
     _refresh();
   }
 
@@ -776,7 +788,7 @@ class AppState extends ChangeNotifier {
   /// Wat je meestal eet bij [meal]: producten die je de afgelopen 30 dagen op minstens 3 dagen bij die maaltijd
   /// logde, met de hoeveelheid van de laatste keer. Zonder wat vandaag al in die maaltijd staat.
   List<DiaryEntry> usualFor(Meal meal, {int limit = 3}) {
-    final today = _dateOnly(DateTime.now());
+    final today = _dateOnly(logicalNow());
     final history = user.entriesBetween(dayKey(today.subtract(const Duration(days: 30))), dayKey(today.subtract(const Duration(days: 1))));
     final days = <String, Set<String>>{};
     final last = <String, DiaryEntry>{};
@@ -883,7 +895,7 @@ class AppState extends ChangeNotifier {
   void addBiometric(String type, double value, {double? value2}) {
     user.addBiometric(day: day, type: type, value: value, value2: value2);
     // Een nieuw gewicht vandaag of later geldt meteen voor de berekening van de doelen
-    if (type == 'weight' && !_date.isBefore(_dateOnly(DateTime.now()))) {
+    if (type == 'weight' && !_date.isBefore(_dateOnly(logicalNow()))) {
       saveProfile(_profile.copyWith(weightKg: value));
       return;
     }
@@ -892,7 +904,7 @@ class AppState extends ChangeNotifier {
 
   /// Na het overnemen uit Health Connect: alles opnieuw tonen; een nieuw gewicht van vandaag geldt meteen voor je doelen.
   void healthImported({String? latestWeightDay}) {
-    if (latestWeightDay != null && latestWeightDay == dayKey(DateTime.now())) {
+    if (latestWeightDay != null && latestWeightDay == dayKey(logicalNow())) {
       saveProfile(_profile.copyWith(weightKg: currentWeight));
       return;
     }
@@ -981,7 +993,7 @@ class AppState extends ChangeNotifier {
   LevelInfo get level => _level ??= _computeLevel();
 
   LevelInfo _computeLevel() {
-    final today = dayKey(DateTime.now());
+    final today = dayKey(logicalNow());
     final byDay = <String, List<DiaryEntry>>{};
     final withFood = <String>{};
     for (final (e, created) in user.entriesWithCreatedAt()) {
@@ -1115,7 +1127,7 @@ class AppState extends ChangeNotifier {
   /// Dagen op rij gelogd (tot vandaag of gisteren) en de langste reeks ooit.
   /// Voor het widget op het startscherm: kcal over vandaag (doel min gegeten), het doel en of je vandaag al logde.
   ({int left, int goal, bool loggedToday}) get todaySummary {
-    final now = DateTime.now();
+    final now = logicalNow();
     final key = dayKey(now);
     final burned = user.exerciseKcalBetween(key, key)[key] ?? 0;
     final goal = targetsForDate(now, burned: burned)['energy']?.goal ?? 0;
@@ -1123,12 +1135,12 @@ class AppState extends ChangeNotifier {
     return (left: (goal - eaten).round(), goal: goal.round(), loggedToday: user.loggedDays().contains(key));
   }
 
-  ({int current, int longest}) get streak => loggingStreak(user.loggedDays(), DateTime.now());
+  ({int current, int longest}) get streak => loggingStreak(user.loggedDays(), logicalNow());
 
   /// Gemiddelde volledigheidsscore van de week die op [monday] begint, over de dagen waarop iets gelogd is
   /// (tot en met vandaag). Null als er die week nog niets gelogd is.
   ({int score, int days})? weekScore(DateTime monday) {
-    final today = DateTime.now();
+    final today = logicalNow();
     var end = monday.add(const Duration(days: 6));
     if (end.isAfter(today)) end = today;
     if (end.isBefore(monday)) return null;

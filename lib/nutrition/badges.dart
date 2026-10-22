@@ -6,6 +6,7 @@
 /// vrienden zien (je showcase).
 library;
 
+import '../day_clock.dart';
 import '../i18n.dart';
 import 'insights.dart';
 import 'levels.dart';
@@ -192,7 +193,7 @@ Map<String, int> badgeValues({
     'scanner': scanned,
     'social': friends,
     'days': days.length,
-    'streak': loggingStreak(days.keys.toSet(), today ?? DateTime.now()).longest,
+    'streak': loggingStreak(days.keys.toSet(), today ?? logicalNow()).longest,
     'perfect': count((d) => d.score >= 95),
     'vitd': count((d) => d.vitD),
     'fiber': count((d) => d.fiber),

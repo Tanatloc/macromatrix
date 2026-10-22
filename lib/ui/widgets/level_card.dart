@@ -26,7 +26,7 @@ class _LevelCardState extends State<LevelCard> {
     final s = context.watch<AppState>();
     final pal = context.pal;
     final info = s.level;
-    final today = info.dayOf(dayKey(DateTime.now()));
+    final today = info.dayOf(dayKey(logicalNow()));
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

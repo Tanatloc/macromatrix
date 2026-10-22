@@ -164,6 +164,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             selected: s.themeMode,
             onChanged: s.setThemeMode,
           ),
+          title(tr('Diary', 'Dagboek')),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(tr('New day starts at', 'Nieuwe dag begint om')),
+            subtitle: Text(
+              tr(
+                'Up late? Until this time, what you eat still counts for the day before, including its Nutrient Score.',
+                'Laat op? Tot dit uur telt wat je eet nog voor de dag ervoor, ook voor de Nutrient Score.',
+              ),
+            ),
+            trailing: DropdownButton<int>(
+              value: dayStartHour,
+              underline: const SizedBox.shrink(),
+              items: [for (var h = 0; h <= 5; h++) DropdownMenuItem(value: h, child: Text(h == 0 ? tr('midnight', 'middernacht') : '0$h:00'))],
+              onChanged: (h) => h == null ? null : s.setDayStart(h),
+            ),
+          ),
           title(tr('Exercise', 'Beweging')),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

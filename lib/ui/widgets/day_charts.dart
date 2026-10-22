@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
+import '../../day_clock.dart';
 import '../theme.dart';
 import 'kit.dart';
 import '../../i18n.dart';
@@ -22,7 +23,7 @@ class DayAxis extends StatelessWidget {
     final f = DateFormat('d MMM', appLocale);
     final last = from.add(Duration(days: days - 1));
     final mid = from.add(Duration(days: (days - 1) ~/ 2));
-    final now = DateTime.now();
+    final now = logicalNow();
     final lastIsToday = last.year == now.year && last.month == now.month && last.day == now.day;
     final style = numStyle(10.5, weight: FontWeight.w400, color: p.ink3);
     return Padding(
@@ -64,7 +65,7 @@ class DayBarsChart extends StatelessWidget {
   });
 
   final List<double?> values;
-  final Color Function(double value) colorOf;
+  final Color Function(double value, int index) colorOf;
   final double? goal;
 
   /// Doelband (van, tot), bv. doel ±10%.
@@ -108,7 +109,7 @@ class _BarsPainter extends CustomPainter {
     required this.highlightLast,
   });
   final List<double?> values;
-  final Color Function(double) colorOf;
+  final Color Function(double, int) colorOf;
   final double? goal;
   final (double, double)? band;
   final List<double?>? avg;
@@ -134,7 +135,7 @@ class _BarsPainter extends CustomPainter {
       if (v == null || v <= 0) continue;
       final x = i * step + (step - bw) / 2;
       final last = highlightLast && i == n - 1;
-      final c = last ? p.ink : colorOf(v);
+      final c = last ? p.ink : colorOf(v, i);
       canvas.drawRRect(
         RRect.fromRectAndCorners(Rect.fromLTRB(x, y(v), x + bw, base), topLeft: const Radius.circular(2), topRight: const Radius.circular(2)),
         Paint()..color = c,
@@ -412,11 +413,15 @@ class ChartLegend extends StatelessWidget {
 /// Energie per dag als balken tegenover je doel. Kleur: groen binnen ±10%, oranje erboven, grijs eronder.
 /// Bij een week ([showValues]) staan de kcal boven elke balk en de weekdag eronder.
 class EnergyBars extends StatelessWidget {
-  const EnergyBars({super.key, required this.days, required this.values, required this.goal, this.height = 150});
+  const EnergyBars({super.key, required this.days, required this.values, required this.goal, this.goals, this.height = 150});
 
   final List<DateTime> days;
   final List<double?> values;
   final double goal;
+
+  /// Doel per dag, met de beweging van die dag erbij. Een dag met een hoger doel krijgt een eigen streepje,
+  /// en wordt daartegen beoordeeld in plaats van tegen [goal].
+  final List<double>? goals;
   final double height;
 
   @override
@@ -424,10 +429,13 @@ class EnergyBars extends StatelessWidget {
     final p = context.pal;
     final showValues = days.length <= 10;
     final known = values.whereType<double>();
-    final maxV = math.max(known.isEmpty ? goal : known.reduce(math.max), goal) * 1.15;
-    final today = DateTime.now();
+    double goalOf(int i) => goals?[i] ?? goal;
+    final topGoal = goals == null || goals!.isEmpty ? goal : math.max(goal, goals!.reduce(math.max));
+    final maxV = math.max(known.isEmpty ? topGoal : known.reduce(math.max), topGoal) * 1.15;
+    final anyExtra = [for (var i = 0; i < days.length; i++) goalOf(i) > goal + 1].contains(true);
+    final today = logicalNow();
     bool isToday(DateTime d) => d.year == today.year && d.month == today.month && d.day == today.day;
-    Color colorOf(double v) => (v - goal).abs() <= goal * 0.1 ? p.okFill : (v > goal ? p.highFill : p.lowFill.withValues(alpha: 0.55));
+    Color colorOf(double v, double goal) => (v - goal).abs() <= goal * 0.1 ? p.okFill : (v > goal ? p.highFill : p.lowFill.withValues(alpha: 0.55));
     final valueStyle = numStyle(10.5, weight: FontWeight.w500, color: p.ink2);
     final axisStyle = numStyle(10.5, weight: FontWeight.w400, color: p.ink3);
     final wd = DateFormat('E', appLocale);
@@ -468,20 +476,36 @@ class EnergyBars extends StatelessWidget {
                     children: [
                       for (final (i, v) in values.indexed)
                         Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                          child: Stack(
+                            clipBehavior: Clip.none,
                             children: [
-                              if (showValues && v != null && v > 0) Text(fmtInt(v), style: valueStyle, maxLines: 1),
-                              const SizedBox(height: 2),
-                              Container(
-                                height: v == null || v <= 0 ? 0 : (v / maxV * barArea).clamp(2.0, barArea),
-                                margin: EdgeInsets.symmetric(horizontal: showValues ? 7 : 1.5),
-                                decoration: BoxDecoration(
-                                  color: v == null ? null : colorOf(v),
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                  border: isToday(days[i]) ? Border.all(color: p.ink, width: 1.5) : null,
-                                ),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  if (showValues && v != null && v > 0) Text(fmtInt(v), style: valueStyle, maxLines: 1),
+                                  // Het getal boven het doelstreepje als dat hoger ligt dan het staafje
+                                  SizedBox(
+                                    height: 2 + (v != null && goalOf(i) > goal + 1 && goalOf(i) > v ? (goalOf(i) - v) / maxV * barArea + 3 : 0),
+                                  ),
+                                  Container(
+                                    height: v == null || v <= 0 ? 0 : (v / maxV * barArea).clamp(2.0, barArea),
+                                    margin: EdgeInsets.symmetric(horizontal: showValues ? 7 : 1.5),
+                                    decoration: BoxDecoration(
+                                      color: v == null ? null : colorOf(v, goalOf(i)),
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                                      border: isToday(days[i]) ? Border.all(color: p.ink, width: 1.5) : null,
+                                    ),
+                                  ),
+                                ],
                               ),
+                              // Hoger doel door beweging die dag
+                              if (goalOf(i) > goal + 1)
+                                Positioned(
+                                  left: showValues ? 3 : 0,
+                                  right: showValues ? 3 : 0,
+                                  bottom: goalOf(i) / maxV * barArea - 1,
+                                  child: Container(height: 2, color: p.ink),
+                                ),
                             ],
                           ),
                         ),
@@ -517,6 +541,8 @@ class EnergyBars extends StatelessWidget {
                 LegendItem(swatch: LegendItem.box(p.okFill, w: 10, h: 10, radius: 3), label: tr('within ±10%', 'binnen ±10%')),
                 LegendItem(swatch: LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), label: tr('above goal', 'boven doel')),
                 LegendItem(swatch: LegendItem.box(p.lowFill.withValues(alpha: 0.55), w: 10, h: 10, radius: 3), label: tr('below goal', 'onder doel')),
+                if (anyExtra)
+                  LegendItem(swatch: LegendItem.box(p.ink, w: 12, h: 2, radius: 1), label: tr('goal incl. exercise', 'doel incl. beweging')),
               ],
             ),
           ],

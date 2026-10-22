@@ -100,7 +100,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
-    final now = DateTime.now();
+    final now = logicalNow();
     final today = DateTime(now.year, now.month, now.day);
     final diff = (s.date.difference(today).inHours / 24).round();
     final title = switch (diff) {
@@ -1522,7 +1522,7 @@ class StreakFlame extends StatelessWidget {
     final s = context.watch<AppState>();
     final p = context.pal;
     final streak = s.streak;
-    final loggedToday = s.user.loggedDays().contains(dayKey(DateTime.now()));
+    final loggedToday = s.user.loggedDays().contains(dayKey(logicalNow()));
     final atRisk = !loggedToday && streak.current > 0;
     if (streak.current == 0) return const SizedBox.shrink();
     return Tooltip(
