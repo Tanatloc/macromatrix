@@ -5,6 +5,7 @@
 /// lichaamsgewicht). Energie: Mifflin-St Jeor x activiteitsfactor. Geen medisch advies.
 library;
 
+import '../day_clock.dart';
 import '../i18n.dart';
 
 enum Sex {
@@ -63,6 +64,8 @@ class Profile {
     this.fatPct = 30,
     this.energyOverride,
     this.rateKgPerWeek,
+    this.targetWeightKg,
+    this.targetDate,
   });
 
   final Sex sex;
@@ -83,8 +86,33 @@ class Profile {
   /// Gewenst tempo in kg per week (negatief = afvallen); null = standaard van het doel.
   final double? rateKgPerWeek;
 
-  /// Tempo dat geldt: bij "behouden" altijd 0.
-  double get rate => goal == Goal.maintain ? 0 : (rateKgPerWeek ?? goal.defaultRate);
+  /// Doelgewicht met een datum: het tempo volgt dan vanzelf uit wat er nog rest. null = geen plan.
+  final double? targetWeightKg;
+  final DateTime? targetDate;
+
+  bool get hasPlan => targetWeightKg != null && targetDate != null && goal != Goal.maintain;
+
+  /// Hoogste tempo dat de app instelt (kg per week), afvallen en aankomen.
+  static const maxLoss = 1.0, maxGain = 0.5;
+
+  /// Tempo dat het plan vandaag vraagt: wat er nog rest gedeeld door de weken tot de datum, zonder plafond.
+  /// 0 als het doel bereikt is. null zonder plan.
+  double? get planRate {
+    if (!hasPlan) return null;
+    final left = targetWeightKg! - weightKg;
+    if (goal == Goal.lose ? left > -0.05 : left < 0.05) return 0;
+    final now = logicalNow();
+    final days = targetDate!.difference(DateTime(now.year, now.month, now.day)).inDays;
+    return left / (days < 7 ? 1 : days / 7);
+  }
+
+  /// Tempo dat geldt: bij "behouden" altijd 0; met een plan uit het plan, begrensd tot een gezond tempo.
+  double get rate {
+    if (goal == Goal.maintain) return 0;
+    final plan = planRate;
+    if (plan != null) return goal == Goal.lose ? plan.clamp(-maxLoss, 0) : plan.clamp(0, maxGain);
+    return rateKgPerWeek ?? goal.defaultRate;
+  }
 
   /// Dagelijks overschot of tekort voor het gekozen tempo.
   double get goalKcal => rate * kcalPerKg / 7;
@@ -103,6 +131,8 @@ class Profile {
     double? fatPct,
     double? Function()? energyOverride,
     double? Function()? rateKgPerWeek,
+    double? Function()? targetWeightKg,
+    DateTime? Function()? targetDate,
   }) => Profile(
     sex: sex ?? this.sex,
     birthYear: birthYear ?? this.birthYear,
@@ -115,6 +145,8 @@ class Profile {
     fatPct: fatPct ?? this.fatPct,
     energyOverride: energyOverride != null ? energyOverride() : this.energyOverride,
     rateKgPerWeek: rateKgPerWeek != null ? rateKgPerWeek() : this.rateKgPerWeek,
+    targetWeightKg: targetWeightKg != null ? targetWeightKg() : this.targetWeightKg,
+    targetDate: targetDate != null ? targetDate() : this.targetDate,
   );
 
   Map<String, Object?> toJson() => {
@@ -129,6 +161,10 @@ class Profile {
     'fatPct': fatPct,
     'energyOverride': energyOverride,
     'rateKgPerWeek': rateKgPerWeek,
+    'targetWeightKg': targetWeightKg,
+    'targetDate': targetDate == null
+        ? null
+        : '${targetDate!.year}-${targetDate!.month.toString().padLeft(2, '0')}-${targetDate!.day.toString().padLeft(2, '0')}',
   };
 
   factory Profile.fromJson(Map<String, Object?> j) {
@@ -146,6 +182,8 @@ class Profile {
       fatPct: num_('fatPct', d.fatPct),
       energyOverride: (j['energyOverride'] as num?)?.toDouble(),
       rateKgPerWeek: (j['rateKgPerWeek'] as num?)?.toDouble(),
+      targetWeightKg: (j['targetWeightKg'] as num?)?.toDouble(),
+      targetDate: DateTime.tryParse(j['targetDate'] as String? ?? ''),
     );
   }
 }

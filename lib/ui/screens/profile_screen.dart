@@ -281,34 +281,121 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Rekenhulp voor een doelgewicht; neemt het tempo over als je dat kiest (en wist dan een eigen energiedoel).
+  /// Rekenhulp voor een doelgewicht; bewaart doel en datum als plan (en wist dan een eigen energiedoel).
   Future<void> _weightGoal(AppState s, Profile p) async {
     final year = DateTime.now().year;
-    final rate = await showDialog<double>(
+    final plan = await showDialog<WeightGoal>(
       context: context,
       builder: (_) => WeightGoalDialog(
         current: s.currentWeight,
         tdee: s.adaptiveTdee ?? formulaTdee(p, year),
         bmr: bmr(p, p.ageIn(year)),
         male: p.sex == Sex.male,
+        target: p.hasPlan ? p.targetWeightKg : null,
+        date: p.hasPlan ? p.targetDate : null,
       ),
     );
-    if (rate == null || !mounted) return;
-    final (goal, r) = goalFromRate(rate);
+    if (plan == null || !mounted) return;
     _energy.clear();
-    _update(p.copyWith(goal: goal, rateKgPerWeek: () => r, energyOverride: () => null));
-    if ((r - rate).abs() > 0.005) {
+    final next = p.copyWith(
+      goal: plan.target < s.currentWeight ? Goal.lose : Goal.gain,
+      rateKgPerWeek: () => null,
+      energyOverride: () => null,
+      targetWeightKg: () => plan.target,
+      targetDate: () => plan.date,
+    );
+    _update(next);
+    final need = next.planRate ?? 0;
+    if ((need - next.rate).abs() > 0.005) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             tr(
-              'Pace set to ${fmtDec(r.abs(), 2)} kg per week, the maximum the app allows.',
-              'Tempo aangepast naar ${fmtDec(r.abs(), 2)} kg per week, het maximum dat de app instelt.',
+              'That needs ${fmtDec(need.abs(), 2)} kg per week; the app keeps it at ${fmtDec(next.rate.abs(), 2)}, so you will reach your goal a bit later.',
+              'Dat vraagt ${fmtDec(need.abs(), 2)} kg per week; de app houdt het op ${fmtDec(next.rate.abs(), 2)}, dus je haalt je doel wat later.',
             ),
           ),
         ),
       );
     }
+  }
+
+  /// Wat het plan nog vraagt: doelgewicht, datum, wat er rest en het tempo van vandaag.
+  Widget _planBox(Palette pal, Profile p) {
+    final left = p.targetWeightKg! - p.weightKg;
+    final now = logicalNow();
+    final days = p.targetDate!.difference(DateTime(now.year, now.month, now.day)).inDays;
+    final need = p.planRate ?? 0;
+    final done = need == 0;
+    final String status;
+    if (done) {
+      status = tr('Goal reached! Choose "Maintain" or set a new goal.', 'Doel bereikt! Kies "Behouden" of stel een nieuw doel in.');
+    } else if (days <= 0) {
+      status = tr(
+        'Your date has passed, ${fmtDec(left.abs())} kg to go. Set a new date.',
+        'Je datum is voorbij, nog ${fmtDec(left.abs())} kg. Kies een nieuwe datum.',
+      );
+    } else {
+      final weeks = days >= 14 ? tr('${(days / 7).round()} weeks', '${(days / 7).round()} weken') : tr('$days days', '$days dagen');
+      status = tr(
+        '${fmtDec(left.abs())} kg to go in $weeks: ${need < 0 ? '−' : '+'}${fmtDec(need.abs(), 2)} kg per week',
+        'Nog ${fmtDec(left.abs())} kg in $weeks: ${need < 0 ? '−' : '+'}${fmtDec(need.abs(), 2)} kg per week',
+      );
+    }
+    final capped = !done && (need - p.rate).abs() > 0.005;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 10),
+      decoration: BoxDecoration(color: pal.brandSoft, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.flag_rounded, size: 18, color: pal.brand),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr(
+                    '${_num(p.targetWeightKg!)} kg by ${DateFormat('d MMMM yyyy', appLocale).format(p.targetDate!)}',
+                    '${_num(p.targetWeightKg!)} kg op ${DateFormat('d MMMM yyyy', appLocale).format(p.targetDate!)}',
+                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: pal.ink),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 26, right: 8),
+            child: Text(status, style: TextStyle(fontSize: 12.5, height: 1.4, color: pal.ink2)),
+          ),
+          if (capped)
+            Padding(
+              padding: const EdgeInsets.only(left: 26, right: 8, top: 4),
+              child: Text(
+                tr(
+                  'Faster than healthy: the app keeps it at ${fmtDec(p.rate.abs(), 2)} kg per week.',
+                  'Sneller dan gezond: de app houdt het op ${fmtDec(p.rate.abs(), 2)} kg per week.',
+                ),
+                style: TextStyle(fontSize: 12, height: 1.4, color: pal.high),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(left: 14),
+            child: Wrap(
+              children: [
+                TextButton(onPressed: () => _weightGoal(context.read<AppState>(), p), child: Text(tr('Change', 'Wijzigen'))),
+                TextButton(
+                  onPressed: () =>
+                      _update(p.copyWith(targetWeightKg: () => null, targetDate: () => null, rateKgPerWeek: () => p.rate == 0 ? null : p.rate)),
+                  child: Text(tr('Stop plan', 'Plan stoppen')),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _energyCard(AppState s, Palette pal, Profile p) {
@@ -362,18 +449,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             height: 32,
             items: [for (final g in Goal.values) (g, g.label)],
             selected: p.goal,
-            onChanged: (g) => _update(p.copyWith(goal: g, rateKgPerWeek: () => null)),
+            onChanged: (g) => _update(p.copyWith(goal: g, rateKgPerWeek: () => null, targetWeightKg: () => null, targetDate: () => null)),
           ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              style: TextButton.styleFrom(padding: EdgeInsets.zero),
-              onPressed: () => _weightGoal(s, p),
-              icon: const Icon(Icons.calculate_outlined, size: 18),
-              label: Text(tr('Goal weight calculator: how much can I eat?', 'Doelgewicht berekenen: hoeveel mag ik eten?')),
+          if (p.hasPlan) ...[
+            const SizedBox(height: 12),
+            _planBox(pal, p),
+          ] else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                onPressed: () => _weightGoal(s, p),
+                icon: const Icon(Icons.flag_outlined, size: 18),
+                label: Text(tr('Set a goal weight and date: how much can I eat?', 'Doelgewicht en datum kiezen: hoeveel mag ik eten?')),
+              ),
             ),
-          ),
-          if (p.goal != Goal.maintain) ...[
+          if (p.goal != Goal.maintain && !p.hasPlan) ...[
             const SizedBox(height: 12),
             Row(
               children: [

@@ -2,17 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../nutrition/insights.dart';
-import '../../nutrition/targets.dart';
 import '../theme.dart';
 import 'kit.dart';
+import '../../day_clock.dart';
 import '../../i18n.dart';
 
-/// Rekenhulp: van je huidige gewicht naar een doelgewicht in een aantal maanden. Toont hoeveel je per dag mag eten
-/// en geeft het tempo terug (kg per week) als je het wil gebruiken.
+/// Doelgewicht met een datum, zoals de rekenhulp het teruggeeft.
+typedef WeightGoal = ({double target, DateTime date});
+
+/// Rekenhulp: van je huidige gewicht naar een doelgewicht in een aantal weken of maanden. Toont hoeveel je per dag
+/// mag eten en geeft het doel met de datum terug als je het als plan wil gebruiken.
 class WeightGoalDialog extends StatefulWidget {
-  const WeightGoalDialog({super.key, required this.current, required this.tdee, required this.bmr, required this.male});
+  const WeightGoalDialog({super.key, required this.current, required this.tdee, required this.bmr, required this.male, this.target, this.date});
   final double current, tdee, bmr;
   final bool male;
+
+  /// Het plan dat er al is, om mee te beginnen.
+  final double? target;
+  final DateTime? date;
 
   @override
   State<WeightGoalDialog> createState() => _WeightGoalDialogState();
@@ -20,8 +27,16 @@ class WeightGoalDialog extends StatefulWidget {
 
 class _WeightGoalDialogState extends State<WeightGoalDialog> {
   late final _now = TextEditingController(text: _fmt(widget.current));
-  final _target = TextEditingController();
-  final _months = TextEditingController(text: '3');
+  late final _target = TextEditingController(text: widget.target == null ? '' : _fmt(widget.target!));
+  late bool _weeks = widget.date != null;
+  late final _span = TextEditingController(text: widget.date == null ? '3' : '${_weeksUntil(widget.date!)}');
+
+  static DateTime get _today {
+    final n = logicalNow();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  static int _weeksUntil(DateTime d) => (d.difference(_today).inDays / 7).round().clamp(1, 156);
 
   static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : v.toStringAsFixed(1).dec;
   static double? _parse(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
@@ -30,18 +45,22 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
   void dispose() {
     _now.dispose();
     _target.dispose();
-    _months.dispose();
+    _span.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final pal = context.pal;
-    final now = _parse(_now.text), target = _parse(_target.text), months = _parse(_months.text);
-    final valid = now != null && target != null && months != null && now >= 30 && target >= 30 && months > 0 && months <= 36;
+    final now = _parse(_now.text), target = _parse(_target.text), span = _parse(_span.text);
+    final t = _today;
+    final ok = span != null && span > 0 && span <= (_weeks ? 156 : 36);
+    final reached = !ok ? null : (_weeks ? t.add(Duration(days: (span * 7).round())) : DateTime(t.year, t.month + span.round(), t.day));
+    // Zelfde rekenwijze als het plan in je profiel: weken tot de datum
+    final months = reached == null ? null : reached.difference(t).inDays / 7 * 12 / 52;
+    final valid = now != null && target != null && months != null && now >= 30 && target >= 30 && months > 0;
     final plan = valid ? WeightPlan.of(current: now, target: target, months: months, tdee: widget.tdee, bmr: widget.bmr, male: widget.male) : null;
     final same = plan != null && (target! - now!).abs() < 0.1;
-    final reached = valid ? DateTime.now().add(Duration(days: (months * 365.25 / 12).round())) : null;
 
     Widget field(TextEditingController c, String label, String suffix) => Expanded(
       child: TextField(
@@ -63,11 +82,29 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
             children: [
               Row(children: [field(_now, tr('Now', 'Nu'), 'kg'), SizedBox(width: 10), field(_target, tr('Goal', 'Doel'), 'kg')]),
               const SizedBox(height: 10),
-              Row(children: [field(_months, tr('Within', 'Binnen'), tr('months', 'maanden'))]),
+              Row(
+                children: [
+                  field(_span, tr('Within', 'Binnen'), ''),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 190,
+                    child: Segmented<bool>(
+                      height: 36,
+                      items: [(true, tr('weeks', 'weken')), (false, tr('months', 'maanden'))],
+                      selected: _weeks,
+                      onChanged: (w) => setState(() {
+                        final v = _parse(_span.text);
+                        if (v != null && w != _weeks) _span.text = _fmt(w ? (v * 52 / 12).roundToDouble() : (v * 12 / 52 * 2).round() / 2);
+                        _weeks = w;
+                      }),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               if (plan == null)
                 Text(
-                  tr('Enter your goal weight and the number of months.', 'Vul je doelgewicht en het aantal maanden in.'),
+                  tr('Enter your goal weight and how long you want to take.', 'Vul je doelgewicht in en hoe lang je erover wil doen.'),
                   style: TextStyle(fontSize: 13, color: pal.ink3),
                 )
               else if (same)
@@ -125,8 +162,10 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
                 const SizedBox(height: 10),
                 Text(
                   tr(
-                    'An estimate: your expenditure drops as you get lighter, and water makes your weight fluctuate. Watch your trend weight.',
-                    'Een schatting: je verbruik daalt mee als je lichter wordt, en vocht laat je gewicht schommelen. Kijk naar je trendgewicht.',
+                    'As a plan, the app recalculates this every time you weigh yourself, so you stay on course to your date. '
+                        'Water makes your weight fluctuate: watch your trend.',
+                    'Als plan rekent de app dit opnieuw uit telkens je je weegt, zodat je op koers blijft naar je datum. '
+                        'Vocht laat je gewicht schommelen: kijk naar je trend.',
                   ),
                   style: TextStyle(fontSize: 11.5, height: 1.4, color: pal.ink3),
                 ),
@@ -138,13 +177,11 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Close', 'Sluiten'))),
         if (plan != null && !same)
-          FilledButton(onPressed: () => Navigator.pop(context, plan.ratePerWeek), child: Text(tr('Use this pace', 'Dit tempo gebruiken'))),
+          FilledButton(
+            onPressed: () => Navigator.pop<WeightGoal>(context, (target: target!, date: reached!)),
+            child: Text(tr('Set as my goal', 'Als mijn doel instellen')),
+          ),
       ],
     );
   }
 }
-
-/// Tempo uit de rekenhulp omzetten naar een doel en een tempo dat de app toelaat.
-(Goal, double) goalFromRate(double rate) => rate < 0
-    ? (Goal.lose, double.parse(rate.clamp(-1.0, -0.1).toStringAsFixed(2)))
-    : (Goal.gain, double.parse(rate.clamp(0.05, 0.5).toStringAsFixed(2)));
