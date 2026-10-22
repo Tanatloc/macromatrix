@@ -402,7 +402,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                     const SizedBox(height: 12),
                     AllergenBanner(food: _food),
                     const SizedBox(height: 4),
-                    // Zoals Cronometer: eerst hoeveel en bij welke maaltijd, daarna wat het bijdraagt
+                    // Eerst hoeveel en bij welke maaltijd, daarna wat het bijdraagt
                     _amountPanel(p),
                     const SizedBox(height: 10),
                     _MacroTiles(amounts: amounts, targets: s.targets),

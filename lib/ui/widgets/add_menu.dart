@@ -11,7 +11,7 @@ import '../screens/supplements_screen.dart';
 import '../theme.dart';
 import 'quick_log.dart';
 
-/// De ronde +-knop in het midden van de navigatie op een gsm (zoals Cronometer).
+/// De ronde +-knop in het midden van de navigatie op een gsm.
 class AddButton extends StatelessWidget {
   const AddButton({super.key, required this.onPressed});
   final VoidCallback onPressed;

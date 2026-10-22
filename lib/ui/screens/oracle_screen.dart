@@ -237,7 +237,7 @@ class _OracleScreenState extends State<OracleScreen> {
 
     return LayoutBuilder(
       builder: (context, c) {
-        // Breed: zoals Cronometer, links de keuzes en rechts de groepen
+        // Breed: links de keuzes en rechts de groepen
         if (c.maxWidth >= 760) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,

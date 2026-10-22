@@ -45,7 +45,7 @@ class DiaryScreen extends StatelessWidget {
     if (isDesktop(context)) return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile);
     final selected = _selectedIn(s);
     final size = MediaQuery.sizeOf(context);
-    // Zoals Cronometer: de kop en de samenvatting blijven staan, alleen het dagboek eronder scrolt. Op een lage
+    // De kop en de samenvatting blijven staan, alleen het dagboek eronder scrolt. Op een lage
     // schermhoogte (liggende gsm) zou er te weinig plaats overblijven; dan scrolt alles mee.
     final sticky = size.height >= 620;
     // Op een gsm zit de +-knop in de navigatie onderaan; op een tablet is er geen, dus daar een zwevende knop.
@@ -116,7 +116,7 @@ class DiaryScreen extends StatelessWidget {
   }
 }
 
-/// Kop van het dagboek op een gsm, zoals bij Cronometer: ‹ dag › in het midden. Tik op de dag voor de kalender;
+/// Kop van het dagboek op een gsm: ‹ dag › in het midden. Tik op de dag voor de kalender;
 /// links je reeks, rechts de notitie.
 class _DayBar extends StatelessWidget {
   const _DayBar();
@@ -2051,7 +2051,7 @@ class _ForTodayCard extends StatelessWidget {
   }
 }
 
-// ── Samenvatting bovenaan (zoals Cronometer): veeg tussen energie, uitgelichte stoffen en je score ──
+// ── Samenvatting bovenaan: veeg tussen energie, uitgelichte stoffen en je score ──
 
 class _SummaryPager extends StatelessWidget {
   const _SummaryPager({this.onOpenNutrients, this.onOpenProfile});
@@ -2177,7 +2177,7 @@ class _PageTitle extends StatelessWidget {
   }
 }
 
-/// Doelen: energie en de drie macro's als "Eiwit - 105 / 205 g … 51%" met een balk eronder (zoals Cronometer).
+/// Doelen: energie en de drie macro's als "Eiwit - 105 / 205 g … 51%" met een balk eronder.
 /// Rechtsboven wissel je tussen wat je at en wat er nog bij mag.
 class _GoalsPage extends StatelessWidget {
   const _GoalsPage({this.onOpenProfile});

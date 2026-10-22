@@ -252,7 +252,7 @@ class _ShellState extends State<Shell> {
         ),
       );
     }
-    // Gsm: zoals Cronometer een ronde + in het midden (in plaats van het tabblad Scan, dat in het +-menu zit)
+    // Gsm: een ronde + in het midden (in plaats van het tabblad Scan, dat in het +-menu zit)
     return Scaffold(
       body: body,
       bottomNavigationBar: _PhoneBar(
