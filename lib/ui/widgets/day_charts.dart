@@ -464,7 +464,7 @@ class ChartLegend extends StatelessWidget {
 /// Energie per dag als balken tegenover je doel. Kleur: groen binnen ±10%, rood erboven, zand eronder; vandaag (nog
 /// bezig) iets lichter. Achter elke balk staat een lichte kolom tot het doel van die dag, met beweging erbij.
 /// Bij een week ([days] ≤ 10) staan de kcal boven elke balk en de weekdag eronder.
-class EnergyBars extends StatelessWidget {
+class EnergyBars extends StatefulWidget {
   const EnergyBars({super.key, required this.days, required this.values, required this.goal, this.goals, this.height = 150});
 
   final List<DateTime> days;
@@ -476,29 +476,54 @@ class EnergyBars extends StatelessWidget {
   final double height;
 
   @override
+  State<EnergyBars> createState() => _EnergyBarsState();
+}
+
+class _EnergyBarsState extends State<EnergyBars> {
+  /// Aangetikte dag; zonder keuze de laatste dag met iets gelogd.
+  int? _picked;
+
+  @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final anyExtra = goals != null && goals!.any((g) => g > goal + 1);
+    final w = widget;
+    final goals = [for (var i = 0; i < w.values.length; i++) w.goals?[i] ?? w.goal];
+    final anyExtra = goals.any((g) => g > w.goal + 1);
     final now = logicalNow();
+    final logged = [
+      for (final (i, v) in w.values.indexed)
+        if (v != null && v > 0) i,
+    ];
+    final sel = _picked != null && _picked! < w.values.length ? _picked : (logged.isEmpty ? null : logged.last);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: height,
-          width: double.infinity,
-          child: CustomPaint(
-            painter: _EnergyPainter(
-              values: values,
-              goals: [for (var i = 0; i < values.length; i++) goals?[i] ?? goal],
-              today: [for (final d in days) d.year == now.year && d.month == now.month && d.day == now.day],
-              labels: days.length <= 10,
-              // Een painter erft het lettertype van de app niet vanzelf
-              font: DefaultTextStyle.of(context).style,
-              p: p,
+        if (sel != null) ...[_detail(p, sel, goals[sel]), const SizedBox(height: 10)],
+        LayoutBuilder(
+          builder: (context, box) => GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: w.values.isEmpty
+                ? null
+                : (d) => setState(() => _picked = (d.localPosition.dx / box.maxWidth * w.values.length).floor().clamp(0, w.values.length - 1)),
+            child: SizedBox(
+              height: w.height,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _EnergyPainter(
+                  values: w.values,
+                  goals: goals,
+                  today: [for (final d in w.days) d.year == now.year && d.month == now.month && d.day == now.day],
+                  labels: w.days.length <= 10,
+                  selected: sel,
+                  // Een painter erft het lettertype van de app niet vanzelf
+                  font: DefaultTextStyle.of(context).style,
+                  p: p,
+                ),
+              ),
             ),
           ),
         ),
-        DayLabels(days: days),
+        DayLabels(days: w.days),
         const SizedBox(height: 10),
         Wrap(
           spacing: 14,
@@ -516,6 +541,45 @@ class EnergyBars extends StatelessWidget {
       ],
     );
   }
+
+  /// Eén regel over de gekozen dag: wat je at tegenover het doel van die dag, en het verschil.
+  Widget _detail(Palette p, int i, double g) {
+    final v = widget.values[i];
+    final extra = g - widget.goal;
+    final diff = v == null ? null : v - g;
+    final small = numStyle(12, weight: FontWeight.w400, color: p.ink3);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(DateFormat('E d MMM', appLocale).format(widget.days[i]), style: small),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: v == null ? '–' : fmtInt(v),
+                  style: numStyle(13.5, weight: FontWeight.w600, color: p.ink),
+                ),
+                TextSpan(
+                  text: ' / ${fmtInt(g)} kcal',
+                  style: numStyle(13.5, weight: FontWeight.w400, color: p.ink2),
+                ),
+                if (extra > 1) TextSpan(text: tr('  incl. ${fmtInt(extra)} exercise', '  incl. ${fmtInt(extra)} beweging'), style: small),
+              ],
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (diff != null)
+          Text(
+            '${diff >= 0 ? '+' : '−'}${fmtInt(diff.abs())}',
+            style: numStyle(13, weight: FontWeight.w600, color: energyColor(p, v!, g) == p.highFill ? p.highFill : p.ink2),
+          ),
+      ],
+    );
+  }
 }
 
 Color _below(Palette p) => p.lowFill.withValues(alpha: 0.55);
@@ -524,8 +588,17 @@ Color _below(Palette p) => p.lowFill.withValues(alpha: 0.55);
 Color energyColor(Palette p, double kcal, double goal) => (kcal - goal).abs() <= goal * 0.1 ? p.okFill : (kcal > goal ? p.highFill : _below(p));
 
 class _EnergyPainter extends CustomPainter {
-  _EnergyPainter({required this.values, required this.goals, required this.today, required this.labels, required this.font, required this.p});
+  _EnergyPainter({
+    required this.values,
+    required this.goals,
+    required this.today,
+    required this.labels,
+    required this.selected,
+    required this.font,
+    required this.p,
+  });
   final TextStyle font;
+  final int? selected;
   final List<double?> values;
   final List<double> goals;
   final List<bool> today;
@@ -538,7 +611,7 @@ class _EnergyPainter extends CustomPainter {
     if (n == 0) return;
     final known = values.whereType<double>();
     final top = math.max(known.isEmpty ? 0.0 : known.reduce(math.max), goals.reduce(math.max)) * 1.08;
-    final head = labels ? 18.0 : 4.0;
+    final head = labels ? 30.0 : 4.0;
     final base = size.height - 1;
     double y(double v) => base - v / top * (base - head);
     final step = size.width / n;
@@ -553,18 +626,32 @@ class _EnergyPainter extends CustomPainter {
       }
       final g = goals[i];
       // Achter elke balk een lichte kolom tot het doel van die dag (met beweging erbij is die hoger)
-      canvas.drawRRect(RRect.fromRectAndCorners(Rect.fromLTRB(x, y(g), x + bw, base), topLeft: r, topRight: r), Paint()..color = p.track);
+      final col = RRect.fromRectAndCorners(Rect.fromLTRB(x, y(g), x + bw, base), topLeft: r, topRight: r);
+      canvas.drawRRect(col, Paint()..color = p.track);
       final c = energyColor(p, v, g);
       canvas.drawRRect(
         RRect.fromRectAndCorners(Rect.fromLTRB(x, math.min(y(v), base - 2), x + bw, base), topLeft: r, topRight: r),
         Paint()..color = today[i] ? c.withValues(alpha: c.a * 0.55) : c,
       );
+      // De aangetikte dag: de rand van zijn doelkolom, zodat je ziet waar het doel lag
+      if (i == selected) {
+        canvas.drawRRect(
+          col,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2
+            ..color = p.ink3,
+        );
+      }
       if (labels) {
+        // Wat je at, met daaronder klein het doel van die dag
         final t = TextPainter(
           text: TextSpan(
             text: fmtInt(v),
             style: font.merge(numStyle(10.5, weight: today[i] ? FontWeight.w600 : FontWeight.w500, color: today[i] ? p.ink : p.ink2)),
+            children: [TextSpan(text: '\n/ ${fmtInt(g)}', style: font.merge(numStyle(9.5, weight: FontWeight.w400, color: p.ink3)))],
           ),
+          textAlign: TextAlign.center,
           textDirection: TextDirection.ltr,
         )..layout();
         t.paint(canvas, Offset(i * step + (step - t.width) / 2, y(math.max(v, g)) - t.height - 3));

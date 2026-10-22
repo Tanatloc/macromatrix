@@ -53,5 +53,12 @@ void main() {
     expect(energyColor(p, 2400, 2500), p.okFill);
     expect(energyColor(p, 2400, 2000), p.highFill);
     expect(find.text('doel van die dag (incl. beweging)'), findsOneWidget);
+    // Zonder keuze toont de regel boven de grafiek de laatste dag; tik op dag 2 voor zijn doel met beweging
+    String detail() => tester.widgetList<RichText>(find.byType(RichText)).map((t) => t.text.toPlainText()).firstWhere((t) => t.contains('kcal'));
+    expect(detail(), contains('/ 2.000 kcal'));
+    await tester.tapAt(tester.getCenter(find.byType(CustomPaint).last));
+    await tester.pump();
+    expect(detail(), contains('/ 2.500 kcal'));
+    expect(detail(), contains('500 beweging'));
   });
 }
