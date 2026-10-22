@@ -52,6 +52,6 @@ void main() {
     expect(energyColor(p, 2000, 2000), p.okFill);
     expect(energyColor(p, 2400, 2500), p.okFill);
     expect(energyColor(p, 2400, 2000), p.highFill);
-    expect(find.text('doel incl. beweging'), findsOneWidget);
+    expect(find.text('doel van die dag (incl. beweging)'), findsOneWidget);
   });
 }

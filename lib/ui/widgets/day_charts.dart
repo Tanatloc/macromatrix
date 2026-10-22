@@ -462,7 +462,7 @@ class ChartLegend extends StatelessWidget {
 }
 
 /// Energie per dag als balken tegenover je doel. Kleur: groen binnen ±10%, rood erboven, zand eronder; vandaag (nog
-/// bezig) iets lichter. Het doel is een stippellijn die op dagen met beweging mee omhoog gaat.
+/// bezig) iets lichter. Achter elke balk staat een lichte kolom tot het doel van die dag, met beweging erbij.
 /// Bij een week ([days] ≤ 10) staan de kcal boven elke balk en de weekdag eronder.
 class EnergyBars extends StatelessWidget {
   const EnergyBars({super.key, required this.days, required this.values, required this.goal, this.goals, this.height = 150});
@@ -489,7 +489,6 @@ class EnergyBars extends StatelessWidget {
           child: CustomPaint(
             painter: _EnergyPainter(
               values: values,
-              goal: goal,
               goals: [for (var i = 0; i < values.length; i++) goals?[i] ?? goal],
               today: [for (final d in days) d.year == now.year && d.month == now.month && d.day == now.day],
               labels: days.length <= 10,
@@ -509,10 +508,9 @@ class EnergyBars extends StatelessWidget {
             LegendItem(swatch: LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), label: tr('above goal', 'boven doel')),
             LegendItem(swatch: LegendItem.box(_below(p), w: 10, h: 10, radius: 3), label: tr('below goal', 'onder doel')),
             LegendItem(
-              swatch: SizedBox(width: 14, height: 2, child: CustomPaint(painter: _DashPainter(p.ink2))),
-              label: tr('goal', 'doel'),
+              swatch: LegendItem.box(p.track, w: 10, h: 10, radius: 3),
+              label: anyExtra ? tr('goal that day (incl. exercise)', 'doel van die dag (incl. beweging)') : tr('goal', 'doel'),
             ),
-            if (anyExtra) LegendItem(swatch: LegendItem.box(p.ink3, w: 12, h: 2, radius: 1), label: tr('goal incl. exercise', 'doel incl. beweging')),
           ],
         ),
       ],
@@ -526,18 +524,9 @@ Color _below(Palette p) => p.lowFill.withValues(alpha: 0.55);
 Color energyColor(Palette p, double kcal, double goal) => (kcal - goal).abs() <= goal * 0.1 ? p.okFill : (kcal > goal ? p.highFill : _below(p));
 
 class _EnergyPainter extends CustomPainter {
-  _EnergyPainter({
-    required this.values,
-    required this.goal,
-    required this.goals,
-    required this.today,
-    required this.labels,
-    required this.font,
-    required this.p,
-  });
+  _EnergyPainter({required this.values, required this.goals, required this.today, required this.labels, required this.font, required this.p});
   final TextStyle font;
   final List<double?> values;
-  final double goal;
   final List<double> goals;
   final List<bool> today;
   final bool labels;
@@ -563,6 +552,8 @@ class _EnergyPainter extends CustomPainter {
         continue;
       }
       final g = goals[i];
+      // Achter elke balk een lichte kolom tot het doel van die dag (met beweging erbij is die hoger)
+      canvas.drawRRect(RRect.fromRectAndCorners(Rect.fromLTRB(x, y(g), x + bw, base), topLeft: r, topRight: r), Paint()..color = p.track);
       final c = energyColor(p, v, g);
       canvas.drawRRect(
         RRect.fromRectAndCorners(Rect.fromLTRB(x, math.min(y(v), base - 2), x + bw, base), topLeft: r, topRight: r),
@@ -576,48 +567,12 @@ class _EnergyPainter extends CustomPainter {
           ),
           textDirection: TextDirection.ltr,
         )..layout();
-        t.paint(canvas, Offset(i * step + (step - t.width) / 2, y(v) - t.height - 3));
+        t.paint(canvas, Offset(i * step + (step - t.width) / 2, y(math.max(v, g)) - t.height - 3));
       }
-    }
-
-    // Doel als stippellijn; op dagen met beweging ligt het doel hoger: dan een kort streepje boven die balk
-    final dash = Paint()
-      ..color = p.ink2
-      ..strokeWidth = 1.2;
-    final gy = y(goal);
-    for (var x = 0.0; x < size.width; x += 6) {
-      canvas.drawLine(Offset(x, gy), Offset(math.min(x + 3, size.width), gy), dash);
-    }
-    final extra = Paint()
-      ..color = p.ink3
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < n; i++) {
-      if (goals[i] <= goal + 1) continue;
-      final x = i * step + (step - bw) / 2;
-      canvas.drawLine(Offset(x + 1, y(goals[i])), Offset(x + bw - 1, y(goals[i])), extra);
     }
     canvas.drawLine(Offset(0, base + 0.5), Offset(size.width, base + 0.5), Paint()..color = p.lineStrong);
   }
 
   @override
   bool shouldRepaint(_EnergyPainter old) => true;
-}
-
-class _DashPainter extends CustomPainter {
-  _DashPainter(this.color);
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1;
-    for (var x = 0.0; x < size.width; x += 6) {
-      canvas.drawLine(Offset(x, 0), Offset(math.min(x + 3, size.width), 0), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashPainter old) => old.color != color;
 }

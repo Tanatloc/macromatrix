@@ -682,7 +682,8 @@ class LegendItem extends StatelessWidget {
     children: [
       swatch,
       const SizedBox(width: 6),
-      Text(label, style: TextStyle(fontSize: 11.5, color: context.pal.ink2)),
+      // Een lang label mag op een smal scherm naar de volgende regel
+      Flexible(child: Text(label, style: TextStyle(fontSize: 11.5, color: context.pal.ink2))),
     ],
   );
 }
