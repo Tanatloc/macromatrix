@@ -24,8 +24,14 @@ String fmtDec(num v, [int d = 1]) => fmtNum(v, d);
 String inSentence(String name) =>
     name.length > 1 && name[1] == name[1].toLowerCase() && name[1] != name[1].toUpperCase() ? name[0].toLowerCase() + name.substring(1) : name;
 
-/// Percentage zonder decimalen.
-String fmtPct(double fraction) => '${(fraction * 100).round()}%';
+/// Percentage zonder decimalen. Rondt niet naar 100% als je er nog net niet bent (99,6% blijft 99%), en
+/// niet naar 0% als er toch iets is (0,4% wordt 1%): anders lijkt een doel gehaald of een inname nul terwijl dat niet zo is.
+String fmtPct(double fraction) {
+  final pct = (fraction * 100).round();
+  if (fraction < 1 && pct >= 100) return '99%';
+  if (fraction > 0 && pct == 0) return '1%';
+  return '$pct%';
+}
 
 /// Inhoud niet breder dan een gsm-kolom op grote schermen.
 class Narrow extends StatelessWidget {

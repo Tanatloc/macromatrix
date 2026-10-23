@@ -658,7 +658,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       ],
       SectionHeader(
         tr('Recently used', 'Recent gebruikt'),
-        trailing: recent.isEmpty || widget.pickOnly ? null : tr('tap + for the same amount', 'tik + voor dezelfde hoeveelheid'),
+        trailing: recent.isEmpty || widget.pickOnly ? null : tr('+ for the same amount', '+ voor dezelfde hoeveelheid'),
       ),
       if (recent.isEmpty)
         Padding(
@@ -855,7 +855,7 @@ class _ResultCard extends StatelessWidget {
         );
       }
     }
-    if ((v['epa_dha'] ?? 0) >= 300) tags.add(Tag('EPA+DHA ${fmtDec((v['epa_dha'] ?? 0) / 1000)} g'));
+    if ((v['epa_dha'] ?? 0) >= 300) tags.add(Tag('EPA+DHA ${fmtInt(v['epa_dha'] ?? 0)} mg'));
 
     return Panel(
       shadow: false,
@@ -923,8 +923,10 @@ class _ResultCard extends StatelessWidget {
                     Flexible(
                       child: Text(
                         tr(
-                          'P ${fmtDec(v['protein'] ?? 0)} · C ${fmtDec(v['carbs'] ?? 0)} · F ${fmtDec(v['fat'] ?? 0)}',
-                          'E ${fmtDec(v['protein'] ?? 0)} · K ${fmtDec(v['carbs'] ?? 0)} · V ${fmtDec(v['fat'] ?? 0)}',
+                          'Protein ${fmtDec(v['protein'] ?? 0)}g · Carbs ${fmtDec(v['carbs'] ?? 0)}g'
+                              '${v['sugars'] != null ? ' (sugar ${fmtDec(v['sugars']!)}g)' : ''} · Fat ${fmtDec(v['fat'] ?? 0)}g',
+                          'Eiwit ${fmtDec(v['protein'] ?? 0)}g · Koolh ${fmtDec(v['carbs'] ?? 0)}g'
+                              '${v['sugars'] != null ? ' (suiker ${fmtDec(v['sugars']!)}g)' : ''} · Vet ${fmtDec(v['fat'] ?? 0)}g',
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

@@ -125,6 +125,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             final picked = await showTimePicker(
                               context: context,
                               initialTime: TimeOfDay(hour: rs.hour, minute: rs.minute),
+                              // 24-uursnotatie, net als de rest van de app (geen AM/PM)
+                              builder: (ctx, child) => MediaQuery(
+                                data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+                                child: child!,
+                              ),
                             );
                             if (picked == null) return;
                             await r.save(rs.copyWith(hour: picked.hour, minute: picked.minute));

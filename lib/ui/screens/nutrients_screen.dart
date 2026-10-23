@@ -215,7 +215,7 @@ class KeyNutrients extends StatelessWidget {
   final int columns;
   final bool isToday;
 
-  static const basics = ['energy', 'protein', 'carbs', 'fat', 'fiber', 'sfa', 'sodium'];
+  static const basics = ['energy', 'protein', 'carbs', 'sugars', 'fiber', 'fat', 'sfa', 'sodium'];
 
   /// De vitaminen en mineralen onder je doel, de grootste tekorten eerst.
   static List<String> shortfalls(NutrientMap values, Map<String, Target> targets, {int limit = 10}) {
@@ -318,6 +318,7 @@ class ScoreCard extends StatelessWidget {
     final s = context.watch<AppState>();
     final p = context.pal;
     final v = s.totals.values;
+    final empty = (v['energy'] ?? 0) <= 0;
     final score = completenessScore(v, s.targets);
     final levels = [
       for (final k in stripKeys)
@@ -333,7 +334,7 @@ class ScoreCard extends StatelessWidget {
           height: 84,
           child: CustomPaint(
             painter: _ScoreRing(score / 100, p),
-            child: Center(child: Text('$score', style: numStyle(24))),
+            child: Center(child: Text(empty ? '—' : '$score', style: numStyle(24))),
           ),
         ),
         const SizedBox(width: 16),
@@ -402,7 +403,9 @@ class ScoreCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                tr('Data complete for ${fmtPct(coverage)} of your kcal', 'Gegevens compleet voor ${fmtPct(coverage)} van je kcal'),
+                empty
+                    ? tr('Nothing logged yet', 'Nog niets gelogd')
+                    : tr('Data complete for ${fmtPct(coverage)} of your kcal', 'Gegevens compleet voor ${fmtPct(coverage)} van je kcal'),
                 style: TextStyle(fontSize: 11.5, color: p.ink3),
               ),
             ],
@@ -469,7 +472,7 @@ class _Ratios extends StatelessWidget {
             badLabel: tr('Too little omega-3', 'Te weinig omega-3'),
           ),
           _RatioRow(
-            title: tr('Potassium : salt', 'Kalium : zout'),
+            title: tr('Potassium : sodium', 'Kalium : natrium'),
             value: ratio('potassium', 'sodium'),
             max: 5,
             good: (2, double.infinity),
@@ -655,8 +658,9 @@ class _MoreInsightsState extends State<_MoreInsights> {
                     ),
                     Text(
                       widget.tips == 0
-                          ? tr('Omega-6 : 3 and potassium : salt', 'Omega-6 : 3 en kalium : zout')
-                          : tr('2 balances · ${widget.tips} tips', '2 verhoudingen · ${widget.tips} tips'),
+                          ? tr('Omega-6 : 3 and potassium : sodium', 'Omega-6 : 3 en kalium : natrium')
+                          : tr('2 balances · ${widget.tips} ${widget.tips == 1 ? 'tip' : 'tips'}',
+                              '2 verhoudingen · ${widget.tips} ${widget.tips == 1 ? 'tip' : 'tips'}'),
                       style: TextStyle(fontSize: 12.5, color: p.ink2),
                     ),
                   ],

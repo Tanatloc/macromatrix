@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../data/models.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/insights.dart';
+import '../../nutrition/targets.dart';
 import '../../nutrition/nutrients.dart';
 import '../../platform/platform.dart';
 import '../../state/app_state.dart';
@@ -214,9 +215,12 @@ Future<void> pickDay(BuildContext context) async {
   final now = logicalNow();
   final picked = await showDatePicker(
     context: context,
-    initialDate: s.date,
+    initialDate: s.date.isAfter(now) ? now : s.date,
     firstDate: DateTime(2000),
-    lastDate: DateTime(now.year + 1, now.month, now.day),
+    // Niet in de toekomst loggen: tot en met vandaag
+    lastDate: now,
+    // De app toont de week vanaf maandag; forceer dat ook in de kalender (ook in het Engels, dat standaard op zondag begint)
+    builder: (ctx, child) => Localizations.override(context: ctx, locale: const Locale('en', 'GB'), child: child!),
   );
   if (picked != null) s.setDate(picked);
 }
@@ -580,10 +584,11 @@ class _EnergyCard extends StatelessWidget {
           for (final (key, name) in [
             ('protein', tr('Protein', 'Eiwit')),
             ('carbs', tr('Carbs', 'Koolhydr.')),
-            ('fat', tr('Fat', 'Vet')),
+            // Vezels horen bij de koolhydraten, niet onder vet
             ('fiber', tr('Fiber', 'Vezels')),
+            ('fat', tr('Fat', 'Vet')),
           ])
-            _MacroLine(name: name, amount: s.totals[key], goal: s.targets[key]?.goal ?? 0, color: p.macro(key), remaining: remaining),
+            _MacroLine(name: name, amount: s.totals[key], target: s.targets[key], color: p.macro(key), remaining: remaining),
         ],
       ],
     );
@@ -592,10 +597,10 @@ class _EnergyCard extends StatelessWidget {
 }
 
 class _MacroLine extends StatelessWidget {
-  const _MacroLine({required this.name, required this.amount, required this.goal, required this.color, this.remaining = false});
+  const _MacroLine({required this.name, required this.amount, required this.target, required this.color, this.remaining = false});
   final String name;
   final double amount;
-  final double goal;
+  final Target? target;
   final Color color;
 
   /// Toon wat er nog bij mag in plaats van wat je at.
@@ -604,6 +609,11 @@ class _MacroLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
+    final goal = target?.goal ?? 0;
+    // Boven het doel is alleen een waarschuwing bij een doel-om-ongeveer-te-halen (energie/koolh./vet) of een
+    // bovengrens. Eiwit en vezels zijn "minstens": erboven is prima, niet rood "te veel".
+    final tooMuch = levelOf(amount, target) == Level.high;
+    final over = amount > goal;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -636,10 +646,14 @@ class _MacroLine extends StatelessWidget {
                   ? TextSpan(
                       children: [
                         TextSpan(
-                          text: amount > goal ? '+${fmtInt(amount - goal)}' : fmtInt(goal - amount),
-                          style: TextStyle(color: amount > goal ? p.high : p.ink, fontWeight: FontWeight.w500),
+                          text: over ? '+${fmtInt(amount - goal)}' : fmtInt(goal - amount),
+                          style: TextStyle(color: tooMuch ? p.high : p.ink, fontWeight: FontWeight.w500),
                         ),
-                        TextSpan(text: amount > goal ? tr(' g over', ' g te veel') : tr(' g to go', ' g nog')),
+                        TextSpan(
+                          text: over
+                              ? (tooMuch ? tr(' g over', ' g te veel') : tr(' g extra', ' g extra'))
+                              : tr(' g to go', ' g nog'),
+                        ),
                       ],
                     )
                   : TextSpan(
@@ -1532,6 +1546,8 @@ Future<void> addExercise(BuildContext context) async {
 
   final ok = await showDialog<Object>(
     context: context,
+    // Niet sluiten bij een tik naast het venster: je zou je ingevulde beweging verliezen (P10)
+    barrierDismissible: false,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setD) => AlertDialog(
         title: Text(tr('Add exercise', 'Beweging toevoegen')),
@@ -2261,10 +2277,15 @@ class _GoalsPage extends StatelessWidget {
       final v = s.totals[key];
       final goal = s.targets[key]?.goal ?? 0;
       final over = goal > 0 && v > goal;
+      // Rood "te veel" alleen bij een doel-om-ongeveer (energie/koolh./vet) boven 110% of boven een bovengrens;
+      // eiwit erboven is prima.
+      final tooMuch = levelOf(v, s.targets[key]) == Level.high;
       final value = !remaining
           ? '${fmtInt(v)} / ${fmtInt(goal)} $unit'
           : over
-          ? tr('${fmtInt(v - goal)} $unit over', '${fmtInt(v - goal)} $unit te veel')
+          ? (tooMuch
+                ? tr('${fmtInt(v - goal)} $unit over', '${fmtInt(v - goal)} $unit te veel')
+                : tr('${fmtInt(v - goal)} $unit extra', '${fmtInt(v - goal)} $unit extra'))
           : tr('${fmtInt(goal - v)} $unit to go', 'nog ${fmtInt(goal - v)} $unit');
       return Padding(
         padding: const EdgeInsets.only(bottom: 9),
@@ -2283,7 +2304,7 @@ class _GoalsPage extends StatelessWidget {
                         ),
                         TextSpan(
                           text: '  $value',
-                          style: numStyle(13, weight: FontWeight.w400, color: remaining && over ? p.high : p.ink2),
+                          style: numStyle(13, weight: FontWeight.w400, color: remaining && tooMuch ? p.high : p.ink2),
                         ),
                       ],
                     ),
@@ -2294,12 +2315,12 @@ class _GoalsPage extends StatelessWidget {
                 ),
                 Text(
                   goal <= 0 ? '' : fmtPct(v / goal),
-                  style: numStyle(12.5, weight: FontWeight.w500, color: over ? p.high : p.ink2),
+                  style: numStyle(12.5, weight: FontWeight.w500, color: tooMuch ? p.high : p.ink2),
                 ),
               ],
             ),
             const SizedBox(height: 5),
-            Bar(fraction: goal <= 0 ? 0 : v / goal, color: over ? p.highFill : color, height: 8),
+            Bar(fraction: goal <= 0 ? 0 : v / goal, color: tooMuch ? p.highFill : color, height: 8),
           ],
         ),
       );

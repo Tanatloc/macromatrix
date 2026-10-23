@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:macromatrix/data/food_db.dart';
+import 'package:macromatrix/day_clock.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/i18n.dart';
 import 'package:macromatrix/nutrition/targets.dart';
@@ -14,7 +15,8 @@ import 'package:macromatrix/ui/widgets/exercise_view.dart';
 /// De app met één dag beweging, zodat de vensters met de echte toestand getekend worden.
 AppState _state({required bool watch}) {
   final user = UserDb(sqlite3.openInMemory());
-  final day = dayKey(DateTime.now());
+  // Zelfde 'vandaag' als de app: na middernacht hoort het nog bij de vorige dag
+  final day = dayKey(logicalNow());
   user.setSetting('profile', const Profile(weightKg: 88, heightCm: 184).toJson());
   if (watch) {
     user.insertExerciseOnce(id: 'hc:abc', day: day, name: 'Lopen', kcal: 452, minutes: 42);

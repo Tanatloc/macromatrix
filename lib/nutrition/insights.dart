@@ -74,6 +74,8 @@ int completenessScore(NutrientMap values, Map<String, Target> targets) {
     if (t.upper != null && v > t.upper!) {
       s = t.upper! / v;
     } else if (t.goal == null) {
+      // Alleen een bovengrens, geen streefwaarde: bij nul inname telt dit niet mee als "gehaald".
+      if (v <= 0) continue;
       s = 1;
     } else {
       s = math.min(1, v / t.goal!);

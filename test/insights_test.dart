@@ -25,7 +25,7 @@ void main() {
       final full = {for (final k in stripKeys) k: (targets[k]!.goal ?? 0) * 1.0};
       full['sodium'] = 1500;
       expect(completenessScore(full, targets), 100);
-      expect(completenessScore({}, targets), (1 / stripKeys.length * 100).round()); // natrium 0 = binnen de limiet
+      expect(completenessScore({}, targets), 0); // niets gegeten: geen punten, ook niet voor 'binnen de limiet'
     });
 
     test('boven een limiet daalt de score', () {

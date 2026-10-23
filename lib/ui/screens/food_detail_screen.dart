@@ -65,6 +65,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   /// Tijdstip "uu:mm" (optioneel).
   String? _time;
 
+  /// Begintoestand bij het wijzigen van een bestaande regel, om te zien of er iets veranderd is (P68).
+  late final ({String qty, String? portion, Meal meal, String? time}) _initial;
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +84,27 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       _portion = _food.portions.firstOrNull;
       _qty = TextEditingController(text: _portion == null ? '100' : '1');
     }
+    _initial = (qty: _qty.text, portion: _portion?.label, meal: _meal, time: _time);
+  }
+
+  /// Alleen bij het wijzigen van een bestaande regel: is er iets aangepast dat verloren zou gaan?
+  bool get _dirty =>
+      widget.entry != null &&
+      (_qty.text != _initial.qty || _portion?.label != _initial.portion || _meal != _initial.meal || _time != _initial.time);
+
+  Future<void> _confirmDiscard() async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Discard change?', 'Wijziging weggooien?')),
+        content: Text(tr('You changed this entry but didn\'t save it.', 'Je hebt deze regel aangepast maar niet bewaard.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Keep editing', 'Verder bewerken'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Discard', 'Weggooien'))),
+        ],
+      ),
+    );
+    if (discard == true && mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -159,7 +183,11 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   Future<void> _pickTime() async {
     final now = TimeOfDay.now();
     final initial = _time == null ? now : TimeOfDay(hour: int.parse(_time!.substring(0, 2)), minute: int.parse(_time!.substring(3)));
-    final t = await showTimePicker(context: context, initialTime: initial);
+    final t = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      builder: (ctx, child) => MediaQuery(data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true), child: child!),
+    );
     if (t != null) setState(() => _time = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
   }
 
@@ -283,8 +311,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
         ? tr('Save', 'Opslaan')
         : tr('Add to ${_meal.label.toLowerCase()}', 'Toevoegen aan ${_meal.label.toLowerCase()}');
 
-    return Scaffold(
-      bottomNavigationBar: DecoratedBox(
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmDiscard();
+      },
+      child: Scaffold(
+        bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           color: p.bg,
           border: Border(top: BorderSide(color: p.line)),
@@ -453,7 +486,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _amountPanel(Palette p) {
@@ -493,7 +526,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                           focusedBorder: InputBorder.none,
                         ),
                         onChanged: (_) => setState(() {}),
-                        onSubmitted: (_) => _save(),
+                        // Enter bevestigt het getal en sluit het toetsenbord; toevoegen doe je bewust met de knop (P67)
+                        onSubmitted: (_) => FocusScope.of(context).unfocus(),
                       ),
                     ),
                     const SizedBox(width: 6),
