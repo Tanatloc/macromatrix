@@ -14,9 +14,9 @@ String _name(String n) => n.isEmpty ? tr('Someone without a name', 'Iemand zonde
 
 /// Uitleg hoe een battle werkt.
 String get battleRules => tr(
-  'A battle runs Monday to Sunday. Every day you log your food on time, your Nutrient Score counts as points (up to 100 a day). '
+  'A battle runs Monday to Sunday. Every day you log your food on time, your Nutrient score counts as points (up to 100 a day). '
       'Whoever has the most points on Sunday evening wins. Battles give no XP: you earn badges, titles and bragging rights.',
-  'Een battle loopt van maandag tot en met zondag. Elke dag dat je op tijd je eten logt, telt je Nutrient Score als punten (max. 100 per dag). '
+  'Een battle loopt van maandag tot en met zondag. Elke dag dat je op tijd je eten logt, telt je Voedingsscore als punten (max. 100 per dag). '
       'Wie zondagavond de meeste punten heeft, wint. Battles geven geen XP: je verdient badges, titels en eer.',
 );
 

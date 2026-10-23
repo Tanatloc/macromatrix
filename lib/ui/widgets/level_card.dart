@@ -111,13 +111,13 @@ class _LevelCardState extends State<LevelCard> {
           if (_help)
             Text(
               tr(
-                '• Every day you log your food, you earn XP equal to that day\'s Nutrient Score (0 to 100).\n'
+                '• Every day you log your food, you earn XP equal to that day\'s Nutrient score (0 to 100).\n'
                     '• From $streakBonusDays days in a row you get 1.5 times as much.\n'
                     '• Only what you log in the app counts: imported data and days you fill in later give no XP.\n'
                     '• Each level needs a bit more XP. Your border changes colour slightly with every level, and every 25 levels you earn a star '
                     '(up to 4, at level 100). Reaching level 100 takes about a year of logging well every day.\n'
                     '• Tap your photo to change it.',
-                '• Elke dag dat je je eten logt, krijg je XP gelijk aan je Nutrient Score van die dag (0 tot 100).\n'
+                '• Elke dag dat je je eten logt, krijg je XP gelijk aan je Voedingsscore van die dag (0 tot 100).\n'
                     '• Vanaf $streakBonusDays dagen op rij krijg je 1,5 keer zoveel.\n'
                     '• Alleen wat je in de app logt, telt: geïmporteerde gegevens en dagen die je pas later invult, geven geen XP.\n'
                     '• Elk level vraagt wat meer XP. Je rand krijgt bij elk level een iets andere kleur, en per 25 levels krijg je een ster '

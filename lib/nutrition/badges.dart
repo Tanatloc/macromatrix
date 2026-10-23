@@ -73,8 +73,8 @@ const badgeCategories = [
     'Log # dagen op rij.',
   )),
   BadgeCategory('perfect', BadgeGroup.nutrition, ('Perfect days', 'Perfecte dagen'), [1, 10, 25, 50, 100], (
-    'Reach a Nutrient Score of 95+ on # days.',
-    'Haal op # dagen een Nutrient Score van 95+.',
+    'Reach a Nutrient score of 95+ on # days.',
+    'Haal op # dagen een Voedingsscore van 95+.',
   )),
   BadgeCategory('vitd', BadgeGroup.nutrition, ('Sunshine', 'Zonnetje'), [7, 30, 90, 180, 365], (
     'Get vitamin D on target on # days.',
@@ -101,8 +101,8 @@ const badgeCategories = [
     'Log # verschillende producten.',
   )),
   BadgeCategory('perfectweek', BadgeGroup.nutrition, ('Perfect weeks', 'Perfecte weken'), [1, 4, 12, 26, 52], (
-    'Have # weeks with an average Nutrient Score of 90+ (at least 5 days logged).',
-    'Haal # weken een gemiddelde Nutrient Score van 90+ (minstens 5 dagen gelogd).',
+    'Have # weeks with an average Nutrient score of 90+ (at least 5 days logged).',
+    'Haal # weken een gemiddelde Voedingsscore van 90+ (minstens 5 dagen gelogd).',
   )),
   BadgeCategory('scanner', BadgeGroup.logging, ('Scanner', 'Scanner'), [1, 10, 50, 100, 250], (
     'Scan # products in the Scan tab.',

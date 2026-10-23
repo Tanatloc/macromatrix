@@ -535,7 +535,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Nutrient Score', style: TextStyle(fontSize: 12, color: p.ink2)),
+                Text('Nutrient score', style: TextStyle(fontSize: 12, color: p.ink2)),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,

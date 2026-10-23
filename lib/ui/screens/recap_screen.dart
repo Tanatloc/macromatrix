@@ -25,7 +25,7 @@ class RecapScreen extends StatelessWidget {
   String shareText(Recap r) => [
     tr('$title on MacroMatrix', '$title op MacroMatrix'),
     tr('${r.daysLogged} days logged, ${r.distinctFoods} different foods', '${r.daysLogged} dagen gelogd, ${r.distinctFoods} verschillende producten'),
-    tr('Average Nutrient Score: ${r.avgScore}', 'Gemiddelde Nutrient Score: ${r.avgScore}'),
+    tr('Average Nutrient score: ${r.avgScore}', 'Gemiddelde Voedingsscore: ${r.avgScore}'),
     tr('Longest streak: ${r.longestStreak} days · ${fmtInt(r.xp)} XP', 'Langste reeks: ${r.longestStreak} dagen · ${fmtInt(r.xp)} XP'),
     if (r.topFoods.isNotEmpty) tr('Most logged: ${r.topFoods.first.$1}', 'Meest gelogd: ${r.topFoods.first.$1}'),
     'app.divinenet.online',

@@ -17,7 +17,7 @@ import 'nutrient_detail_screen.dart';
 import 'nutrients_screen.dart';
 import 'shopping_screen.dart';
 
-/// Maaltijdplanner: zet vooraf klaar wat je (morgen) eet, zie meteen je Nutrient Score en wat er nog ontbreekt,
+/// Maaltijdplanner: zet vooraf klaar wat je (morgen) eet, zie meteen je Voedingsscore en wat er nog ontbreekt,
 /// en zet het daarna met één tik in je dagboek.
 class PlannerScreen extends StatefulWidget {
   const PlannerScreen({super.key, this.day});
@@ -172,8 +172,8 @@ class _PlannerScreenState extends State<PlannerScreen> {
                 children: [
                   Text(
                     tr(
-                      'Plan what you will eat and see your Nutrient Score before you eat it. Then put it in your diary with one tap.',
-                      'Plan wat je gaat eten en zie je Nutrient Score nog voor je het eet. Daarna zet je het met één tik in je dagboek.',
+                      'Plan what you will eat and see your Nutrient score before you eat it. Then put it in your diary with one tap.',
+                      'Plan wat je gaat eten en zie je Voedingsscore nog voor je het eet. Daarna zet je het met één tik in je dagboek.',
                     ),
                     style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
                   ),
@@ -299,7 +299,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
               PanelTitle(
                 tr('Plan for ${_dayLabel(_day)}', 'Plan voor ${_dayLabel(_day)}'),
                 trailing: Text(
-                  'Nutrient Score $score',
+                  'Nutrient score $score',
                   style: numStyle(13, weight: FontWeight.w600, color: p.ink),
                 ),
               ),
@@ -415,7 +415,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
               children: [
                 PanelTitle(
                   tr('Fill the gaps', 'Vul je tekorten aan'),
-                  subtitle: tr('Nutrient Score ${fill.before} → ${fill.after}', 'Nutrient Score ${fill.before} → ${fill.after}'),
+                  subtitle: tr('Nutrient score ${fill.before} → ${fill.after}', 'Voedingsscore ${fill.before} → ${fill.after}'),
                 ),
                 const SizedBox(height: 4),
                 for (final it in fill.items)

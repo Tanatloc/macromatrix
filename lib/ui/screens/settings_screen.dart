@@ -170,8 +170,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(tr('New day starts at', 'Nieuwe dag begint om')),
             subtitle: Text(
               tr(
-                'Up late? Until this time, what you eat still counts for the day before, including its Nutrient Score.',
-                'Laat op? Tot dit uur telt wat je eet nog voor de dag ervoor, ook voor de Nutrient Score.',
+                'Up late? Until this time, what you eat still counts for the day before, including its Nutrient score.',
+                'Laat op? Tot dit uur telt wat je eet nog voor de dag ervoor, ook voor de Voedingsscore.',
               ),
             ),
             trailing: DropdownButton<int>(
@@ -201,8 +201,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(tr('Track water', 'Water bijhouden')),
             subtitle: Text(
               tr(
-                'Off: water is hidden from your goals, lists and Nutrient Score, so you can focus on food.',
-                'Uit: water verdwijnt uit je doelen, lijsten en Nutrient Score, zodat je je op voeding kunt focussen.',
+                'Off: water is hidden from your goals, lists and Nutrient score, so you can focus on food.',
+                'Uit: water verdwijnt uit je doelen, lijsten en Voedingsscore, zodat je je op voeding kunt focussen.',
               ),
             ),
             value: s.settings.trackWater,

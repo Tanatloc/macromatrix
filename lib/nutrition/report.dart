@@ -1,4 +1,4 @@
-/// Weekrapport: je gemiddelde Nutrient Score tegenover de week ervoor, je beste en zwakste voedingsstoffen en een
+/// Weekrapport: je gemiddelde voedingsscore tegenover de week ervoor, je beste en zwakste voedingsstoffen en een
 /// tip voor de komende week.
 library;
 

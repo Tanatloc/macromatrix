@@ -12,7 +12,7 @@ import '../widgets/avatar.dart';
 import '../widgets/health_view.dart';
 import '../widgets/kit.dart';
 
-/// Weekrapport: je gemiddelde Nutrient Score tegenover vorige week, een gezondheidsoordeel, beste en zwakste stoffen,
+/// Weekrapport: je gemiddelde Voedingsscore tegenover vorige week, een gezondheidsoordeel, beste en zwakste stoffen,
 /// battles en een tip.
 class WeeklyReportScreen extends StatelessWidget {
   const WeeklyReportScreen({super.key, required this.monday});
@@ -29,8 +29,8 @@ class WeeklyReportScreen extends StatelessWidget {
     return [
       tr('My MacroMatrix week (${_range(r.monday)})', 'Mijn MacroMatrix-week (${_range(r.monday)})'),
       tr(
-        'Nutrient Score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change vs last week)'}',
-        'Nutrient Score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change t.o.v. vorige week)'}',
+        'Nutrient score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change vs last week)'}',
+        'Nutrient score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change t.o.v. vorige week)'}',
       ),
       tr('Days logged: ${r.days}/7 · streak: $streak', 'Gelogde dagen: ${r.days}/7 · reeks: $streak'),
       if (r.health != null)
@@ -122,7 +122,7 @@ class WeeklyReportScreen extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Nutrient Score', style: TextStyle(fontSize: 13, color: p.ink2)),
+                                    Text('Nutrient score', style: TextStyle(fontSize: 13, color: p.ink2)),
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.baseline,
                                       textBaseline: TextBaseline.alphabetic,
@@ -300,8 +300,8 @@ class WeeklyReportCard extends StatelessWidget {
                 ),
                 Text(
                   tr(
-                        'Nutrient Score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} days logged',
-                        'Nutrient Score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} dagen gelogd',
+                        'Nutrient score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} days logged',
+                        'Nutrient score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} dagen gelogd',
                       ) +
                       (r.health == null ? '' : ' · ${tr('health', 'gezondheid')}: ${r.health!.rating.label.toLowerCase()}'),
                   style: TextStyle(fontSize: 12.5, color: p.ink2),

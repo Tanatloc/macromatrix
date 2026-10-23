@@ -454,7 +454,7 @@ HealthCheck? healthCheck(
     factor(
       'micro',
       tr('Vitamins and minerals', 'Vitaminen en mineralen'),
-      'Nutrient Score ${micro.round()}',
+      'Nutrient score ${micro.round()}',
       rateUp(micro, 85, 70),
       weight: 2,
       tips: microTips,

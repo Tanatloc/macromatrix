@@ -309,7 +309,7 @@ class _DesktopDiary extends StatelessWidget {
   }
 }
 
-/// Op een pc naast je dagboek: je Nutrient Score en de vitaminen en mineralen waar je vandaag nog onder zit.
+/// Op een pc naast je dagboek: je Voedingsscore en de vitaminen en mineralen waar je vandaag nog onder zit.
 class _ShortfallCard extends StatelessWidget {
   const _ShortfallCard({this.onOpenNutrients});
   final VoidCallback? onOpenNutrients;
@@ -320,6 +320,7 @@ class _ShortfallCard extends StatelessWidget {
     final p = context.pal;
     final v = s.totals.values;
     final low = KeyNutrients.shortfalls(v, s.targets, limit: 8);
+    final logged = s.entries.any((e) => !e.foodRef.startsWith('supp:'));
     final score = completenessScore(v, s.targets);
     return Panel(
       shadow: false,
@@ -328,11 +329,13 @@ class _ShortfallCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(
-            tr('Still short today', 'Vandaag nog te weinig'),
-            trailing: Text(
-              'Nutrient Score $score',
-              style: numStyle(12, weight: FontWeight.w600, color: p.ink2),
-            ),
+            s.isToday ? tr('Still short today', 'Vandaag nog te weinig') : tr('Still short this day', 'Deze dag nog te weinig'),
+            trailing: logged
+                ? Text(
+                    tr('Nutrient score $score', 'Voedingsscore $score'),
+                    style: numStyle(12, weight: FontWeight.w600, color: p.ink2),
+                  )
+                : null,
           ),
           const SizedBox(height: 4),
           if (low.isEmpty)
@@ -2302,7 +2305,7 @@ class _GoalsPage extends StatelessWidget {
   }
 }
 
-/// Score: je Nutrient Score en de twee stoffen waar je het verst onder zit.
+/// Score: je Voedingsscore en de twee stoffen waar je het verst onder zit.
 class _ScorePage extends StatelessWidget {
   const _ScorePage({this.onOpenNutrients});
   final VoidCallback? onOpenNutrients;

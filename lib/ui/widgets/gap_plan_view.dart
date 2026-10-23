@@ -113,7 +113,7 @@ class _GapPlanSheetState extends State<_GapPlanSheet> {
               Text.rich(
                 TextSpan(
                   children: [
-                    TextSpan(text: tr('Nutrient Score ', 'Nutrient Score ')),
+                    TextSpan(text: tr('Nutrient score ', 'Voedingsscore ')),
                     TextSpan(
                       text: '${plan.before} → ${plan.after}',
                       style: TextStyle(fontWeight: FontWeight.w700, color: p.ink),

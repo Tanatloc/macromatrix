@@ -61,8 +61,10 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(tr('Delete ${f.name}?', '${f.name} verwijderen?')),
         content: Text(
-          tr('The product disappears from your list. What is already in your diary stays.',
-              'Het product verdwijnt uit je lijst. Wat al in je dagboek staat, blijft.'),
+          tr(
+            'The product disappears from your list. What is already in your diary stays.',
+            'Het product verdwijnt uit je lijst. Wat al in je dagboek staat, blijft.',
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
@@ -128,11 +130,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
         title: Text(widget.existing == null ? tr('Own product', 'Eigen product') : tr('Edit product', 'Product bewerken')),
         actions: [
           if (widget.existing != null && widget.existing!.source == FoodSource.custom)
-            IconButton(
-              icon: const Icon(Icons.delete_outline_rounded),
-              tooltip: tr('Delete', 'Verwijderen'),
-              onPressed: _delete,
-            ),
+            IconButton(icon: const Icon(Icons.delete_outline_rounded), tooltip: tr('Delete', 'Verwijderen'), onPressed: _delete),
         ],
       ),
       bottomNavigationBar: SafeArea(

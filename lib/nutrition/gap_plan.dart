@@ -29,7 +29,7 @@ class GapPlan {
   const GapPlan(this.items, this.before, this.after);
   final List<PlanItem> items;
 
-  /// Nutrient Score vóór en na het plan.
+  /// Voedingsscore vóór en na het plan.
   final int before, after;
   double get kcal => items.fold(0, (a, i) => a + i.kcal);
 }

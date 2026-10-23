@@ -343,8 +343,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   tr(
-                    'Week score: average Nutrient Score of the days you logged this week. Friends never see what you eat.',
-                    'Weekscore: gemiddelde Nutrient Score van de dagen die je deze week logde. Vrienden zien nooit wat je eet.',
+                    'Week score: average Voedingsscore of the days you logged this week. Friends never see what you eat.',
+                    'Weekscore: gemiddelde Voedingsscore van de dagen die je deze week logde. Vrienden zien nooit wat je eet.',
                   ),
                   style: TextStyle(fontSize: 11.5, color: pal.ink3),
                 ),

@@ -32,7 +32,7 @@ enum _Filter {
   final List<NutrientGroup>? groups;
 }
 
-/// Alle voedingsstoffen van de gekozen dag, met een Nutrient Score, verhoudingen en een bereikbalk per stof
+/// Alle voedingsstoffen van de gekozen dag, met een Voedingsscore, verhoudingen en een bereikbalk per stof
 /// (de dagweergave van het dashboard).
 class DayNutrients extends StatefulWidget {
   const DayNutrients({super.key});
@@ -256,7 +256,9 @@ class KeyNutrients extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(
-            tr('Still short today', 'Vandaag nog te weinig'),
+            context.read<AppState>().isToday
+                ? tr('Still short today', 'Vandaag nog te weinig')
+                : tr('Still short this day', 'Deze dag nog te weinig'),
             subtitle: low.isEmpty ? null : tr('Vitamins and minerals under your goal', 'Vitaminen en mineralen onder je doel'),
           ),
           const SizedBox(height: 4),
@@ -305,7 +307,7 @@ class KeyNutrients extends StatelessWidget {
   }
 }
 
-/// Nutrient Score met de verdeling op doel / tekort / te veel. [bare]: zonder kaart eromheen.
+/// Voedingsscore met de verdeling op doel / tekort / te veel. [bare]: zonder kaart eromheen.
 class ScoreCard extends StatelessWidget {
   const ScoreCard({super.key, this.bare = false});
   final bool bare;
@@ -341,7 +343,7 @@ class ScoreCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    tr('Nutrient Score', 'Nutrient Score'),
+                    tr('Nutrient score', 'Voedingsscore'),
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
                   ),
                   const SizedBox(width: 4),
@@ -613,7 +615,7 @@ class _RatioRowState extends State<_RatioRow> {
   }
 }
 
-/// Balans en opname samen, standaard dichtgeklapt, zodat de Nutrient Score en de lijst meer ruimte krijgen.
+/// Balans en opname samen, standaard dichtgeklapt, zodat de Voedingsscore en de lijst meer ruimte krijgen.
 class _MoreInsights extends StatefulWidget {
   const _MoreInsights({required this.values, required this.tips});
   final Map<String, double> values;
