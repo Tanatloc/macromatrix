@@ -215,11 +215,10 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     if (result == true) Navigator.of(context).pop();
   }
 
-  /// Een recente regel openen met dezelfde hoeveelheid als toen (P89). Eén portie blijft een portie; meer porties
-  /// worden gram, zodat de hoeveelheid exact klopt.
+  /// Een recente regel openen met dezelfde hoeveelheid als toen (P89), in dezelfde portie (2 sneetjes blijft 2 sneetjes).
   void _openEntry(AppState s, DiaryEntry e) {
     final food = s.foodFor(e);
-    final portion = e.portionLabel == null || e.quantity != 1 ? null : food.portions.where((p) => p.label == e.portionLabel).firstOrNull;
+    final portion = e.portionLabel == null ? null : food.portions.where((p) => p.label == e.portionLabel).firstOrNull;
     _open(food, initialGrams: e.grams > 0 ? e.grams : null, initialPortion: portion);
   }
 
