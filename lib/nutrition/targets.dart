@@ -234,6 +234,8 @@ Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal =
     'fat': Target(goal: kcal * p.fatPct / 100 / 9, about: true),
     'fiber': const Target(goal: 25),
     'sfa': Target(upper: kcal * 0.10 / 9),
+    // Vrije suikers (WHO): minder dan 10% van de energie. Alle suikers samen (ook uit fruit en melk) hebben geen maximum.
+    'free_sugars': Target(upper: kcal * 0.10 / 4),
     'trans': Target(upper: kcal * 0.01 / 9),
     'la': Target(goal: kcal * 0.04 / 9),
     'ala': Target(goal: kcal * 0.005 / 9),
