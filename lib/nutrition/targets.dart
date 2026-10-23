@@ -189,13 +189,16 @@ class Profile {
 
 /// Richtwaarde voor één voedingsstof.
 class Target {
-  const Target({this.goal, this.upper});
+  const Target({this.goal, this.upper, this.about = false});
 
   /// Hoeveel je best haalt per dag (aanbevolen inname). null = geen aanbeveling.
   final double? goal;
 
   /// Hoeveel je best niet overschrijdt (bovengrens of limiet). null = geen bovengrens.
   final double? upper;
+
+  /// Een doel om ongeveer te halen (energie, koolhydraten, vet): ruim erboven is net zo goed naast het doel als eronder.
+  final bool about;
 
   /// Alleen een limiet (bv. natrium, verzadigd vet): minder is beter.
   bool get isLimit => goal == null && upper != null;
@@ -221,10 +224,10 @@ Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal =
   Target aa(double mgPerKg) => Target(goal: mgPerKg * kg / 1000);
 
   return {
-    'energy': Target(goal: kcal),
+    'energy': Target(goal: kcal, about: true),
     'protein': Target(goal: kcal * p.proteinPct / 100 / 4),
-    'carbs': Target(goal: kcal * p.carbsPct / 100 / 4),
-    'fat': Target(goal: kcal * p.fatPct / 100 / 9),
+    'carbs': Target(goal: kcal * p.carbsPct / 100 / 4, about: true),
+    'fat': Target(goal: kcal * p.fatPct / 100 / 9, about: true),
     'fiber': const Target(goal: 25),
     'sfa': Target(upper: kcal * 0.10 / 9),
     'trans': Target(upper: kcal * 0.01 / 9),

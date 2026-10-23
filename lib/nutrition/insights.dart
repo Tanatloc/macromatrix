@@ -12,10 +12,13 @@ import '../i18n.dart';
 /// Status van een voedingsstof ten opzichte van de richtwaarde.
 enum Level { none, low, ok, high }
 
+/// Eén kleurregel voor alle schermen: onder het doel is laag, boven de bovengrens is te veel, en bij een doel om
+/// ongeveer te halen (energie, koolhydraten, vet) telt meer dan 10% erboven ook als te veel, nooit als groen.
 Level levelOf(double amount, Target? t) {
   if (t == null) return Level.none;
   if (t.upper != null && amount > t.upper!) return Level.high;
   if (t.goal == null) return Level.ok;
+  if (t.about && amount > t.goal! * 1.1) return Level.high;
   return amount >= t.goal! ? Level.ok : Level.low;
 }
 

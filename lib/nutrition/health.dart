@@ -342,7 +342,39 @@ HealthCheck? healthCheck(
   // Verminderde nierfunctie: dan geen advies om meer eiwit te eten
   final kidneys = labs['egfr']?.value.status == -1;
 
+  // Energie: at je ongeveer wat je doel vraagt? Een groot tekort of overschot verdient de eerste plaats
+  final kcalGoal = full.fold(0.0, (s, d) => s + (d.$2['energy']?.goal ?? 0)) / n;
+  final kcalEaten = energy / n;
+  final kcalGap = kcalEaten - kcalGoal;
+  final kcalOff = kcalGoal <= 0 ? 0.0 : kcalGap.abs() / kcalGoal;
+  final under = kcalGap < 0;
   final factors = [
+    if (kcalGoal > 0)
+      factor(
+        'energy',
+        tr('Energy', 'Energie'),
+        '${fmtNum(kcalEaten, 0)} / ${fmtNum(kcalGoal, 0)} kcal $perDay',
+        kcalOff <= 0.1 ? HealthRating.good : (kcalOff <= 0.2 ? HealthRating.ok : HealthRating.poor),
+        good: tr('You eat about what your goal asks for.', 'Je eet ongeveer wat je doel vraagt.'),
+        ok: tr(
+          'You ate on average ${fmtNum(kcalGap.abs(), 0)} kcal a day ${under ? 'below' : 'above'} your goal.',
+          'Je at gemiddeld ${fmtNum(kcalGap.abs(), 0)} kcal per dag ${under ? 'onder' : 'boven'} je doel.',
+        ),
+        poor: tr(
+          'You ate on average ${fmtNum(kcalGap.abs(), 0)} kcal a day ${under ? 'below' : 'above'} your goal, so your weight will not go the way you planned.',
+          'Je at gemiddeld ${fmtNum(kcalGap.abs(), 0)} kcal per dag ${under ? 'onder' : 'boven'} je doel, dus je gewicht gaat niet de kant op die je plande.',
+        ),
+        advice: under
+            ? tr(
+                'Add about ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal a day: an extra snack, a bigger portion of your usual meal or a glass of milk.',
+                'Voeg ongeveer ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal per dag toe: een extra tussendoortje, een grotere portie van je gewone maaltijd of een glas melk.',
+              )
+            : tr(
+                'Eat about ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal a day less: a smaller portion, fewer snacks or fewer sweet drinks.',
+                'Eet ongeveer ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal per dag minder: een kleinere portie, minder tussendoortjes of minder zoete drank.',
+              ),
+        weight: 2,
+      ),
     factor(
       'sodium',
       tr('Salt', 'Zout'),
