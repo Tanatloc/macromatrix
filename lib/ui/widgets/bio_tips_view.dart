@@ -25,6 +25,11 @@ Widget _tipRow(BuildContext context, BioTip t) {
                 t.title,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
               ),
+              if (t.mealLabel case final m?)
+                Text(
+                  m,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: p.ink3),
+                ),
               const SizedBox(height: 2),
               Text(t.text, style: TextStyle(fontSize: 12.5, height: 1.45, color: p.ink2)),
             ],
@@ -111,6 +116,9 @@ class _BioTipsCardState extends State<BioTipsCard> {
                             t.title,
                             style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
                           ),
+                          // Bij welke maaltijd, zodat bv. "Voeg vitamine C toe" (lunch) en "IJzer + vitamine C"
+                          // (avondeten) niet tegenstrijdig lijken.
+                          if (t.mealLabel case final m?) Text(m, style: TextStyle(fontSize: 11.5, color: p.ink3)),
                           if (_open.contains(t.title)) ...[
                             const SizedBox(height: 3),
                             Text(t.text, style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2)),
@@ -174,7 +182,9 @@ class BioTipLine extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Text(
-            first.title + (tips.length > 1 ? tr('  ·  ${tips.length} tips', '  ·  ${tips.length} tips') : ''),
+            first.title +
+                (first.mealLabel == null ? '' : ' (${first.mealLabel!.toLowerCase()})') +
+                (tips.length > 1 ? tr('  ·  ${tips.length} tips', '  ·  ${tips.length} tips') : ''),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),

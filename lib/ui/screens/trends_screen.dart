@@ -156,7 +156,13 @@ class _PeriodTrendsState extends State<PeriodTrends> {
   }
 
   Widget _macros(AppState s, Palette p, List<String> keys, Map<String, NutrientTotals> daily, DateTime from) {
-    final splits = [for (final k in keys) daily[k] == null ? null : macroSplit(daily[k]!.values)];
+    final splits = [
+      for (final k in keys)
+        switch (daily[k] == null ? null : macroSplit(daily[k]!.values)) {
+          (final pr, final ca, final fa, _) => (pr, ca, fa),
+          null => null,
+        },
+    ];
     final known = splits.whereType<(double, double, double)>().toList();
     double avg(double Function((double, double, double)) pick) => known.isEmpty ? 0 : known.map(pick).reduce((a, b) => a + b) / known.length;
     final prof = s.profileFor(DateTime.now());

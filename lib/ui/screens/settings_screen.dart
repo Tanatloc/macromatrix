@@ -187,7 +187,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           title(tr('Exercise', 'Beweging')),
-          SwitchListTile(
+          // Gewone ListTile met losse schakelaar: onderaan het scherm zette een tik ergens op de brede rij
+          // hem per ongeluk om; nu wisselt alleen de schakelaar zelf.
+          ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(tr('Add burned energy to your goal', 'Verbrande energie bij je doel optellen')),
             subtitle: Text(
@@ -196,8 +198,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Zet dan je activiteit op "Zittend" of "Licht actief", anders tel je je training dubbel.',
               ),
             ),
-            value: s.settings.addExercise,
-            onChanged: (v) => s.saveSettings(s.settings.copyWith(addExercise: v)),
+            trailing: Switch(
+              value: s.settings.addExercise,
+              onChanged: (v) => s.saveSettings(s.settings.copyWith(addExercise: v)),
+            ),
           ),
           if (HealthSync.supported) ...[title('Health Connect'), const _HealthConnectTile()],
           title(tr('Water', 'Water')),
@@ -243,21 +247,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SupplementsScreen())),
           ),
           title(tr('Data', 'Gegevens')),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _export,
-                icon: const Icon(Icons.download_rounded, size: 18),
-                label: Text(tr('Export diary (CSV)', 'Dagboek exporteren (CSV)')),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImportScreen())),
-                icon: const Icon(Icons.upload_rounded, size: 18),
-                label: Text(tr('Import from Cronometer or MyFitnessPal', 'Importeren uit Cronometer of MyFitnessPal')),
-              ),
-            ],
+          // Twee even brede knoppen onder elkaar, met de uitleg over de CSV direct onder Exporteren.
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _export,
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: Text(tr('Export diary (CSV)', 'Dagboek exporteren (CSV)')),
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -266,6 +263,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Alle dagen met datum, tijd, maaltijd, hoeveelheid en elke voedingsstof. Opent in Excel.',
             ),
             style: TextStyle(fontSize: 12, color: pal.ink3),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImportScreen())),
+              icon: const Icon(Icons.upload_rounded, size: 18),
+              label: Text(tr('Import from Cronometer or MyFitnessPal', 'Importeren uit Cronometer of MyFitnessPal')),
+            ),
           ),
           title(tr('Sources', 'Bronnen')),
           Text(

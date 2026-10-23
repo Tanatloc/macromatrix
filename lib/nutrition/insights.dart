@@ -117,11 +117,12 @@ List<(Nutrient, double, Level)> attentionList(NutrientMap values, Map<String, Ta
     ..sort((a, b) => a.$3 == b.$3 ? a.$2.compareTo(b.$2) : (a.$3 == Level.low ? -1 : 1));
 }
 
-/// Verdeling van de energie over eiwit, koolhydraten en vet, in delen van 1 (samen 1), of null zonder energie.
-(double, double, double)? macroSplit(NutrientMap v) {
-  final p = (v['protein'] ?? 0) * 4, c = (v['carbs'] ?? 0) * 4, f = (v['fat'] ?? 0) * 9;
-  final total = p + c + f;
-  return total <= 0 ? null : (p / total, c / total, f / total);
+/// Verdeling van de energie over eiwit, koolhydraten, vet en alcohol (7 kcal/g), in delen van 1 (samen 1),
+/// of null zonder energie. Zonder alcohol telt wijn anders nauwelijks mee.
+(double, double, double, double)? macroSplit(NutrientMap v) {
+  final p = (v['protein'] ?? 0) * 4, c = (v['carbs'] ?? 0) * 4, f = (v['fat'] ?? 0) * 9, a = (v['alcohol'] ?? 0) * 7;
+  final total = p + c + f + a;
+  return total <= 0 ? null : (p / total, c / total, f / total, a / total);
 }
 
 /// Trendgewicht: exponentieel gewogen gemiddelde per dag, zodat schommelingen van vocht en eten wegvallen.

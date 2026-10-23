@@ -734,7 +734,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          MacroSplitBar((p.proteinPct / 100, p.carbsPct / 100, p.fatPct / 100), height: 10),
+          MacroSplitBar((p.proteinPct / 100, p.carbsPct / 100, p.fatPct / 100, 0), height: 10),
           const SizedBox(height: 4),
           for (final (i, (key, label, pct, rule)) in rows.indexed)
             Container(

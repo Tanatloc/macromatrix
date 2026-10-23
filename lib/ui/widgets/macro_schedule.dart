@@ -217,10 +217,13 @@ class MacroScheduleCard extends StatelessWidget {
   }
 }
 
-/// Verdeling eiwit / koolhydraten / vet als één balk met de percentages erin.
+/// Verdeling eiwit / koolhydraten / vet (en eventueel alcohol, grijs) als één balk met de percentages erin.
 class MacroSplitBar extends StatelessWidget {
-  const MacroSplitBar({super.key, required this.split, this.compact = false});
+  const MacroSplitBar({super.key, required this.split, this.alcohol = 0, this.compact = false});
   final (double, double, double) split;
+
+  /// Aandeel alcohol in procent; een schema heeft dat nooit, dus standaard 0 (dan geen segment).
+  final double alcohol;
   final bool compact;
 
   @override
@@ -246,7 +249,12 @@ class MacroSplitBar extends StatelessWidget {
       child: SizedBox(
         height: compact ? 20 : 24,
         child: Row(
-          children: [part(p, pal.protein, tr('Protein', 'Eiwit')), part(c, pal.carbs, tr('Carbs', 'Koolh.')), part(f, pal.fat, tr('Fat', 'Vet'))],
+          children: [
+            part(p, pal.protein, tr('Protein', 'Eiwit')),
+            part(c, pal.carbs, tr('Carbs', 'Koolh.')),
+            part(f, pal.fat, tr('Fat', 'Vet')),
+            if (alcohol > 0) part(alcohol, pal.ink3, tr('Alcohol', 'Alcohol')),
+          ],
         ),
       ),
     );
