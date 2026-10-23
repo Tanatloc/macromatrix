@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show DateFormat, toBeginningOfSentenceCase;
 import 'package:provider/provider.dart';
 
 import '../../data/food.dart';
@@ -20,10 +21,12 @@ import '../widgets/number_input.dart';
 import '../widgets/undo.dart';
 
 /// Eén voedingsstof in detail: stand van de dag, verloop, waar het vandaan kwam, de rijkste bronnen ("Oracle")
-/// en je eigen doel.
+/// en je eigen doel. Met [from] en [to] (vanuit het dashboard, week of maand) toont het het daggemiddelde van die
+/// periode in plaats van de gekozen dag.
 class NutrientDetailScreen extends StatefulWidget {
-  const NutrientDetailScreen({super.key, required this.nutrient});
+  const NutrientDetailScreen({super.key, required this.nutrient, this.from, this.to});
   final Nutrient nutrient;
+  final DateTime? from, to;
 
   @override
   State<NutrientDetailScreen> createState() => _NutrientDetailScreenState();
@@ -31,9 +34,50 @@ class NutrientDetailScreen extends StatefulWidget {
 
 class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   bool _perKcal = false;
-  int _days = 30;
+  late int _days = _isPeriod && _periodDays <= 7 ? 7 : 30;
 
   Nutrient get n => widget.nutrient;
+
+  /// Geopend voor een week of maand in plaats van één dag.
+  bool get _isPeriod => widget.from != null && widget.to != null;
+  int get _periodDays => _isPeriod ? _dateOnly(widget.to!).difference(_dateOnly(widget.from!)).inDays + 1 : 1;
+  static DateTime _dateOnly(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+
+  /// Laatste dag van wat je bekijkt: het einde van de periode, of de gekozen dag.
+  DateTime _end(AppState s) => _isPeriod ? widget.to! : s.date;
+
+  bool _isTodayDate(DateTime d) {
+    final now = logicalNow();
+    return d.year == now.year && d.month == now.month && d.day == now.day;
+  }
+
+  /// Gemiddelde per gelogde dag in de periode, en het aantal gelogde dagen.
+  (double, int) _periodAverage(AppState s) {
+    final daily = s.dailyTotals(widget.from!, widget.to!);
+    if (daily.isEmpty) return (0, 0);
+    return (daily.values.fold<double>(0, (a, t) => a + t[n.key]) / daily.length, daily.length);
+  }
+
+  /// Welke dag of periode je ziet, bovenaan de grote kaart.
+  String _viewLabel(AppState s) {
+    if (_isPeriod) {
+      final f = DateFormat('d MMM', appLocale);
+      final from = widget.from!, to = widget.to!;
+      final range = from.year == to.year && from.month == to.month && from.day == to.day ? f.format(from) : '${f.format(from)} – ${f.format(to)}';
+      return tr('Average per day · $range', 'Gemiddeld per dag · $range');
+    }
+    final now = logicalNow();
+    final diff = (s.date.difference(DateTime(now.year, now.month, now.day)).inHours / 24).round();
+    return switch (diff) {
+      0 => tr('Today', 'Vandaag'),
+      -1 => tr('Yesterday', 'Gisteren'),
+      _ => toBeginningOfSentenceCase(DateFormat(s.date.year == now.year ? 'EEEE d MMMM' : 'EEEE d MMMM yyyy', appLocale).format(s.date)),
+    };
+  }
+
+  /// Energie en macro's volgen je eigen verdeling (profiel), de rest de EFSA-richtwaarden.
+  bool get _fromPlan => const {'energy', 'protein', 'carbs', 'fat'}.contains(n.key);
+  String get _sourceLabel => _fromPlan ? tr('From your plan', 'Uit je plan') : tr('EFSA advice', 'EFSA-advies');
 
   static String _groupLabel(NutrientGroup g) => switch (g) {
     NutrientGroup.vitamins => tr('Vitamin', 'Vitamine'),
@@ -101,7 +145,9 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                tr('Default (EFSA): ${_describe(standard)}', 'Standaard (EFSA): ${_describe(standard)}'),
+                _fromPlan
+                    ? tr('Default (from your plan): ${_describe(standard)}', 'Standaard (uit je plan): ${_describe(standard)}')
+                    : tr('Default (EFSA): ${_describe(standard)}', 'Standaard (EFSA): ${_describe(standard)}'),
                 style: Theme.of(ctx).textTheme.bodySmall,
               ),
             ],
@@ -153,13 +199,13 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final target = s.targets[n.key];
-    final total = s.totals[n.key];
+    final target = _isPeriod ? s.targetsForDate(widget.to!)[n.key] : s.targets[n.key];
+    final (total, logged) = _isPeriod ? _periodAverage(s) : (s.totals[n.key], 1);
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 32),
+        // De kop met terug-knop blijft staan, de rest scrolt eronder (zoals de dagbalk in het dagboek)
+        child: Column(
           children: [
             Narrow(
               child: Padding(
@@ -181,23 +227,30 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                 ),
               ),
             ),
-            Narrow(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _hero(s, p, target, total),
-                    const SizedBox(height: 10),
-                    _history(s, p, target),
-                    const SizedBox(height: 10),
-                    _contributors(s, p, total),
-                    const SizedBox(height: 10),
-                    _sources(s, p),
-                    const SizedBox(height: 10),
-                    _targetCard(s, p, target),
-                  ],
-                ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 32),
+                children: [
+                  Narrow(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _hero(s, p, target, total, logged),
+                          const SizedBox(height: 10),
+                          _history(s, p, target),
+                          const SizedBox(height: 10),
+                          _isPeriod ? _periodContributors(s, p, total, logged) : _contributors(s, p, total),
+                          const SizedBox(height: 10),
+                          _sources(s, p),
+                          const SizedBox(height: 10),
+                          _targetCard(s, p, target),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -206,14 +259,14 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     );
   }
 
-  Widget _hero(AppState s, Palette p, Target? target, double total) {
+  Widget _hero(AppState s, Palette p, Target? target, double total, int logged) {
     final ref = target?.goal ?? target?.upper;
     final level = levelOf(total, target);
     final f = fractionOf(total, target);
 
     // "Nog X te gaan": met wat je zelf vaak eet, anders met de rijkste bron uit de database
     String? hint;
-    if (target?.goal != null && total < target!.goal! && s.isToday) {
+    if (!_isPeriod && target?.goal != null && total < target!.goal! && s.isToday) {
       final need = target.goal! - total;
       final candidates = [
         for (final food in s.recentFoods())
@@ -235,6 +288,21 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Welke dag (of periode) dit is: vanuit het dashboard kan dat een andere dag zijn dan vandaag
+          Row(
+            children: [
+              Expanded(child: Eyebrow(_viewLabel(s))),
+              if (_isPeriod)
+                Text(
+                  tr(
+                    '$logged of $_periodDays ${_periodDays == 1 ? 'day' : 'days'} logged',
+                    '$logged van $_periodDays ${_periodDays == 1 ? 'dag' : 'dagen'} gelogd',
+                  ),
+                  style: numStyle(11, weight: FontWeight.w400, color: p.ink3),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -327,7 +395,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   }
 
   Widget _stats(AppState s) {
-    final to = s.date;
+    final to = _end(s);
     final daily = s.dailyTotals(to.subtract(const Duration(days: 29)), to);
     double? avg(int days) {
       final keys = [for (var i = 0; i < days; i++) dayKey(to.subtract(Duration(days: i)))];
@@ -362,7 +430,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   Target? _targetOn(AppState s, String day, Map<String, double> burned) => s.targetsForDate(parseDay(day), burned: burned[day] ?? 0)[n.key];
 
   Widget _history(AppState s, Palette p, Target? target) {
-    final to = s.date;
+    final to = _end(s);
     final from = to.subtract(Duration(days: _days - 1));
     final daily = s.dailyTotals(from, to);
     final keys = [for (var i = 0; i < _days; i++) dayKey(from.add(Duration(days: i)))];
@@ -403,7 +471,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             DayBarsChart(
               values: values,
               goal: t?.goal ?? t?.upper,
-              highlightLast: s.isToday,
+              highlightLast: _isTodayDate(to),
               colorOf: (v, i) => switch (levelOf(v, _targetOn(s, keys[i], burned))) {
                 Level.ok => p.okFill,
                 Level.high => p.highFill,
@@ -411,7 +479,26 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                 Level.none => p.ink3.withValues(alpha: 0.4),
               },
             ),
-            DayAxis(from: from, days: _days),
+            // Bij 7 dagen passen de getallen onder de staven
+            if (_days <= 7)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    for (final v in values)
+                      Expanded(
+                        child: Text(
+                          v == null ? '–' : formatAmount(v, n),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: numStyle(10.5, color: p.ink2),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (_days <= 7) DayLabels(days: [for (var i = 0; i < _days; i++) from.add(Duration(days: i))]) else DayAxis(from: from, days: _days),
             ChartLegend(
               items: [
                 if (t?.goal != null) (LegendItem.box(p.okFill), tr('on target', 'op doel')),
@@ -463,6 +550,58 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             const SizedBox(height: 4),
             for (final (i, (e, v)) in top.indexed)
               _contributorRow(p, i, e.name, '${e.meal.label} · ${fmtInt(e.grams)} g', v, total, i == top.length - 1 && rest <= 0),
+            if (rest > 0)
+              _contributorRow(p, 99, tr('Other', 'Overige'), tr('${rows.length - 5} products', '${rows.length - 5} producten'), rest, total, true),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Waar het vandaan kwam over de hele periode: per product, gemiddeld per gelogde dag.
+  Widget _periodContributors(AppState s, Palette p, double total, int logged) {
+    final sums = <String, (String, double, int)>{};
+    for (final e in s.user.entriesBetween(dayKey(widget.from!), dayKey(widget.to!))) {
+      final v = withDerived(e.amounts)[n.key] ?? 0;
+      if (v <= 0) continue;
+      final key = '${e.foodRef}|${e.name}';
+      final prev = sums[key];
+      sums[key] = (e.name, (prev?.$2 ?? 0) + v, (prev?.$3 ?? 0) + 1);
+    }
+    final rows = [for (final (name, sum, count) in sums.values) (name, logged == 0 ? 0.0 : sum / logged, count)]
+      ..sort((a, b) => b.$2.compareTo(a.$2));
+    final top = rows.take(5).toList();
+    final rest = rows.skip(5).fold<double>(0, (a, r) => a + r.$2);
+    final shares = [for (final r in top) total <= 0 ? 0.0 : r.$2 / total, if (rest > 0 && total > 0) rest / total];
+
+    return Panel(
+      shadow: false,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Where it came from in this period', 'Waar kwam het vandaan in deze periode'),
+            subtitle: tr('Average per logged day', 'Gemiddeld per gelogde dag'),
+            trailing: Text(
+              _amount(total),
+              style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
+            ),
+          ),
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                tr('Nothing eaten with ${inSentence(n.name)} in this period.', 'Niets gegeten met ${inSentence(n.name)} in deze periode.'),
+                style: TextStyle(color: p.ink2),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 12),
+            ContributorBar(shares: shares),
+            const SizedBox(height: 4),
+            for (final (i, (name, v, count)) in top.indexed)
+              _contributorRow(p, i, name, tr('$count× logged', '$count× gelogd'), v, total, i == top.length - 1 && rest <= 0),
             if (rest > 0)
               _contributorRow(p, 99, tr('Other', 'Overige'), tr('${rows.length - 5} products', '${rows.length - 5} producten'), rest, total, true),
           ],
@@ -710,12 +849,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: option(
-                  label: tr('EFSA advice', 'EFSA-advies'),
-                  value: describe(standard),
-                  selected: !custom,
-                  onTap: () => s.setOverride(n.key, null),
-                ),
+                child: option(label: _sourceLabel, value: describe(standard), selected: !custom, onTap: () => s.setOverride(n.key, null)),
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -734,8 +868,8 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             _note(
               p,
               tr(
-                'Upper limit ${_amount(target!.upper!)}${custom ? '' : ' (EFSA)'}: above it the bar turns red.',
-                'Bovengrens ${_amount(target.upper!)}${custom ? '' : ' (EFSA)'}: daarboven kleurt de balk rood.',
+                'Upper limit ${_amount(target!.upper!)}${custom || _fromPlan ? '' : ' (EFSA)'}: above it the bar turns red.',
+                'Bovengrens ${_amount(target.upper!)}${custom || _fromPlan ? '' : ' (EFSA)'}: daarboven kleurt de balk rood.',
               ),
             ),
           ],

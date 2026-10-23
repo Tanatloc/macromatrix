@@ -14,8 +14,11 @@ enum _Period { day, week, month }
 
 /// Dashboard: alle macro's en micro's van één dag, of het gemiddelde en verloop van een week of maand.
 /// Met de pijltjes blader je naar vorige dagen, weken of maanden.
+/// Telkens [showDay] afgaat (bv. "Alle voedingsstoffen" in het dagboek), springt het terug naar de dagweergave:
+/// die volgt de dag die in het dagboek gekozen is.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.showDay});
+  final Listenable? showDay;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -24,6 +27,36 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   _Period _period = _Period.day;
   DateTime _anchor = _today();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.showDay?.addListener(_toDay);
+  }
+
+  @override
+  void didUpdateWidget(DashboardScreen old) {
+    super.didUpdateWidget(old);
+    if (old.showDay != widget.showDay) {
+      old.showDay?.removeListener(_toDay);
+      widget.showDay?.addListener(_toDay);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.showDay?.removeListener(_toDay);
+    super.dispose();
+  }
+
+  /// Terug naar de dagweergave (de dag zelf staat in AppState.date).
+  void _toDay() {
+    if (!mounted) return;
+    setState(() {
+      _period = _Period.day;
+      _anchor = context.read<AppState>().date;
+    });
+  }
 
   static DateTime _today() {
     final n = logicalNow();
