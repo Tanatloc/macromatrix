@@ -2,6 +2,7 @@
 /// (beweging, metingen, notities, vasten, terugkerende items).
 library;
 
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -103,6 +104,7 @@ class AppState extends ChangeNotifier {
   /// Alles opnieuw inlezen, bv. nadat de synchronisatie wijzigingen van een ander toestel binnenhaalde.
   void reloadFromDisk() {
     _targetsVersion++;
+    _frozenCache = null;
     _readSettings();
     _refresh();
   }
@@ -202,32 +204,93 @@ class AppState extends ChangeNotifier {
     _defaultTargets = targetsFor(
       profileFor(_date),
       year: _date.year,
-      extraKcal: _extraKcal(burnedKcal, profileFor(_date), _date.year),
+      extraKcal: _extraKcal(burnedKcal, profileFor(_date), _date.year, _frozenFor(_date)?.$2),
       tdee: adaptiveTdee,
     );
   }
 
   /// Beweging bij het doel optellen. Je activiteitsniveau rekent al een deel beweging in (de factor boven zittend),
   /// dus we tellen alleen de verbranding daarboven erbij. Zo telt een training niet dubbel.
-  double _extraKcal(double burned, Profile p, int year) {
-    if (!_settings.addExercise || adaptiveTdee != null) return 0;
+  double _extraKcal(double burned, Profile p, int year, [TargetSettings? settings]) {
+    if (!(settings ?? _settings).addExercise || adaptiveTdee != null) return 0;
     final alreadyInFactor = bmr(p, p.ageIn(year)) * (p.activity.factor - Activity.sedentary.factor);
     return math.max(0, burned - alreadyInFactor);
   }
 
   /// Hoeveel kcal beweging vandaag echt bij je doel komt (de verbranding boven wat je activiteitsniveau al inrekent).
-  double get exerciseKcalInGoal => _extraKcal(burnedKcal, profileFor(_date), _date.year);
+  double get exerciseKcalInGoal => _extraKcal(burnedKcal, profileFor(_date), _date.year, _frozenFor(_date)?.$2);
 
-  /// Profiel voor een dag, met de macroverdeling van het weekschema als die er is.
+  /// Profiel voor een dag, met de macroverdeling van het weekschema als die er is. Een vroegere dag met bevroren
+  /// doelen houdt het profiel van toen.
   Profile profileFor(DateTime d) {
+    if (_frozenFor(d) case (final p, _)) return p;
     final s = _settings.schedule[d.weekday];
     return s == null ? _profile : _profile.copyWith(proteinPct: s.$1, carbsPct: s.$2, fatPct: s.$3);
   }
 
   /// Richtwaarden voor een dag: profiel, weekschema, beweging en eigen doelen.
   Map<String, Target> targetsForDate(DateTime d, {double burned = 0}) {
-    final t = targetsFor(profileFor(d), year: d.year, extraKcal: _extraKcal(burned, profileFor(d), d.year), tdee: adaptiveTdee);
-    return {...t, ..._settings.overrides}..removeWhere((k, _) => hiddenNutrients.contains(k));
+    final settings = _frozenFor(d)?.$2 ?? _settings;
+    final p = profileFor(d);
+    final t = targetsFor(p, year: d.year, extraKcal: _extraKcal(burned, p, d.year, settings), tdee: adaptiveTdee);
+    return {...t, ...settings.overrides}..removeWhere((k, _) => hiddenNutrients.contains(k));
+  }
+
+  // ── Doelen van vroegere dagen bevriezen ──
+  //
+  // Wie zijn doel of macroschema wijzigt, wil niet dat vorige dagen opeens anders beoordeeld worden (keto-maandag
+  // die een oude gewone maandag rood kleurt, XP die daalt). Vlak vóór elke wijziging van profiel of doelen bewaren we
+  // daarom voor elke al gelogde vroegere dag zonder bevroren doelen het profiel (met weekschema) en de doelinstellingen
+  // die toen golden. Identieke plannen worden één keer bewaard. Vandaag blijft altijd de huidige instellingen volgen.
+
+  Map<String, (Profile, TargetSettings)>? _frozenCache;
+
+  Map<String, (Profile, TargetSettings)> get _frozen {
+    if (_frozenCache case final c?) return c;
+    final raw = (user.setting('frozenTargets') ?? const {}) as Map;
+    final plans = [
+      for (final x in (raw['plans'] as List? ?? const []))
+        (
+          Profile.fromJson(((x as Map)['profile'] as Map).cast<String, Object?>()),
+          TargetSettings.fromJson((x['settings'] as Map).cast<String, Object?>()),
+        ),
+    ];
+    return _frozenCache = {
+      for (final e in ((raw['days'] as Map?) ?? const {}).entries)
+        if ((e.value as num).toInt() < plans.length) e.key as String: plans[(e.value as num).toInt()],
+    };
+  }
+
+  (Profile, TargetSettings)? _frozenFor(DateTime d) {
+    final key = dayKey(d);
+    if (key.compareTo(dayKey(logicalNow())) >= 0) return null;
+    return _frozen[key];
+  }
+
+  void _freezePastDays() {
+    final today = dayKey(logicalNow());
+    final raw = (user.setting('frozenTargets') ?? const {}) as Map;
+    final plans = [for (final x in (raw['plans'] as List? ?? const [])) jsonEncode(x)];
+    final days = {for (final e in ((raw['days'] as Map?) ?? const {}).entries) e.key as String: (e.value as num).toInt()};
+    var changed = false;
+    for (final d in user.loggedDays()) {
+      if (d.compareTo(today) >= 0 || days.containsKey(d)) continue;
+      final day = parseDay(d);
+      final s = _settings.schedule[day.weekday];
+      final profile = s == null ? _profile : _profile.copyWith(proteinPct: s.$1, carbsPct: s.$2, fatPct: s.$3);
+      // Het weekschema zit al in het profiel; bewaar de instellingen zonder schema
+      final plan = jsonEncode({'profile': profile.toJson(), 'settings': _settings.copyWith(schedule: const {}).toJson()});
+      var i = plans.indexOf(plan);
+      if (i < 0) {
+        plans.add(plan);
+        i = plans.length - 1;
+      }
+      days[d] = i;
+      changed = true;
+    }
+    if (!changed) return;
+    user.setSetting('frozenTargets', {'plans': [for (final p in plans) jsonDecode(p)], 'days': days});
+    _frozenCache = null;
   }
 
   /// Voedingsstoffen die je niet wilt zien (bv. water als je dat niet bijhoudt).
@@ -1084,6 +1147,7 @@ class AppState extends ChangeNotifier {
   void shiftDay(int days) => setDate(_date.add(Duration(days: days)));
 
   void saveProfile(Profile p) {
+    _freezePastDays();
     _targetsVersion++;
     _profile = p;
     _hasProfile = true;
@@ -1092,6 +1156,7 @@ class AppState extends ChangeNotifier {
   }
 
   void saveSettings(TargetSettings s) {
+    _freezePastDays();
     _targetsVersion++;
     _settings = s;
     user.setSetting('targets', s.toJson());
