@@ -56,6 +56,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Nieuwe dag begint om'), findsOneWidget);
     expect(find.text('SNEL NAAR'), findsOneWidget);
+
+    // Profiel in de zijbalk brengt je terug naar het beginscherm van Profiel (P103)
+    await tester.tap(find.text('Profiel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nieuwe dag begint om'), findsNothing);
+  });
+
+  testWidgets('smal venster: het toevoegmenu is niet uitgerekt en de derde rij is bereikbaar', (tester) async {
+    await pumpShell(tester, const Size(780, 700));
+    await tester.tap(find.byTooltip('Toevoegen'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(GridView)).width, lessThanOrEqualTo(560));
+    final check = find.text('Product checken');
+    expect(tester.getRect(check).bottom, lessThanOrEqualTo(700));
+    expect(check.hitTestable(), findsOneWidget);
   });
 
   testWidgets('gsm: navigatie onderaan met een + in het midden die het toevoegmenu opent', (tester) async {

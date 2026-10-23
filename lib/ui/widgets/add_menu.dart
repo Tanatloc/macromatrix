@@ -52,18 +52,19 @@ Future<void> showAddMenu(BuildContext context) {
     (Icons.event_note_outlined, p.low, tr('Plan meals', 'Maaltijden plannen'), () => push(const PlannerScreen())),
     (Icons.fact_check_outlined, p.ink2, tr('Check a product', 'Product checken'), () => push(const ProductScanScreen())),
   ];
+  // Op een breed scherm (bv. een smal browservenster op een pc) geen uitgerekt gsm-blad: hooguit 560 breed, vaste
+  // rijhoogte, en scrollen als het venster te laag is, zodat ook de derde rij bereikbaar blijft (P144)
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
+    constraints: BoxConstraints(maxWidth: 560, maxHeight: MediaQuery.sizeOf(context).height * 0.9),
     builder: (ctx) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-        child: GridView.count(
-          crossAxisCount: 3,
+        child: GridView(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 4, mainAxisExtent: 112),
           shrinkWrap: true,
-          mainAxisSpacing: 4,
-          childAspectRatio: 1.15,
-          physics: const NeverScrollableScrollPhysics(),
           children: [
             for (final (icon, color, label, onTap) in items)
               InkWell(

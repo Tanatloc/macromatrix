@@ -229,6 +229,28 @@ class _BodyScreenState extends State<BodyScreen> {
 
     final now = logicalNow();
     final diff = (s.date.difference(DateTime(now.year, now.month, now.day)).inHours / 24).round();
+    final header = PageHeader(
+      eyebrow: switch (diff) {
+        0 => tr('Today', 'Vandaag'),
+        -1 => tr('Yesterday', 'Gisteren'),
+        _ => toBeginningOfSentenceCase(DateFormat('EEEE d MMMM', appLocale).format(s.date)),
+      },
+      title: tr('Body', 'Lichaam'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SquareButton(icon: Icons.chevron_left_rounded, tooltip: tr('Previous day', 'Vorige dag'), onPressed: () => s.shiftDay(-1)),
+          const SizedBox(width: 6),
+          SquareButton(icon: Icons.chevron_right_rounded, tooltip: tr('Next day', 'Volgende dag'), onPressed: () => s.shiftDay(1)),
+        ],
+      ),
+    );
+    final back = Navigator.of(context).canPop();
+    final backButton = IconButton(
+      onPressed: () => Navigator.of(context).maybePop(),
+      icon: const Icon(Icons.arrow_back_rounded),
+      tooltip: tr('Back', 'Terug'),
+    );
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addMeasurement,
@@ -241,35 +263,24 @@ class _BodyScreenState extends State<BodyScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 104),
             children: [
-              // Geopend vanuit Profiel: terugknop
-              if (Navigator.of(context).canPop())
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      tooltip: tr('Back', 'Terug'),
-                    ),
-                  ),
-                ),
-              PageHeader(
-                eyebrow: switch (diff) {
-                  0 => tr('Today', 'Vandaag'),
-                  -1 => tr('Yesterday', 'Gisteren'),
-                  _ => toBeginningOfSentenceCase(DateFormat('EEEE d MMMM', appLocale).format(s.date)),
-                },
-                title: tr('Body', 'Lichaam'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+              // Geopend vanuit Profiel of een snelkoppeling: terugknop. Op een pc naast de titel, zoals de titelbalk
+              // van de andere schermen (P125); op een gsm erboven.
+              if (back && isDesktop(context))
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    SquareButton(icon: Icons.chevron_left_rounded, tooltip: tr('Previous day', 'Vorige dag'), onPressed: () => s.shiftDay(-1)),
-                    const SizedBox(width: 6),
-                    SquareButton(icon: Icons.chevron_right_rounded, tooltip: tr('Next day', 'Volgende dag'), onPressed: () => s.shiftDay(1)),
+                    Padding(padding: const EdgeInsets.only(bottom: 12), child: backButton),
+                    Expanded(child: header),
                   ],
-                ),
-              ),
+                )
+              else ...[
+                if (back)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(padding: const EdgeInsets.only(top: 6), child: backButton),
+                  ),
+                header,
+              ],
               const _FastingCard(),
               card(tr('Measurements on this day', 'Metingen op deze dag'), [
                 if (s.biometrics.isEmpty)
@@ -311,21 +322,16 @@ class _BodyScreenState extends State<BodyScreen> {
               card(
                 chartType.label,
                 [
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
+                  // Over meerdere regels in plaats van zijwaarts scrollen: met een muis of trackpad kon je de
+                  // laatste soorten niet bereiken, en op een gsm viel "Bloedsuiker" buiten beeld (P124)
+                  Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 18),
-                    child: Row(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
                         for (final t in types.where((t) => t.chartable))
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: PillChip(
-                              label: t.label,
-                              height: 30,
-                              selected: t.key == chartType.key,
-                              onTap: () => setState(() => _chartType = t.key),
-                            ),
-                          ),
+                          PillChip(label: t.label, height: 30, selected: t.key == chartType.key, onTap: () => setState(() => _chartType = t.key)),
                       ],
                     ),
                   ),
