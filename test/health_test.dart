@@ -65,6 +65,15 @@ void main() {
     expect(c.rating, HealthRating.good); // de rest is goed
   });
 
+  test('alcohol: uit 3 dagen geen weekcijfer, wel wat je echt dronk', () {
+    final c = healthCheck(week(day({'alcohol': 30}), 3), weightKg: 75)!;
+    final f = factor(c, 'alcohol');
+    expect(f.rating, HealthRating.unknown);
+    expect(f.value, '9 glazen in 3 dagen');
+    expect(f.effect, contains('Log minstens 4 dagen'));
+    expect(factor(healthCheck(week(day({'alcohol': 30}), 4), weightKg: 75)!, 'alcohol').rating, HealthRating.poor);
+  });
+
   test('alcohol: meer dan 7 glazen per week = slecht', () {
     final c = healthCheck(week(day({'alcohol': 12})), weightKg: 75)!;
     expect(factor(c, 'alcohol').rating, HealthRating.poor);

@@ -581,28 +581,42 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Weekrapport voor de week die op [monday] begint (null als je die week niets logde).
+  /// Weekrapport voor de week die op [monday] begint (null als je die week geen enkele volledige dag logde).
+  /// Score, gemiddelden en gezondheidscheck volgen één regel: alleen volledig gelogde dagen ([isFullDay]) en nooit
+  /// vandaag, want die dag loopt nog.
   WeeklyReport? weeklyReport(DateTime monday) {
-    ({int score, int days, Map<String, double> avg, HealthCheck? health})? week(DateTime m) {
+    final today = dayKey(logicalNow());
+    ({int score, int days, int partial, Map<String, double> avg, double kcal, double kcalGoal, HealthCheck? health})? week(DateTime m) {
       final end = DateTime(m.year, m.month, m.day + 6);
       final daily = dailyTotals(m, end);
-      if (daily.isEmpty) return null;
       final scores = <int>[];
       final sums = <String, double>{};
       final withTargets = <(NutrientTotals, Map<String, Target>)>[];
+      var kcal = 0.0, kcalGoal = 0.0, partial = 0;
       for (final e in daily.entries) {
         final t = targetsForDate(DateTime.parse(e.key));
+        if (e.key.compareTo(today) >= 0 || !isFullDay(e.value, t)) {
+          partial++;
+          continue;
+        }
         withTargets.add((e.value, t));
         scores.add(completenessScore(e.value.values, t));
-        for (final k in stripKeys) {
+        kcal += e.value['energy'];
+        kcalGoal += t['energy']?.goal ?? 0;
+        for (final k in [...stripKeys, 'energy', 'protein']) {
           final g = t[k]?.goal;
           if (g != null && g > 0) sums[k] = (sums[k] ?? 0) + (e.value.values[k] ?? 0) / g;
         }
       }
+      if (scores.isEmpty) return null;
+      final n = scores.length;
       return (
-        score: (scores.reduce((a, b) => a + b) / scores.length).round(),
-        days: scores.length,
-        avg: {for (final e in sums.entries) e.key: e.value / daily.length},
+        score: (scores.reduce((a, b) => a + b) / n).round(),
+        days: n,
+        partial: partial,
+        avg: {for (final e in sums.entries) e.key: e.value / n},
+        kcal: kcal / n,
+        kcalGoal: kcalGoal / n,
         health: healthCheck(
           withTargets,
           weightKg: currentWeight,
@@ -618,13 +632,20 @@ class AppState extends ChangeNotifier {
     final now = week(monday);
     if (now == null) return null;
     final prev = week(DateTime(monday.year, monday.month, monday.day - 7));
-    final ranked = now.avg.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    final worst = ranked.reversed.take(3).toList();
-    // Tip: een gewoon product dat je zwakste stof flink aanvult
+    final micros = [
+      for (final e in now.avg.entries)
+        if (stripKeys.contains(e.key)) e,
+    ]..sort((a, b) => b.value.compareTo(a.value));
+    // Eerst een duidelijk energie- of eiwitprobleem, dan de zwakste vitaminen en mineralen
+    final worst = attentionOrder(now.avg, micros.reversed.toList());
+    final energy = now.avg['energy'] ?? 1;
+    final energyOff = energy < reportEnergyLow || energy > reportEnergyHigh;
+    // Tip: een gewoon product dat je zwakste stof flink aanvult. Bij een duidelijk energieprobleem geen product-tip:
+    // dan toont het rapport eerst dat (een wortel lost een tekort van 800 kcal niet op)
     WeeklyTip? tip;
-    for (final w in worst) {
+    for (final w in energyOff ? const <MapEntry<String, double>>[] : worst) {
       final goal = _targets[w.key]?.goal;
-      if (goal == null) continue;
+      if (goal == null || w.key == 'energy' || w.key == 'sodium') continue;
       final upper = _targets[w.key]?.upper;
       for (final (f, per100) in richestFor(w.key, limit: 40, advice: true)) {
         if (!isAdviceFood(f)) continue;
@@ -633,21 +654,52 @@ class AppState extends ChangeNotifier {
         final grams = portion?.grams ?? 100;
         final frac = per100 * grams / 100 / goal;
         if (frac < 0.25 || frac > 1.5 || (upper != null && per100 * grams / 100 > upper)) continue;
+        // Nooit een zout product (gezouten makreel, ansjovis) aanraden, en zeker niet als je al genoeg zout eet
+        if (tooSaltyForTip((withDerived(f.per100g)['sodium'] ?? 0) * grams / 100, now.avg['sodium'])) continue;
         tip = WeeklyTip(nutrientByKey[w.key]!, f, grams, portion == null ? '100 g' : '${portion.label} (${grams.round()} g)', frac);
         break;
       }
       if (tip != null) break;
     }
+    // Gewicht, beweging en notities van die week
+    final sunday = dayKey(DateTime(monday.year, monday.month, monday.day + 6));
+    final weights = [
+      for (final b in user.biometricHistory('weight', from: dayKey(monday)))
+        if (b.day.compareTo(sunday) <= 0) b.value,
+    ];
+    var sessions = 0;
+    var minutes = 0.0, burned = 0.0;
+    final notes = <String, String>{};
+    for (var i = 0; i < 7; i++) {
+      final d = dayKey(DateTime(monday.year, monday.month, monday.day + i));
+      for (final e in user.exerciseFor(d)) {
+        sessions++;
+        minutes += e.minutes ?? 0;
+        burned += e.kcal;
+      }
+      final note = user.note(d).trim();
+      if (note.isNotEmpty) notes[d] = note;
+    }
     return WeeklyReport(
       monday: monday,
       score: now.score,
       days: now.days,
+      partialDays: now.partial,
       prevScore: prev?.score,
-      best: [for (final e in ranked.take(3)) (nutrientByKey[e.key]!, e.value)],
+      best: [for (final e in micros.take(3)) (nutrientByKey[e.key]!, e.value)],
       worst: [for (final e in worst) (nutrientByKey[e.key]!, e.value)],
       tip: tip,
       health: now.health,
       prevHealthScore: prev?.health?.score,
+      avg: now.avg,
+      prevAvg: prev?.avg ?? const {},
+      kcalAvg: now.kcal,
+      kcalGoal: now.kcalGoal > 0 ? now.kcalGoal : null,
+      prevKcalAvg: prev?.kcal,
+      weightStart: weights.length >= 2 ? weights.first : null,
+      weightEnd: weights.isEmpty ? null : weights.last,
+      exercise: WeeklyExercise(sessions: sessions, minutes: minutes, kcal: burned),
+      notes: notes,
     );
   }
 
@@ -819,15 +871,14 @@ class AppState extends ChangeNotifier {
       if (cluster.length >= 3) {
         final energies = [for (final h in cluster) h.$2.per100g['energy']!]..sort();
         final medE = energies[energies.length ~/ 2];
-        final lead = (cluster..sort((a, b) =>
-                (a.$2.per100g['energy']! - medE).abs().compareTo((b.$2.per100g['energy']! - medE).abs())))
-            .first
-            .$2;
-        hits.sort((a, b) => a.$2.ref == lead.ref
-            ? -1
-            : b.$2.ref == lead.ref
-                ? 1
-                : b.$1.compareTo(a.$1));
+        final lead = (cluster..sort((a, b) => (a.$2.per100g['energy']! - medE).abs().compareTo((b.$2.per100g['energy']! - medE).abs()))).first.$2;
+        hits.sort(
+          (a, b) => a.$2.ref == lead.ref
+              ? -1
+              : b.$2.ref == lead.ref
+              ? 1
+              : b.$1.compareTo(a.$1),
+        );
       }
     }
     (Food, double, Portion?) amount(Food f) {
