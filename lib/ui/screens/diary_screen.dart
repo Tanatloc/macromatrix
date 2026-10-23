@@ -485,7 +485,7 @@ class _EnergyCard extends StatelessWidget {
     final p = context.pal;
     final eaten = s.totals['energy'];
     final budget = s.targets['energy']?.goal ?? 2000;
-    final burned = s.settings.addExercise && s.adaptiveTdee == null ? s.burnedKcal : 0.0;
+    final burned = s.exerciseKcalInGoal;
     final left = budget - eaten;
     final over = left < 0;
 
@@ -1742,7 +1742,12 @@ class _NoteCard extends StatelessWidget {
           Icon(Icons.sticky_note_2_outlined, size: 18, color: p.ink3),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(s.note, style: TextStyle(fontSize: 14, height: 1.4, color: p.ink)),
+            child: Text(
+              s.note,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, height: 1.4, color: p.ink),
+            ),
           ),
         ],
       ),

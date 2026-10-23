@@ -461,7 +461,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       (null, 100, '100 g', ''),
       for (final x in _food.portions.take(6)) (x, 1, x.label, '${_fmt(x.grams)} g'),
     ];
-    bool selected(Portion? x, double q) => x == null ? _portion == null && _quantity == 100 : _portion == x && _quantity == 1;
+    bool selected(Portion? x, double q) => x == null ? _portion == null : _portion == x;
     return Panel(
       padding: const EdgeInsets.all(16),
       child: Column(

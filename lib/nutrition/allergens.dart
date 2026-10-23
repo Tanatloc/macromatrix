@@ -76,8 +76,11 @@ final _plantDairy = RegExp(
   caseSensitive: false,
 );
 
-/// "Pindakaas" blijft pinda, maar "boter" telt dan niet als zuivel.
-String _noPlantDairy(String s) => s.replaceAllMapped(_plantDairy, (m) => '${m[1]} ');
+/// Waterkefir (tibicos) is een gesuikerde waterdrank, geen zuivel.
+final _waterKefir = RegExp(r'\bwater[- ]?kefir\b', caseSensitive: false);
+
+/// "Pindakaas" blijft pinda, maar "boter" telt dan niet als zuivel; waterkefir is geen melk.
+String _noPlantDairy(String s) => s.replaceAll(_waterKefir, 'water drink').replaceAllMapped(_plantDairy, (m) => '${m[1]} ');
 
 enum AllergenLevel { contains, traces, name }
 
