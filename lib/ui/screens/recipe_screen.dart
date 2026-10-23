@@ -60,9 +60,8 @@ class _RecipeScreenState extends State<RecipeScreen> {
     // Het volledige product (met porties); niet meer gevonden: terugvallen op wat in het recept staat
     final ref = item.foodRef;
     final food = (FoodDb.isDbRef(ref) ? s.foods.byRef(ref) : s.user.food(ref)) ?? item.toFood();
-    // Het detailscherm begint een portie altijd op 1: bij een ander aantal porties tonen we de grammen,
-    // zodat de hoeveelheid exact blijft
-    final portion = item.portionLabel == null || item.quantity != 1 ? null : food.portions.where((p) => p.label == item.portionLabel).firstOrNull;
+    // Met de portie van het recept: het detailscherm rekent de grammen om naar het aantal porties
+    final portion = item.portionLabel == null ? null : food.portions.where((p) => p.label == item.portionLabel).firstOrNull;
     final t = await Navigator.of(context).push<ItemTemplate>(
       MaterialPageRoute(
         builder: (_) => FoodDetailScreen(food: food, meal: Meal.lunch, pickOnly: true, initialGrams: item.grams, initialPortion: portion),

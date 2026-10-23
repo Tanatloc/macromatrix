@@ -79,7 +79,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       _qty = TextEditingController(text: _fmt(_portion == null ? e.grams : e.quantity));
     } else if (widget.initialGrams != null) {
       _portion = widget.initialPortion;
-      _qty = TextEditingController(text: _portion == null ? _fmt(widget.initialGrams!) : '1');
+      // Met een portie: het aantal porties dat bij de meegegeven grammen hoort (2 sneetjes, niet altijd 1)
+      _qty = TextEditingController(text: _fmt(_portion == null ? widget.initialGrams! : widget.initialGrams! / _portion!.grams));
     } else {
       _portion = _food.portions.firstOrNull;
       _qty = TextEditingController(text: _portion == null ? '100' : '1');
