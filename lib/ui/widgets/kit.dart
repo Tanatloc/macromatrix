@@ -1,6 +1,7 @@
 /// Bouwstenen van het ontwerpsysteem: kaart, kop, statusvorm, bereikbalk, segmentknop, chips en labels.
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -790,35 +791,108 @@ class StatTile extends StatelessWidget {
   }
 }
 
-/// Plus-min-knoppen rond een getal.
-class StepButton extends StatelessWidget {
+/// Plus-min-knoppen rond een getal. Ingedrukt houden herhaalt: na 400 ms elke 90 ms, na 1,5 s sneller (P19).
+class StepButton extends StatefulWidget {
   const StepButton({super.key, required this.icon, required this.onTap, required this.tooltip, this.size = 32});
   final IconData icon;
   final VoidCallback? onTap;
   final String tooltip;
   final double size;
 
+  static const repeatDelay = Duration(milliseconds: 400);
+  static const repeatInterval = Duration(milliseconds: 90);
+  static const fastAfter = Duration(milliseconds: 1500);
+  static const fastInterval = Duration(milliseconds: 40);
+
+  @override
+  State<StepButton> createState() => _StepButtonState();
+}
+
+class _StepButtonState extends State<StepButton> {
+  Timer? _timer;
+  Offset? _down;
+
+  /// Deze druk heeft al herhaald: de tik bij het loslaten telt dan niet nog eens.
+  bool _repeated = false;
+
+  void _start(PointerDownEvent e) {
+    _stop();
+    _repeated = false;
+    if (widget.onTap == null) return;
+    _down = e.position;
+    _timer = Timer(StepButton.repeatDelay, () {
+      _fire();
+      // Aantal gewone herhalingen tot het sneller gaat (tellen, geen klok: werkt ook in tests)
+      final slowTicks = (StepButton.fastAfter - StepButton.repeatDelay).inMilliseconds ~/ StepButton.repeatInterval.inMilliseconds;
+      _timer = Timer.periodic(StepButton.repeatInterval, (t) {
+        _fire();
+        if (t.tick >= slowTicks) {
+          t.cancel();
+          _timer = Timer.periodic(StepButton.fastInterval, (_) => _fire());
+        }
+      });
+    });
+  }
+
+  void _fire() {
+    if (!mounted || widget.onTap == null) return _stop();
+    _repeated = true;
+    widget.onTap!();
+  }
+
+  void _move(PointerMoveEvent e) {
+    // Weggeschoven (bv. scrollen, meer dan de gewone aanraakdrempel van 18 px): niet blijven herhalen
+    if (_down != null && (e.position - _down!).distance > 18) _stop();
+  }
+
+  void _stop() {
+    _timer?.cancel();
+    _timer = null;
+    _down = null;
+  }
+
+  void _tap() {
+    if (_repeated) return;
+    widget.onTap?.call();
+  }
+
+  @override
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return _HitArea(
-      size: size,
-      onTap: onTap,
-      child: Tooltip(
-        message: tooltip,
-        child: Material(
-          color: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9),
-            side: BorderSide(color: p.lineStrong),
-          ),
-          child: InkWell(
-            customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9)),
-            onTap: onTap,
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: Icon(icon, size: size >= 40 ? 18 : 15, color: p.ink),
+    final size = widget.size;
+    final onTap = widget.onTap == null ? null : _tap;
+    return Listener(
+      onPointerDown: _start,
+      onPointerMove: _move,
+      onPointerUp: (_) => _stop(),
+      onPointerCancel: (_) => _stop(),
+      child: _HitArea(
+        size: size,
+        onTap: onTap,
+        child: Tooltip(
+          message: widget.tooltip,
+          // Niet bij lang indrukken (dat herhaalt); met de muis verschijnt hij nog
+          triggerMode: TooltipTriggerMode.manual,
+          child: Material(
+            color: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9),
+              side: BorderSide(color: p.lineStrong),
+            ),
+            child: InkWell(
+              customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9)),
+              onTap: onTap,
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: Icon(widget.icon, size: size >= 40 ? 18 : 15, color: p.ink),
+              ),
             ),
           ),
         ),

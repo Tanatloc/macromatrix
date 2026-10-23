@@ -30,6 +30,43 @@ void main() {
     expect(taps, 2);
   });
 
+  testWidgets('StepButton herhaalt bij ingedrukt houden, en sneller na 1,5 s (P19)', (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(_app(StepButton(icon: Icons.add, tooltip: 'plus', size: 44, onTap: () => taps++)));
+    final center = tester.getCenter(find.byType(StepButton));
+
+    // Gewone tik: precies één keer
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(taps, 1);
+
+    taps = 0;
+    final g = await tester.startGesture(center);
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(taps, 0);
+    await tester.pump(const Duration(milliseconds: 60)); // 410 ms: eerste herhaling
+    expect(taps, 1);
+    await tester.pump(const Duration(milliseconds: 900)); // ~1,3 s: elke 90 ms
+    final slow = taps;
+    expect(slow, inInclusiveRange(10, 12));
+    await tester.pump(const Duration(milliseconds: 1000)); // daarna sneller
+    expect(taps - slow, greaterThan(1000 ~/ 90 + 3));
+    await g.up();
+    final atRelease = taps;
+    await tester.pump(const Duration(milliseconds: 500));
+    // Loslaten stopt, en telt geen extra tik
+    expect(taps, atRelease);
+
+    // Weggeschoven (scrollen): geen herhaling
+    taps = 0;
+    final drag = await tester.startGesture(center);
+    await drag.moveBy(const Offset(0, 40));
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(taps, 0);
+    await drag.up();
+    await tester.pump(const Duration(milliseconds: 300));
+  });
+
   testWidgets('PillChip met vinkje verandert niet van breedte', (tester) async {
     Future<Size> sizeOf(bool selected) async {
       await tester.pumpWidget(_app(PillChip(label: 'Groenten', selected: selected, check: true, onTap: () {})));

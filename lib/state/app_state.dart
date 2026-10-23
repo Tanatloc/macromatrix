@@ -35,6 +35,7 @@ import '../nutrition/report.dart';
 import '../nutrition/levels.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/preferences.dart';
+import '../nutrition/portions.dart' show typicalPieceGrams;
 import '../nutrition/processing.dart';
 import '../nutrition/supplements.dart';
 import '../nutrition/targets.dart';
@@ -1940,39 +1941,8 @@ class AppState extends ChangeNotifier {
   }
 }
 
-/// Gewoon gewicht van één stuk, als de databank geen portie heeft.
-double? _typicalPieceGrams(String name) {
-  const pieces = <String, double>{
-    r'protein powder|\bwhey protein': 30,
-    r'\begg': 55,
-    r'\bcroissant': 60,
-    r'\bbagel': 90,
-    r'\b(bread )?roll\b': 60,
-    r'\bslice': 35,
-    r'\bmuffin': 70,
-    r'\bbanana': 120,
-    r'\bapple': 150,
-    r'\borange\b': 150,
-    r'\bpear\b': 160,
-    r'\bkiwi': 75,
-    r'\bmandarin|\btangerine|\bclementine': 70,
-    r'\bbiscuit|\bcookie|\bdigestive': 15,
-    r'\bcracker': 8,
-    r'\brice cake': 9,
-    r'\bsausage': 60,
-    r'\bhash brown': 60,
-    r'\bpotato\b': 150,
-    r'\btomato\b': 120,
-    r'\bcarrot': 60,
-    r'\bavocado': 140,
-    r'\bpeach': 150,
-    r'\bplum\b': 65,
-  };
-  for (final e in pieces.entries) {
-    if (RegExp(e.key).hasMatch(name)) return e.value;
-  }
-  return null;
-}
+/// Gewoon gewicht van één stuk, als de databank geen portie heeft (gedeeld met de porties bij een product).
+double? _typicalPieceGrams(String name) => typicalPieceGrams(name);
 
 /// Beleg en sauzen: zonder hoeveelheid genoemd is dat een lepel.
 const _spreads =

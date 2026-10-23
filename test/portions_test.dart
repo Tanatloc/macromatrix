@@ -1,0 +1,109 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/nutrition/portions.dart';
+
+Food _food(String name, {String? group, String part = 'product', List<Portion> portions = const []}) => Food(
+  ref: 'ciqual:${name.hashCode}',
+  name: name,
+  source: FoodSource.ciqual,
+  per100g: const {'energy': 100},
+  portions: portions,
+  label: group == null ? null : FoodLabel(food: name, group: group, part: part, kind: 'plant', state: 'not applicable'),
+);
+
+List<String> _labels(Food f) => [for (final p in everydayPortions(f)) p.label];
+
+void main() {
+  group('gewone porties (P19)', () {
+    test('brood krijgt een sneetje, als schatting', () {
+      final p = everydayPortions(_food('Bread, wholemeal', group: 'bread'));
+      expect(p.single.short, '1 slice');
+      expect(p.single.label, '1 slice (≈35 g)');
+      expect(p.single.grams, 35);
+      // Ook zonder label, op naam
+      expect(_labels(_food('Sourdough bread')), ['1 slice (≈35 g)']);
+      // Een broodje is een stuk, geen sneetje
+      expect(_labels(_food('Bread roll, white')), ['1 piece (≈60 g)']);
+    });
+
+    test('dranken: glas, wijn kleiner, koffie een mok', () {
+      expect(_labels(_food('Milk, semi-skimmed', group: 'dairy', part: 'drink')), ['1 glass (≈200 ml)']);
+      expect(_labels(_food('Milk, semi-skimmed')), ['1 glass (≈200 ml)']);
+      expect(_labels(_food('Orange juice', group: 'beverage', part: 'juice')), ['1 glass (≈200 ml)']);
+      expect(everydayPortions(_food('Red wine', group: 'alcohol', part: 'drink')).single.grams, 150);
+      expect(_labels(_food('Coffee, brewed', group: 'beverage', part: 'drink')), ['1 mug (≈250 ml)']);
+      // Melkpoeder en melkchocolade zijn geen drank
+      expect(_labels(_food('Milk powder', group: 'dairy', part: 'powder')), isEmpty);
+      expect(_labels(_food('Milk chocolate')), isEmpty);
+    });
+
+    test('kom, stuk, schep en lepels', () {
+      expect(_labels(_food('Yoghurt, plain', group: 'dairy')), ['1 bowl (≈150 g)']);
+      expect(everydayPortions(_food('Muesli', group: 'breakfast cereal')).single.grams, 40);
+      expect(everydayPortions(_food('Banana, raw', group: 'fruit')).single.grams, 120);
+      expect(everydayPortions(_food('Egg, whole, raw', group: 'egg')).single.short, '1 piece');
+      expect(_labels(_food('Whey protein powder', group: 'supplement', part: 'powder')), ['1 scoop (≈30 g)']);
+      expect([for (final p in everydayPortions(_food('Butter', group: 'oil/fat'))) p.grams], [10, 5, 15]);
+      // Olie smeer je niet op een boterham
+      expect([for (final p in everydayPortions(_food('Olive oil', group: 'oil/fat', part: 'oil'))) p.grams], [5, 15]);
+      // Eiernoedels zijn geen ei, appelmoes geen appel
+      expect(_labels(_food('Egg noodles, cooked', group: 'pasta')), isEmpty);
+      expect(_labels(_food('Apple puree', group: 'fruit', part: 'puree')), isEmpty);
+    });
+
+    test('geen dubbele portie als de databank er al een heeft', () {
+      final bread = _food('Bread, white', group: 'bread', portions: const [Portion('1 slice', 28)]);
+      expect(everydayPortions(bread), isEmpty);
+      expect(portionOptions(bread).map((p) => p.label), ['1 slice']);
+      final milk = _food('Milk, whole', group: 'dairy', part: 'drink', portions: const [Portion('1 cup', 244)]);
+      expect(everydayPortions(milk), isEmpty);
+      final butter = _food('Butter', group: 'oil/fat', portions: const [Portion('1 tbsp', 14)]);
+      expect(_labels(butter), ['on a slice (≈10 g)', '1 teaspoon (≈5 g)']);
+    });
+
+    test('hoogstens 6 knoppen, schattingen na de databankporties', () {
+      final many = _food('Butter', group: 'oil/fat', portions: [for (var i = 1; i <= 8; i++) Portion('$i pat', i * 5.0)]);
+      final options = portionOptions(many);
+      expect(options, hasLength(6));
+      expect(options.take(3).map((p) => p.label), ['1 pat', '2 pat', '3 pat']);
+      expect(options.skip(3).every((p) => p is EverydayPortion), isTrue);
+    });
+
+    test('stukgewicht blijft hetzelfde voor Snel loggen', () {
+      expect(typicalPieceGrams('apple'), 150);
+      expect(typicalPieceGrams('protein powder'), 30);
+      expect(typicalPieceGrams('lasagne'), isNull);
+    });
+  });
+
+  group('stappen van plus en min (P19)', () {
+    double up(double q, {bool portion = false}) => stepQuantity(q, up: true, portion: portion);
+    double down(double q, {bool portion = false}) => stepQuantity(q, up: false, portion: portion);
+
+    test('gram: per 10 onder 100, daarboven per 25, altijd rond', () {
+      expect(up(40), 50);
+      expect(up(95), 100);
+      expect(up(100), 125);
+      expect(up(110), 125);
+      expect(up(125), 150);
+      expect(down(150), 125);
+      expect(down(110), 100);
+      expect(down(100), 90);
+      expect(down(37), 30);
+      expect(down(5), 0);
+      expect(down(0), 0);
+    });
+
+    test('porties: per 1, onder 2 per halve', () {
+      expect(up(1, portion: true), 1.5);
+      expect(up(1.5, portion: true), 2);
+      expect(up(2, portion: true), 3);
+      expect(up(2.5, portion: true), 3);
+      expect(down(3, portion: true), 2);
+      expect(down(2, portion: true), 1.5);
+      expect(down(2.5, portion: true), 2);
+      expect(down(0.5, portion: true), 0);
+      expect(up(0.3, portion: true), 0.5);
+    });
+  });
+}
