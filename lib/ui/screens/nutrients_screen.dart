@@ -72,23 +72,23 @@ class _DayNutrientsState extends State<DayNutrients> {
                     ),
                   )
                 : wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // Score en bewerking naast elkaar (ongeveer even hoog), de inklapbare balans eronder over de hele
+                // breedte: anders bleef er naast de score een groot gat onder de dichtgeklapte balans (P48)
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: Column(
+                      IntrinsicHeight(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const ScoreCard(),
-                            const SizedBox(height: 10),
-                            ProcessingCard(share: s.processingOf(s.entries)),
+                            const Expanded(child: ScoreCard()),
+                            const SizedBox(width: 12),
+                            Expanded(child: ProcessingCard(share: s.processingOf(s.entries))),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
-                      ),
+                      const SizedBox(height: 10),
+                      _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
                     ],
                   )
                 : Column(
@@ -679,8 +679,10 @@ class _MoreInsightsState extends State<_MoreInsights> {
                     Text(
                       widget.tips == 0
                           ? tr('Omega-6 : 3 and potassium : sodium', 'Omega-6 : 3 en kalium : natrium')
-                          : tr('2 balances · ${widget.tips} ${widget.tips == 1 ? 'tip' : 'tips'}',
-                              '2 verhoudingen · ${widget.tips} ${widget.tips == 1 ? 'tip' : 'tips'}'),
+                          : tr(
+                              '2 balances · ${widget.tips} ${widget.tips == 1 ? 'tip' : 'tips'}',
+                              '2 verhoudingen · ${widget.tips} ${widget.tips == 1 ? 'tip' : 'tips'}',
+                            ),
                       style: TextStyle(fontSize: 12.5, color: p.ink2),
                     ),
                   ],

@@ -170,19 +170,35 @@ class _ShellState extends State<Shell> {
   }
 
   void _go(int i) {
-    // Nog eens op het tabblad waar je al bent: terug naar het begin ervan
-    if (i == _index) _navigators[i].currentState?.popUntil((r) => r.isFirst);
+    // Een tabblad brengt je altijd naar het begin ervan (op een pc heeft elk tabblad zijn eigen navigator, en een
+    // scherm dat daar nog openstond, verraste je als je via de zijbalk terugkwam). De staat van dat beginscherm
+    // zelf (bv. week of maand op het dashboard) blijft bewaard.
+    _navigators[i].currentState?.popUntil((r) => r.isFirst);
     // Het tabblad Vandaag brengt je ook echt naar vandaag, niet naar de dag die je laatst bekeek
     if (i == 0) context.read<AppState>().goToToday();
     setState(() => _index = _tab.value = i);
   }
 
+  /// De snelkoppeling waarvan het scherm nu openstaat in het tabblad Profiel: die is dan het enige gemarkeerde
+  /// item in de zijbalk, niet ook nog Profiel.
+  int? _shortcut;
+  Route<void>? _shortcutRoute;
+
   /// Snelkoppeling in de zijbalk: opent het scherm in het tabblad Profiel.
-  void _open(Widget screen) {
-    setState(() => _index = _tab.value = 4);
+  void _open(int shortcut, Widget screen) {
     final nav = _navigators[4].currentState;
     nav?.popUntil((r) => r.isFirst);
-    nav?.push(MaterialPageRoute(builder: (_) => screen));
+    final route = MaterialPageRoute<void>(builder: (_) => screen);
+    _shortcutRoute = route;
+    setState(() {
+      _index = _tab.value = 4;
+      _shortcut = shortcut;
+    });
+    nav?.push(route);
+    // Terug (pijltje, Escape of Profiel in de zijbalk): weer Profiel markeren
+    route.popped.then((_) {
+      if (mounted && identical(_shortcutRoute, route)) setState(() => _shortcut = _shortcutRoute = null);
+    });
   }
 
   @override
@@ -205,40 +221,49 @@ class _ShellState extends State<Shell> {
     final wide = width >= 800;
 
     if (width >= desktopWidth) {
+      final theme = Theme.of(context);
       return Scaffold(
         body: Row(
           children: [
             _SideBar(
               items: _items,
-              index: _index,
+              index: _index == 4 && _shortcut != null ? -1 : _index,
+              shortcut: _index == 4 ? _shortcut : null,
               icon: icon,
               onSelect: _go,
               shortcuts: [
-                (Icons.event_note_outlined, tr('Meal planner', 'Maaltijdplanner'), () => _open(const PlannerScreen())),
-                (Icons.shopping_cart_outlined, tr('Shopping list', 'Boodschappenlijst'), () => _open(const ShoppingScreen())),
-                (Icons.travel_explore_rounded, tr('Oracle', 'Orakel'), () => _open(const OracleScreen())),
-                (Icons.monitor_weight_outlined, tr('Body', 'Lichaam'), () => _open(const BodyScreen())),
-                (Icons.bloodtype_outlined, tr('Blood values', 'Bloedwaarden'), () => _open(const LabsScreen())),
-                (Icons.medication_outlined, tr('Supplements', 'Supplementen'), () => _open(const SupplementsScreen())),
-                (Icons.settings_outlined, tr('Settings', 'Instellingen'), () => _open(const SettingsScreen())),
+                (Icons.event_note_outlined, tr('Meal planner', 'Maaltijdplanner'), () => _open(0, const PlannerScreen())),
+                (Icons.shopping_cart_outlined, tr('Shopping list', 'Boodschappenlijst'), () => _open(1, const ShoppingScreen())),
+                (Icons.travel_explore_rounded, tr('Oracle', 'Orakel'), () => _open(2, const OracleScreen())),
+                (Icons.monitor_weight_outlined, tr('Body', 'Lichaam'), () => _open(3, const BodyScreen())),
+                (Icons.bloodtype_outlined, tr('Blood values', 'Bloedwaarden'), () => _open(4, const LabsScreen())),
+                (Icons.medication_outlined, tr('Supplements', 'Supplementen'), () => _open(5, const SupplementsScreen())),
+                (Icons.settings_outlined, tr('Settings', 'Instellingen'), () => _open(6, const SettingsScreen())),
               ],
             ),
             Expanded(
-              child: IndexedStack(
-                index: _index,
-                children: [
-                  for (var i = 0; i < pages.length; i++)
-                    // Een tabblad dat niet zichtbaar is, mag geen sneltoetsen of focus pakken
-                    TickerMode(
-                      enabled: i == _index,
-                      child: Navigator(
-                        key: _navigators[i],
-                        onGenerateRoute: (_) => MaterialPageRoute(
-                          builder: (_) => ValueListenableBuilder(valueListenable: _tab, builder: (_, tab, _) => pagesFor(tab)[i]),
+              // Schermen met een titelbalk (snelkoppelingen, details) krijgen op een pc dezelfde grote titel als
+              // Vandaag en Profiel, zodat de kop niet per scherm verspringt
+              child: Theme(
+                data: theme.copyWith(
+                  appBarTheme: theme.appBarTheme.copyWith(titleTextStyle: theme.textTheme.headlineMedium, toolbarHeight: 76, titleSpacing: 8),
+                ),
+                child: IndexedStack(
+                  index: _index,
+                  children: [
+                    for (var i = 0; i < pages.length; i++)
+                      // Een tabblad dat niet zichtbaar is, mag geen sneltoetsen of focus pakken
+                      TickerMode(
+                        enabled: i == _index,
+                        child: Navigator(
+                          key: _navigators[i],
+                          onGenerateRoute: (_) => MaterialPageRoute(
+                            builder: (_) => ValueListenableBuilder(valueListenable: _tab, builder: (_, tab, _) => pagesFor(tab)[i]),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -354,10 +379,22 @@ class _PhoneBar extends StatelessWidget {
 
 /// Zijbalk op een pc: logo, de vijf tabbladen met hun naam, snelkoppelingen, en onderaan je level en reeks.
 class _SideBar extends StatelessWidget {
-  const _SideBar({required this.items, required this.index, required this.icon, required this.onSelect, required this.shortcuts});
+  const _SideBar({
+    required this.items,
+    required this.index,
+    required this.shortcut,
+    required this.icon,
+    required this.onSelect,
+    required this.shortcuts,
+  });
 
   final List<(IconData, IconData, String)> items;
+
+  /// Het gemarkeerde tabblad (-1: geen, want een snelkoppeling staat open).
   final int index;
+
+  /// De snelkoppeling die openstaat, of null.
+  final int? shortcut;
   final Widget Function(int i, IconData d) icon;
   final void Function(int) onSelect;
   final List<(IconData, String, VoidCallback)> shortcuts;
@@ -368,6 +405,8 @@ class _SideBar extends StatelessWidget {
     final s = context.watch<AppState>();
     final level = s.level.level;
     final streak = s.streak.current;
+    // Laag venster (bv. een laptop met de browserbalken): alles iets compacter
+    final low = MediaQuery.sizeOf(context).height < 760;
     return Container(
       width: 236,
       decoration: BoxDecoration(
@@ -380,7 +419,7 @@ class _SideBar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 22, 16, 22),
+              padding: EdgeInsets.fromLTRB(20, low ? 14 : 22, 16, low ? 14 : 22),
               child: Row(
                 children: [
                   const MatrixLogo(size: 34),
@@ -396,13 +435,24 @@ class _SideBar extends StatelessWidget {
                 ],
               ),
             ),
-            for (final (i, (o, sel, label)) in items.indexed)
-              _SideItem(icon: icon(i, i == index ? sel : o), label: label, selected: i == index, onTap: () => onSelect(i)),
-            Padding(padding: const EdgeInsets.fromLTRB(22, 22, 16, 8), child: Eyebrow(tr('Shortcuts', 'Snel naar'))),
-            for (final (ic, label, onTap) in shortcuts) _SideItem(icon: Icon(ic), label: label, selected: false, onTap: onTap, small: true),
-            const Spacer(),
+            // In een laag venster scrollen de tabbladen en snelkoppelingen, zodat je level onderaan heel blijft
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (i, (o, sel, label)) in items.indexed)
+                      _SideItem(icon: icon(i, i == index ? sel : o), label: label, selected: i == index, onTap: () => onSelect(i)),
+                    Padding(padding: EdgeInsets.fromLTRB(22, low ? 14 : 22, 16, 8), child: Eyebrow(tr('Shortcuts', 'Snel naar'))),
+                    for (final (j, (ic, label, onTap)) in shortcuts.indexed)
+                      _SideItem(icon: Icon(ic), label: label, selected: j == shortcut, onTap: onTap, small: true),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(low ? 8 : 12),
               child: Material(
                 color: p.surface2,
                 borderRadius: BorderRadius.circular(14),
