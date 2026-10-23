@@ -125,7 +125,7 @@ class NutrientRow extends StatelessWidget {
               children: [
                 Flexible(
                   child: Text(
-                    pct == null ? '' : (pct >= 10 ? '>999%' : fmtPct(pct)),
+                    pct == null ? '' : (pct >= 10 ? '>999%' : (pct < 1 && (pct * 100).round() >= 100 ? '99%' : fmtPct(pct))),
                     maxLines: 1,
                     style: numStyle(12.5, color: shownLevel == Level.ok || shownLevel == Level.none ? p.ink : p.textOf(shownLevel)),
                   ),

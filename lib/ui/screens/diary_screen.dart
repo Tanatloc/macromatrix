@@ -13,6 +13,7 @@ import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
 import 'add_food_screen.dart';
+import 'dashboard_screen.dart';
 import 'food_detail_screen.dart';
 import 'nutrient_detail_screen.dart';
 import 'nutrients_screen.dart';
@@ -854,29 +855,40 @@ class _WeekCard extends StatelessWidget {
     final logged = kcal.whereType<double>().length;
 
     return Panel(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _Spark(
-              label: tr('Energy avg.', 'Energie gem.'),
-              unit: 'kcal',
-              values: kcal,
-              target: energyGoal,
-              color: p.ink,
-              note: tr('$inBand of $logged days within ±10%', '$inBand van $logged dagen binnen ±10%'),
-            ),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: _Spark(
-              label: tr('Protein avg.', 'Eiwit gem.'),
-              unit: 'g',
-              values: protein,
-              target: proteinGoal,
-              color: p.protein,
-              note: tr('Goal ${fmtInt(proteinGoal)} g · $proteinOk of $logged days', 'Doel ${fmtInt(proteinGoal)} g · $proteinOk van $logged dagen'),
-            ),
+          PanelTitle(tr('Last 7 days', 'Laatste 7 dagen'), trailing: Icon(Icons.chevron_right_rounded, size: 18, color: p.ink3)),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _Spark(
+                  label: tr('Energy avg.', 'Energie gem.'),
+                  unit: 'kcal',
+                  values: kcal,
+                  target: energyGoal,
+                  color: p.ink,
+                  note: tr('$inBand of $logged days within ±10%', '$inBand van $logged dagen binnen ±10%'),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: _Spark(
+                  label: tr('Protein avg.', 'Eiwit gem.'),
+                  unit: 'g',
+                  values: protein,
+                  target: proteinGoal,
+                  color: p.protein,
+                  note: tr(
+                    'Goal ${fmtInt(proteinGoal)} g · $proteinOk of $logged days',
+                    'Doel ${fmtInt(proteinGoal)} g · $proteinOk van $logged dagen',
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

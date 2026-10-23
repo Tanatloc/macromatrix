@@ -747,7 +747,7 @@ class _ImpactPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(a > 9.99 ? '>999%' : fmtPct(a), style: numStyle(13, color: limit ? (a > 1 ? p.high : p.ink) : (a >= 1 ? p.ok : p.low))),
+                        Text(a > 9.99 ? '>999%' : (a < 1 && (a * 100).round() >= 100 ? '99%' : fmtPct(a)), style: numStyle(13, color: limit ? (a > 1 ? p.high : p.ink) : (a >= 1 ? p.ok : p.low))),
                         Text(
                           tr('was ${fmtPct(b)}', 'was ${fmtPct(b)}'),
                           style: numStyle(10.5, weight: FontWeight.w400, color: p.ink3),
