@@ -19,26 +19,111 @@ class WeeklyTip {
   final double fraction;
 }
 
+/// Energie telt als duidelijk te laag of te hoog buiten deze delen van je doel (gemiddeld over de week).
+const reportEnergyLow = 0.85, reportEnergyHigh = 1.15;
+
+/// Eiwit telt als duidelijk te laag onder dit deel van je doel.
+const reportProteinLow = 0.8;
+
+/// Natrium in een portie (mg) waarboven een product nooit als tip komt: dat is al ongeveer 1 g zout.
+const tipSodiumMax = 400.0;
+
+/// Wie al op of boven zijn natriumdoel zit, krijgt alleen producten met hooguit zoveel natrium per portie (mg).
+const tipSodiumMaxWhenHigh = 120.0;
+
+/// Te zout voor een tip: veel natrium in de portie, of al genoeg zout gegeten ([sodiumFraction] = gemiddeld deel
+/// van je natriumdoel) en toch merkbaar natrium in de portie.
+bool tooSaltyForTip(double sodiumInPortion, double? sodiumFraction) =>
+    sodiumInPortion > tipSodiumMax || ((sodiumFraction ?? 0) >= 1 && sodiumInPortion > tipSodiumMaxWhenHigh);
+
+/// Wat aandacht verdient: eerst een duidelijk probleem met energie of eiwit, dan de zwakste vitaminen en mineralen.
+/// [avg] = gemiddeld deel van het doel per stof; [micros] = de vitaminen en mineralen van laag naar hoog.
+List<MapEntry<String, double>> attentionOrder(Map<String, double> avg, List<MapEntry<String, double>> micros, {int take = 3}) {
+  final energy = avg['energy'];
+  final protein = avg['protein'];
+  return [
+    if (energy != null && (energy < reportEnergyLow || energy > reportEnergyHigh)) MapEntry('energy', energy),
+    if (protein != null && protein < reportProteinLow) MapEntry('protein', protein),
+    ...micros,
+  ].take(take).toList();
+}
+
+/// Beweging in de week van het rapport.
+class WeeklyExercise {
+  const WeeklyExercise({this.sessions = 0, this.minutes = 0, this.kcal = 0});
+  final int sessions;
+  final double minutes, kcal;
+}
+
 class WeeklyReport {
   const WeeklyReport({
     required this.monday,
     required this.score,
     required this.days,
+    this.partialDays = 0,
     this.prevScore,
     required this.best,
     required this.worst,
     this.tip,
     this.health,
     this.prevHealthScore,
+    this.avg = const {},
+    this.prevAvg = const {},
+    this.kcalAvg,
+    this.kcalGoal,
+    this.prevKcalAvg,
+    this.weightStart,
+    this.weightEnd,
+    this.exercise = const WeeklyExercise(),
+    this.notes = const {},
   });
 
   final DateTime monday;
+
+  /// [days] = volledig gelogde dagen waarop score en gemiddelden steunen (zie [isFullDay]; vandaag telt nog niet mee).
   final int score, days;
+
+  /// Dagen met iets gelogd die niet meetellen: te weinig gelogd of vandaag (nog bezig).
+  final int partialDays;
   final int? prevScore;
 
-  /// (stof, gemiddeld deel van het doel per gelogde dag).
+  /// (stof, gemiddeld deel van het doel per volledig gelogde dag).
   final List<(Nutrient, double)> best, worst;
   final WeeklyTip? tip;
+
+  /// Gemiddeld deel van het doel per stof (ook 'energy' en 'protein'), deze en vorige week.
+  final Map<String, double> avg, prevAvg;
+
+  /// Gemiddelde energie per volledige dag en je gemiddelde energiedoel (kcal), en vorige week.
+  final double? kcalAvg, kcalGoal, prevKcalAvg;
+
+  /// Eerste en laatste gewicht van de week (kg), als je je woog.
+  final double? weightStart, weightEnd;
+  final WeeklyExercise exercise;
+
+  /// Dagnotities (jjjj-mm-dd → tekst), alleen dagen met een notitie.
+  final Map<String, String> notes;
+
+  /// Gewichtsverandering over de week (kg), als je je minstens twee keer woog.
+  double? get weightChange => weightStart == null || weightEnd == null ? null : weightEnd! - weightStart!;
+
+  /// Gemiddeld tekort (negatief) of overschot (positief) tegenover je energiedoel, in kcal per dag.
+  double? get energyBalance => kcalAvg == null || kcalGoal == null || kcalGoal! <= 0 ? null : kcalAvg! - kcalGoal!;
+
+  /// Energie duidelijk te laag (-1), te hoog (1) of in orde (0).
+  int get energyOff {
+    final f = avg['energy'];
+    if (f == null) return 0;
+    return f < reportEnergyLow ? -1 : (f > reportEnergyHigh ? 1 : 0);
+  }
+
+  /// Verschil in deel van het doel tegenover vorige week (0,12 = 12 procentpunt meer), of null.
+  double? changeFor(String key) {
+    final now = avg[key], prev = prevAvg[key];
+    return now == null || prev == null ? null : now - prev;
+  }
+
+  int? get kcalChange => kcalAvg == null || prevKcalAvg == null ? null : (kcalAvg! - prevKcalAvg!).round();
 
   /// Gezondheidscheck, of null bij minder dan [healthMinDays] volledig gelogde dagen.
   final HealthCheck? health;

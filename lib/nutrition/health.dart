@@ -165,6 +165,9 @@ class ActivityWeek {
 /// Minstens zoveel volledig gelogde dagen voor een oordeel.
 const healthMinDays = 3;
 
+/// Minstens zoveel volledig gelogde dagen om alcohol naar een week om te rekenen.
+const alcoholMinDays = 4;
+
 /// Een dag telt als volledig gelogd vanaf de helft van je energiedoel (en minstens 800 kcal).
 bool isFullDay(NutrientTotals t, Map<String, Target> targets) => t['energy'] >= math.max(800, (targets['energy']?.goal ?? 0) * 0.5);
 
@@ -212,6 +215,7 @@ HealthCheck? healthCheck(
     List<String> bloodTips = const [],
     double weight = 1,
     bool isKnown = true,
+    String? unknown,
   }) {
     final r = isKnown ? rating : HealthRating.unknown;
     return HealthFactor(
@@ -223,10 +227,12 @@ HealthCheck? healthCheck(
         HealthRating.good => good,
         HealthRating.ok => ok,
         HealthRating.poor => poor,
-        HealthRating.unknown => tr(
-          'Too many of the foods you logged have no data for this, so the app cannot judge it.',
-          'Van te veel producten die je logde ontbreken gegevens hierover, dus de app kan dit niet beoordelen.',
-        ),
+        HealthRating.unknown =>
+          unknown ??
+              tr(
+                'Too many of the foods you logged have no data for this, so the app cannot judge it.',
+                'Van te veel producten die je logde ontbreken gegevens hierover, dus de app kan dit niet beoordelen.',
+              ),
       },
       advice: r == HealthRating.ok || r == HealthRating.poor ? advice : null,
       note: note,
@@ -246,8 +252,11 @@ HealthCheck? healthCheck(
   final sugars = pctEnergy('sugars', 4);
   final epaDha = avg('epa_dha');
   final protein = weightKg > 0 ? avg('protein') / weightKg : 0.0;
-  // Alcohol in standaardglazen van 10 g per week
+  // Alcohol in standaardglazen van 10 g per week. Pas vanaf [alcoholMinDays] volledige dagen omrekenen naar een week:
+  // uit 3 dagen een weekcijfer maken, overdrijft een feestje of verbergt een gewone week
   final glasses = avg('alcohol') * 7 / 10;
+  final alcoholKnown = n >= alcoholMinDays;
+  final drinksLogged = full.fold(0.0, (s, d) => s + d.$1['alcohol']) / 10;
   // Over de hele week: een dag met veel vult een dag met weinig aan, want je lichaam heeft voorraden. Behalve bij
   // wat oplost in water: het overschot plas je uit, dus dat telt per dag maar tot twee keer je doel mee.
   double counted(String k, (NutrientTotals, Map<String, Target>) d) {
@@ -558,8 +567,15 @@ HealthCheck? healthCheck(
     factor(
       'alcohol',
       tr('Alcohol', 'Alcohol'),
-      tr('${fmtNum(glasses)} drinks per week', '${fmtNum(glasses)} glazen per week'),
+      alcoholKnown
+          ? tr('${fmtNum(glasses)} drinks per week', '${fmtNum(glasses)} glazen per week')
+          : tr('${fmtNum(drinksLogged)} drinks in $n days', '${fmtNum(drinksLogged)} glazen in $n dagen'),
       rateDown(glasses, 1, 7),
+      isKnown: alcoholKnown,
+      unknown: tr(
+        'Too few fully logged days to work out a weekly figure. Log at least $alcoholMinDays days.',
+        'Te weinig volledig gelogde dagen om een weekcijfer te berekenen. Log minstens $alcoholMinDays dagen.',
+      ),
       bloodTips: labTips(['ggt', 'alt', 'uric_acid']),
       good: tr('Little or no alcohol: the best for your health.', 'Weinig of geen alcohol: het beste voor je gezondheid.'),
       ok: tr(
