@@ -165,11 +165,14 @@ class _DayBar extends StatelessWidget {
                     onTap: () => pickDay(context),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: p.ink, letterSpacing: -0.3),
+                      // Op een smal scherm krimpt de datum liever dan dat hij afgekapt wordt ('Wo 21 o…')
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: p.ink, letterSpacing: -0.3),
+                        ),
                       ),
                     ),
                   ),

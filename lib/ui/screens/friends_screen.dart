@@ -8,6 +8,7 @@ import '../../state/app_state.dart';
 import '../../sync/account.dart';
 import '../../sync/friends.dart';
 import '../theme.dart';
+import '../widgets/account_card.dart';
 import '../../nutrition/badges.dart';
 import '../widgets/avatar.dart';
 import '../widgets/badges_view.dart';
@@ -119,6 +120,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             style: TextStyle(color: pal.ink2),
           ),
         ),
+        if (Account.configured) ...[const SizedBox(height: 12), const AccountCard()],
       ];
     } else if (f.code == null) {
       body = [
