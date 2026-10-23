@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import '../data/food.dart';
 import 'insights.dart';
 import 'nutrients.dart';
+import 'processing.dart';
 import 'targets.dart';
 import 'values.dart';
 
@@ -118,6 +119,12 @@ const _adviceSkipParts = {
   'white',
 };
 
+/// Ongezond als advies, ook al levert het een stof: gefrituurd, fastfood, chips en snoep.
+final _unhealthyAdvice = RegExp(
+  r'\b(deep[- ]?fried|fast food|takeaway|take-away|fries|french fries|chips|crisps|nuggets?|doughnuts?|donuts?|candy|sweets|chocolate bar|soft drink|energy drink)\b',
+  caseSensitive: false,
+);
+
 /// Staat wel in een paar tabellen, maar ligt hier zelden in de winkel.
 final _exotic = RegExp(
   r'\b(amaranth|rose ?hip|acerola|fenugreek|dock|sorrel|jute|taro|cassava|moringa|purslane|epazote|kantola|bitter gourd|balsam|jujube|sea lion|seal|whale|walrus|caribou|tunicate)\b',
@@ -131,8 +138,13 @@ const _cookFirst = {'meat', 'poultry', 'fish', 'shellfish', 'egg', 'legume', 'ce
 /// staat. Geen agar, gist, kauwgom, energiedrank of zeeleeuwlever. Producten zonder label (gescand, eigen
 /// producten) volgen [isEverydayFood].
 bool isAdviceFood(Food f) {
+  // Nooit aanraden: gefrituurd, gepaneerd, fastfood, chips, gezoet of ultrabewerkt. Ook als het een tekort aanvult
+  // (frieten 'voor vitamine K' komt uit het frituurvet).
+  if (_unhealthyAdvice.hasMatch(f.name) || novaOf(f) == Nova.ultra) return false;
   final l = f.label;
   if (l == null) return isEverydayFood(f);
+  if (l.state == 'deep-fried' || (l.state == 'fried' && l.group == 'potato/tuber')) return false;
+  if (l.flags.any(const {'breaded', 'sweetened', 'in syrup', 'brand'}.contains)) return false;
   if (!_adviceGroups.contains(l.group) || _adviceSkipParts.contains(l.part) || l.dish) return false;
   if (l.kind == 'algae' || l.kind == 'other' || l.food.contains('yeast') || l.flags.contains('infant')) return false;
   // Oesters eet je wel rauw

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:macromatrix/data/food_db.dart';
 import 'package:macromatrix/data/user_db.dart';
+import 'package:macromatrix/nutrition/gap_plan.dart';
 import 'package:macromatrix/nutrition/insights.dart';
 import 'package:macromatrix/state/app_state.dart';
 
@@ -38,5 +39,16 @@ void main() {
     expect(s.richestFor('vit_a', perKcal: true, limit: 3, advice: true).first.$1.label!.food, 'carrot');
     final fish = {for (final (f, _) in s.richestFor('epa_dha', perKcal: true, limit: 10, advice: true)) f.label!.group};
     expect(fish, {'fish'});
+  });
+
+  test('geen frieten, fastfood, gepaneerd of gezoet als advies, ook niet uit wat je eet', () {
+    final db = FoodDb(sqlite3.open('assets/db/foods.db', mode: OpenMode.readOnly));
+    for (final q in ['French fries, deepfried, fast food', 'chips', 'nuggets', 'doughnut']) {
+      for (final f in db.search(q, limit: 20)) {
+        if (RegExp(r'fries|fast food|nugget|doughnut|donut|deep', caseSensitive: false).hasMatch(f.name)) {
+          expect(isAdviceFood(f), isFalse, reason: f.name);
+        }
+      }
+    }
   });
 }
