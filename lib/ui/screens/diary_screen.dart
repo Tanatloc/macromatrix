@@ -1621,7 +1621,14 @@ Future<void> addExercise(BuildContext context) async {
   if (ok != true) return;
   final burned = parse(kcal) ?? estimate();
   final label = type?.name ?? (name.text.trim().isEmpty ? tr('Exercise', 'Beweging') : name.text.trim());
-  if (burned <= 0 || !context.mounted || !await confirmExercise(context, parse(minutes), burned)) return;
+  if (burned <= 0) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('Enter how long or how many kcal you burned.', 'Vul in hoe lang of hoeveel kcal je verbrandde.'))));
+    }
+    return;
+  }
+  if (!context.mounted || !await confirmExercise(context, parse(minutes), burned)) return;
   s.addExercise(label, burned, minutes: parse(minutes));
 }
 
