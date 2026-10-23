@@ -325,6 +325,7 @@ class _CustomScreenState extends State<_CustomScreen> {
                           child: TextField(
                             controller: e.value,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: decimalInput,
                             onTap: selectAllOnTap(e.value),
                             decoration: InputDecoration(suffixText: nutrientByKey[e.key]!.unit, isDense: true),
                           ),

@@ -113,6 +113,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                     child: TextField(
                       controller: _servings,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: decimalInput,
                       onTap: selectAllOnTap(_servings),
                       decoration: InputDecoration(labelText: tr('Number of servings', 'Aantal porties')),
                       onChanged: (_) => setState(() {}),
@@ -123,6 +124,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                     child: TextField(
                       controller: _cooked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: decimalInput,
                       onTap: selectAllOnTap(_cooked),
                       decoration: InputDecoration(
                         labelText: tr('Weight after cooking', 'Gewicht na bereiding'),

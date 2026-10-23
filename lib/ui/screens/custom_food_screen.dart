@@ -54,6 +54,28 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
     super.dispose();
   }
 
+  Future<void> _delete() async {
+    final f = widget.existing!;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Delete ${f.name}?', '${f.name} verwijderen?')),
+        content: Text(
+          tr('The product disappears from your list. What is already in your diary stays.',
+              'Het product verdwijnt uit je lijst. Wat al in je dagboek staat, blijft.'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Delete', 'Verwijderen'))),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      context.read<AppState>().deleteCustomFood(f);
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
   void _save() {
     if (!_form.currentState!.validate()) return;
     final per100g = <String, double>{for (final e in _values.entries) e.key: ?_parse(e.value.text)};
@@ -73,12 +95,27 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
     Navigator.of(context).pop(food);
   }
 
+  /// Per 100 g kan een macro nooit boven 100 g, en kcal nooit boven ~900; negatief kan nooit.
+  static double _maxFor(String key) => switch (key) {
+    'energy' => 900,
+    'protein' || 'fat' || 'carbs' || 'sugars' || 'fiber' || 'sfa' => 100,
+    _ => 1e6,
+  };
+
   Widget _field(Nutrient n) => TextFormField(
     controller: _values[n.key],
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    inputFormatters: decimalInput,
     onTap: selectAllOnTap(_values[n.key]!),
     decoration: InputDecoration(labelText: n.name, suffixText: n.unit, isDense: true),
-    validator: (t) => t == null || t.trim().isEmpty || _parse(t) != null ? null : tr('Not a valid number', 'Geen geldig getal'),
+    validator: (t) {
+      if (t == null || t.trim().isEmpty) return null;
+      final v = _parse(t);
+      if (v == null) return tr('Not a valid number', 'Geen geldig getal');
+      if (v < 0) return tr('Cannot be negative', 'Kan niet negatief zijn');
+      if (v > _maxFor(n.key)) return tr('At most ${fmtNum(_maxFor(n.key))} per 100 g', 'Hoogstens ${fmtNum(_maxFor(n.key))} per 100 g');
+      return null;
+    },
   );
 
   @override
@@ -87,7 +124,17 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
     final extra = nutrients.where((n) => !n.derived && !_labelKeys.contains(n.key) && n.key != 'sodium');
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.existing == null ? tr('Own product', 'Eigen product') : tr('Edit product', 'Product bewerken'))),
+      appBar: AppBar(
+        title: Text(widget.existing == null ? tr('Own product', 'Eigen product') : tr('Edit product', 'Product bewerken')),
+        actions: [
+          if (widget.existing != null && widget.existing!.source == FoodSource.custom)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded),
+              tooltip: tr('Delete', 'Verwijderen'),
+              onPressed: _delete,
+            ),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         child: Center(
           heightFactor: 1,
@@ -132,6 +179,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                       child: TextFormField(
                         controller: _barcode,
                         keyboardType: TextInputType.number,
+                        inputFormatters: wholeInput,
                         decoration: InputDecoration(labelText: tr('Barcode (optional)', 'Barcode (optioneel)')),
                       ),
                     ),
@@ -141,6 +189,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                 TextFormField(
                   controller: _portionGrams,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: decimalInput,
                   onTap: selectAllOnTap(_portionGrams),
                   decoration: InputDecoration(
                     labelText: tr('Weight of one serving (optional)', 'Gewicht van één portie (optioneel)'),
@@ -158,6 +207,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                 TextFormField(
                   controller: _salt,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: decimalInput,
                   onTap: selectAllOnTap(_salt),
                   decoration: InputDecoration(labelText: tr('Salt', 'Zout'), suffixText: 'g', isDense: true),
                 ),

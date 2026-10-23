@@ -90,6 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: TextField(
                 controller: c,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: decimalInput,
                 onTap: selectAllOnTap(c),
                 decoration: InputDecoration(
                   labelText: label,
@@ -599,6 +600,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextField(
             controller: _energy,
             keyboardType: TextInputType.number,
+            inputFormatters: wholeInput,
             onTap: selectAllOnTap(_energy),
             decoration: InputDecoration(
               labelText: tr('Custom energy goal (empty = calculate)', 'Eigen energiedoel (leeg = berekenen)'),

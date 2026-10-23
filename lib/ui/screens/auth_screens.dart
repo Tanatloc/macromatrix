@@ -488,6 +488,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       TextField(
                         controller: _code,
                         keyboardType: TextInputType.number,
+                        inputFormatters: wholeInput,
                         autofillHints: kIsWeb ? null : const [AutofillHints.oneTimeCode],
                         maxLength: 6,
                         style: numStyle(22),
@@ -698,6 +699,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       child: TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: decimalInput,
         onTap: selectAllOnTap(c),
         decoration: InputDecoration(labelText: label, suffixText: suffix),
       ),

@@ -31,6 +31,8 @@ class BiometricType {
   static const builtIn = [
     weight,
     BiometricType('body_fat', 'Vetpercentage', '%'),
+    BiometricType('lean_mass', 'Spiermassa', 'kg'),
+    BiometricType('body_water', 'Lichaamsvocht', 'kg'),
     BiometricType('waist', 'Buikomtrek', 'cm'),
     BiometricType('blood_pressure', 'Bloeddruk', 'mmHg', decimals: 0, secondLabelNl: 'onderdruk'),
     BiometricType('heart_rate', 'Hartslag in rust', 'bpm', decimals: 0),
@@ -66,6 +68,8 @@ class ExerciseType {
 const _bioEnglish = {
   'weight': 'Weight',
   'body_fat': 'Body fat',
+  'lean_mass': 'Lean mass',
+  'body_water': 'Body water',
   'waist': 'Waist',
   'blood_pressure': 'Blood pressure',
   'heart_rate': 'Resting heart rate',

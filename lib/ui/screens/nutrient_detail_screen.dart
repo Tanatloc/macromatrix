@@ -76,6 +76,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               TextField(
                 controller: goal,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: decimalInput,
                 onTap: selectAllOnTap(goal),
                 decoration: InputDecoration(
                   labelText: tr('At least (recommended)', 'Minstens (aanbevolen)'),
@@ -88,6 +89,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               TextField(
                 controller: upper,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: decimalInput,
                 onTap: selectAllOnTap(upper),
                 decoration: InputDecoration(
                   labelText: tr('At most (upper limit)', 'Hoogstens (bovengrens)'),

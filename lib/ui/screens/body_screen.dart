@@ -58,6 +58,7 @@ class _BodyScreenState extends State<BodyScreen> {
                 controller: v1,
                 autofocus: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: decimalInput,
                 onTap: selectAllOnTap(v1),
                 decoration: InputDecoration(
                   labelText: type.secondLabel == null ? type.label : tr('Systolic', 'Bovendruk'),
@@ -70,6 +71,7 @@ class _BodyScreenState extends State<BodyScreen> {
                 TextField(
                   controller: v2,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: decimalInput,
                   onTap: selectAllOnTap(v2),
                   decoration: InputDecoration(labelText: tr('Diastolic', 'Onderdruk'), suffixText: type.unit, errorText: error2),
                 ),

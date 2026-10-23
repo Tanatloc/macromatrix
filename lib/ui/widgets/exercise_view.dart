@@ -212,6 +212,7 @@ class _ExerciseSheet extends StatelessWidget {
             TextField(
               controller: minutes,
               keyboardType: TextInputType.number,
+              inputFormatters: wholeInput,
               onTap: selectAllOnTap(minutes),
               onChanged: durationChanged,
               decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
@@ -220,6 +221,7 @@ class _ExerciseSheet extends StatelessWidget {
             TextField(
               controller: kcal,
               keyboardType: TextInputType.number,
+              inputFormatters: wholeInput,
               onTap: selectAllOnTap(kcal),
               onChanged: (_) => kcalEdited = true,
               decoration: InputDecoration(labelText: tr('Burned', 'Verbrand'), suffixText: 'kcal'),

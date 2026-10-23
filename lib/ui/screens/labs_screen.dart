@@ -287,6 +287,7 @@ class LabsScreen extends StatelessWidget {
                           controller: value,
                           autofocus: true,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: decimalInput,
                           onTap: selectAllOnTap(value),
                           decoration: InputDecoration(labelText: tr('Value', 'Waarde')),
                         ),

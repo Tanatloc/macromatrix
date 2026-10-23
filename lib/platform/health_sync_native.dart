@@ -18,7 +18,18 @@ class HealthSync {
     HealthDataType.WORKOUT,
     HealthDataType.TOTAL_CALORIES_BURNED,
     HealthDataType.DISTANCE_DELTA,
+    HealthDataType.BODY_FAT_PERCENTAGE,
+    HealthDataType.LEAN_BODY_MASS,
+    HealthDataType.BODY_WATER_MASS,
   ];
+
+  /// Lichaamssamenstelling van een slimme weegschaal: de app van de weegschaal rekent de
+  /// percentages uit en zet ze in Health Connect, wij nemen ze daar over.
+  static const _bodyTypes = {
+    HealthDataType.BODY_FAT_PERCENTAGE: 'body_fat',
+    HealthDataType.LEAN_BODY_MASS: 'lean_mass',
+    HealthDataType.BODY_WATER_MASS: 'body_water',
+  };
 
   /// Aan op dit toestel (lokale instelling, want toestemming geldt per toestel).
   bool get enabled => state.user.setting('_health')?['on'] == true;
@@ -60,23 +71,26 @@ class HealthSync {
       }
 
       final points = _health.removeDuplicates(
-        await _health.getHealthDataFromTypes(types: const [HealthDataType.WEIGHT, HealthDataType.WORKOUT], startTime: from, endTime: now),
+        await _health.getHealthDataFromTypes(
+          types: [HealthDataType.WEIGHT, HealthDataType.WORKOUT, ..._bodyTypes.keys],
+          startTime: from,
+          endTime: now,
+        ),
       );
 
       // Gewicht: de laatste meting per dag
-      final weights = <String, (DateTime, double)>{};
-      for (final p in points.where((p) => p.type == HealthDataType.WEIGHT)) {
-        final v = p.value;
-        if (v is! NumericHealthValue) continue;
-        final day = dayKey(p.dateFrom);
-        if (weights[day] == null || p.dateFrom.isAfter(weights[day]!.$1)) weights[day] = (p.dateFrom, v.numericValue.toDouble());
-      }
       String? latestDay;
-      for (final MapEntry(key: day, value: (at, kg)) in weights.entries) {
-        final time = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
-        if (db.upsertBiometric(id: 'hc:weight:$day', day: day, type: 'weight', value: (kg * 10).round() / 10, time: time)) {
+      for (final MapEntry(key: day, value: (at, kg)) in _lastPerDay(points, HealthDataType.WEIGHT).entries) {
+        if (db.upsertBiometric(id: 'hc:weight:$day', day: day, type: 'weight', value: (kg * 10).round() / 10, time: _hhmm(at))) {
           changed++;
           if (latestDay == null || day.compareTo(latestDay) > 0) latestDay = day;
+        }
+      }
+
+      // Lichaamssamenstelling: ook de laatste meting per dag
+      for (final MapEntry(key: hcType, value: bioType) in _bodyTypes.entries) {
+        for (final MapEntry(key: day, value: (at, value)) in _lastPerDay(points, hcType).entries) {
+          if (db.upsertBiometric(id: 'hc:$bioType:$day', day: day, type: bioType, value: (value * 10).round() / 10, time: _hhmm(at))) changed++;
         }
       }
 
@@ -103,6 +117,20 @@ class HealthSync {
       return 0;
     }
   }
+
+  /// De laatste meting per dag voor één soort, als dag → (tijdstip, waarde).
+  static Map<String, (DateTime, double)> _lastPerDay(List<HealthDataPoint> points, HealthDataType type) {
+    final out = <String, (DateTime, double)>{};
+    for (final p in points.where((p) => p.type == type)) {
+      final v = p.value;
+      if (v is! NumericHealthValue) continue;
+      final day = dayKey(p.dateFrom);
+      if (out[day] == null || p.dateFrom.isAfter(out[day]!.$1)) out[day] = (p.dateFrom, v.numericValue.toDouble());
+    }
+    return out;
+  }
+
+  static String _hhmm(DateTime at) => '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
 
   /// Wanneer voor het laatst overgenomen, of null.
   DateTime? get lastSync {

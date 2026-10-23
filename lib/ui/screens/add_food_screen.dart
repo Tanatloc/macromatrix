@@ -40,7 +40,7 @@ enum _Scope {
 /// Zoeken en toevoegen: recent gegeten, maaltijden, recepten, eigen producten, de ingebouwde database en
 /// Open Food Facts. Met [pickOnly] om een ingrediënt te kiezen (geeft een [ItemTemplate] terug).
 class AddFoodScreen extends StatefulWidget {
-  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false, this.forPlan = false, this.scan = false});
+  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false, this.forPlan = false, this.scan = false, this.initialQuery});
   final Meal meal;
   final bool pickOnly;
 
@@ -49,6 +49,9 @@ class AddFoodScreen extends StatefulWidget {
 
   /// Met [pickOnly]: kiezen voor de planner (in plaats van voor een recept).
   final bool forPlan;
+
+  /// Begin meteen met deze zoekterm (bv. vanuit Snel loggen als daar niets gevonden werd).
+  final String? initialQuery;
 
   @override
   State<AddFoodScreen> createState() => _AddFoodScreenState();
@@ -73,6 +76,10 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   void initState() {
     super.initState();
     _focus.addListener(() => setState(() {}));
+    if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
+      _query.text = widget.initialQuery!.trim();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onChanged(_query.text));
+    }
     if (widget.scan) WidgetsBinding.instance.addPostFrameCallback((_) => _scan());
   }
 
@@ -376,6 +383,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                                       onPressed: () {
                                         _query.clear();
                                         _onChanged('');
+                                        _focus.requestFocus();
                                       },
                                     ),
                                   ],

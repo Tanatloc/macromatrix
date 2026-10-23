@@ -13,6 +13,7 @@ import '../../nutrition/quick_parse.dart';
 import '../../platform/cloud_voice.dart';
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
+import '../screens/add_food_screen.dart';
 import '../theme.dart';
 import 'kit.dart';
 import 'undo.dart';
@@ -364,7 +365,31 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: !l.found
-                      ? Text(tr('"${l.item.query}": nothing found', '"${l.item.query}": niets gevonden'), style: TextStyle(color: p.ink3))
+                      ? InkWell(
+                          onTap: () async {
+                            final picked = await Navigator.of(context).push<void>(
+                              MaterialPageRoute(
+                                builder: (_) => AddFoodScreen(meal: _meal, initialQuery: l.item.query),
+                              ),
+                            );
+                            if (mounted) setState(() => _lines = [..._lines]..remove(l));
+                            return picked;
+                          },
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  tr(
+                                    '"${l.item.query}": nothing found — tap to search yourself',
+                                    '"${l.item.query}": niets gevonden — tik om zelf te zoeken',
+                                  ),
+                                  style: TextStyle(color: p.ink3),
+                                ),
+                              ),
+                              Icon(Icons.search_rounded, size: 18, color: p.ink3),
+                            ],
+                          ),
+                        )
                       : Row(
                           children: [
                             Expanded(

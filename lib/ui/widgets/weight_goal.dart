@@ -87,6 +87,7 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
       child: TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: decimalInput,
         onTap: selectAllOnTap(c),
         decoration: InputDecoration(labelText: label, suffixText: suffix, isDense: true),
         onChanged: (_) => setState(() {}),

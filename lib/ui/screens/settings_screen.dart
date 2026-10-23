@@ -318,8 +318,8 @@ class _HealthConnectTileState extends State<_HealthConnectTile> {
         SnackBar(
           content: Text(
             tr(
-              'No access. Install Health Connect and allow MacroMatrix to read steps, weight and exercise.',
-              'Geen toegang. Installeer Health Connect en geef MacroMatrix toestemming om stappen, gewicht en beweging te lezen.',
+              'No access. Install Health Connect and allow MacroMatrix to read steps, weight, body composition and exercise.',
+              'Geen toegang. Installeer Health Connect en geef MacroMatrix toestemming om stappen, gewicht, lichaamssamenstelling en beweging te lezen.',
             ),
           ),
         ),

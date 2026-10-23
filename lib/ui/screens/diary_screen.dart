@@ -1560,6 +1560,7 @@ Future<void> addExercise(BuildContext context) async {
             TextField(
               controller: minutes,
               keyboardType: TextInputType.number,
+              inputFormatters: wholeInput,
               onTap: selectAllOnTap(minutes),
               decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
               onChanged: (_) => setD(() {}),
@@ -1568,6 +1569,7 @@ Future<void> addExercise(BuildContext context) async {
             TextField(
               controller: kcal,
               keyboardType: TextInputType.number,
+              inputFormatters: wholeInput,
               onTap: selectAllOnTap(kcal),
               decoration: InputDecoration(
                 labelText: tr('Burned (empty = estimate)', 'Verbrand (leeg = schatting)'),

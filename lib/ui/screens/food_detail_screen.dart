@@ -481,6 +481,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                         controller: _qty,
                         textAlign: TextAlign.right,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: decimalInput,
                         onTap: selectAllOnTap(_qty),
                         style: numStyle(40, color: p.ink),
                         decoration: const InputDecoration(

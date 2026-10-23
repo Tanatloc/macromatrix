@@ -14,6 +14,7 @@ import '../widgets/allergen_banner.dart';
 import '../widgets/kit.dart';
 import 'food_detail_screen.dart';
 import 'scan_screen.dart';
+import '../widgets/number_input.dart';
 
 /// Tabblad Scan: een product scannen en zien wat erin zit (additieven, allergenen, Nutri-Score, bewerkingsgraad
 /// en herkomst), zoals Yuka, maar met de knop om het meteen in je dagboek te zetten.
@@ -122,6 +123,7 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
                                 child: TextField(
                                   controller: _code,
                                   keyboardType: TextInputType.number,
+                                  inputFormatters: wholeInput,
                                   textInputAction: TextInputAction.search,
                                   onSubmitted: (_) => _submit(),
                                   decoration: InputDecoration(

@@ -3,8 +3,15 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../i18n.dart';
+
+/// Laat alleen cijfers en één decimaalteken (komma of punt) toe, zodat letters niet in een getalveld komen.
+final decimalInput = <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))];
+
+/// Hetzelfde maar zonder decimaal, voor hele getallen (minuten, kcal, geboortejaar).
+final wholeInput = <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly];
 
 /// Getal uit een veld, met komma of punt als decimaalteken. Leeg of ongeldig geeft null.
 double? parseNum(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
