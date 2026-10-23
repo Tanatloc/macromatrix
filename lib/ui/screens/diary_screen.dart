@@ -1474,7 +1474,10 @@ class _EntryRow extends StatelessWidget {
 String _trim(double v) => v == v.roundToDouble() ? v.round().toString() : v.toStringAsFixed(1).dec;
 
 Future<String?> _askName(BuildContext context, Meal meal) {
-  final c = TextEditingController(text: meal.label);
+  // Leeg beginnen met de maaltijd als hint: zo plakt een getypte naam niet aan 'Ontbijt' (P142),
+  // en een lege naam wordt de (vertaalde) maaltijdnaam in plaats van 'Breakfast'.
+  final c = TextEditingController();
+  String result() => c.text.trim().isEmpty ? meal.label : c.text.trim();
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -1482,12 +1485,12 @@ Future<String?> _askName(BuildContext context, Meal meal) {
       content: TextField(
         controller: c,
         autofocus: true,
-        decoration: InputDecoration(labelText: tr('Name, e.g. "My usual breakfast"', 'Naam, bv. "Mijn standaard ontbijt"')),
-        onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        decoration: InputDecoration(labelText: tr('Name', 'Naam'), hintText: tr('e.g. ${meal.label} with eggs', 'bv. ${meal.label} met eieren')),
+        onSubmitted: (_) => Navigator.pop(ctx, result()),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-        FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: Text(tr('Save', 'Opslaan'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, result()), child: Text(tr('Save', 'Opslaan'))),
       ],
     ),
   );
@@ -2539,6 +2542,7 @@ Future<void> _copyToDay(BuildContext context, List<DiaryEntry> entries) async {
   );
   if (day == null || !context.mounted) return;
   final n = s.copyEntriesTo(entries, day);
+  _selection.value = const {};
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(
@@ -2684,6 +2688,7 @@ Future<void> _entryActions(BuildContext context, List<DiaryEntry> entries) async
       await _move(context, entries);
     case 'today':
       final n = s.copyEntriesTo(entries, logicalNow());
+      _selection.value = const {};
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('$n copied to today.', '$n gekopieerd naar vandaag.'))));
     case 'copy':
       await _copyToDay(context, entries);

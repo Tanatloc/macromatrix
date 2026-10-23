@@ -1041,6 +1041,9 @@ class AppState extends ChangeNotifier {
 
   NutrientTotals totalsFor(Meal meal) => NutrientTotals.sumOf(entriesFor(meal).map((e) => withDerived(e.amounts)));
 
+  /// Terug naar de dag van vandaag (bv. via het tabblad Vandaag).
+  void goToToday() => setDate(logicalNow());
+
   void setDate(DateTime d) {
     _date = _dateOnly(d);
     _refresh();

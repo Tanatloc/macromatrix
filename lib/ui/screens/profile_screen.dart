@@ -21,6 +21,7 @@ import 'shopping_screen.dart';
 import 'settings_screen.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
+import '../widgets/undo.dart';
 
 /// Profiel en doelen: energie (doel, tempo, formule of adaptief), macro's, voorkeuren, eigen doelen per
 /// voedingsstof en het weekschema. De overige instellingen staan achter het tandwiel.
@@ -440,8 +441,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 TextButton(onPressed: () => _weightGoal(context.read<AppState>(), p), child: Text(tr('Change', 'Wijzigen'))),
                 TextButton(
-                  onPressed: () =>
-                      _update(p.copyWith(targetWeightKg: () => null, targetDate: () => null, rateKgPerWeek: () => p.rate == 0 ? null : p.rate)),
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(tr('Stop your plan?', 'Je plan stoppen?')),
+                        content: Text(tr('Your goal goes back to keeping your weight.', 'Je doel gaat terug naar je gewicht behouden.')),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Stop plan', 'Plan stoppen'))),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      _update(p.copyWith(targetWeightKg: () => null, targetDate: () => null, goal: Goal.maintain, rateKgPerWeek: () => null));
+                    }
+                  },
                   child: Text(tr('Stop plan', 'Plan stoppen')),
                 ),
               ],
@@ -682,7 +697,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   label: d.label,
                   selected: preset == d,
                   height: 30,
-                  onTap: () => _update(p.copyWith(proteinPct: d.protein, carbsPct: d.carbs, fatPct: d.fat)),
+                  onTap: () {
+                    final before = p;
+                    _update(p.copyWith(proteinPct: d.protein, carbsPct: d.carbs, fatPct: d.fat));
+                    showUndo(context, tr('Macros set to ${d.label}', "Macro's op ${d.label}"), () => _update(before));
+                  },
                 ),
             ],
           ),

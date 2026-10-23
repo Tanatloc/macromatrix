@@ -161,6 +161,8 @@ class _ShellState extends State<Shell> {
   void _go(int i) {
     // Nog eens op het tabblad waar je al bent: terug naar het begin ervan
     if (i == _index) _navigators[i].currentState?.popUntil((r) => r.isFirst);
+    // Het tabblad Vandaag brengt je ook echt naar vandaag, niet naar de dag die je laatst bekeek
+    if (i == 0) context.read<AppState>().goToToday();
     setState(() => _index = _tab.value = i);
   }
 
