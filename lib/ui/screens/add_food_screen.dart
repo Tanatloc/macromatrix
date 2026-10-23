@@ -985,10 +985,11 @@ class _ResultCard extends StatelessWidget {
                     Flexible(
                       child: Text(
                         tr(
-                          'Protein ${fmtDec(v['protein'] ?? 0)}g · Carbs ${fmtDec(v['carbs'] ?? 0)}g'
-                              '${v['sugars'] != null ? ' (sugar ${fmtDec(v['sugars']!)}g)' : ''} · Fat ${fmtDec(v['fat'] ?? 0)}g',
-                          'Eiwit ${fmtDec(v['protein'] ?? 0)}g · Koolh ${fmtDec(v['carbs'] ?? 0)}g'
-                              '${v['sugars'] != null ? ' (suiker ${fmtDec(v['sugars']!)}g)' : ''} · Vet ${fmtDec(v['fat'] ?? 0)}g',
+                          // Suiker achteraan: op een smalle gsm valt dat eerst weg, niet het vet
+                          'Protein ${fmtDec(v['protein'] ?? 0)}g · Carbs ${fmtDec(v['carbs'] ?? 0)}g · Fat ${fmtDec(v['fat'] ?? 0)}g'
+                              '${v['sugars'] != null ? ' · Sugar ${fmtDec(v['sugars']!)}g' : ''}',
+                          'Eiwit ${fmtDec(v['protein'] ?? 0)}g · Koolh ${fmtDec(v['carbs'] ?? 0)}g · Vet ${fmtDec(v['fat'] ?? 0)}g'
+                              '${v['sugars'] != null ? ' · Suiker ${fmtDec(v['sugars']!)}g' : ''}',
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

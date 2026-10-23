@@ -425,7 +425,7 @@ class _SideBar extends StatelessWidget {
                               ),
                               Text(
                                 streak > 0
-                                    ? tr('$streak days in a row', '$streak dagen op rij')
+                                    ? (streak == 1 ? tr('1 day in a row', '1 dag op rij') : tr('$streak days in a row', '$streak dagen op rij'))
                                     : tr('Log today to start a streak', 'Log vandaag voor een reeks'),
                                 style: TextStyle(fontSize: 12, color: p.ink2),
                                 maxLines: 1,

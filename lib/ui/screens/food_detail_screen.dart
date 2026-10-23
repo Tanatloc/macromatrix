@@ -801,12 +801,13 @@ class _ImpactPanel extends StatelessWidget {
     // Sporenelementen die bijna niemand bewust opvolgt: alleen tonen als dit product er echt veel van levert
     const obscure = {'fluoride', 'molybdenum', 'chloride', 'chromium', 'manganese', 'copper'};
     for (final n in nutrients) {
-      if (n.group == NutrientGroup.general || const {'protein', 'carbs', 'fat'}.contains(n.key)) continue;
+      // Geen aminozuren (eiwit staat al in de tegels erboven, en threonine of leucine zegt bijna niemand iets)
+      if (n.group == NutrientGroup.general || n.group == NutrientGroup.protein || const {'carbs', 'fat'}.contains(n.key)) continue;
       final t = s.targets[n.key];
       final add = added[n.key] ?? 0;
       if (t == null || add <= 0) continue;
       if (t.goal != null) {
-        if (obscure.contains(n.key) && add / t.goal! < 0.25) continue;
+        if (obscure.contains(n.key) && add / t.goal! < 0.5) continue;
         rows.add((n, before(n.key) / t.goal!, (before(n.key) + add) / t.goal!, false));
       } else if (t.upper != null) {
         final after = (before(n.key) + add) / t.upper!;
@@ -1071,7 +1072,8 @@ class _ValuesPanelState extends State<_ValuesPanel> {
   /// Cellen in twee kolommen (of één op smalle schermen), kolom per kolom gevuld.
   Widget _grid(List<Widget> cells) => LayoutBuilder(
     builder: (context, c) {
-      final cols = c.maxWidth >= 300 ? 2 : 1;
+      // Twee kolommen pas als de namen er voluit in passen (anders "Carbohydrat…" op een gsm)
+      final cols = c.maxWidth >= 520 ? 2 : 1;
       final rows = (cells.length / cols).ceil();
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
