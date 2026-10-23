@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../data/user_db.dart' show Meal;
+import '../../state/app_state.dart';
 import '../../i18n.dart';
 import '../screens/add_food_screen.dart';
 import '../screens/body_screen.dart';
@@ -35,10 +36,10 @@ class AddButton extends StatelessWidget {
 }
 
 /// Alles wat je kunt toevoegen, als raster van 3 × 3 onderaan het scherm. Eten gaat naar de maaltijd die past bij
-/// het uur, op de dag die open staat in je dagboek.
+/// het uur (op een andere dag: de eerste lege maaltijd), op de dag die open staat in je dagboek.
 Future<void> showAddMenu(BuildContext context) {
   final p = context.pal;
-  final meal = Meal.forHour(DateTime.now().hour);
+  final meal = context.read<AppState>().suggestedMeal;
   void push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   final items = <(IconData, Color, String, VoidCallback)>[
     (Icons.restaurant_rounded, p.protein, tr('Add food', 'Eten toevoegen'), () => push(AddFoodScreen(meal: meal))),

@@ -461,6 +461,19 @@ class UserDb {
   }
 
   /// Laatst gebruikte voedingsmiddelen (één regel per product), nieuwste eerst.
+  /// Hoe vaak elk product de laatste [days] dagen gelogd werd (voor "vaak gegeten" bovenaan).
+  Map<String, int> logCounts({int days = 60}) {
+    final d = DateTime.now().subtract(Duration(days: days));
+    final from = '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return {
+      for (final r in _db.select(
+        "SELECT food_ref, COUNT(*) AS n FROM diary WHERE deleted = 0 AND day >= ? AND food_ref NOT LIKE 'supp:%' GROUP BY food_ref",
+        [from],
+      ))
+        r['food_ref'] as String: (r['n'] as num).toInt(),
+    };
+  }
+
   List<DiaryEntry> recent({int limit = 40}) => [
     for (final r in _db.select(
       '''

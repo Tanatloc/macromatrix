@@ -139,6 +139,14 @@ class AppState extends ChangeNotifier {
   String get day => dayKey(_date);
   bool get isToday => _date == _dateOnly(logicalNow());
 
+  /// Maaltijd om iets aan toe te voegen: vandaag volgens de klok; op een andere dag de eerste maaltijd die nog leeg is,
+  /// want wie 's avonds gisteren invult, begint niet bij het avondeten.
+  Meal get suggestedMeal {
+    if (isToday) return Meal.forHour(DateTime.now().hour);
+    final used = {for (final e in _entries) e.meal};
+    return Meal.values.firstWhere((m) => !used.contains(m), orElse: () => Meal.snacks);
+  }
+
   List<DiaryEntry> _entries = const [];
   List<DiaryEntry> get entries => _entries;
 

@@ -23,6 +23,7 @@ import 'recipe_screen.dart';
 import 'scan_screen.dart';
 import '../widgets/quick_log.dart';
 import '../../i18n.dart';
+import '../widgets/undo.dart';
 
 enum _Scope {
   all('All', 'Alles'),
@@ -62,6 +63,9 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   bool _loadingOnline = false;
   String? _error;
   _Scope _scope = _Scope.all;
+
+  /// Volgorde van "Recent gebruikt" zolang dit scherm open is: niets verspringt onder je vinger na een tik op +.
+  List<String>? _recentOrder;
 
   static bool get _canScan => canScanBarcodes;
 
@@ -210,11 +214,11 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   /// Opnieuw toevoegen met dezelfde hoeveelheid als de vorige keer.
   void _addAgain(DiaryEntry e) {
     final s = context.read<AppState>();
-    s.addFood(s.foodFor(e), meal: widget.meal, grams: e.grams, quantity: e.quantity, portionLabel: e.portionLabel);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(tr('${e.name} added to ${widget.meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${widget.meal.label.toLowerCase()}')),
-      ),
+    final id = s.addFood(s.foodFor(e), meal: widget.meal, grams: e.grams, quantity: e.quantity, portionLabel: e.portionLabel);
+    showUndo(
+      context,
+      tr('${e.name} added to ${widget.meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${widget.meal.label.toLowerCase()}'),
+      () => s.removeEntriesById({id}),
     );
   }
 
@@ -517,7 +521,15 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
 
   /// Zonder zoekterm: opgeslagen maaltijden en recent gebruikte producten.
   List<Widget> _idle(AppState s, Palette p) {
-    final recent = s.user.recent(limit: 25);
+    // Vaak gegeten eerst (je dagelijkse boterham zakt niet weg na één weekend), dan het laatst gegeten
+    var recent = s.user.recent(limit: 25);
+    if (_recentOrder == null) {
+      final counts = s.user.logCounts();
+      final byFreq = [...recent]..sort((a, b) => (counts[b.foodRef] ?? 0).compareTo(counts[a.foodRef] ?? 0));
+      _recentOrder = [for (final e in byFreq) e.foodRef];
+    }
+    final order = {for (final (i, r) in _recentOrder!.indexed) r: i};
+    recent = [...recent]..sort((a, b) => (order[a.foodRef] ?? 999).compareTo(order[b.foodRef] ?? 999));
     final favorites = s.favorites();
     return [
       if (favorites.isNotEmpty) ...[

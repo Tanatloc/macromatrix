@@ -91,7 +91,7 @@ class DiaryScreen extends StatelessWidget {
           ? null
           : FloatingActionButton.extended(
               heroTag: 'add',
-              onPressed: () => openAddFood(context, Meal.forHour(DateTime.now().hour)),
+              onPressed: () => openAddFood(context, context.read<AppState>().suggestedMeal),
               icon: const Icon(Icons.add_rounded),
               label: Text(tr('Add', 'Toevoegen')),
             ),
@@ -274,7 +274,7 @@ class _DesktopDiary extends StatelessWidget {
                   children: [
                     _Header(
                       add: FilledButton.icon(
-                        onPressed: () => openAddFood(context, Meal.forHour(DateTime.now().hour)),
+                        onPressed: () => openAddFood(context, context.read<AppState>().suggestedMeal),
                         icon: const Icon(Icons.add_rounded),
                         label: Text(tr('Add food', 'Eten toevoegen')),
                       ),
@@ -734,7 +734,7 @@ class _SuggestionCard extends StatelessWidget {
     final p = context.pal;
     final x = suggestion;
     final amount = x.portion == null ? '${fmtInt(x.grams)} g' : '${x.portion!.label} (${fmtInt(x.grams)} g)';
-    final meal = Meal.forHour(DateTime.now().hour);
+    final meal = context.read<AppState>().suggestedMeal;
     return Panel(
       shadow: false,
       color: p.brandSoft,
@@ -1028,7 +1028,7 @@ class _StartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final meal = Meal.forHour(DateTime.now().hour);
+    final meal = context.read<AppState>().suggestedMeal;
     final yesterday = s.user
         .entriesFor(dayKey(s.date.subtract(const Duration(days: 1))))
         .where((e) => e.meal == meal && !e.foodRef.startsWith('supp:'))
@@ -1871,7 +1871,7 @@ class _UsualStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final meal = Meal.forHour(DateTime.now().hour);
+    final meal = context.read<AppState>().suggestedMeal;
     if (s.entriesFor(meal).isNotEmpty) return const SizedBox.shrink();
     final usual = s.usualFor(meal);
     if (usual.isEmpty) return const SizedBox.shrink();

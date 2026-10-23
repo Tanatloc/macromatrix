@@ -24,7 +24,7 @@ bool get speechSupported => kIsWeb || defaultTargetPlatform == TargetPlatform.an
 Future<void> showQuickLog(BuildContext context, {Meal? meal}) => showModalBottomSheet<void>(
   context: context,
   isScrollControlled: true,
-  builder: (_) => _QuickLogSheet(meal: meal ?? Meal.forHour(DateTime.now().hour)),
+  builder: (_) => _QuickLogSheet(meal: meal ?? context.read<AppState>().suggestedMeal),
 );
 
 class _Line {
