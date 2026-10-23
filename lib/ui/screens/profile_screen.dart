@@ -619,6 +619,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Een macro in grammen instellen (bv. 180 g eiwit); de app rekent dat om naar een percentage van je energie.
+  Future<void> _editMacroGrams(String key, String label, AppState s) async {
+    final kcalPerGram = key == 'fat' ? 9.0 : 4.0;
+    final kcal = s.targets['energy']?.goal ?? 2000;
+    final c = TextEditingController(text: fmtInt(s.targets[key]!.goal!));
+    final grams = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('$label in grams', '$label in grammen')),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: decimalInput,
+          onTap: selectAllOnTap(c),
+          decoration: InputDecoration(
+            suffixText: 'g',
+            helperText: tr('For today, at ${fmtInt(kcal)} kcal', 'Voor vandaag, bij ${fmtInt(kcal)} kcal'),
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, parseNum(c.text)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, parseNum(c.text)), child: Text(tr('Set', 'Instellen'))),
+        ],
+      ),
+    );
+    if (grams == null || grams <= 0 || kcal <= 0) return;
+    final pct = (grams * kcalPerGram / kcal * 100).clamp(0, 85).toDouble();
+    _setMacro(key, pct);
+  }
+
   Widget _macroCard(AppState s, Palette pal, Profile p) {
     final preset = _presetOf(p.proteinPct, p.carbsPct, p.fatPct);
     final rows = [
@@ -690,17 +722,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: numStyle(12, weight: FontWeight.w400, color: pal.ink3),
                       ),
                       const SizedBox(width: 10),
-                      Container(
-                        height: 30,
-                        constraints: const BoxConstraints(minWidth: 64),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        alignment: Alignment.centerRight,
-                        decoration: BoxDecoration(
-                          color: pal.surface2,
-                          border: Border.all(color: pal.line),
-                          borderRadius: BorderRadius.circular(8),
+                      InkWell(
+                        onTap: () => _editMacroGrams(key, label, s),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          height: 30,
+                          constraints: const BoxConstraints(minWidth: 64),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          alignment: Alignment.centerRight,
+                          decoration: BoxDecoration(
+                            color: pal.surface2,
+                            border: Border.all(color: pal.line),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('${fmtInt(s.targets[key]!.goal!)} g', style: numStyle(14)),
+                              const SizedBox(width: 4),
+                              Icon(Icons.edit_rounded, size: 12, color: pal.ink3),
+                            ],
+                          ),
                         ),
-                        child: Text('${fmtInt(s.targets[key]!.goal!)} g', style: numStyle(14)),
                       ),
                     ],
                   ),
