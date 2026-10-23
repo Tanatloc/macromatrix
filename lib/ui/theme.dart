@@ -381,6 +381,9 @@ ThemeData buildTheme(Brightness b) {
       contentTextStyle: TextStyle(fontFamily: kSans, fontSize: 14, color: p.bg),
       actionTextColor: p.brandSoft,
       behavior: SnackBarBehavior.floating,
+      // Zwevende meldingen hoog genoeg houden, zodat ze de knoppen onderaan (maaltijd toevoegen, FAB) niet
+      // bedekken en geen tikken opslokken. Breedte blijft vrij; alleen de onderkant schuift op.
+      insetPadding: const EdgeInsets.fromLTRB(16, 10, 16, 88),
       shape: r12,
     ),
     tooltipTheme: TooltipThemeData(

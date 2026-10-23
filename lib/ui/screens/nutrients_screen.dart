@@ -573,8 +573,13 @@ class _RatioRowState extends State<_RatioRow> {
                                 top: 0,
                                 width: 5,
                                 height: 14,
+                                // Naald in de statuskleur: buiten de goede zone mag hij niet "groen" ogen
                                 child: Container(
-                                  decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(3)),
+                                  decoration: BoxDecoration(
+                                    color: ok ? p.ok : p.low,
+                                    borderRadius: BorderRadius.circular(3),
+                                    border: Border.all(color: p.surface, width: 1),
+                                  ),
                                 ),
                               ),
                           ],
@@ -588,7 +593,7 @@ class _RatioRowState extends State<_RatioRow> {
                   child: Text(
                     v == null ? '–' : '${fmtDec(v)}:1',
                     textAlign: TextAlign.right,
-                    style: numStyle(13, color: p.ink),
+                    style: numStyle(13, color: v == null || ok ? p.ink : p.low),
                   ),
                 ),
                 const SizedBox(width: 8),

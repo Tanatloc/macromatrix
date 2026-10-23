@@ -49,15 +49,23 @@ const oracleGroups = <(String, String, String)>[
 /// Orakel: zoek de voedingsmiddelen die het rijkst zijn aan één voedingsstof, per 100 g, per 100 kcal of per portie,
 /// eventueel alleen in bepaalde voedingsgroepen.
 class OracleScreen extends StatefulWidget {
-  const OracleScreen({super.key, this.nutrient = 'potassium'});
-  final String nutrient;
+  const OracleScreen({super.key, this.nutrient});
+
+  /// Stof om mee te openen; null = de laatst gekozen stof (of eiwit de eerste keer).
+  final String? nutrient;
+
+  /// Laatste keuze in het Orakel, zodat het de volgende keer niet terugspringt (zolang de app open is).
+  static String? lastNutrient;
 
   @override
   State<OracleScreen> createState() => _OracleScreenState();
 }
 
+/// Stoffen die bovenaan de keuzelijst staan, omdat de meeste mensen daarnaar zoeken.
+const oracleCommon = ['protein', 'fiber', 'iron', 'calcium', 'vit_d'];
+
 class _OracleScreenState extends State<OracleScreen> {
-  late String _key = nutrientByKey.containsKey(widget.nutrient) ? widget.nutrient : 'potassium';
+  late String _key = [widget.nutrient, OracleScreen.lastNutrient, 'protein'].firstWhere((k) => k != null && nutrientByKey.containsKey(k))!;
   OracleRank _rank = OracleRank.per100g;
   int _limit = 25;
   final Set<String> _groups = {};
@@ -151,20 +159,15 @@ class _OracleScreenState extends State<OracleScreen> {
     final nutrientField = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        label(tr('Search nutrient', 'Voedingsstof')),
-        DropdownButtonFormField<String>(
-          initialValue: _key,
-          isExpanded: true,
-          decoration: const InputDecoration(isDense: true),
-          menuMaxHeight: 420,
-          items: [
-            for (final n in _searchable)
-              DropdownMenuItem(
-                value: n.key,
-                child: Text('${n.name} (${n.unit})', overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (k) => setState(() => _key = k ?? _key),
+        label(tr('Nutrient', 'Voedingsstof')),
+        _NutrientPicker(
+          selected: nutrientByKey[_key]!,
+          onPick: () async {
+            final k = await showNutrientSearch(context, _searchable, _key);
+            if (k == null || !mounted) return;
+            OracleScreen.lastNutrient = k;
+            setState(() => _key = k);
+          },
         ),
       ],
     );
@@ -353,6 +356,128 @@ class _OracleScreenState extends State<OracleScreen> {
                     Text(
                       fmtPct(v / goal),
                       style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Veld met de gekozen stof; tik om te zoeken.
+class _NutrientPicker extends StatelessWidget {
+  const _NutrientPicker({required this.selected, required this.onPick});
+  final Nutrient selected;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onPick,
+        child: InputDecorator(
+          decoration: const InputDecoration(isDense: true, suffixIcon: Icon(Icons.search_rounded, size: 20)),
+          child: Text(
+            '${selected.name} (${selected.unit})',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 14.5, color: p.ink),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Zoekvenster voor een voedingsstof: zoekveld bovenaan, de gangbare stoffen eerst. Geeft de gekozen sleutel terug.
+Future<String?> showNutrientSearch(BuildContext context, List<Nutrient> all, String current) => showModalBottomSheet<String>(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  showDragHandle: true,
+  builder: (_) => _NutrientSearchSheet(all: all, current: current),
+);
+
+class _NutrientSearchSheet extends StatefulWidget {
+  const _NutrientSearchSheet({required this.all, required this.current});
+  final List<Nutrient> all;
+  final String current;
+
+  @override
+  State<_NutrientSearchSheet> createState() => _NutrientSearchSheetState();
+}
+
+class _NutrientSearchSheetState extends State<_NutrientSearchSheet> {
+  String _q = '';
+
+  bool _matches(Nutrient n) {
+    final q = _q.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return n.name.toLowerCase().contains(q) || n.nameNl.toLowerCase().contains(q) || n.key.toLowerCase().contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final common = [
+      for (final k in oracleCommon)
+        if (nutrientByKey[k] case final n? when widget.all.contains(n) && _matches(n)) n,
+    ];
+    final rest = [
+      for (final n in widget.all)
+        if (!oracleCommon.contains(n.key) && _matches(n)) n,
+    ];
+    Widget tile(Nutrient n) => ListTile(
+      dense: true,
+      title: Text(n.name),
+      trailing: n.key == widget.current
+          ? Icon(Icons.check_rounded, size: 18, color: p.brand)
+          : Text(n.unit, style: TextStyle(fontSize: 12, color: p.ink3)),
+      selected: n.key == widget.current,
+      onTap: () => Navigator.of(context).pop(n.key),
+    );
+    Widget head(String t) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        t,
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.ink3),
+      ),
+    );
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.75,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                autofocus: true,
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  hintText: tr('Search nutrient', 'Zoek een voedingsstof'),
+                ),
+                onChanged: (v) => setState(() => _q = v),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: [
+                  if (common.isNotEmpty && _q.trim().isEmpty) head(tr('Common', 'Veelgezocht')),
+                  for (final n in common) tile(n),
+                  if (rest.isNotEmpty && common.isNotEmpty && _q.trim().isEmpty) head(tr('All nutrients', 'Alle voedingsstoffen')),
+                  for (final n in rest) tile(n),
+                  if (common.isEmpty && rest.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(tr('No nutrient found.', 'Geen voedingsstof gevonden.'), style: TextStyle(color: p.ink2)),
                     ),
                 ],
               ),
