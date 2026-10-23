@@ -85,6 +85,7 @@ class _ShellState extends State<Shell> {
     _widgetClicks?.cancel();
     _widgetTimer?.cancel();
     _tab.dispose();
+    _dashboardToDay.dispose();
     super.dispose();
   }
 
@@ -158,6 +159,16 @@ class _ShellState extends State<Shell> {
   /// Het actieve tabblad voor de schermen in die navigators: die bouwen niet mee als de shell herbouwt.
   late final _tab = ValueNotifier(_index);
 
+  /// Gaat af als het dagboek "Alle voedingsstoffen" opent: het dashboard toont dan die dag, niet een week of maand.
+  final _dashboardToDay = ValueNotifier(0);
+
+  /// Dashboard openen op de dag die in het dagboek gekozen is.
+  void _openDayNutrients() {
+    _navigators[1].currentState?.popUntil((r) => r.isFirst);
+    _dashboardToDay.value++;
+    _go(1);
+  }
+
   void _go(int i) {
     // Nog eens op het tabblad waar je al bent: terug naar het begin ervan
     if (i == _index) _navigators[i].currentState?.popUntil((r) => r.isFirst);
@@ -178,8 +189,8 @@ class _ShellState extends State<Shell> {
   Widget build(BuildContext context) {
     final p = context.pal;
     List<Widget> pagesFor(int index) => [
-      DiaryScreen(onOpenNutrients: () => _go(1), onOpenProfile: () => _go(4)),
-      const DashboardScreen(),
+      DiaryScreen(onOpenNutrients: _openDayNutrients, onOpenProfile: () => _go(4)),
+      DashboardScreen(showDay: _dashboardToDay),
       const ProductScanScreen(),
       FriendsScreen(active: index == 3),
       const ProfileScreen(),

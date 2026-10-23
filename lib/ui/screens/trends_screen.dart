@@ -315,7 +315,11 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             Padding(
               padding: const EdgeInsets.only(top: 5),
               child: InkWell(
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NutrientDetailScreen(nutrient: n, from: widget.from, to: widget.to),
+                  ),
+                ),
                 child: Row(
                   children: [
                     SizedBox(
@@ -384,7 +388,11 @@ class _PeriodTrendsState extends State<PeriodTrends> {
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: rare.first))),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NutrientDetailScreen(nutrient: rare.first, from: widget.from, to: widget.to),
+                  ),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(
@@ -640,7 +648,11 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           incomplete: incomplete,
           hidden: s.hiddenNutrients,
           columns: columns,
-          onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
+          onTapNutrient: (n) => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => NutrientDetailScreen(nutrient: n, from: widget.from, to: widget.to),
+            ),
+          ),
         ),
       ],
     );
