@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:macromatrix/data/food_db.dart';
 import 'package:macromatrix/data/user_db.dart';
-import 'package:macromatrix/day_clock.dart';
 import 'package:macromatrix/nutrition/targets.dart';
 import 'package:macromatrix/state/app_state.dart';
 
