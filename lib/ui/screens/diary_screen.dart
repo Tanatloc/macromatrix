@@ -47,9 +47,9 @@ class DiaryScreen extends StatelessWidget {
     if (isDesktop(context)) return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile);
     final selected = _selectedIn(s);
     final size = MediaQuery.sizeOf(context);
-    // De kop en de samenvatting blijven staan, alleen het dagboek eronder scrolt. Op een lage
-    // schermhoogte (liggende gsm) zou er te weinig plaats overblijven; dan scrolt alles mee.
-    final sticky = size.height >= 620;
+    // De kop met de dag blijft altijd staan. De samenvatting blijft alleen staan op een hoog scherm (tablet);
+    // op een gsm nam ze zo'n 40% van het scherm in en ving ze tikken op, dus daar scrolt ze mee.
+    final sticky = size.height >= 900;
     // Op een gsm zit de +-knop in de navigatie onderaan; op een tablet is er geen, dus daar een zwevende knop.
     final fab = size.width >= 800 && selected.isEmpty;
     const gap = SizedBox(height: 12);

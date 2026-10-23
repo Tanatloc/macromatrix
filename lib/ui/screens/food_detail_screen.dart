@@ -104,9 +104,21 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     _qty.text = _fmt(quantity ?? (p == null ? 100 : 1));
   });
 
+  /// Al aan het bewaren: een dubbele tik op Toevoegen voegt niets dubbel toe.
+  bool _saving = false;
+
   Future<void> _save() async {
     final s = context.read<AppState>();
-    if (_grams <= 0) return;
+    if (_grams <= 0 || _saving) return;
+    _saving = true;
+    try {
+      await _saveChecked(s);
+    } finally {
+      _saving = false;
+    }
+  }
+
+  Future<void> _saveChecked(AppState s) async {
     // Een vergeten komma of cijfers tussen het oude getal maken van 100 g snel 100 kg: eerst vragen
     final kcal = (_food.per100g['energy'] ?? 0) * _grams / 100;
     if (_grams > 2000 || kcal > 3000) {

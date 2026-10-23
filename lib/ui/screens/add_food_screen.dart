@@ -699,7 +699,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                           StepButton(
                             icon: Icons.add_rounded,
                             tooltip: tr('Add ${e.name} again', '${e.name} opnieuw toevoegen'),
-                            size: 36,
+                            size: 44,
                             onTap: () => _addAgain(e),
                           ),
                         ],

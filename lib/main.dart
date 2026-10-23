@@ -14,6 +14,7 @@ import 'i18n.dart';
 import 'sync/friends.dart';
 import 'ui/screens/auth_screens.dart';
 import 'ui/theme.dart';
+import 'ui/widgets/tap_guard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,6 +80,8 @@ class MacroMatrixApp extends StatelessWidget {
           'dark' => ThemeMode.dark,
           _ => ThemeMode.system,
         },
+        navigatorObservers: [tapGuard],
+        builder: (context, child) => tapGuard.wrap(child),
         home: const AuthGate(),
       ),
     );
