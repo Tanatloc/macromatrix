@@ -42,6 +42,9 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
   late bool _weeks = widget.date != null;
   late final _span = TextEditingController(text: widget.date == null ? '3' : '${_weeksUntil(widget.date!)}');
 
+  /// Iets aangepast: dan sluit een tik naast het venster het niet meer (je verliest anders wat je typte).
+  bool _dirty = false;
+
   static DateTime get _today {
     final n = logicalNow();
     return DateTime(n.year, n.month, n.day);
@@ -83,144 +86,164 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
         : null;
     final same = plan != null && (target! - now!).abs() < 0.1;
 
-    Widget field(TextEditingController c, String label, String suffix) => Expanded(
-      child: TextField(
-        controller: c,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: decimalInput,
-        onTap: selectAllOnTap(c),
-        decoration: InputDecoration(labelText: label, suffixText: suffix, isDense: true),
-        onChanged: (_) => setState(() {}),
+    // De eenheid als icoon: altijd zichtbaar, ook in een leeg veld (suffixText verschijnt pas bij het typen)
+    Widget field(TextEditingController c, String label, String suffix) => TextField(
+      controller: c,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: decimalInput,
+      onTap: selectAllOnTap(c),
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        suffixIcon: Padding(
+          padding: const EdgeInsetsDirectional.only(start: 4, end: 12),
+          child: Text(suffix, style: TextStyle(fontSize: 14, color: pal.ink2)),
+        ),
+        suffixIconConstraints: const BoxConstraints(minHeight: 36),
       ),
+      onChanged: (_) => setState(() => _dirty = true),
     );
 
-    return AlertDialog(
-      title: Text(tr('Goal weight calculator', 'Doelgewicht berekenen')),
-      content: SizedBox(
-        width: 380,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(children: [field(_now, tr('Now', 'Nu'), 'kg'), SizedBox(width: 10), field(_target, tr('Goal', 'Doel'), 'kg')]),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  field(_span, tr('Within', 'Binnen'), ''),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 190,
-                    child: Segmented<bool>(
-                      height: 36,
-                      items: [(true, tr('weeks', 'weken')), (false, tr('months', 'maanden'))],
-                      selected: _weeks,
-                      onChanged: (w) => setState(() {
-                        final v = _parse(_span.text);
-                        if (v != null && w != _weeks) _span.text = _fmt(w ? (v * 52 / 12).roundToDouble() : (v * 12 / 52 * 2).round() / 2);
-                        _weeks = w;
-                      }),
+    // Vaste hoogte: het venster springt niet op en neer terwijl je typt en de uitkomst of waarschuwingen
+    // verschijnen; wat niet past, scrolt
+    final height = (MediaQuery.sizeOf(context).height * 0.6).clamp(360.0, 540.0);
+
+    // Een tik naast het venster sluit het niet zodra je iets invulde; "Sluiten" blijft altijd werken
+    return PopScope(
+      canPop: !_dirty,
+      child: AlertDialog(
+        title: Text(tr('Goal weight calculator', 'Doelgewicht berekenen')),
+        content: SizedBox(
+          width: 380,
+          height: height,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: field(_now, tr('Now', 'Nu'), 'kg')),
+                    const SizedBox(width: 10),
+                    Expanded(child: field(_target, tr('Goal', 'Doel'), 'kg')),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Volle breedte met de eenheid erbij, en de keuze weken/maanden eronder
+                field(_span, tr('Within', 'Binnen'), _weeks ? tr('weeks', 'weken') : tr('months', 'maanden')),
+                const SizedBox(height: 8),
+                Segmented<bool>(
+                  height: 36,
+                  items: [(true, tr('weeks', 'weken')), (false, tr('months', 'maanden'))],
+                  selected: _weeks,
+                  onChanged: (w) => setState(() {
+                    final v = _parse(_span.text);
+                    if (v != null && w != _weeks) _span.text = _fmt(w ? (v * 52 / 12).roundToDouble() : (v * 12 / 52 * 2).round() / 2);
+                    _weeks = w;
+                    _dirty = true;
+                  }),
+                ),
+                const SizedBox(height: 16),
+                if (plan == null)
+                  Text(
+                    tr('Enter your goal weight and how long you want to take.', 'Vul je doelgewicht in en hoe lang je erover wil doen.'),
+                    style: TextStyle(fontSize: 13, color: pal.ink3),
+                  )
+                else if (same)
+                  Text(
+                    tr('That is your current weight: choose "Maintain".', 'Dat is je huidige gewicht: kies "Behouden".'),
+                    style: TextStyle(fontSize: 13, color: pal.ink2),
+                  )
+                else ...[
+                  // Een onveilig plan krijgt geen geruststellend groen vak en geen negatief aantal kcal
+                  if (plan.unsafe)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: pal.highSoft, borderRadius: BorderRadius.circular(14)),
+                      child: Text(
+                        plan.dailyKcal <= 0
+                            ? tr(
+                                'This is not possible: you would have to eat less than nothing.',
+                                'Dit kan niet: je zou minder dan niets moeten eten.',
+                              )
+                            : tr(
+                                'This plan would mean eating only ${fmtInt(plan.dailyKcal)} kcal a day. Choose a later date or a different goal.',
+                                'Dit plan betekent maar ${fmtInt(plan.dailyKcal)} kcal per dag eten. Kies een latere datum of een ander doel.',
+                              ),
+                        style: TextStyle(fontSize: 13.5, height: 1.45, color: pal.ink),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: pal.brandSoft, borderRadius: BorderRadius.circular(14)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(tr('You can eat about', 'Je mag per dag ongeveer'), style: TextStyle(fontSize: 13, color: pal.ink2)),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(fmtInt(plan.dailyKcal), style: numStyle(30, color: pal.ink)),
+                              const SizedBox(width: 6),
+                              Text(tr('kcal per day', 'kcal eten'), style: TextStyle(fontSize: 14, color: pal.ink2)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            tr(
+                              'You ${plan.ratePerWeek < 0 ? 'lose' : 'gain'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week: '
+                                  '${fmtInt(plan.dailyChange.abs())} kcal ${plan.ratePerWeek < 0 ? 'less' : 'more'} than you burn (${fmtInt(widget.tdee)} kcal) every day. '
+                                  'Goal reached around ${DateFormat('d MMMM yyyy', appLocale).format(reached!)}.',
+                              '${plan.ratePerWeek < 0 ? 'Je valt' : 'Je komt'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week '
+                                  '${plan.ratePerWeek < 0 ? 'af' : 'aan'}: elke dag ${fmtInt(plan.dailyChange.abs())} kcal '
+                                  '${plan.ratePerWeek < 0 ? 'minder' : 'meer'} dan je verbruik (${fmtInt(widget.tdee)} kcal). '
+                                  'Doel bereikt rond ${DateFormat('d MMMM yyyy', appLocale).format(reached)}.',
+                            ),
+                            style: TextStyle(fontSize: 13, height: 1.45, color: pal.ink),
+                          ),
+                        ],
+                      ),
                     ),
+                  for (final w in plan.warnings)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 18, color: pal.high),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(w, style: TextStyle(fontSize: 12.5, height: 1.4, color: pal.ink)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  Text(
+                    tr(
+                      'As a plan, the app recalculates this every time you weigh yourself, so you stay on course to your date. '
+                          'Water makes your weight fluctuate: watch your trend.',
+                      'Als plan rekent de app dit opnieuw uit telkens je je weegt, zodat je op koers blijft naar je datum. '
+                          'Vocht laat je gewicht schommelen: kijk naar je trend.',
+                    ),
+                    style: TextStyle(fontSize: 11.5, height: 1.4, color: pal.ink3),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              if (plan == null)
-                Text(
-                  tr('Enter your goal weight and how long you want to take.', 'Vul je doelgewicht in en hoe lang je erover wil doen.'),
-                  style: TextStyle(fontSize: 13, color: pal.ink3),
-                )
-              else if (same)
-                Text(
-                  tr('That is your current weight: choose "Maintain".', 'Dat is je huidige gewicht: kies "Behouden".'),
-                  style: TextStyle(fontSize: 13, color: pal.ink2),
-                )
-              else ...[
-                // Een onveilig plan krijgt geen geruststellend groen vak en geen negatief aantal kcal
-                if (plan.unsafe)
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: pal.highSoft, borderRadius: BorderRadius.circular(14)),
-                    child: Text(
-                      plan.dailyKcal <= 0
-                          ? tr('This is not possible: you would have to eat less than nothing.', 'Dit kan niet: je zou minder dan niets moeten eten.')
-                          : tr(
-                              'This plan would mean eating only ${fmtInt(plan.dailyKcal)} kcal a day. Choose a later date or a different goal.',
-                              'Dit plan betekent maar ${fmtInt(plan.dailyKcal)} kcal per dag eten. Kies een latere datum of een ander doel.',
-                            ),
-                      style: TextStyle(fontSize: 13.5, height: 1.45, color: pal.ink),
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: pal.brandSoft, borderRadius: BorderRadius.circular(14)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(tr('You can eat about', 'Je mag per dag ongeveer'), style: TextStyle(fontSize: 13, color: pal.ink2)),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(fmtInt(plan.dailyKcal), style: numStyle(30, color: pal.ink)),
-                            const SizedBox(width: 6),
-                            Text(tr('kcal per day', 'kcal eten'), style: TextStyle(fontSize: 14, color: pal.ink2)),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          tr(
-                            'You ${plan.ratePerWeek < 0 ? 'lose' : 'gain'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week: '
-                                '${fmtInt(plan.dailyChange.abs())} kcal ${plan.ratePerWeek < 0 ? 'less' : 'more'} than you burn (${fmtInt(widget.tdee)} kcal) every day. '
-                                'Goal reached around ${DateFormat('d MMMM yyyy', appLocale).format(reached!)}.',
-                            '${plan.ratePerWeek < 0 ? 'Je valt' : 'Je komt'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week '
-                                '${plan.ratePerWeek < 0 ? 'af' : 'aan'}: elke dag ${fmtInt(plan.dailyChange.abs())} kcal '
-                                '${plan.ratePerWeek < 0 ? 'minder' : 'meer'} dan je verbruik (${fmtInt(widget.tdee)} kcal). '
-                                'Doel bereikt rond ${DateFormat('d MMMM yyyy', appLocale).format(reached)}.',
-                          ),
-                          style: TextStyle(fontSize: 13, height: 1.45, color: pal.ink),
-                        ),
-                      ],
-                    ),
-                  ),
-                for (final w in plan.warnings)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.warning_amber_rounded, size: 18, color: pal.high),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(w, style: TextStyle(fontSize: 12.5, height: 1.4, color: pal.ink)),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 10),
-                Text(
-                  tr(
-                    'As a plan, the app recalculates this every time you weigh yourself, so you stay on course to your date. '
-                        'Water makes your weight fluctuate: watch your trend.',
-                    'Als plan rekent de app dit opnieuw uit telkens je je weegt, zodat je op koers blijft naar je datum. '
-                        'Vocht laat je gewicht schommelen: kijk naar je trend.',
-                  ),
-                  style: TextStyle(fontSize: 11.5, height: 1.4, color: pal.ink3),
-                ),
               ],
-            ],
+            ),
           ),
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Close', 'Sluiten'))),
+          if (plan != null && !same && !plan.unsafe)
+            FilledButton(
+              onPressed: () => Navigator.pop<WeightGoal>(context, (target: target!, date: reached!)),
+              child: Text(tr('Set as my goal', 'Als mijn doel instellen')),
+            ),
+        ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Close', 'Sluiten'))),
-        if (plan != null && !same && !plan.unsafe)
-          FilledButton(
-            onPressed: () => Navigator.pop<WeightGoal>(context, (target: target!, date: reached!)),
-            child: Text(tr('Set as my goal', 'Als mijn doel instellen')),
-          ),
-      ],
     );
   }
 }

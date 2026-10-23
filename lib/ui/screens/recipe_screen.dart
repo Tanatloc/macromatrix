@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/food_db.dart';
 import '../../data/models.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../widgets/nutrient_row.dart';
 import 'add_food_screen.dart';
+import 'food_detail_screen.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
 
@@ -49,6 +51,24 @@ class _RecipeScreenState extends State<RecipeScreen> {
     final t = await Navigator.of(context)
         .push<ItemTemplate>(MaterialPageRoute(builder: (_) => const AddFoodScreen(meal: Meal.lunch, pickOnly: true)));
     if (t != null) setState(() => _items.add(t));
+  }
+
+  /// Een ingrediënt aanpassen: het detailscherm met de huidige hoeveelheid, en de regel vervangen door wat terugkomt.
+  Future<void> _editIngredient(int i) async {
+    final s = context.read<AppState>();
+    final item = _items[i];
+    // Het volledige product (met porties); niet meer gevonden: terugvallen op wat in het recept staat
+    final ref = item.foodRef;
+    final food = (FoodDb.isDbRef(ref) ? s.foods.byRef(ref) : s.user.food(ref)) ?? item.toFood();
+    // Het detailscherm begint een portie altijd op 1: bij een ander aantal porties tonen we de grammen,
+    // zodat de hoeveelheid exact blijft
+    final portion = item.portionLabel == null || item.quantity != 1 ? null : food.portions.where((p) => p.label == item.portionLabel).firstOrNull;
+    final t = await Navigator.of(context).push<ItemTemplate>(
+      MaterialPageRoute(
+        builder: (_) => FoodDetailScreen(food: food, meal: Meal.lunch, pickOnly: true, initialGrams: item.grams, initialPortion: portion),
+      ),
+    );
+    if (t != null && mounted && i < _items.length) setState(() => _items[i] = t);
   }
 
   void _save() {
@@ -128,13 +148,27 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       onTap: selectAllOnTap(_cooked),
                       decoration: InputDecoration(
                         labelText: tr('Weight after cooking', 'Gewicht na bereiding'),
-                        suffixText: 'g',
+                        hintText: tr('Weigh the pot contents', 'Weeg de inhoud van de pot'),
+                        // Als icoon blijft de eenheid altijd zichtbaar (suffixText verschijnt pas bij het typen)
+                        suffixIcon: const Padding(padding: EdgeInsetsDirectional.only(end: 12), child: Text('g')),
+                        suffixIconConstraints: const BoxConstraints(),
                         helperText: tr('Optional (raw: ${recipe.rawGrams.round()} g)', 'Optioneel (rauw: ${recipe.rawGrams.round()} g)'),
                       ),
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              // Veel mensen zien het veld over het hoofd: zeg wat het doet (water dat pasta opneemt of soep verliest)
+              Text(
+                tr(
+                  'Pasta, rice and legumes absorb water while cooking; soups and sauces lose some. Weigh the finished dish and enter '
+                      'the weight after cooking: then a portion you weigh on your plate has the right nutrients. Leave it empty to use the raw weight.',
+                  'Pasta, rijst en peulvruchten nemen bij het koken water op; soep en saus verliezen er wat. Weeg het klare gerecht en vul '
+                      'het gewicht na bereiding in: dan klopt een portie die je op je bord weegt. Laat het leeg om met het rauwe gewicht te rekenen.',
+                ),
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.4),
               ),
               const SizedBox(height: 20),
               Row(
@@ -145,6 +179,14 @@ class _RecipeScreenState extends State<RecipeScreen> {
                   TextButton.icon(onPressed: _addIngredient, icon: Icon(Icons.add), label: Text(tr('Add', 'Toevoegen'))),
                 ],
               ),
+              if (_items.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    tr('Tap an ingredient to change its amount.', 'Tik op een ingrediënt om de hoeveelheid aan te passen.'),
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
               Card(
                 child: Column(
                   children: [
@@ -152,6 +194,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                     for (final (i, item) in _items.indexed)
                       ListTile(
                         dense: true,
+                        onTap: () => _editIngredient(i),
                         title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Text(
                           item.portionLabel == null

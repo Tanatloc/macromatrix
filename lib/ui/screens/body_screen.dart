@@ -28,12 +28,19 @@ class _BodyScreenState extends State<BodyScreen> {
 
   static String fmt(double v, int decimals) => v.toStringAsFixed(decimals).dec;
 
-  Future<void> _addMeasurement() async {
+  /// Meting toevoegen, of met [existing] een bestaande aanpassen (de soort ligt dan vast, alleen de waarde verandert).
+  Future<void> _addMeasurement({Biometric? existing}) async {
     final s = context.read<AppState>();
     final types = s.biometricTypes();
-    var type = types.first;
-    final v1 = TextEditingController();
-    final v2 = TextEditingController();
+    // Een eigen soort die niet meer in de lijst staat, toch kunnen tonen
+    final types2 = existing == null || types.any((t) => t.key == existing.type)
+        ? types
+        : [...types, BiometricType.custom(existing.type.replaceFirst('custom:', ''), '')];
+    var type = existing == null ? types2.first : types2.firstWhere((t) => t.key == existing.type);
+    // Tot 3 decimalen (overbodige nullen vallen weg), zodat bewaren zonder te wijzigen niets afrondt
+    String text(double? v) => v == null ? '' : fmtNum(v, 3);
+    final v1 = TextEditingController(text: text(existing?.value));
+    final v2 = TextEditingController(text: text(existing?.value2));
     double? parse(TextEditingController c) => parseNum(c.text);
     String? error1, error2;
 
@@ -41,7 +48,7 @@ class _BodyScreenState extends State<BodyScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
-          title: Text(tr('Add measurement', 'Meting toevoegen')),
+          title: Text(existing == null ? tr('Add measurement', 'Meting toevoegen') : tr('Edit measurement', 'Meting aanpassen')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,8 +57,8 @@ class _BodyScreenState extends State<BodyScreen> {
                 initialValue: type,
                 isExpanded: true,
                 decoration: InputDecoration(labelText: tr('What', 'Wat')),
-                items: [for (final t in types) DropdownMenuItem(value: t, child: Text('${t.label} (${t.unit})'))],
-                onChanged: (t) => setD(() => type = t!),
+                items: [for (final t in types2) DropdownMenuItem(value: t, child: Text('${t.label} (${t.unit})'))],
+                onChanged: existing != null ? null : (t) => setD(() => type = t!),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -76,18 +83,20 @@ class _BodyScreenState extends State<BodyScreen> {
                   decoration: InputDecoration(labelText: tr('Diastolic', 'Onderdruk'), suffixText: type.unit, errorText: error2),
                 ),
               ],
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await _newCustomType();
-                  },
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text(tr('Create custom measurement', 'Eigen meting maken')),
+              if (existing == null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _newCustomType();
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text(tr('Create custom measurement', 'Eigen meting maken')),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           actions: [
@@ -110,18 +119,30 @@ class _BodyScreenState extends State<BodyScreen> {
     );
     final value = parse(v1);
     if (!mounted) return;
-    if (ok == true && value != null && type.key == 'weight' && (value - s.currentWeight).abs() > 5) {
+    // Vergelijken met je vorige gewicht; bij aanpassen telt de meting zelf niet mee (je verbetert net een tikfout)
+    final last = existing == null
+        ? s.currentWeight
+        : s.user.biometricHistory('weight').where((b) => b.id != existing.id).lastOrNull?.value ?? s.currentWeight;
+    if (ok == true && value != null && type.key == 'weight' && (value - last).abs() > 5) {
       final ok2 = await confirmUnusual(
         context,
         tr(
-          '${fmt(value, 1)} kg is ${fmt((value - s.currentWeight).abs(), 1)} kg ${value > s.currentWeight ? 'more' : 'less'} than your last weight (${fmt(s.currentWeight, 1)} kg). Your goals are calculated from it.',
-          '${fmt(value, 1)} kg is ${fmt((value - s.currentWeight).abs(), 1)} kg ${value > s.currentWeight ? 'meer' : 'minder'} dan je vorige gewicht (${fmt(s.currentWeight, 1)} kg). Je doelen worden ermee berekend.',
+          '${fmt(value, 1)} kg is ${fmt((value - last).abs(), 1)} kg ${value > last ? 'more' : 'less'} than your last weight (${fmt(last, 1)} kg). Your goals are calculated from it.',
+          '${fmt(value, 1)} kg is ${fmt((value - last).abs(), 1)} kg ${value > last ? 'meer' : 'minder'} dan je vorige gewicht (${fmt(last, 1)} kg). Je doelen worden ermee berekend.',
         ),
       );
       if (!ok2) return;
     }
     if (ok == true && value != null) {
-      s.addBiometric(type.key, value, value2: type.secondLabel == null ? null : parse(v2));
+      final value2 = type.secondLabel == null ? null : parse(v2);
+      if (existing == null) {
+        s.addBiometric(type.key, value, value2: value2);
+      } else {
+        s.user.updateBiometric(existing.id, value: value, value2: value2);
+        // "Terugzetten" van de (niet verwijderde) meting laat de app alles opnieuw tonen en neemt een
+        // aangepast gewicht over in je profiel, net als na toevoegen of verwijderen
+        s.restoreBiometric(existing);
+      }
       setState(() => _chartType = type.key);
     }
   }
@@ -280,7 +301,11 @@ class _BodyScreenState extends State<BodyScreen> {
                         ),
                       ],
                     ),
-                    onTap: () => setState(() => _chartType = b.type),
+                    // Tikken: de meting aanpassen (en haar grafiek tonen)
+                    onTap: () {
+                      setState(() => _chartType = b.type);
+                      _addMeasurement(existing: b);
+                    },
                   ),
               ]),
               card(

@@ -689,6 +689,10 @@ class UserDb {
     _db.execute('UPDATE $table SET deleted = 0, updated_at = ? WHERE id = ?', [_now(), id]);
   }
 
+  /// Een meting aanpassen (getikt in de lijst): dezelfde id, dag en tijd, alleen de waarde(n).
+  void updateBiometric(String id, {required double value, double? value2}) =>
+      _db.execute('UPDATE biometrics SET value = ?, value2 = ?, updated_at = ? WHERE id = ?', [value, value2, _now(), id]);
+
   void deleteBiometric(String id) => _db.execute('UPDATE biometrics SET deleted = 1, updated_at = ? WHERE id = ?', [_now(), id]);
 
   List<Biometric> biometricsFor(String day) => [

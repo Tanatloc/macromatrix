@@ -21,6 +21,13 @@ class SupplementsScreen extends StatelessWidget {
     if (picked != null) s.addSupplement(picked);
   }
 
+  /// Een supplement uit je lijst aanpassen (ook een uit de ingebouwde lijst): naam, dosis en hoeveelheden.
+  Future<void> _edit(BuildContext context, Supplement sup) async {
+    final s = context.read<AppState>();
+    final edited = await Navigator.of(context).push<Supplement>(MaterialPageRoute(builder: (_) => _CustomScreen(existing: sup)));
+    if (edited != null) s.updateSupplement(edited);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
@@ -72,20 +79,30 @@ class SupplementsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      sup.name,
-                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      [sup.dose, if (sup.summary.isNotEmpty) sup.summary].join(' · '),
-                                      style: TextStyle(fontSize: 12.5, height: 1.4, color: pal.ink3),
-                                    ),
-                                  ],
+                                // Tik op naam of samenvatting om aan te passen
+                                child: InkWell(
+                                  onTap: () => _edit(context, sup),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        sup.name,
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        [sup.dose, if (sup.summary.isNotEmpty) sup.summary].join(' · '),
+                                        style: TextStyle(fontSize: 12.5, height: 1.4, color: pal.ink3),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                              ),
+                              IconButton(
+                                tooltip: tr('Edit', 'Aanpassen'),
+                                icon: Icon(Icons.edit_outlined, color: pal.ink3),
+                                onPressed: () => _edit(context, sup),
                               ),
                               IconButton(
                                 tooltip: tr('Remove', 'Verwijderen'),
@@ -215,18 +232,51 @@ class _CatalogScreenState extends State<_CatalogScreen> {
   }
 }
 
-/// Eigen supplement: naam, dosis en per voedingsstof de hoeveelheid per dosis.
+/// Hoeveel IU (internationale eenheden) één eenheid van de voedingsstof is, voor etiketten die nog IU gebruiken:
+/// vitamine D 1 µg = 40 IU, vitamine A (retinol) 1 µg = 3,33 IU, vitamine E 1 mg = 1,49 IU (natuurlijk
+/// alfa-tocoferol; synthetisch is 1 mg = 2,22 IU, maar we rekenen met de natuurlijke vorm en zeggen dat ook).
+const iuPerUnit = {'vit_d': 40.0, 'vit_a': 3.33, 'vit_e': 1.49};
+
+/// IU omrekenen naar de eenheid van de voedingsstof (µg of mg); null als die voedingsstof geen IU kent.
+double? fromIu(String key, double iu) => switch (iuPerUnit[key]) {
+  final f? => iu / f,
+  null => null,
+};
+
+/// Een ruime maar realistische bovengrens voor wat een supplement per dosis kan bevatten (in de eigen eenheid).
+double supplementCap(String key) {
+  const high = {'vit_a', 'vit_d', 'vit_k', 'b9', 'b12', 'biotin', 'b7', 'iodine', 'selenium', 'chromium', 'molybdenum'};
+  final unit = nutrientByKey[key]?.unit ?? 'mg';
+  if (high.contains(key) || unit == 'µg') return 100000; // µg
+  if (unit == 'g') return 500;
+  return 10000; // mg: ruim boven elke zinnige dosis
+}
+
+/// Eigen supplement: naam, dosis en per voedingsstof de hoeveelheid per dosis. Met [existing] een supplement uit
+/// je lijst aanpassen (id, vanzelf aanvinken en startdag blijven).
 class _CustomScreen extends StatefulWidget {
-  const _CustomScreen();
+  const _CustomScreen({this.existing});
+  final Supplement? existing;
 
   @override
   State<_CustomScreen> createState() => _CustomScreenState();
 }
 
 class _CustomScreenState extends State<_CustomScreen> {
-  final _name = TextEditingController();
-  final _dose = TextEditingController(text: tr('1 tablet', '1 tablet'));
-  final _amounts = <String, TextEditingController>{};
+  late final _name = TextEditingController(text: widget.existing?.name ?? '');
+  late final _dose = TextEditingController(text: widget.existing?.dose ?? tr('1 tablet', '1 tablet'));
+  late final _amounts = <String, TextEditingController>{
+    for (final e in (widget.existing?.nutrients ?? const <String, double>{}).entries)
+      if (e.key != 'energy' && nutrientByKey[e.key] != null) e.key: TextEditingController(text: _fmt(e.value)),
+  };
+
+  /// Voedingsstoffen waarvan je de hoeveelheid in IU invult (vitamine A, D, E).
+  final _iu = <String>{};
+
+  /// Na een poging om te bewaren: bij het veld zelf tonen wat er ontbreekt.
+  bool _tried = false;
+
+  static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : fmtNum(v, 3);
 
   @override
   void dispose() {
@@ -239,63 +289,91 @@ class _CustomScreenState extends State<_CustomScreen> {
   }
 
   Future<void> _addNutrient() async {
+    var q = '';
     final n = await showModalBottomSheet<Nutrient>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => SizedBox(
-        height: MediaQuery.sizeOf(ctx).height * 0.7,
-        child: ListView(
-          children: [
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final lower = q.trim().toLowerCase();
+          final list = [
             for (final n in nutrients)
-              if (n.key != 'energy' && !_amounts.containsKey(n.key))
-                ListTile(title: Text(n.name), trailing: Text(n.unit), onTap: () => Navigator.pop(ctx, n)),
-          ],
-        ),
+              if (n.key != 'energy' && !_amounts.containsKey(n.key) && (lower.isEmpty || n.name.toLowerCase().contains(lower))) n,
+          ];
+          return Padding(
+            // Het toetsenbord mag de zoekbalk niet bedekken
+            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+            child: SizedBox(
+              height: MediaQuery.sizeOf(ctx).height * 0.7,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: tr('Search, e.g. zinc or B12', 'Zoek, bv. zink of B12'),
+                        prefixIcon: const Icon(Icons.search_rounded),
+                      ),
+                      onChanged: (v) => setS(() => q = v),
+                    ),
+                  ),
+                  Expanded(
+                    child: list.isEmpty
+                        ? Center(child: Text(tr('Nothing found', 'Niets gevonden')))
+                        : ListView(
+                            children: [
+                              for (final n in list) ListTile(title: Text(n.name), trailing: Text(n.unit), onTap: () => Navigator.pop(ctx, n)),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
     if (n != null) setState(() => _amounts[n.key] = TextEditingController());
   }
 
-  /// Een ruime maar realistische bovengrens voor wat een supplement per dosis kan bevatten.
-  static double _supplementCap(String key) {
-    const high = {'vit_a', 'vit_d', 'vit_k', 'b9', 'b12', 'biotin', 'b7', 'iodine', 'selenium', 'chromium', 'molybdenum'};
-    final unit = nutrientByKey[key]?.unit ?? 'mg';
-    if (high.contains(key) || unit == 'µg') return 100000; // µg
-    if (unit == 'g') return 500;
-    return 10000; // mg: ruim boven elke zinnige dosis
+  /// Ingevulde hoeveelheid in de eenheid van de voedingsstof (IU omgerekend), of null als het veld leeg of ongeldig is.
+  double? _value(String key) {
+    final v = parseNum(_amounts[key]!.text);
+    if (v == null) return null;
+    return _iu.contains(key) ? fromIu(key, v) : v;
   }
 
+  /// Melding bij het veld zelf, al tijdens het typen: te veel per dosis (geen 999999 mg, dat ontregelt de score).
+  String? _capError(String key) {
+    final v = _value(key);
+    final cap = supplementCap(key);
+    if (v == null || v <= cap) return null;
+    final unit = nutrientByKey[key]!.unit;
+    return tr('At most ${fmtNum(cap)} $unit per dose', 'Hoogstens ${fmtNum(cap)} $unit per dosis');
+  }
+
+  bool get _noName => _name.text.trim().isEmpty;
+  bool get _noAmount => !_amounts.keys.any((k) => (_value(k) ?? 0) > 0);
+
   void _save() {
+    setState(() => _tried = true);
+    if (_noName || _noAmount || _amounts.keys.any((k) => _capError(k) != null)) return;
     final values = <String, double>{'energy': 0};
-    String? tooBig;
-    for (final e in _amounts.entries) {
-      final v = parseNum(e.value.text);
-      if (v == null || v <= 0) continue;
-      // Een plausibele bovengrens per dosis: geen 999999 mg (dat ontregelt de score)
-      final cap = _supplementCap(e.key);
-      if (v > cap) {
-        tooBig = tr(
-          '${nutrientByKey[e.key]!.name}: at most ${fmtNum(cap)} ${nutrientByKey[e.key]!.unit} per dose',
-          '${nutrientByKey[e.key]!.name}: hoogstens ${fmtNum(cap)} ${nutrientByKey[e.key]!.unit} per dosis',
-        );
-        continue;
-      }
-      values[e.key] = v;
+    for (final k in _amounts.keys) {
+      final v = _value(k);
+      if (v != null && v > 0) values[k] = v;
     }
-    final msg = _name.text.trim().isEmpty || values.length < 2
-        ? tr('Enter a name and at least one nutrient with an amount.', 'Geef een naam en minstens één voedingsstof met een hoeveelheid.')
-        : tooBig;
-    if (msg != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-      return;
-    }
+    final old = widget.existing;
     Navigator.pop(
       context,
       Supplement(
-        id: 'c${DateTime.now().millisecondsSinceEpoch}',
+        id: old?.id ?? 'c${DateTime.now().millisecondsSinceEpoch}',
         name: _name.text.trim(),
         dose: _dose.text.trim().isEmpty ? tr('1 dose', '1 dosis') : _dose.text.trim(),
         nutrients: values,
+        auto: old?.auto ?? false,
+        since: old?.since,
       ),
     );
   }
@@ -305,7 +383,7 @@ class _CustomScreenState extends State<_CustomScreen> {
     final pal = context.pal;
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr('Custom supplement', 'Eigen supplement')),
+        title: Text(widget.existing == null ? tr('Custom supplement', 'Eigen supplement') : tr('Edit supplement', 'Supplement aanpassen')),
         actions: [TextButton(onPressed: _save, child: Text(tr('Save', 'Bewaren')))],
       ),
       body: ListView(
@@ -318,7 +396,12 @@ class _CustomScreenState extends State<_CustomScreen> {
                 TextField(
                   controller: _name,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(labelText: tr('Name', 'Naam'), hintText: tr('E.g. Magnesium + B6', 'Bv. Magnesium + B6')),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    labelText: tr('Name', 'Naam'),
+                    hintText: tr('E.g. Magnesium + B6', 'Bv. Magnesium + B6'),
+                    errorText: _tried && _noName ? tr('Give the supplement a name', 'Geef het supplement een naam') : null,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -331,28 +414,18 @@ class _CustomScreenState extends State<_CustomScreen> {
                   style: TextStyle(fontWeight: FontWeight.w600, color: pal.ink),
                 ),
                 const SizedBox(height: 6),
-                for (final e in _amounts.entries)
+                for (final key in _amounts.keys.toList()) _amountRow(key),
+                if (_tried && _noAmount)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(nutrientByKey[e.key]!.name)),
-                        SizedBox(
-                          width: 130,
-                          child: TextField(
-                            controller: e.value,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            inputFormatters: decimalInput,
-                            onTap: selectAllOnTap(e.value),
-                            decoration: InputDecoration(suffixText: nutrientByKey[e.key]!.unit, isDense: true),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded),
-                          tooltip: tr('Remove', 'Weghalen'),
-                          onPressed: () => setState(() => _amounts.remove(e.key)?.dispose()),
-                        ),
-                      ],
+                    child: Text(
+                      _amounts.isEmpty
+                          ? tr(
+                              'Add at least one nutrient with the amount from the label.',
+                              'Voeg minstens één voedingsstof toe met de hoeveelheid van het etiket.',
+                            )
+                          : tr('Fill in an amount for at least one nutrient.', 'Vul bij minstens één voedingsstof een hoeveelheid in.'),
+                      style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.error),
                     ),
                   ),
                 OutlinedButton.icon(
@@ -362,6 +435,77 @@ class _CustomScreenState extends State<_CustomScreen> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _amountRow(String key) {
+    final c = _amounts[key]!;
+    final n = nutrientByKey[key]!;
+    final canIu = iuPerUnit.containsKey(key);
+    final iu = _iu.contains(key);
+    final converted = iu ? _value(key) : null;
+    final unitStyle = TextStyle(fontSize: 14, color: context.pal.ink2);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Padding(padding: const EdgeInsets.only(top: 10), child: Text(n.name)),
+          ),
+          SizedBox(
+            width: 150,
+            child: TextField(
+              controller: c,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: decimalInput,
+              onTap: selectAllOnTap(c),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                isDense: true,
+                // Eenheid als icoon: altijd zichtbaar, ook in een leeg veld. Bij A, D en E kies je µg/mg of IU.
+                suffixIcon: canIu
+                    ? PopupMenuButton<bool>(
+                        tooltip: tr('Unit', 'Eenheid'),
+                        initialValue: iu,
+                        onSelected: (v) => setState(() => v ? _iu.add(key) : _iu.remove(key)),
+                        itemBuilder: (_) => [PopupMenuItem(value: false, child: Text(n.unit)), const PopupMenuItem(value: true, child: Text('IU'))],
+                        child: Padding(
+                          padding: const EdgeInsetsDirectional.only(start: 4, end: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(iu ? 'IU' : n.unit, style: unitStyle),
+                              const Icon(Icons.arrow_drop_down_rounded, size: 20),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 4, end: 12),
+                        child: Text(n.unit, style: unitStyle),
+                      ),
+                suffixIconConstraints: const BoxConstraints(minHeight: 36),
+                errorText: _capError(key),
+                errorMaxLines: 3,
+                // Wat de IU in de eigen eenheid is; vitamine E rekent met natuurlijk alfa-tocoferol
+                helperText: converted == null
+                    ? null
+                    : '= ${fmtNum(converted, n.unit == 'µg' ? 1 : 2)} ${n.unit}${key == 'vit_e' ? tr(' (natural form)', ' (natuurlijke vorm)') : ''}',
+                helperMaxLines: 2,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded),
+            tooltip: tr('Remove', 'Weghalen'),
+            onPressed: () => setState(() {
+              _amounts.remove(key)?.dispose();
+              _iu.remove(key);
+            }),
           ),
         ],
       ),
