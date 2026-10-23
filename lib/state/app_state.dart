@@ -798,6 +798,38 @@ class AppState extends ChangeNotifier {
     }
 
     final hits = [for (final (i, f) in all.indexed) (rank(i, f), f)]..sort((a, b) => b.$1.compareTo(a.$1));
+    // P157: staan er bovenaan meerdere bronnen van hetzelfde product (banaan 51-97 kcal, rijst 113-171),
+    // dan is er geen "juiste" — kies de mediane energie i.p.v. toevallig een extreme. Een eerder gekozen of
+    // eerder gegeten product (+200/+25 in rank) staat buiten deze band en blijft dus vooraan.
+    if (hits.length >= 3) {
+      String stem(String w) => w.replaceAll(RegExp(r'(es|s)$'), '');
+      String headOf(Food f) {
+        for (final w in f.name.toLowerCase().split(',').first.split(RegExp(r'\s+'))) {
+          if (w.length >= 3) return stem(w);
+        }
+        return '';
+      }
+
+      final topHead = headOf(hits.first.$2);
+      final best = hits.first.$1;
+      final cluster = [
+        for (final h in hits)
+          if (best - h.$1 <= 3 && topHead.isNotEmpty && headOf(h.$2) == topHead && (h.$2.per100g['energy'] ?? 0) > 0) h,
+      ];
+      if (cluster.length >= 3) {
+        final energies = [for (final h in cluster) h.$2.per100g['energy']!]..sort();
+        final medE = energies[energies.length ~/ 2];
+        final lead = (cluster..sort((a, b) =>
+                (a.$2.per100g['energy']! - medE).abs().compareTo((b.$2.per100g['energy']! - medE).abs())))
+            .first
+            .$2;
+        hits.sort((a, b) => a.$2.ref == lead.ref
+            ? -1
+            : b.$2.ref == lead.ref
+                ? 1
+                : b.$1.compareTo(a.$1));
+      }
+    }
     (Food, double, Portion?) amount(Food f) {
       if (q.grams != null) return (f, q.grams!, null);
       final n = q.count ?? 1;

@@ -768,7 +768,9 @@ def validate_measured(r):
     if any(k in n for k in AMINO) and (aa > n.get('protein', 0) + 0.5 or (n.get('protein', 0) == 0 and aa > 0.3)):
         for k in AMINO:
             n.pop(k, None)
-    # Totaal kleiner dan zijn gemeten delen: het totaal is fout (de delen zijn gedetailleerder gemeten)
+    # Totaal kleiner dan zijn gemeten delen: het totaal is fout (de delen zijn gedetailleerder gemeten).
+    # Vet laten we buiten beschouwing: dat ophogen duwt de som eiwit+koolh.+vet+… soms boven 100 g, wat
+    # zichtbaarder fout is dan een vetzuuruitsplitsing die net boven het vet uitkomt.
     for total, parts in (('pufa', PUFA_PARTS), ('carbs', ('sugars', 'starch'))):
         present = [p for p in parts if p in n]
         if total in n and present:
@@ -1265,6 +1267,83 @@ def r_ok(r):
 ALL_KEYS = sorted(({k for k in USDA if not k.startswith('_')} | {'carbs', 'chloride'}) - {'energy', 'omega3', 'omega6'})
 
 
+# ─────────────────────────── Opschonen ───────────────────────────
+#
+# Laatste stap vóór het wegschrijven: waarden die niet kunnen kloppen weghalen, zodat de app ze als "onbekend"
+# toont in plaats van een verzonnen of fysiek onmogelijk getal. Raakt nooit een gemeten hoofdbestanddeel aan
+# (eiwit, koolhydraten, vet, water…), alleen micro's en afgeleide delen. Wat weg mag:
+#   - een bijgeschatte micro (≈) die t.o.v. zijn groep een uitschieter is (> 20× of < 1/20 van de mediaan):
+#     dat is een aanvulling die duidelijk de mist in ging;
+#   - vezels of zetmeel in een zuiver dierlijk product (dieren maken die niet aan);
+#   - B12, cholesterol, EPA/DHA of vitamine D (buiten paddenstoelen) in een zuiver plantaardig product.
+# Onduidelijke gevallen (energie klopt niet met de macro's, som > 100 g, waarde boven de fysieke grens) blijven
+# staan: daar is niet te zeggen welke waarde fout is. Die horen in tool/food_fixes.json na controle.
+SANITY_MICROS = (
+    'sodium', 'potassium', 'calcium', 'magnesium', 'phosphorus', 'iron', 'zinc', 'copper', 'manganese', 'selenium',
+    'iodine', 'vit_c', 'vit_d', 'vit_e', 'vit_k', 'vit_a', 'beta_carotene', 'b1', 'b2', 'b3', 'b5', 'b6', 'b9', 'b12',
+    'choline', 'cholesterol',
+)
+# Onder deze waarde telt een afwijking van de groep niet mee (meetruis rond nul)
+SANITY_FLOOR = {
+    'sodium': 20, 'potassium': 50, 'calcium': 20, 'magnesium': 10, 'phosphorus': 30, 'iron': 0.5, 'zinc': 0.5,
+    'copper': 0.1, 'manganese': 0.2, 'selenium': 5, 'iodine': 5, 'vit_c': 5, 'vit_d': 0.5, 'vit_e': 0.5, 'vit_k': 5,
+    'vit_a': 30, 'beta_carotene': 100, 'b1': 0.05, 'b2': 0.05, 'b3': 0.5, 'b5': 0.2, 'b6': 0.05, 'b9': 10, 'b12': 0.3,
+    'choline': 10, 'cholesterol': 10,
+}
+PLANT_B12_OK = re.compile(r'\b(nori|laver|seaweed|algae|spirulina|chlorella|tempeh|mushrooms?|shiitake)\b', re.I)
+PLANT_EPADHA_OK = re.compile(r'\b(algae|algal|seaweed|kelp)\b', re.I)
+
+
+def sanity_pass(rows):
+    """Onmogelijke of verzonnen micro's weghalen (zie uitleg hierboven). Geeft de tellingen per soort terug."""
+    # Medianen per groep (bron + categorie), alleen uit gemeten waarden — net als de audit
+    groups = {}
+    for r in rows:
+        key = (r['source'], r['category'] or '')
+        g = groups.setdefault(key, {})
+        for k in SANITY_MICROS:
+            if k in r['nut'] and k not in r['est']:
+                g.setdefault(k, []).append(r['nut'][k])
+
+    def drop(r, k):
+        r['nut'].pop(k, None)
+        r['est'].pop(k, None)
+
+    dier = plant = est_outlier = 0
+    for r in rows:
+        n, est, name, cat = r['nut'], r['est'], r['name'], r['category']
+        kd = kind(name, cat)
+        if kd == 'dier':
+            if n.get('fiber', 0) > 0.5:
+                drop(r, 'fiber'); dier += 1
+            if n.get('starch', 0) > 1:
+                drop(r, 'starch'); dier += 1
+        elif kd == 'plant':
+            if n.get('b12', 0) > 0.3 and not PLANT_B12_OK.search(name):
+                drop(r, 'b12'); plant += 1
+            if n.get('cholesterol', 0) > 5:
+                drop(r, 'cholesterol'); plant += 1
+            if n.get('epa', 0) + n.get('dha', 0) > 0.02 and not PLANT_EPADHA_OK.search(name):
+                drop(r, 'epa'); drop(r, 'dha'); drop(r, 'dpa'); plant += 1
+            if n.get('vit_d', 0) > 1 and not MUSHROOM.search(name):
+                drop(r, 'vit_d'); plant += 1
+        # Geschatte uitschieters t.o.v. de groep
+        g = groups.get((r['source'], cat or ''), {})
+        for k in list(est):
+            if k not in SANITY_MICROS or k not in n:
+                continue
+            vals = g.get(k, ())
+            if len(vals) < 8:
+                continue
+            med = statistics.median(vals)
+            floor = SANITY_FLOOR[k]
+            ratio = max(n[k], floor) / max(med, floor)
+            if ratio > 20 or ratio < 1 / 20:
+                drop(r, k)
+                est_outlier += 1
+    return dier, plant, est_outlier
+
+
 # ─────────────────────────── Nauwkeurigheidstest ───────────────────────────
 
 HOLDOUT_KEYS = ['choline', 'b5', 'vit_k', 'iodine', 'selenium', 'vit_d', 'b12', 'manganese', 'copper', 'vit_e', 'b9',
@@ -1398,6 +1477,8 @@ def main(root, target):
     if hidden:
         holdout_report(hidden)
         return
+    # Vitamine A opnieuw uit retinol + bètacaroteen, nu bètacaroteen eventueel is aangevuld
+    for r in rows:
         bc = r['nut'].get('beta_carotene')
         if r['retinol'] == 'unknown' and bc is not None and kind(r['name'], r['category']) == 'plant':
             # Planten bevatten geen retinol: vitamine A = bètacaroteen / 12
@@ -1408,6 +1489,8 @@ def main(root, target):
         elif isinstance(r['retinol'], float) and 'beta_carotene' in r['est'] and bc:
             r['nut']['vit_a'] = r['retinol'] + bc / 12
             r['est']['vit_a'] = r['est']['beta_carotene']
+    d, p, eo = sanity_pass(rows)
+    print(f'opgeschoond: dierlijk vezels/zetmeel {d}, plantaardig onmogelijk {p}, geschatte uitschieters {eo}')
 
     # Het label gaat mee naar de app (voor advies en voedingsgroepen), met n = in hoeveel bronnen dit voedingsmiddel
     # voorkomt: hoe meer landen het in hun tabel hebben, hoe gewoner het is
