@@ -105,10 +105,16 @@ class RecapScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    tr(
-                                      'You logged ${r.daysLogged} of ${r.daysInPeriod} days.',
-                                      'Je logde ${r.daysLogged} van de ${r.daysInPeriod} dagen.',
-                                    ),
+                                    // 'van de 412 dagen' sinds de installatie klinkt als een verwijt; enkel bij een maand of korter
+                                    r.daysInPeriod <= 31
+                                        ? tr(
+                                            'You logged ${r.daysLogged} of ${r.daysInPeriod} days.',
+                                            'Je logde ${r.daysLogged} van de ${r.daysInPeriod} dagen.',
+                                          )
+                                        : tr(
+                                            '${r.daysLogged} ${r.daysLogged == 1 ? 'day' : 'days'} logged.',
+                                            '${r.daysLogged} ${r.daysLogged == 1 ? 'dag' : 'dagen'} gelogd.',
+                                          ),
                                   ),
                                 ],
                               ),

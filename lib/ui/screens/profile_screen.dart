@@ -23,6 +23,14 @@ import '../../i18n.dart';
 import '../widgets/number_input.dart';
 import '../widgets/undo.dart';
 
+/// Vraag om het Profiel bij de doelen (energie en macro's) te tonen in plaats van bovenaan bij je level (P03).
+/// Elke verhoging is één vraag; een profielscherm dat nog niet bestond, handelt een openstaande vraag af bij het openen.
+final profileGoalsRequest = ValueNotifier<int>(0);
+int _goalsHandled = 0;
+
+/// Naar de doelen in het Profiel scrollen (het tabblad zelf openen doet de shell).
+void showProfileGoals() => profileGoalsRequest.value++;
+
 /// Profiel en doelen: energie (doel, tempo, formule of adaptief), macro's, voorkeuren, eigen doelen per
 /// voedingsstof en het weekschema. De overige instellingen staan achter het tandwiel.
 class ProfileScreen extends StatefulWidget {
@@ -37,11 +45,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Profile get _p => context.read<AppState>().profile;
 
+  final _goalsKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    profileGoalsRequest.addListener(_toGoals);
+    if (profileGoalsRequest.value > _goalsHandled) _toGoals();
+  }
+
+  /// Na de volgende frame (het tabblad moet eerst zichtbaar zijn) naar de energiekaart scrollen.
+  void _toGoals() {
+    _goalsHandled = profileGoalsRequest.value;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _goalsKey.currentContext;
+      if (!mounted || ctx == null) return;
+      Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+    });
+  }
+
   static String _num(double v) => v == v.roundToDouble() ? '${v.round()}' : '$v'.dec;
   static double? _parse(String s) => double.tryParse(s.replaceAll(',', '.'));
 
   @override
   void dispose() {
+    profileGoalsRequest.removeListener(_toGoals);
     _energy.dispose();
     super.dispose();
   }
@@ -319,7 +347,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ],
                   right: [
-                    _energyCard(s, pal, p),
+                    KeyedSubtree(key: _goalsKey, child: _energyCard(s, pal, p)),
                     const SizedBox(height: 10),
                     _macroCard(s, pal, p),
                     const SizedBox(height: 10),

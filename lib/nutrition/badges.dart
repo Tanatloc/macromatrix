@@ -2,7 +2,7 @@
 /// goud, platina en diamant. Het icoon blijft hetzelfde, de vormgeving groeit mee.
 ///
 /// Alles wordt berekend uit wat je in de app logde (dezelfde regels als XP: op tijd, geen import) en uit je
-/// battles. Badges en titels geven geen XP. Je kiest zelf welke titel onder je naam staat en welke 3 badges je
+/// battles. Badges en titels geven geen XP. Je kiest zelf welke titel vrienden bij je avatar zien en welke 3 badges je
 /// vrienden zien (je showcase).
 library;
 
@@ -124,7 +124,7 @@ const badgeCategories = [
 
 final categoryById = {for (final c in badgeCategories) c.id: c};
 
-/// Titels onder je naam, vrijgespeeld door een niveau in een categorie.
+/// Titels bij je avatar (voor vrienden), vrijgespeeld door een niveau in een categorie.
 class ProfileTitle {
   const ProfileTitle(this.id, this._name, [this.category, this.tier = 0]);
   final String id;

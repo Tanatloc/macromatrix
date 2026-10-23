@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
@@ -63,11 +65,11 @@ class MacroMatrixApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mode = context.select<AppState, String>((s) => s.themeMode);
-    // Andere taal: alles opnieuw opbouwen
+    // Andere taal: nieuwe locale, en _LanguageRebuild bouwt alle schermen opnieuw op. Geen nieuwe sleutel meer op
+    // MaterialApp: dat gooide alles weg (terug naar het eerste tabblad, open schermen dicht, dag bleef staan) (P15).
     return ValueListenableBuilder<AppLang>(
       valueListenable: appLang,
       builder: (context, lang, _) => MaterialApp(
-        key: ValueKey(lang),
         locale: Locale(lang.name),
         supportedLocales: const [Locale('en'), Locale('nl')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -81,9 +83,90 @@ class MacroMatrixApp extends StatelessWidget {
           _ => ThemeMode.system,
         },
         navigatorObservers: [tapGuard],
-        builder: (context, child) => tapGuard.wrap(child),
+        builder: (context, child) => _LanguageRebuild(child: EscapeToClose(child: tapGuard.wrap(child))),
         home: const AuthGate(),
       ),
     );
   }
+}
+
+/// Bij een andere taal alles eronder opnieuw laten bouwen, ook schermen en tabbladen die niets van de taal
+/// weten (de teksten komen uit tr()). De toestand (tabblad, open schermen, dag, ingevulde velden) blijft.
+class _LanguageRebuild extends StatefulWidget {
+  const _LanguageRebuild({required this.child});
+  final Widget child;
+
+  @override
+  State<_LanguageRebuild> createState() => _LanguageRebuildState();
+}
+
+class _LanguageRebuildState extends State<_LanguageRebuild> {
+  @override
+  void initState() {
+    super.initState();
+    appLang.addListener(_rebuildAll);
+  }
+
+  @override
+  void dispose() {
+    appLang.removeListener(_rebuildAll);
+    super.dispose();
+  }
+
+  void _rebuildAll() {
+    if (!mounted) return;
+    // Midden in een bouwbeurt mag niets als vuil gemarkeerd worden: dan na deze frame
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => _rebuildAll());
+      return;
+    }
+    void mark(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(mark);
+    }
+
+    (context as Element).visitChildren(mark);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// Escape sluit het bovenste scherm, onderblad of venster, zoals de terugknop (P132). Standaard doet Escape dat
+/// alleen bij vensters die je met een tik ernaast mag sluiten; volledige schermen bleven op een pc gewoon staan.
+/// Een navigator die niets meer kan sluiten, laat de toets door (bv. aan een tekstveld).
+class EscapeToClose extends StatelessWidget {
+  const EscapeToClose({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Shortcuts(
+    shortcuts: const {SingleActivator(LogicalKeyboardKey.escape): _CloseTopIntent()},
+    child: Actions(actions: {_CloseTopIntent: _CloseTopAction()}, child: child),
+  );
+}
+
+class _CloseTopIntent extends Intent {
+  const _CloseTopIntent();
+}
+
+class _CloseTopAction extends Action<_CloseTopIntent> {
+  /// De dichtstbijzijnde navigator (vanaf wat de focus heeft) die nog iets kan sluiten: een geneste navigator
+  /// van een tabblad op een pc, anders de hoofdnavigator.
+  NavigatorState? _target() {
+    final ctx = primaryFocus?.context;
+    if (ctx == null || !ctx.mounted) return null;
+    NavigatorState? nav = Navigator.maybeOf(ctx);
+    while (nav != null) {
+      if (nav.canPop()) return nav;
+      nav = nav.context.findAncestorStateOfType<NavigatorState>();
+    }
+    return null;
+  }
+
+  @override
+  bool isEnabled(_CloseTopIntent intent) => _target() != null;
+
+  @override
+  Object? invoke(_CloseTopIntent intent) => _target()?.maybePop();
 }
