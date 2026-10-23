@@ -86,6 +86,15 @@ enum OracleRank {
   String get label => tr(en, nl);
 }
 
+/// Wat [AppState.addFood] deed: een nieuwe regel, of de hoeveelheid erbij in een bestaande regel
+/// (dan met de hoeveelheid van daarvoor, om het ongedaan te kunnen maken).
+class AddedEntry {
+  const AddedEntry(this.id, {this.prevGrams, this.prevQuantity});
+  final String id;
+  final double? prevGrams, prevQuantity;
+  bool get merged => prevGrams != null;
+}
+
 class AppState extends ChangeNotifier {
   AppState({required this.foods, required this.user, OffClient? off, FdcClient? fdc}) : off = off ?? OffClient(), fdc = fdc ?? FdcClient() {
     _readSettings();
@@ -1181,13 +1190,35 @@ class AppState extends ChangeNotifier {
 
   // ── Dagboek ──
 
-  /// Voegt een product toe aan de dag en geeft de id van de nieuwe regel terug.
-  String addFood(Food food, {required Meal meal, required double grams, required double quantity, String? portionLabel, String? time}) {
+  /// Voegt een product toe aan de dag. Staat hetzelfde product met dezelfde portie al in die maaltijd (zonder
+  /// eigen tijd), dan komt de hoeveelheid bij die regel in plaats van een tweede regel. Geef het resultaat aan
+  /// [undoAdds] om het ongedaan te maken.
+  AddedEntry addFood(Food food, {required Meal meal, required double grams, required double quantity, String? portionLabel, String? time}) {
     // Opgezochte en eigen producten lokaal bewaren, zodat ze bij "recent" en offline beschikbaar blijven
     if (!FoodDb.isDbRef(food.ref) && food.source != FoodSource.recipe) user.saveFood(food);
-    final id = user.addEntry(day: day, meal: meal, food: food, grams: grams, quantity: quantity, portionLabel: portionLabel, time: time);
+    final AddedEntry added;
+    final into = user.mergeTarget(day: day, meal: meal, food: food, portionLabel: portionLabel, time: time);
+    if (into != null) {
+      user.updateEntryAmount(into.id, into.grams + grams, into.quantity + quantity);
+      added = AddedEntry(into.id, prevGrams: into.grams, prevQuantity: into.quantity);
+    } else {
+      added = AddedEntry(user.addEntry(day: day, meal: meal, food: food, grams: grams, quantity: quantity, portionLabel: portionLabel, time: time));
+    }
     _refresh();
-    return id;
+    return added;
+  }
+
+  /// Toevoegingen ongedaan maken: nieuwe regels weg, samengevoegde regels terug naar hun vorige hoeveelheid.
+  /// Achterstevoren, zodat twee toevoegingen aan dezelfde regel netjes teruggedraaid worden.
+  void undoAdds(Iterable<AddedEntry> added) {
+    for (final a in added.toList().reversed) {
+      if (a.merged) {
+        user.updateEntryAmount(a.id, a.prevGrams!, a.prevQuantity!);
+      } else {
+        user.deleteEntry(a.id);
+      }
+    }
+    _refresh();
   }
 
   /// Net toegevoegde regels weer weghalen (ongedaan maken na Snel loggen).
@@ -1244,7 +1275,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// Een eerder gelogde regel opnieuw toevoegen (zelfde hoeveelheid) aan [meal] op de gekozen dag.
-  void addAgain(DiaryEntry e, Meal meal) => addFood(foodFor(e), meal: meal, grams: e.grams, quantity: e.quantity, portionLabel: e.portionLabel);
+  AddedEntry addAgain(DiaryEntry e, Meal meal) => addFood(foodFor(e), meal: meal, grams: e.grams, quantity: e.quantity, portionLabel: e.portionLabel);
 
   int copyMealFromYesterday(Meal meal) {
     final n = user.copyMeal(fromDay: dayKey(_date.subtract(const Duration(days: 1))), meal: meal, toDay: day);

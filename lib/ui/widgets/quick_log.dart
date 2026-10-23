@@ -268,7 +268,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
 
   void _addAll() {
     final s = context.read<AppState>();
-    final added = <String>{};
+    final added = <AddedEntry>[];
     for (final l in _lines) {
       if (!l.found) continue;
       final (food, grams, portion) = l.pick;
@@ -285,7 +285,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
         'Added $n ${n == 1 ? 'item' : 'items'} to ${_meal.label.toLowerCase()}',
         '$n ${n == 1 ? 'item' : 'items'} toegevoegd aan ${_meal.label.toLowerCase()}',
       ),
-      () => s.removeEntriesById(added),
+      () => s.undoAdds(added),
       messenger: messenger,
     );
   }

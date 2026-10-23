@@ -376,6 +376,30 @@ class UserDb {
     return id;
   }
 
+  /// Bestaande regel waar een nieuwe toevoeging bij opgeteld mag worden: zelfde dag, maaltijd, product,
+  /// portie en voedingswaarden, geen eigen tijd (of dezelfde) en niet uit een herhaling. Null als er geen is.
+  ({String id, double grams, double quantity})? mergeTarget({
+    required String day,
+    required Meal meal,
+    required Food food,
+    String? portionLabel,
+    String? time,
+  }) {
+    final rows = _db.select(
+      'SELECT id, grams, quantity FROM diary WHERE day = ? AND meal = ? AND food_ref = ? AND deleted = 0 AND repeat_id IS NULL '
+      'AND portion_label IS ? AND (time IS NULL OR time IS ?) AND nutrients = ? ORDER BY created_at LIMIT 1',
+      [day, meal.index, food.ref, portionLabel, time, encodeNutrients(food.per100g)],
+    );
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return (id: r['id'] as String, grams: (r['grams'] as num).toDouble(), quantity: (r['quantity'] as num).toDouble());
+  }
+
+  /// Alleen de hoeveelheid van een regel aanpassen (samenvoegen en ongedaan maken daarvan).
+  void updateEntryAmount(String id, double grams, double quantity) {
+    _db.execute('UPDATE diary SET grams = ?, quantity = ?, updated_at = ? WHERE id = ?', [grams, quantity, _now(), id]);
+  }
+
   /// Een opgeslagen item (uit een maaltijd of herhaling) in het dagboek zetten.
   String addTemplate(String day, Meal meal, ItemTemplate t, {String? time, String? repeatId, String? id}) => addEntry(
     day: day,

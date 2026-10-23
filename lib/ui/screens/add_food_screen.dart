@@ -237,11 +237,11 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   /// Opnieuw toevoegen met dezelfde hoeveelheid als de vorige keer.
   void _addAgain(DiaryEntry e) {
     final s = context.read<AppState>();
-    final id = s.addFood(s.foodFor(e), meal: widget.meal, grams: e.grams, quantity: e.quantity, portionLabel: e.portionLabel);
+    final added = s.addAgain(e, widget.meal);
     showUndo(
       context,
       tr('${e.name} added to ${widget.meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${widget.meal.label.toLowerCase()}'),
-      () => s.removeEntriesById({id}),
+      () => s.undoAdds([added]),
     );
   }
 
