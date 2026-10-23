@@ -256,7 +256,33 @@ class PageHeader extends StatelessWidget {
   );
 }
 
-/// Vierkante knop met een icoon en een dunne rand (40 × 40).
+/// Minimale tikzone voor kleine knoppen (richtlijn: 44–48 px). De knop zelf blijft even groot en
+/// staat in het midden; een tik in de doorzichtige rand telt ook.
+const double kMinTapTarget = 44;
+
+class _HitArea extends StatelessWidget {
+  const _HitArea({required this.size, required this.onTap, required this.child});
+  final double size;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (size >= kMinTapTarget) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      onTap: onTap,
+      child: SizedBox(
+        width: kMinTapTarget,
+        height: kMinTapTarget,
+        child: Center(child: child),
+      ),
+    );
+  }
+}
+
+/// Vierkante knop met een icoon en een dunne rand (40 × 40, tikzone minstens 44 × 44).
 class SquareButton extends StatelessWidget {
   const SquareButton({super.key, required this.icon, required this.onPressed, required this.tooltip, this.filled = false, this.size = 40});
   final IconData icon;
@@ -268,21 +294,25 @@ class SquareButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: filled ? p.ink : p.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(size >= 46 ? 14 : 12),
-          side: filled ? BorderSide.none : BorderSide(color: p.line),
-        ),
-        child: InkWell(
-          customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(size >= 46 ? 14 : 12)),
-          onTap: onPressed,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Icon(icon, size: size >= 46 ? 22 : 18, color: filled ? p.bg : (onPressed == null ? p.ink3 : p.ink)),
+    return _HitArea(
+      size: size,
+      onTap: onPressed,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: filled ? p.ink : p.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(size >= 46 ? 14 : 12),
+            side: filled ? BorderSide.none : BorderSide(color: p.line),
+          ),
+          child: InkWell(
+            customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(size >= 46 ? 14 : 12)),
+            onTap: onPressed,
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Icon(icon, size: size >= 46 ? 22 : 18, color: filled ? p.bg : (onPressed == null ? p.ink3 : p.ink)),
+            ),
           ),
         ),
       ),
@@ -364,7 +394,8 @@ extension LevelColors on Palette {
 }
 
 /// Bereikbalk: loopt tot 150% van het doel; het streepje staat op het doel, de rode zone begint bij de
-/// bovengrens (of bij het maximum als de stof alleen een limiet heeft).
+/// bovengrens (of bij het maximum als de stof alleen een limiet heeft). Boven 150% komt er een donkere
+/// staart aan het eind, die breder wordt naarmate de overschrijding groter is.
 class RangeBar extends StatelessWidget {
   const RangeBar({super.key, required this.amount, required this.target, this.height = 8, this.neutral = false});
   final double amount;
@@ -373,6 +404,10 @@ class RangeBar extends StatelessWidget {
 
   /// Eén product in plaats van een dag: "nog niet gehaald" krijgt geen waarschuwingskleur.
   final bool neutral;
+
+  /// Breedte van de overloopstaart: ×1 (net boven 150%) = 5% van de balk, elke verdubbeling 5% meer, max 30%.
+  static double overflowTailWidth(double over, double width) =>
+      (width * 0.05 * (1 + math.log(math.max(1, over)) / math.ln2)).clamp(4.0, math.max(4.0, width * 0.3));
 
   @override
   Widget build(BuildContext context) {
@@ -416,6 +451,21 @@ class RangeBar extends StatelessWidget {
                 height: height,
                 decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.all(r)),
               ),
+              // Boven 150% loopt de balk niet verder; een donkere staart die groeit met de overschrijding
+              // houdt 150%, 300% en 1000% toch uit elkaar.
+              if (amount > scale)
+                Positioned(
+                  right: 0,
+                  top: 3,
+                  bottom: 3,
+                  width: overflowTailWidth(amount / scale, w),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: level == Level.high || (t.goal != null && amount >= t.goal! * 3) ? p.high : p.ink2,
+                      borderRadius: BorderRadius.horizontal(right: r),
+                    ),
+                  ),
+                ),
               Positioned(
                 left: w / 1.5 - 1,
                 top: 0,
@@ -580,10 +630,15 @@ class PillChip extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (check && selected) ...[Icon(Icons.check_rounded, size: 14, color: p.bg), const SizedBox(width: 5)],
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: selected ? p.bg : p.ink2),
+                // Plaats voor het vinkje altijd vrijhouden, anders verspringt de chip (en de rest van de rij) bij een tik
+                if (check) ...[Icon(Icons.check_rounded, size: 14, color: selected ? p.bg : Colors.transparent), const SizedBox(width: 5)],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: selected ? p.bg : p.ink2),
+                  ),
                 ),
               ],
             ),
@@ -691,7 +746,9 @@ class LegendItem extends StatelessWidget {
       swatch,
       const SizedBox(width: 6),
       // Een lang label mag op een smal scherm naar de volgende regel
-      Flexible(child: Text(label, style: TextStyle(fontSize: 11.5, color: context.pal.ink2))),
+      Flexible(
+        child: Text(label, style: TextStyle(fontSize: 11.5, color: context.pal.ink2)),
+      ),
     ],
   );
 }
@@ -744,21 +801,25 @@ class StepButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9),
-          side: BorderSide(color: p.lineStrong),
-        ),
-        child: InkWell(
-          customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9)),
-          onTap: onTap,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Icon(icon, size: size >= 40 ? 18 : 15, color: p.ink),
+    return _HitArea(
+      size: size,
+      onTap: onTap,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9),
+            side: BorderSide(color: p.lineStrong),
+          ),
+          child: InkWell(
+            customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(size >= 40 ? 12 : 9)),
+            onTap: onTap,
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Icon(icon, size: size >= 40 ? 18 : 15, color: p.ink),
+            ),
           ),
         ),
       ),
