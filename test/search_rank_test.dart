@@ -35,6 +35,17 @@ void main() {
     expect(box('cola zero').name.toLowerCase(), contains('cola'));
   });
 
+  test('Coca-Cola of coke: gewone cola met suiker, geen zoetstof of pina colada', () {
+    for (final q in ['Coca-Cola', 'coca cola', 'coke', 'pepsi']) {
+      for (final f in [box(q), quick(q)]) {
+        final n = f.name.toLowerCase();
+        expect(n, contains('cola'), reason: '$q: ${f.name}');
+        expect(n, isNot(matches(RegExp(r'sweetener|diet|colada|without added'))), reason: '$q: ${f.name}');
+        expect(f.per100g['energy']!, greaterThan(30), reason: '$q: ${f.name}');
+      }
+    }
+  });
+
   test('griekse yoghurt: gewone Griekse yoghurt, geen smaakje of merk', () {
     for (final f in [box('griekse yoghurt'), quick('griekse yoghurt')]) {
       expect(f.name, contains('Greek'), reason: f.name);

@@ -792,6 +792,11 @@ class AppState extends ChangeNotifier {
     'cola light': 'cola sweetener',
     'diet coke': 'cola sweetener',
     'pepsi max': 'cola sweetener',
+    // Een merknaam voor gewone cola: de gewone cola uit de databank (merkproducten zoek je via 'Merken')
+    'coca cola': 'cola',
+    'coca-cola': 'cola',
+    'coke': 'cola',
+    'pepsi': 'cola',
     'griekse yoghurt': 'greek yogurt',
     'halfvolle melk': 'semi-skimmed milk',
     'magere melk': 'skimmed milk',
