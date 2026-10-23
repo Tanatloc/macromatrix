@@ -3,6 +3,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:sqlite3/common.dart';
 
@@ -91,15 +92,33 @@ class FoodDb {
       match = 0;
     } else if (first.startsWith(t) || categoryFirst) {
       match = 1;
-    } else if (RegExp('\\b${RegExp.escape(t)}').hasMatch(name)) {
+    } else if (RegExp('\\b${RegExp.escape(t)}(s|es)?\\b').hasMatch(name)) {
       match = 2;
-    } else {
+    } else if (RegExp('\\b${RegExp.escape(t)}').hasMatch(name)) {
+      // Begin van een ander woord: "egg" in "eggplant"
       match = 3;
+    } else {
+      // Midden in een woord: "cola" in "chocolate"
+      match = 4;
+    }
+    // Een tweede zoekwoord dat alleen als stukje voorkomt, maakt het een slechtere treffer
+    for (final o in tokens.skip(1)) {
+      if (!RegExp('\\b${RegExp.escape(o)}').hasMatch(name)) match = math.max(match, 3);
     }
     final tier = match <= 1 ? 0 : match; // exacte en "begint met"-treffers samen, zodat Europa daar voorgaat
     final europe = source.european ? 0 : 1;
     final raw = RegExp(r'\braw\b').hasMatch(name) ? 0 : 1;
-    return ((((tier * 2 + europe) * 4 + match) * 2 + raw) * 2 + (nutrientCount < 30 ? 1 : 0)) * 1000 + name.length.clamp(0, 999);
+    // Wat je zoekt is de drank of het product zelf, niet een ingrediënt of cocktail ervan (tenzij je dat typt)
+    final q = tokens.join(' ');
+    final odd =
+        (RegExp(r'\b(irish|liqueur|cocktail|bulk|powder(ed)?|dehydrated|concentrate)\b').hasMatch(name) &&
+                !RegExp(r'irish|liqueur|cocktail|bulk|powder|dehydrated|concentrate|whey|protein').hasMatch(q)) ||
+            (RegExp(r'\b(coffee|tea|cocoa)\b').hasMatch(name) &&
+                RegExp(r'\b(ground|beans?|leaves|leaf|instant|granules)\b').hasMatch(name) &&
+                !RegExp(r'ground|bean|lea[fv]|instant|granule').hasMatch(q))
+        ? 1
+        : 0;
+    return (((((tier * 2 + odd) * 2 + europe) * 5 + match) * 2 + raw) * 2 + (nutrientCount < 30 ? 1 : 0)) * 1000 + name.length.clamp(0, 999);
   }
 
   /// SQL-uitdrukking voor de hoeveelheid van een voedingsstof per 100 g (ook voor afgeleide stoffen).

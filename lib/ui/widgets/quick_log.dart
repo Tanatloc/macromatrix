@@ -15,6 +15,7 @@ import '../../state/app_state.dart';
 import '../../sync/account.dart';
 import '../theme.dart';
 import 'kit.dart';
+import 'undo.dart';
 
 /// Spraak werkt in de Android-app en in Chrome/Edge; op Linux typ je de zin.
 bool get speechSupported => kIsWeb || defaultTargetPlatform == TargetPlatform.android;
@@ -266,23 +267,25 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
 
   void _addAll() {
     final s = context.read<AppState>();
-    var n = 0;
+    final added = <String>{};
     for (final l in _lines) {
       if (!l.found) continue;
       final (food, grams, portion) = l.pick;
-      s.addFood(food, meal: _meal, grams: grams, quantity: portion == null ? grams : (l.item.count ?? 1), portionLabel: portion?.label);
-      n++;
+      // Een andere treffer gekozen: die onthouden voor de volgende keer
+      if (l.choice != 0) s.rememberQuickPick(l.item.query, food.ref);
+      added.add(s.addFood(food, meal: _meal, grams: grams, quantity: portion == null ? grams : (l.item.count ?? 1), portionLabel: portion?.label));
     }
+    final n = added.length;
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          tr(
-            'Added $n ${n == 1 ? 'item' : 'items'} to ${_meal.label.toLowerCase()}',
-            '$n ${n == 1 ? 'item' : 'items'} toegevoegd aan ${_meal.label.toLowerCase()}',
-          ),
-        ),
+    showUndo(
+      null,
+      tr(
+        'Added $n ${n == 1 ? 'item' : 'items'} to ${_meal.label.toLowerCase()}',
+        '$n ${n == 1 ? 'item' : 'items'} toegevoegd aan ${_meal.label.toLowerCase()}',
       ),
+      () => s.removeEntriesById(added),
+      messenger: messenger,
     );
   }
 

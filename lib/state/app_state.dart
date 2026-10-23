@@ -632,13 +632,34 @@ class AppState extends ChangeNotifier {
 
   /// Snel loggen: een stuk van een zin omzetten naar een product en een hoeveelheid.
   /// Geeft de beste treffers (de eerste is de keuze) en per treffer gram en portielabel.
+  /// Wat je bij Snel loggen zelf koos in plaats van de eerste treffer, per zoekterm. Volgende keer staat dat bovenaan.
+  Map<String, String> get _quickPicks => ((user.setting('quickPicks') ?? const {}) as Map).cast<String, String>();
+
+  void rememberQuickPick(String query, String ref) {
+    final picks = {..._quickPicks}..remove(query.toLowerCase());
+    picks[query.toLowerCase()] = ref;
+    // Alleen de laatste 300 keuzes bewaren
+    final keep = picks.entries.toList().reversed.take(300).toList().reversed;
+    user.setSetting('quickPicks', {for (final e in keep) e.key: e.value});
+  }
+
+  /// Gewone woorden die in de databank anders heten.
+  static const _quickAliases = {'toast': 'bread toasted', 'mince': 'minced beef', 'jacket potato': 'potato baked', 'oats': 'porridge oats'};
+
   List<(Food, double, Portion?)> resolveQuick(QuickItem q) {
+    final alias = _quickAliases[q.query.toLowerCase()];
+    if (alias != null) q = QuickItem(alias, grams: q.grams, count: q.count, unitGrams: q.unitGrams);
     // Wat iemand zegt, is meestal bereid en heel: "rijst" is gekookte rijst, "eieren" zijn hele eieren
     // Meervoud ("breads", "apples", "eieren"): ook het enkelvoud zoeken, en dat eerst
     final singular = q.query.replaceAll(RegExp(r'(es|s|en)$'), '');
     final seen = <String>{};
+    final picked = _quickPicks[q.query.toLowerCase()];
+    final pickedFood = picked == null ? null : (FoodDb.isDbRef(picked) ? foods.byRef(picked) : user.food(picked));
+    // Wat je eerder at, is bijna altijd wat je bedoelt
+    final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
     var all = [
       for (final f in [
+        ?pickedFood,
         if (singular != q.query && singular.length > 2) ...[...user.searchSaved(singular), ...foods.search(singular, limit: 150)],
         ...user.searchSaved(q.query),
         ...foods.search(q.query, limit: 200),
@@ -649,10 +670,75 @@ class AppState extends ChangeNotifier {
     final words = q.query.split(RegExp(r'\s+'));
     if (all.isEmpty && words.length > 1) all = searchLocal(words.join()).take(25).toList();
     if (all.isEmpty && words.length > 1) all = searchLocal(words.last).take(25).toList();
+    final queryWords = [
+      for (final w in q.query.toLowerCase().split(RegExp(r'\s+')))
+        if (w.length > 1) w,
+    ];
     double rank(int i, Food f) {
       final n = f.name.toLowerCase();
       var s = 20.0 - i * 0.15;
       final query = q.query.toLowerCase();
+      if (f.ref == picked) s += 200;
+      if (mine.contains(f.ref)) s += 25;
+      // Hele woorden tellen: "egg" is geen eggplant, "cola" geen chocolate
+      final head = n.split(',').first;
+      for (final w in queryWords) {
+        final stem = w.replaceAll(RegExp(r'(es|s)$'), '');
+        if (RegExp('\\b${RegExp.escape(stem)}(es|s|ed)?\\b').hasMatch(n)) {
+          s += 4;
+          if (RegExp('\\b${RegExp.escape(stem)}(es|s|ed)?\\b').hasMatch(head)) s += 6;
+        } else if (n.contains(stem)) {
+          s -= 14;
+        }
+      }
+      // Een woord dat alleen iets anders beschrijft ("spinach spaghetti", "quinoa pasta") is niet het product zelf
+      final last = head.trim().split(RegExp(r'\s+')).last;
+      if (queryWords.length == 1 && !last.startsWith(queryWords.first.replaceAll(RegExp(r'(es|s)$'), '')) && head.split(RegExp(r'\s+')).length > 1) {
+        s -= 4;
+      }
+      // Elk extra woord maakt het een ander product ("batter pudding with semi-skimmed milk" is geen melk)
+      const plain = {'raw', 'boiled', 'cooked', 'plain', 'whole', 'fresh', 'infusion', 'ready-to-drink', 'prepared', 'average', 'all', 'types'};
+      final extra = head
+          .split(RegExp(r'[\s/()-]+'))
+          .where((w) => w.length > 2 && !plain.contains(w) && !query.contains(w.replaceAll(RegExp(r'(es|s)$'), '')));
+      s -= math.min(9, extra.length * 1.5);
+      // Een gerecht met het product erin, terwijl je het product zelf noemt
+      if (RegExp(r'(w/|\b(with|in|sauce|pudding|pie|soup|salad|sandwich)\b)').hasMatch(n) &&
+          !RegExp(r'\b(with|sauce|pudding|pie|soup|salad|sandwich)\b').hasMatch(query)) {
+        s -= 10;
+      }
+      if (RegExp(r'\b(coated|breaded|battered|french|swedish)\b').hasMatch(n) && !RegExp(r'coat|bread|batter|french|swedish').hasMatch(query)) {
+        s -= 12;
+      }
+      // Vleeswaren en kant-en-klare vormen alleen als je ze noemt
+      if (RegExp(r'\b(roll|loaf|luncheon|deli|sliced|nuggets?|patty|patties|takeaway|prepacked)\b').hasMatch(n) &&
+          !RegExp(r'roll|loaf|luncheon|deli|slice|nugget|patt|takeaway').hasMatch(query)) {
+        s -= 10;
+      }
+      // "Whey" of "protein shake" is eiwitpoeder, geen wei
+      if (RegExp(r'^whey$|protein').hasMatch(query) && n.contains('protein')) s += 15;
+      // Een ingrediënt in plaats van wat je eet of drinkt: melkpoeder, concentraat, energiedrank (whey en eiwit zijn wel poeder)
+      if (RegExp(r'\b(powder(ed)?|dry|dried|dehydrated|concentrate|bulk|energy drink)\b').hasMatch(n) &&
+          !RegExp(r'powder|dry|dried|dehydrated|concentrate|bulk|energy|whey|protein|cocoa|spice|curry|paprika|cinnamon').hasMatch(query)) {
+        s -= 25;
+      }
+      // Koffie en thee zijn de drank, niet gemalen bonen of bladeren
+      if (RegExp(r'\b(coffee|tea|cocoa)\b').hasMatch(n) &&
+          RegExp(r'\b(ground|grounds|beans?|leaves|leaf|instant|granules|dry)\b').hasMatch(n) &&
+          !RegExp(r'ground|bean|lea[fv]|instant|granule').hasMatch(query)) {
+        s -= 25;
+      }
+      // Cocktails en likeuren alleen als je ze noemt (koffie is geen Irish coffee)
+      if (RegExp(r'\b(irish|liqueur|cocktail|with (rum|whisky|whiskey|brandy|vodka)|spiked)\b').hasMatch(n) &&
+          !RegExp(r'irish|liqueur|cocktail|rum|whisk|brandy|vodka').hasMatch(query)) {
+        s -= 30;
+      }
+      // Eieren zijn kippeneieren, tenzij je een ander ei noemt
+      if (RegExp(r'\b(goose|duck|quail|turkey|emu|ostrich)\b').hasMatch(n) &&
+          RegExp(r'\begg').hasMatch(n) &&
+          !RegExp(r'goose|duck|quail|turkey|emu|ostrich').hasMatch(query)) {
+        s -= 30;
+      }
       // Bereid krijgt voorrang bij vlees, vis, granen, eieren en aardappelen; fruit en zuivel liefst zoals ze zijn
       final cookable = RegExp(
         r'\b(chicken|beef|pork|turkey|lamb|fish|salmon|cod|tuna|rice|pasta|spaghetti|noodles?|quinoa|potato(es)?|lentils?|beans?|egg|eggs|kip|rijst|vis|aardappel(en)?)\b',
@@ -662,17 +748,21 @@ class AppState extends ChangeNotifier {
           !RegExp(r'fried|candied|canned|syrup|chips|sweet').hasMatch(query)) {
         s -= 15;
       }
-      if (!isEverydayFood(f)) s -= 30;
+      if (!isEverydayFood(f) && !(n.contains('protein') && RegExp(r'whey|protein').hasMatch(query))) s -= 30;
       if (RegExp(r'\b(rice|pasta|spaghetti|noodles?|quinoa|lentils?|beans?|oats?|barley|couscous|bulgur)\b').hasMatch(n) &&
           RegExp(r'\b(raw|dry|uncooked)\b').hasMatch(n)) {
         s -= 30;
       }
       if (RegExp(r'\b(yolk|white|powder|dried|flour|substitute|frozen)\b').hasMatch(n) &&
-          !query.contains(RegExp(r'yolk|white|powder|dried|flour|frozen'))) {
+          !query.contains(RegExp(r'yolk|white|powder|dried|flour|frozen|whey|protein'))) {
         s -= 15;
       }
       // Bijproducten en merkproducten van ketens zijn zelden wat iemand bedoelt
-      if (RegExp(r'\b(rendered|fat|grease|drippings|skin only|by-products?)\b').hasMatch(n) && !RegExp(r'fat|vet').hasMatch(query)) s -= 20;
+      if (RegExp(r'\b(rendered|grease|drippings|skin only|by-products?)\b|(?<!%\s?)\bfat\b(?!\s*\d)')
+              .hasMatch(n.replaceAll(RegExp(r'[\d.,]+\s*%\s*fat'), '')) &&
+          !RegExp(r'fat|vet').hasMatch(query)) {
+        s -= 20;
+      }
       if (RegExp(r"^[A-Z0-9 &'.-]{4,},").hasMatch(f.name)) s -= 12;
       // Orgaanvlees en dieetvarianten alleen als je ze zelf noemt
       if (RegExp(r'\b(liver|kidney|heart|gizzard|giblets|tongue|lever)\b').hasMatch(n) &&
@@ -690,13 +780,19 @@ class AppState extends ChangeNotifier {
     (Food, double, Portion?) amount(Food f) {
       if (q.grams != null) return (f, q.grams!, null);
       final n = q.count ?? 1;
+      // Een glas wijn is kleiner dan een glas water
+      if (q.unitGrams == 200 && RegExp(r'\b(wine|champagne|prosecco|cava|port|sherry)\b').hasMatch(f.name.toLowerCase())) return (f, n * 150, null);
       if (q.unitGrams != null) return (f, n * q.unitGrams!, null);
+      // Beleg zonder hoeveelheid ("toast with butter") is een lepel, geen pakje
+      if (q.count == null && RegExp(_spreads).hasMatch(q.query.toLowerCase())) return (f, 15, null);
       // Eén stuk: de kleinste portie die met "1 " begint (bv. "1 large" eerder dan een vreemde 101 g)
       final ones = f.portions.where((p) => p.grams >= 15 && p.grams <= 400 && p.label.startsWith('1 ')).toList()
         ..sort((a, b) => a.grams.compareTo(b.grams));
       final portion = ones.firstOrNull ?? f.portions.where((p) => p.grams >= 15 && p.grams <= 400).firstOrNull;
       if (portion != null) return (f, n * portion.grams, portion);
-      return (f, n * 100, null);
+      // Geen portie in de databank: een gewoon stukgewicht in plaats van 100 g per stuk
+      final typical = _typicalPieceGrams(f.name.toLowerCase());
+      return (f, n * (typical ?? 100), null);
     }
 
     return [for (final h in hits.take(6)) amount(h.$2)];
@@ -959,11 +1055,21 @@ class AppState extends ChangeNotifier {
 
   // ── Dagboek ──
 
-  void addFood(Food food, {required Meal meal, required double grams, required double quantity, String? portionLabel, String? time}) {
+  /// Voegt een product toe aan de dag en geeft de id van de nieuwe regel terug.
+  String addFood(Food food, {required Meal meal, required double grams, required double quantity, String? portionLabel, String? time}) {
     // Opgezochte en eigen producten lokaal bewaren, zodat ze bij "recent" en offline beschikbaar blijven
     if (!FoodDb.isDbRef(food.ref) && food.source != FoodSource.recipe) user.saveFood(food);
-    user.addEntry(day: day, meal: meal, food: food, grams: grams, quantity: quantity, portionLabel: portionLabel, time: time);
+    final id = user.addEntry(day: day, meal: meal, food: food, grams: grams, quantity: quantity, portionLabel: portionLabel, time: time);
     _refresh();
+    return id;
+  }
+
+  /// Net toegevoegde regels weer weghalen (ongedaan maken na Snel loggen).
+  void removeEntriesById(Set<String> ids) {
+    deleteEntries([
+      for (final e in _entries)
+        if (ids.contains(e.id)) e,
+    ]);
   }
 
   void updateEntry(DiaryEntry e, {required Meal meal, required double grams, required double quantity, String? portionLabel, String? time}) {
@@ -1501,9 +1607,13 @@ class AppState extends ChangeNotifier {
   /// Lokaal zoeken: eigen producten en recepten eerst, dan de ingebouwde database.
   List<Food> searchLocal(String q) {
     final all = [...user.searchSaved(q), ...foods.search(q)];
-    // Favorieten eerst
+    // Favorieten eerst, dan wat je al eens at, dan de rest
     final fav = favoriteRefs.toSet();
-    return [...all.where((f) => fav.contains(f.ref)), ...all.where((f) => !fav.contains(f.ref))];
+    final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
+    int group(Food f) => fav.contains(f.ref) ? 0 : (mine.contains(f.ref) ? 1 : 2);
+    return [
+      for (final g in [0, 1, 2]) ...all.where((f) => group(f) == g),
+    ];
   }
 
   // ── Favorieten (gesynchroniseerd) ──
@@ -1653,3 +1763,42 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+/// Gewoon gewicht van één stuk, als de databank geen portie heeft.
+double? _typicalPieceGrams(String name) {
+  const pieces = <String, double>{
+    r'protein powder|\bwhey protein': 30,
+    r'\begg': 55,
+    r'\bcroissant': 60,
+    r'\bbagel': 90,
+    r'\b(bread )?roll\b': 60,
+    r'\bslice': 35,
+    r'\bmuffin': 70,
+    r'\bbanana': 120,
+    r'\bapple': 150,
+    r'\borange\b': 150,
+    r'\bpear\b': 160,
+    r'\bkiwi': 75,
+    r'\bmandarin|\btangerine|\bclementine': 70,
+    r'\bbiscuit|\bcookie|\bdigestive': 15,
+    r'\bcracker': 8,
+    r'\brice cake': 9,
+    r'\bsausage': 60,
+    r'\bhash brown': 60,
+    r'\bpotato\b': 150,
+    r'\btomato\b': 120,
+    r'\bcarrot': 60,
+    r'\bavocado': 140,
+    r'\bpeach': 150,
+    r'\bplum\b': 65,
+  };
+  for (final e in pieces.entries) {
+    if (RegExp(e.key).hasMatch(name)) return e.value;
+  }
+  return null;
+}
+
+/// Beleg en sauzen: zonder hoeveelheid genoemd is dat een lepel.
+const _spreads =
+    r'\b(mayo|mayonnaise|ketchup|mustard|butter|margarine|jam|marmalade|honey|syrup|dressing|spread|sugar|oil|cream cheese|'
+    r'peanut butter|nutella|pesto|hummus|houmous|gravy|brown sauce|bbq sauce|salsa)\b';
