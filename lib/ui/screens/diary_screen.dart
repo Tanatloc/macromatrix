@@ -107,6 +107,8 @@ class DiaryScreen extends StatelessWidget {
               if (sticky) summary,
               Expanded(
                 child: ListView(
+                  // Scrollpositie bewaren over een herbouw (na bewerken, verplaatsen of een notitie opslaan)
+                  key: const PageStorageKey('diary-list'),
                   padding: EdgeInsets.only(top: sticky ? 2 : 0, bottom: fab ? 96 : 24),
                   children: [if (!sticky) summary, list],
                 ),

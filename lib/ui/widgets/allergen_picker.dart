@@ -18,13 +18,21 @@ class AllergenPicker extends StatelessWidget {
       runSpacing: 8,
       children: [
         for (final a in Allergen.values)
-          FilterChip(
-            label: Text(a.label),
-            selected: selected.contains(a),
-            selectedColor: p.highSoft,
-            checkmarkColor: p.high,
-            onSelected: (on) => onChanged(on ? {...selected, a} : ({...selected}..remove(a))),
-          ),
+          () {
+            final on = selected.contains(a);
+            return FilterChip(
+              label: Text(
+                a.label,
+                style: TextStyle(color: on ? p.high : p.ink, fontWeight: on ? FontWeight.w600 : null),
+              ),
+              selected: on,
+              showCheckmark: true,
+              selectedColor: p.highSoft,
+              checkmarkColor: p.high,
+              side: BorderSide(color: on ? p.high : p.line),
+              onSelected: (v) => onChanged(v ? {...selected, a} : ({...selected}..remove(a))),
+            );
+          }(),
       ],
     );
   }
