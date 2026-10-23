@@ -19,6 +19,13 @@ class MacroScheduleCard extends StatelessWidget {
   static DietPreset? _presetOf(double protein, double carbs, double fat) =>
       DietPreset.values.where((d) => d.protein == protein && d.carbs == carbs && d.fat == fat).firstOrNull;
 
+  /// "Standaard" met de naam van de stijl erbij als je gewone verdeling er een is (bv. Standaard (Gebalanceerd)):
+  /// zo staan er geen twee keuzes met dezelfde verdeling.
+  static String _defaultLabel(Profile base) {
+    final preset = _presetOf(base.proteinPct, base.carbsPct, base.fatPct);
+    return preset == null ? tr('Default', 'Standaard') : tr('Default (${preset.label})', 'Standaard (${preset.label})');
+  }
+
   Future<void> _pickDay(BuildContext context, int weekday) async {
     final s = context.read<AppState>();
     final base = s.profile;
@@ -83,22 +90,24 @@ class MacroScheduleCard extends StatelessWidget {
                   ),
                 ),
                 option(
-                  title: tr('Default', 'Standaard'),
+                  title: _defaultLabel(base),
                   sub: tr('Your usual split from Profile', 'Je gewone verdeling uit Profiel'),
                   split: (base.proteinPct, base.carbsPct, base.fatPct),
                   selected: current == null,
                   value: 'default',
                 ),
-                for (final d in DietPreset.values) ...[
-                  const SizedBox(height: 4),
-                  option(
-                    title: d.label,
-                    sub: _presetHint(d),
-                    split: (d.protein, d.carbs, d.fat),
-                    selected: current != null && _presetOf(current.$1, current.$2, current.$3) == d,
-                    value: d,
-                  ),
-                ],
+                // Een stijl met precies je gewone verdeling staat al als "Standaard" bovenaan
+                for (final d in DietPreset.values)
+                  if (_presetOf(base.proteinPct, base.carbsPct, base.fatPct) != d) ...[
+                    const SizedBox(height: 4),
+                    option(
+                      title: d.label,
+                      sub: _presetHint(d),
+                      split: (d.protein, d.carbs, d.fat),
+                      selected: current != null && _presetOf(current.$1, current.$2, current.$3) == d,
+                      value: d,
+                    ),
+                  ],
               ],
             ),
           ),
@@ -152,7 +161,7 @@ class MacroScheduleCard extends StatelessWidget {
                 final sched = s.settings.schedule[d];
                 final split = sched ?? (base.proteinPct, base.carbsPct, base.fatPct);
                 final label = sched == null
-                    ? tr('Default', 'Standaard')
+                    ? _defaultLabel(base)
                     : (_presetOf(split.$1, split.$2, split.$3)?.label ?? tr('Custom split', 'Eigen verdeling'));
                 return InkWell(
                   borderRadius: BorderRadius.circular(10),
