@@ -85,7 +85,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       // Met een portie: het aantal porties dat bij de meegegeven grammen hoort (2 sneetjes, niet altijd 1)
       _qty = TextEditingController(text: _fmt(_portion == null ? widget.initialGrams! : widget.initialGrams! / _portion!.grams));
     } else {
-      _portion = _food.portions.firstOrNull;
+      // Geen portie in de databank: begin bij de gewone portie (1 sneetje, 1 glas, 1 stuk) als die er is
+      _portion = _food.portions.firstOrNull ?? everydayPortions(_food).firstOrNull;
       _qty = TextEditingController(text: _portion == null ? '100' : '1');
     }
     _initial = (qty: _qty.text, portion: _portion?.label, meal: _meal, time: _time);

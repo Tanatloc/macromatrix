@@ -1527,8 +1527,12 @@ class _EntryRow extends StatelessWidget {
 
   static String _amountLabel(DiaryEntry e) {
     final g = '${_trim(e.grams)} g';
-    if (e.portionLabel == null) return g;
-    return '${_trim(e.quantity)} × ${e.portionLabel} ($g)';
+    final label = e.portionLabel;
+    if (label == null) return g;
+    // Een geschatte portie draagt haar grammen al in de naam ("1 slice (≈35 g)"): niet nog eens "(35 g)" erachter
+    final hasGrams = RegExp(r'\d\s*(g|ml)\)').hasMatch(label);
+    if (e.quantity == 1) return hasGrams ? label : '$label ($g)';
+    return hasGrams ? '${_trim(e.quantity)} × $label · $g' : '${_trim(e.quantity)} × $label ($g)';
   }
 }
 
