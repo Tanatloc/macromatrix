@@ -2591,7 +2591,7 @@ Future<void> _nutritionOf(BuildContext context, List<DiaryEntry> entries) {
             style: TextStyle(fontSize: 13, color: ctx.pal.ink2),
           ),
           const SizedBox(height: 12),
-          KeyNutrients(values: totals.values, targets: s.targets, incomplete: totals.incomplete),
+          KeyNutrients(values: totals.values, targets: s.targets, incomplete: totals.incomplete, isToday: s.isToday),
         ],
       ),
     ),

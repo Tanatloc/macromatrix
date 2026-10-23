@@ -116,7 +116,7 @@ void main() {
     final high = day({'vit_d': targets['vit_d']!.goal! * 2});
     final low = day({'vit_d': 0});
     final c = healthCheck([...week(high, 3), ...week(low, 3)], weightKg: 75)!;
-    expect(factor(c, 'micro').value, 'Nutrient Score 100');
+    expect(factor(c, 'micro').value, 'Nutrient score 100');
   });
 
   test('vitamine C plas je uit: een overschot telt per dag hooguit dubbel', () {
@@ -127,7 +127,7 @@ void main() {
       ...week(day({'vit_c': 0}), 5),
     ], weightKg: 75)!;
     final m = factor(c, 'micro');
-    expect(m.value, isNot('Nutrient Score 100'));
+    expect(m.value, isNot('Nutrient score 100'));
     expect(m.tips, isEmpty); // geen bovengrens voor vitamine C: onschadelijk
   });
 

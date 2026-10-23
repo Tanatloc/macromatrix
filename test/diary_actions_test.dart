@@ -76,7 +76,7 @@ void main() {
     expect(find.text('Kiezen'), findsOneWidget);
     await tester.tap(find.byTooltip('Volgende'));
     await tester.pumpAndSettle();
-    expect(find.text('Nutrient Score'), findsOneWidget);
+    expect(find.text('Voedingsscore'), findsOneWidget);
     await tester.tap(find.byTooltip('Volgende'));
     await tester.pumpAndSettle();
     expect(find.text('DOELEN'), findsOneWidget);

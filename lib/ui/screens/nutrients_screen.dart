@@ -148,6 +148,7 @@ class _DayNutrientsState extends State<DayNutrients> {
                 children: [
                   if (_filter == _Filter.key)
                     KeyNutrients(
+                      isToday: s.isToday,
                       values: s.totals.values,
                       targets: s.targets,
                       incomplete: s.totals.incomplete,
@@ -201,6 +202,7 @@ class KeyNutrients extends StatelessWidget {
     this.hidden = const {},
     this.onShowAll,
     this.columns = 1,
+    this.isToday = true,
   });
 
   final NutrientMap values;
@@ -211,6 +213,7 @@ class KeyNutrients extends StatelessWidget {
 
   /// Twee kolommen (pc): de basis en de tekorten naast elkaar.
   final int columns;
+  final bool isToday;
 
   static const basics = ['energy', 'protein', 'carbs', 'fat', 'fiber', 'sfa', 'sodium'];
 
@@ -256,9 +259,7 @@ class KeyNutrients extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(
-            context.read<AppState>().isToday
-                ? tr('Still short today', 'Vandaag nog te weinig')
-                : tr('Still short this day', 'Deze dag nog te weinig'),
+            isToday ? tr('Still short today', 'Vandaag nog te weinig') : tr('Still short this day', 'Deze dag nog te weinig'),
             subtitle: low.isEmpty ? null : tr('Vitamins and minerals under your goal', 'Vitaminen en mineralen onder je doel'),
           ),
           const SizedBox(height: 4),
