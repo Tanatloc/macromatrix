@@ -408,13 +408,49 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                               ),
                             ),
                             if (l.options.length > 1)
+                              // Met een woord erbij, niet alleen een pijltje (P154); per keuze de bron en de kcal (P177)
                               PopupMenuButton<int>(
                                 tooltip: tr('Other match', 'Andere treffer'),
-                                icon: Icon(Icons.swap_horiz_rounded, color: p.ink2),
                                 itemBuilder: (_) => [
-                                  for (final (i, o) in l.options.indexed) PopupMenuItem(value: i, child: Text(o.$1.name, maxLines: 2)),
+                                  for (final (i, o) in l.options.indexed)
+                                    PopupMenuItem(
+                                      value: i,
+                                      child: Row(
+                                        children: [
+                                          if (i == l.choice)
+                                            Icon(Icons.check_rounded, size: 16, color: p.brand)
+                                          else
+                                            const SizedBox(width: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(o.$1.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                                Text(
+                                                  '${o.$1.source.labelWithCountry} · ${fmtInt((o.$1.per100g['energy'] ?? 0) * o.$2 / 100)} kcal (${fmtInt(o.$2)} g)',
+                                                  style: TextStyle(fontSize: 11.5, color: p.ink3),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                                 onSelected: (i) => setState(() => l.choice = i),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.swap_horiz_rounded, size: 18, color: p.ink2),
+                                      const SizedBox(width: 3),
+                                      Text(tr('Other', 'Andere'), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.ink2)),
+                                    ],
+                                  ),
+                                ),
                               ),
                             IconButton(
                               tooltip: tr('Remove', 'Weghalen'),

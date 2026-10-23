@@ -67,14 +67,15 @@ class FoodDb {
     if (tokens.isEmpty) return const [];
     final where = List.filled(tokens.length, 'search LIKE ?').join(' AND ');
     final rows = _db.select('SELECT * FROM foods WHERE $where LIMIT 600', [for (final t in tokens) '%$t%']);
-    final ranked = [for (final r in rows) (_rank(r, tokens), r)]..sort((a, b) => a.$1.compareTo(b.$1));
+    // Bij gelijke stand de volgorde van de databank (sort is niet stabiel)
+    final ranked = [for (final (i, r) in rows.indexed) (_rank(r, tokens) * 1000 + i, r)]..sort((a, b) => a.$1.compareTo(b.$1));
     return [for (final (_, r) in ranked.take(limit)) _food(r)];
   }
 
   /// Lager = beter.
   /// 1. Hoe goed de naam overeenkomt: "Banana, raw" voor "banana" vóór "Pepper, banana".
   /// 2. Bij een goede overeenkomst: Europese bronnen vóór USDA.
-  /// 3. Rauwe/basisvorm, dan producten met veel gegevens, dan kortere namen.
+  /// 3. De gewone vorm (fruit rauw, rijst en pasta gekookt), dan producten met veel gegevens, dan kortere namen.
   static int _rank(Row r, List<String> tokens) {
     final name = (r['name'] as String).toLowerCase();
     final source = FoodSource.fromDb(r['source'] as String);
@@ -107,15 +108,24 @@ class FoodDb {
     }
     final tier = match <= 1 ? 0 : match; // exacte en "begint met"-treffers samen, zodat Europa daar voorgaat
     final europe = source.european ? 0 : 1;
-    final raw = RegExp(r'\braw\b').hasMatch(name) ? 0 : 1;
-    // Wat je zoekt is de drank of het product zelf, niet een ingrediënt of cocktail ervan (tenzij je dat typt)
     final q = tokens.join(' ');
+    // De gewone vorm: fruit en groenten rauw, maar granen, pasta en peulvruchten gekookt (P156)
+    final cooks = RegExp(r'\b(rice|pasta|spaghetti|macaroni|noodles?|quinoa|lentils?|beans?|chickpeas?|barley|couscous|bulgur|egg|eggs)\b').hasMatch(name);
+    final raw = (cooks && !RegExp(r'\b(raw|dry|uncooked)\b').hasMatch(q)
+            ? RegExp(r'\b(cooked|boiled)\b').hasMatch(name)
+            : RegExp(r'\braw\b').hasMatch(name))
+        ? 0
+        : 1;
+    // Wat je zoekt is de drank of het product zelf, niet een ingrediënt of cocktail ervan (tenzij je dat typt)
     final odd =
         (RegExp(r'\b(irish|liqueur|cocktail|bulk|powder(ed)?|dehydrated|concentrate)\b').hasMatch(name) &&
                 !RegExp(r'irish|liqueur|cocktail|bulk|powder|dehydrated|concentrate|whey|protein').hasMatch(q)) ||
             (RegExp(r'\b(coffee|tea|cocoa)\b').hasMatch(name) &&
                 RegExp(r'\b(ground|beans?|leaves|leaf|instant|granules)\b').hasMatch(name) &&
-                !RegExp(r'ground|bean|lea[fv]|instant|granule').hasMatch(q))
+                !RegExp(r'ground|bean|lea[fv]|instant|granule').hasMatch(q)) ||
+            // Gehakt, diepvries, lactosevrij, "light" en energiedrank alleen als je ze noemt
+            (RegExp(r'\b(minced?|frozen|lactose|reduced|energy drink)\b').hasMatch(name) &&
+                !RegExp(r'minc|frozen|lactose|reduced|energy').hasMatch(q))
         ? 1
         : 0;
     return (((((tier * 2 + odd) * 2 + europe) * 5 + match) * 2 + raw) * 2 + (nutrientCount < 30 ? 1 : 0)) * 1000 + name.length.clamp(0, 999);
