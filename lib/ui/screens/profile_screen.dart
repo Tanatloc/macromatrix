@@ -664,7 +664,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Een macro in grammen instellen (bv. 180 g eiwit); de app rekent dat om naar een percentage van je energie.
   Future<void> _editMacroGrams(String key, String label, AppState s) async {
-    final kcalPerGram = key == 'fat' ? 9.0 : 4.0;
     final kcal = s.targets['energy']?.goal ?? 2000;
     final c = TextEditingController(text: fmtInt(s.targets[key]!.goal!));
     final grams = await showDialog<double>(
@@ -690,7 +689,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (grams == null || grams <= 0 || kcal <= 0) return;
-    final pct = (grams * kcalPerGram / kcal * 100).clamp(0, 85).toDouble();
+    // Eiwit rust op je onderhoudsenergie, koolhydraten en vet op wat daarna overblijft (zie macroGrams)
+    final maintenance = maintenanceKcal(_p, s.date.year, extraKcal: s.exerciseKcalInGoal, tdee: s.adaptiveTdee);
+    final pct = macroPctForGrams(key, grams, _p, kcal, maintenance).clamp(0, 85).toDouble();
     _setMacro(key, pct);
   }
 
@@ -808,12 +809,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
+          // Het weekschema gaat voor: anders lijkt een stijl kiezen hier niets te veranderen aan de grammen van vandaag
+          if (s.settings.schedule[s.date.weekday] != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                tr(
+                  'Today follows your macro schedule (Settings), so the grams above use that day\'s split.',
+                  'Vandaag volgt je macroschema (Instellingen), dus de grammen hierboven gebruiken de verdeling van die dag.',
+                ),
+                style: TextStyle(fontSize: 11.5, height: 1.45, color: pal.ink2),
+              ),
+            ),
           Text(
             tr(
-              'Grams for today. EFSA recommends at least 0.83 g protein per kg; people who train a lot often take 1.6 to 2.2 g per kg. '
-                  'Fiber: at least ${fmtInt(s.targets['fiber']?.goal ?? 25)} g.',
-              'Grammen voor vandaag. EFSA raadt minstens 0,83 g eiwit per kg aan; wie veel traint, neemt vaak 1,6 à 2,2 g per kg. '
-                  'Vezels: minstens ${fmtInt(s.targets['fiber']?.goal ?? 25)} g.',
+              'Grams for today. Protein is calculated on the energy you need to maintain your weight, so it does not drop when you '
+                  'lose weight; carbs and fat absorb the deficit. Never below 0.83 g per kg (EFSA); people who train a lot often take '
+                  '1.6 to 2.2 g per kg. Fiber: at least ${fmtInt(s.targets['fiber']?.goal ?? 25)} g.',
+              'Grammen voor vandaag. Eiwit rekent de app op de energie die je nodig hebt om je gewicht te behouden, dus het daalt '
+                  'niet als je afvalt; koolhydraten en vet vangen het tekort op. Nooit onder 0,83 g per kg (EFSA); wie veel traint, '
+                  'neemt vaak 1,6 à 2,2 g per kg. Vezels: minstens ${fmtInt(s.targets['fiber']?.goal ?? 25)} g.',
             ),
             style: TextStyle(fontSize: 11.5, height: 1.45, color: pal.ink3),
           ),

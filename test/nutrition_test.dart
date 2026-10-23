@@ -69,6 +69,53 @@ void main() {
       expect(t['fat']!.goal, closeTo(66.7, 0.1));
     });
 
+    test('afvallen verlaagt het eiwitdoel niet; koolhydraten en vet vangen het tekort op', () {
+      const keep = Profile(goal: Goal.maintain);
+      const lose = Profile(goal: Goal.lose);
+      final a = targetsFor(keep, year: 2026), b = targetsFor(lose, year: 2026);
+      expect(b['energy']!.goal!, lessThan(a['energy']!.goal!));
+      expect(b['protein']!.goal, closeTo(a['protein']!.goal!, 0.01));
+      expect(b['carbs']!.goal!, lessThan(a['carbs']!.goal!));
+      expect(b['fat']!.goal!, lessThan(a['fat']!.goal!));
+    });
+
+    test('eiwit nooit onder 0,83 g per kg', () {
+      const p = Profile(weightKg: 120, proteinPct: 5, carbsPct: 60, fatPct: 35, goal: Goal.lose);
+      expect(targetsFor(p, year: 2026)['protein']!.goal!, greaterThanOrEqualTo(0.83 * 120 - 0.01));
+    });
+
+    test('macro\'s komen samen uit op het energiedoel', () {
+      for (final p in [
+        const Profile(),
+        const Profile(goal: Goal.lose),
+        const Profile(goal: Goal.gain, proteinPct: 30, carbsPct: 40, fatPct: 30),
+        const Profile(sex: Sex.female, weightKg: 58, heightCm: 163, goal: Goal.lose, proteinPct: 25, carbsPct: 5, fatPct: 70),
+        const Profile(weightKg: 120, proteinPct: 5, carbsPct: 60, fatPct: 35, goal: Goal.lose),
+      ]) {
+        final t = targetsFor(p, year: 2026, extraKcal: 300);
+        final sum = t['protein']!.goal! * 4 + t['carbs']!.goal! * 4 + t['fat']!.goal! * 9;
+        expect(sum, closeTo(t['energy']!.goal!, 3));
+      }
+    });
+
+    test('eiwitrijk geeft duidelijk meer eiwit dan gebalanceerd', () {
+      Profile with_(DietPreset d) => Profile(goal: Goal.lose, proteinPct: d.protein, carbsPct: d.carbs, fatPct: d.fat);
+      final balanced = targetsFor(with_(DietPreset.balanced), year: 2026)['protein']!.goal!;
+      final high = targetsFor(with_(DietPreset.highProtein), year: 2026)['protein']!.goal!;
+      expect(DietPreset.highProtein.protein, greaterThan(DietPreset.balanced.protein));
+      expect(high, greaterThan(balanced * 1.3));
+      expect(high / const Profile().weightKg, greaterThanOrEqualTo(1.6));
+    });
+
+    test('grammen naar procent en terug', () {
+      const p = Profile(goal: Goal.lose, proteinPct: 25, carbsPct: 45, fatPct: 30);
+      const kcal = 1900.0, maintenance = 2400.0;
+      final (protein, carbs, fat) = macroGrams(p, kcal, maintenance);
+      expect(macroPctForGrams('protein', protein, p, kcal, maintenance), closeTo(25, 0.01));
+      expect(macroPctForGrams('carbs', carbs, p, kcal, maintenance), closeTo(45, 0.01));
+      expect(macroPctForGrams('fat', fat, p, kcal, maintenance), closeTo(30, 0.01));
+    });
+
     test('profiel heen en terug naar JSON', () {
       const p = Profile(sex: Sex.female, birthYear: 2000, weightKg: 61.5, goal: Goal.lose, energyOverride: 1800);
       final q = Profile.fromJson(p.toJson());
@@ -189,10 +236,13 @@ void main() {
     });
 
     test('elk ei heeft choline, selenium en B12 (ontbreken kan niet)', () {
-      final eggs = db.search('egg').where(
-        (f) => RegExp(r'^eggs?\b', caseSensitive: false).hasMatch(f.name) &&
-            !RegExp(r'white|roll|noodle|salad|sauce|nog|flip|custard', caseSensitive: false).hasMatch(f.name),
-      );
+      final eggs = db
+          .search('egg')
+          .where(
+            (f) =>
+                RegExp(r'^eggs?\b', caseSensitive: false).hasMatch(f.name) &&
+                !RegExp(r'white|roll|noodle|salad|sauce|nog|flip|custard', caseSensitive: false).hasMatch(f.name),
+          );
       expect(eggs.length, greaterThan(10));
       for (final e in eggs) {
         for (final k in ['choline', 'selenium', 'b12']) {

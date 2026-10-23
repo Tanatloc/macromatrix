@@ -215,6 +215,37 @@ double formulaTdee(Profile p, int year) => bmr(p, p.ageIn(year)) * p.activity.fa
 /// Energiebehoefte per dag inclusief activiteit en doel. [tdee] = verbruik uit een andere bron (adaptief).
 double energyTarget(Profile p, int year, {double? tdee}) => p.energyOverride ?? ((tdee ?? formulaTdee(p, year)) + p.goalKcal).roundToDouble();
 
+/// Minimum eiwit per kg lichaamsgewicht (EFSA PRI voor volwassenen).
+const proteinMinPerKg = 0.83;
+
+/// Energie waarop het eiwitdoel rust: je onderhoud, dus zonder het tekort of overschot van je doel, plus beweging.
+/// Met een eigen energiedoel is dat doel de basis (de app weet dan niet welk deel tekort is).
+double maintenanceKcal(Profile p, int year, {double extraKcal = 0, double? tdee}) =>
+    (p.energyOverride ?? (tdee ?? formulaTdee(p, year)).roundToDouble()) + extraKcal;
+
+/// Macro's in gram (eiwit, koolhydraten, vet) voor een dag met [kcal] als energiedoel.
+///
+/// Eiwit rekenen we eerst, op de onderhoudsenergie [maintenance]: afvallen verlaagt je eiwitdoel dus niet, want net
+/// dan heb je eiwit nodig om je spieren te behouden. Nooit onder 0,83 g per kg. Wat overblijft van [kcal] gaat naar
+/// koolhydraten en vet in hun onderlinge verhouding: die vangen het tekort of overschot op, en samen komen de macro's
+/// zo precies uit op het energiedoel.
+(double, double, double) macroGrams(Profile p, double kcal, double maintenance) {
+  final protein = math.min(math.max(maintenance * p.proteinPct / 100 / 4, proteinMinPerKg * p.weightKg), math.max(0.0, kcal) / 4);
+  final rest = math.max(0.0, kcal - protein * 4);
+  final cf = p.carbsPct + p.fatPct;
+  if (cf <= 0) return (protein, 0, 0);
+  return (protein, rest * p.carbsPct / cf / 4, rest * p.fatPct / cf / 9);
+}
+
+/// Omgekeerd van [macroGrams]: welk percentage voor [key] (protein, carbs of fat) geeft [grams] gram. Eiwit is een
+/// deel van de onderhoudsenergie; koolhydraten en vet een deel van wat na eiwit overblijft (geschaald naar procent).
+double macroPctForGrams(String key, double grams, Profile p, double kcal, double maintenance) {
+  if (key == 'protein') return maintenance <= 0 ? p.proteinPct : grams * 4 / maintenance * 100;
+  final rest = kcal - macroGrams(p, kcal, maintenance).$1 * 4;
+  if (rest <= 0) return 0;
+  return grams * (key == 'fat' ? 9 : 4) / rest * (100 - p.proteinPct);
+}
+
 /// Richtwaarden voor een profiel. [extraKcal] = verbrande energie door beweging die bij het doel komt.
 Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal = 0, double? tdee}) {
   final age = p.ageIn(year);
@@ -227,11 +258,13 @@ Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal =
   // Essentiële aminozuren: mg per kg lichaamsgewicht -> g per dag
   Target aa(double mgPerKg) => Target(goal: mgPerKg * kg / 1000);
 
+  final (protein, carbs, fat) = macroGrams(p, kcal, maintenanceKcal(p, year, extraKcal: extraKcal, tdee: tdee));
+
   return {
     'energy': Target(goal: kcal, about: true),
-    'protein': Target(goal: kcal * p.proteinPct / 100 / 4),
-    'carbs': Target(goal: kcal * p.carbsPct / 100 / 4, about: true),
-    'fat': Target(goal: kcal * p.fatPct / 100 / 9, about: true),
+    'protein': Target(goal: protein),
+    'carbs': Target(goal: carbs, about: true),
+    'fat': Target(goal: fat, about: true),
     'fiber': const Target(goal: 25),
     'sfa': Target(upper: kcal * 0.10 / 9),
     'trans': Target(upper: kcal * 0.01 / 9),
@@ -291,6 +324,7 @@ Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal =
 /// Voedingsstijl: een vertrekpunt voor de verdeling van de macro's (eiwit, koolhydraten, vet in %).
 enum DietPreset {
   balanced('Balanced', 'Gebalanceerd', 20, 50, 30),
+  // Duidelijk meer eiwit dan gebalanceerd: 30% van de onderhoudsenergie is voor de meesten 1,6 à 2,2 g per kg
   highProtein('High protein', 'Eiwitrijk', 30, 40, 30),
   lowCarb('Low carb', 'Koolhydraatarm', 30, 20, 50),
   keto('Keto', 'Keto', 25, 5, 70),

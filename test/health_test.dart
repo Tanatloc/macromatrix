@@ -24,7 +24,7 @@ void main() {
       'potassium': 4000,
       'sugars': kcal * 0.10 / 4,
       'epa_dha': 400,
-      'protein': 90,
+      'protein': targets['protein']!.goal!,
       'alcohol': 0,
       ...over,
     },
@@ -99,13 +99,27 @@ void main() {
     expect(factor(healthCheck(week(day()), weightKg: 0)!, 'protein').rating, HealthRating.unknown);
   });
 
+  test('eiwit tegen je eigen doel, zoals de kleuren van Vandaag', () {
+    final goal = targets['protein']!.goal!;
+    expect(goal / 75, greaterThan(1.2)); // standaardprofiel: ruim boven 0,83 g/kg
+    // Op je doel: goed
+    final atGoal = factor(healthCheck(week(day({'protein': goal})), weightKg: 75)!, 'protein');
+    expect(atGoal.rating, HealthRating.good);
+    expect(atGoal.value, contains('100%'));
+    // 1 g/kg is onder je doel (oranje op Vandaag): niet goed, maar ook geen probleem
+    final under = factor(healthCheck(week(day({'protein': 75})), weightKg: 75)!, 'protein');
+    expect(under.rating, HealthRating.ok);
+    expect(under.effect, contains('0,83'));
+    expect(under.value, contains('${(75 / goal * 100).round()}%'));
+  });
+
   test('persoonlijk advies verandert het oordeel niet', () {
-    // 0,9 g/kg: goed volgens de algemene richtlijn
+    // 0,9 g/kg: onder het eigen doel, dus "kan beter", met of zonder persoonlijke tips
     final plain = factor(healthCheck(week(day({'protein': 67.5})), weightKg: 75)!, 'protein');
-    expect(plain.rating, HealthRating.good);
+    expect(plain.rating, HealthRating.ok);
     expect(plain.tips, isEmpty);
     final older = factor(healthCheck(week(day({'protein': 67.5})), weightKg: 75, age: 70, trains: true)!, 'protein');
-    expect(older.rating, HealthRating.good);
+    expect(older.rating, HealthRating.ok);
     expect(older.tips, hasLength(2)); // 65+ en training
     // BMI 36: advies met aangepast gewicht
     final heavy = factor(healthCheck(week(day()), weightKg: 110, heightCm: 175)!, 'protein');

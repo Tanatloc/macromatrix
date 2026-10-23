@@ -299,6 +299,17 @@ HealthCheck? healthCheck(
       ),
   ];
 
+  // Eiwit beoordelen we tegen je eigen eiwitdoel, met dezelfde regel als de kleuren van Vandaag (levelOf): onder je
+  // doel is nooit "goed". Een probleem is het pas onder 0,83 g per kg (EFSA); daartussen is het "kan beter".
+  final proteinGoal = mean(full.map((d) => d.$2['protein']?.goal));
+  final proteinOfGoal = proteinGoal == null || proteinGoal <= 0 ? null : avg('protein') / proteinGoal;
+  final proteinRating = switch (proteinGoal) {
+    final g? when g > 0 && levelOf(avg('protein'), Target(goal: g)) == Level.ok => HealthRating.good,
+    final g? when g > 0 && protein >= proteinMinPerKg => HealthRating.ok,
+    final g? when g > 0 => rateUp(protein, proteinMinPerKg, 0.66) == HealthRating.poor ? HealthRating.poor : HealthRating.ok,
+    _ => rateUp(protein, proteinMinPerKg, 0.66),
+  };
+
   // Eiwit: hogere behoefte vanaf 65 en bij training; bij een BMI boven 30 rekenen met een aangepast gewicht
   final proteinTips = <String>[];
   if (weightKg > 0) {
@@ -548,13 +559,22 @@ HealthCheck? healthCheck(
     factor(
       'protein',
       tr('Protein', 'Eiwit'),
-      '${fmtNum(protein)} g ${tr('per kg', 'per kg')}',
-      rateUp(protein, 0.83, 0.66),
+      proteinOfGoal == null
+          ? '${fmtNum(protein)} g ${tr('per kg', 'per kg')}'
+          : '${fmtNum(protein)} g ${tr('per kg', 'per kg')} · ${fmtNum(proteinOfGoal * 100, 0)}% ${tr('of your goal', 'van je doel')}',
+      proteinRating,
       isKnown: weightKg > 0,
       tips: kidneys ? const [] : proteinTips,
       bloodTips: labTips(['egfr']),
-      good: tr('Enough protein to maintain your muscles.', 'Genoeg eiwit om je spieren te onderhouden.'),
-      ok: tr('Slightly too little protein.', 'Net wat te weinig eiwit.'),
+      good: proteinOfGoal == null
+          ? tr('Enough protein to maintain your muscles.', 'Genoeg eiwit om je spieren te onderhouden.')
+          : tr('You reach your protein goal.', 'Je haalt je eiwitdoel.'),
+      ok: protein >= proteinMinPerKg
+          ? tr(
+              'Below your own protein goal, but enough to maintain your muscles (at least 0.83 g per kg).',
+              'Onder je eigen eiwitdoel, maar genoeg om je spieren te onderhouden (minstens 0,83 g per kg).',
+            )
+          : tr('Slightly too little protein.', 'Net wat te weinig eiwit.'),
       poor: tr(
         'Too little protein. In the long run you lose muscle and recover more slowly.',
         'Te weinig eiwit. Op termijn verlies je spiermassa en herstel je trager.',
