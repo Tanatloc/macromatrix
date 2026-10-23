@@ -457,10 +457,10 @@ class Bar extends StatelessWidget {
   );
 }
 
-/// Verdeling van de energie over eiwit, koolhydraten en vet als dunne gestapelde balk.
+/// Verdeling van de energie over eiwit, koolhydraten, vet en alcohol (grijs) als dunne gestapelde balk.
 class MacroSplitBar extends StatelessWidget {
   const MacroSplitBar(this.split, {super.key, this.height = 4, this.width});
-  final (double, double, double)? split;
+  final (double, double, double, double)? split;
   final double height;
   final double? width;
 
@@ -479,7 +479,7 @@ class MacroSplitBar extends StatelessWidget {
               height: height,
               child: Row(
                 children: [
-                  for (final (f, c) in [(s.$1, p.protein), (s.$2, p.carbs), (s.$3, p.fat)])
+                  for (final (f, c) in [(s.$1, p.protein), (s.$2, p.carbs), (s.$3, p.fat), (s.$4, p.ink3)])
                     if (f > 0.005)
                       Expanded(
                         flex: math.max(1, (f * 1000).round()),

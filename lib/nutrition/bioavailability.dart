@@ -14,10 +14,24 @@ import 'values.dart';
 enum TipKind { warn, good }
 
 class BioTip {
-  const BioTip(this.kind, this.title, this.text, {this.meal, this.weight = 1});
+  const BioTip(this.kind, this.title, this.text, {this.meal, this.meals = const [], this.weight = 1});
   final TipKind kind;
   final String title, text;
   final Meal? meal;
+
+  /// Alle maaltijden waarvoor deze tip geldt, na samenvoegen van dezelfde tip over meerdere maaltijden.
+  final List<Meal> meals;
+
+  /// Maaltijden van deze tip (leeg voor een dagtip).
+  List<Meal> get allMeals => meals.isNotEmpty ? meals : [?meal];
+
+  /// Bv. "Lunch" of "Breakfast, dinner", zodat tips van verschillende maaltijden niet tegenstrijdig lijken.
+  String? get mealLabel {
+    final ms = allMeals;
+    if (ms.isEmpty) return null;
+    final s = ms.map((m) => m.label.toLowerCase()).join(', ');
+    return s[0].toUpperCase() + s.substring(1);
+  }
 
   /// Hoe belangrijk (hoger = eerst tonen).
   final double weight;
@@ -181,8 +195,31 @@ List<BioTip> bioTips(List<DiaryEntry> entries, Map<String, Target> targets) {
     );
   }
 
-  tips.sort((a, b) => b.weight.compareTo(a.weight));
-  return tips;
+  final merged = _mergeSameTips(tips)..sort((a, b) => b.weight.compareTo(a.weight));
+  return merged;
+}
+
+/// Dezelfde tip bij meerdere maaltijden wordt één tip met alle maaltijden, in plaats van identieke titels onder
+/// elkaar. De uitleg per maaltijd blijft staan (die noemt telkens de maaltijd en de hoeveelheid).
+List<BioTip> _mergeSameTips(List<BioTip> tips) {
+  final groups = <(TipKind, String), List<BioTip>>{};
+  for (final t in tips) {
+    groups.putIfAbsent((t.kind, t.title), () => []).add(t);
+  }
+  return [
+    for (final g in groups.values)
+      if (g.length == 1)
+        g.first
+      else
+        BioTip(
+          g.first.kind,
+          g.first.title,
+          g.map((t) => t.text).toSet().join('\n\n'),
+          meal: g.first.meal,
+          meals: [for (final t in g) ...t.allMeals],
+          weight: g.map((t) => t.weight).reduce((a, b) => a > b ? a : b),
+        ),
+  ];
 }
 
 String fmt1(double v) => fmtNum(v);

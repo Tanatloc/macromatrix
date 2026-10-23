@@ -163,11 +163,22 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     if (t != null) setState(() => _time = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
   }
 
-  /// Dit item automatisch laten terugkomen op gekozen weekdagen.
+  /// Bestaande herhalingen van dit item (zelfde product, zelfde maaltijd).
+  List<RepeatItem> _repeatsOf(AppState s) {
+    final e = widget.entry;
+    if (e == null) return const [];
+    return s.repeats().where((r) => r.item.foodRef == e.foodRef && r.mealIndex == e.meal.index).toList();
+  }
+
+  /// Dit item automatisch laten terugkomen op gekozen weekdagen, met een hoeveelheid die je hier nog kunt aanpassen.
   Future<void> _repeat() async {
     final s = context.read<AppState>();
     var mask = 0x7f;
     const days = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
+    final unitGrams = _portion?.grams ?? 1;
+    final amount = TextEditingController(text: _fmt(_portion == null ? _grams : _quantity));
+    double qty() => double.tryParse(amount.text.replaceAll(',', '.')) ?? 0;
+    final existing = _repeatsOf(s);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -179,11 +190,42 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             children: [
               Text(
                 tr(
-                  'From tomorrow, ${widget.entry!.name} is added to your ${widget.entry!.meal.label.toLowerCase()} automatically, on:',
-                  '${widget.entry!.name} komt vanaf morgen vanzelf in je dagboek bij ${widget.entry!.meal.label.toLowerCase()}, op:',
+                  'From tomorrow, ${widget.entry!.name} is added to your ${widget.entry!.meal.label.toLowerCase()} automatically, in this amount:',
+                  '${widget.entry!.name} komt vanaf morgen vanzelf in je dagboek bij ${widget.entry!.meal.label.toLowerCase()}, in deze hoeveelheid:',
                 ),
               ),
               const SizedBox(height: 12),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: amount,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: decimalInput,
+                      decoration: InputDecoration(isDense: true, labelText: tr('Amount', 'Hoeveelheid')),
+                      onChanged: (_) => setD(() {}),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(_portion == null ? 'g' : '× ${_portion!.label}  (= ${_fmt(qty() * unitGrams)} g)', overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+              if (existing.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  tr(
+                    'This item already repeats (${existing.length}×). This adds another one; manage them under Settings → Recurring items.',
+                    'Dit item wordt al herhaald (${existing.length}×). Dit voegt er nog een toe; beheren kan in Instellingen → Terugkerende items.',
+                  ),
+                  style: TextStyle(fontSize: 12.5, color: ctx.pal.ink3),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text(tr('On:', 'Op:')),
+              const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
@@ -200,13 +242,32 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-            FilledButton(onPressed: mask == 0 ? null : () => Navigator.pop(ctx, true), child: Text(tr('Repeat', 'Herhalen'))),
+            FilledButton(onPressed: mask == 0 || qty() <= 0 ? null : () => Navigator.pop(ctx, true), child: Text(tr('Repeat', 'Herhalen'))),
           ],
         ),
       ),
     );
+    // Niet meteen dispose(): het veld leeft nog tijdens de sluitanimatie van het venster
+    final q = qty();
     if (ok == true && mounted) {
-      s.addRepeat(widget.entry!, mask);
+      // Herhalen met de gekozen hoeveelheid (en de portie die nu gekozen is)
+      final e = widget.entry!;
+      s.addRepeat(
+        DiaryEntry(
+          id: e.id,
+          day: e.day,
+          meal: e.meal,
+          foodRef: _food.ref,
+          name: _food.name,
+          brand: _food.brand,
+          grams: q * unitGrams,
+          quantity: _portion == null ? q * unitGrams : q,
+          portionLabel: _portion?.label,
+          per100g: _food.per100g,
+          time: e.time,
+        ),
+        mask,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(tr('Repeating. Manage it under Settings → Recurring items.', 'Wordt herhaald. Beheren kan in Profiel → Terugkerende items.')),
@@ -233,6 +294,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final p = context.pal;
     final amounts = withDerived(scale(_food.per100g, _grams));
     final editing = widget.entry != null;
+    final repeating = editing && _repeatsOf(s).isNotEmpty;
     final kcal = amounts['energy'] ?? 0;
 
     // Uitleg bij geschatte waarden: uit welk product in welke databank ze komen. "~bron:id" = vergelijkbaar product
@@ -319,12 +381,12 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       ),
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
+        // Terug-knop en acties staan vast boven de lijst, zodat ze niet wegscrollen
+        child: Column(
           children: [
             Narrow(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 10, 16, 0),
+                padding: const EdgeInsets.fromLTRB(8, 10, 16, 4),
                 child: Row(
                   children: [
                     IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: Icon(Icons.arrow_back_rounded), tooltip: tr('Back', 'Terug')),
@@ -346,7 +408,15 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       const SizedBox(width: 6),
                     ],
                     if (editing) ...[
-                      SquareButton(icon: Icons.repeat_rounded, tooltip: tr('Repeat automatically', 'Automatisch herhalen'), onPressed: _repeat),
+                      SquareButton(
+                        // Gevuld (en ander icoon) als dit item al automatisch terugkomt
+                        icon: repeating ? Icons.repeat_on_rounded : Icons.repeat_rounded,
+                        filled: repeating,
+                        tooltip: repeating
+                            ? tr('Already repeats · add another repeat', 'Wordt al herhaald · nog een herhaling toevoegen')
+                            : tr('Repeat automatically', 'Automatisch herhalen'),
+                        onPressed: _repeat,
+                      ),
                       const SizedBox(width: 6),
                       SquareButton(
                         icon: Icons.delete_outline_rounded,
@@ -364,90 +434,98 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                 ),
               ),
             ),
-            Narrow(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 24),
+                children: [
+                  Narrow(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(_food.name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontSize: 22)),
-                          if (_food.brand != null && _food.brand!.isNotEmpty) Text(_food.brand!, style: TextStyle(fontSize: 14, color: p.ink2)),
-                          if (_food.localName != null) Text(_food.localName!, style: TextStyle(fontSize: 13.5, color: p.ink2)),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              SourceBadge(_food.source),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(sourceLine(_food), style: TextStyle(fontSize: 13, color: p.ink2)),
-                              ),
-                              IconButton(
-                                tooltip: tr('About this data', 'Over deze gegevens'),
-                                visualDensity: VisualDensity.compact,
-                                icon: Icon(Icons.info_outline_rounded, size: 20, color: p.ink3),
-                                onPressed: () => showDialog<void>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: Text(tr('About this data', 'Over deze gegevens')),
-                                    content: Text(
-                                      [
-                                        _food.source.citation,
-                                        '$measured ${fromLabel ? tr('values from the label', 'waarden van het etiket') : tr('measured values', 'gemeten waarden')}',
-                                        if (_food.estimated.isNotEmpty)
-                                          tr(
-                                            '${_food.estimated.length} values estimated from a similar food (marked ≈)',
-                                            '${_food.estimated.length} waarden geschat uit een gelijkaardig product (met ≈)',
-                                          ),
-                                        if (_food.barcode != null) tr('Barcode ${_food.barcode}', 'Barcode ${_food.barcode}'),
-                                      ].join('\n'),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_food.name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontSize: 22)),
+                                if (_food.brand != null && _food.brand!.isNotEmpty) Text(_food.brand!, style: TextStyle(fontSize: 14, color: p.ink2)),
+                                if (_food.localName != null) Text(_food.localName!, style: TextStyle(fontSize: 13.5, color: p.ink2)),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    SourceBadge(_food.source),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(sourceLine(_food), style: TextStyle(fontSize: 13, color: p.ink2)),
                                     ),
-                                    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Close', 'Sluiten')))],
-                                  ),
+                                    IconButton(
+                                      tooltip: tr('About this data', 'Over deze gegevens'),
+                                      visualDensity: VisualDensity.compact,
+                                      icon: Icon(Icons.info_outline_rounded, size: 20, color: p.ink3),
+                                      onPressed: () => showDialog<void>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: Text(tr('About this data', 'Over deze gegevens')),
+                                          content: Text(
+                                            [
+                                              _food.source.citation,
+                                              '$measured ${fromLabel ? tr('values from the label', 'waarden van het etiket') : tr('measured values', 'gemeten waarden')}',
+                                              if (_food.estimated.isNotEmpty)
+                                                tr(
+                                                  '${_food.estimated.length} values estimated from a similar food (marked ≈)',
+                                                  '${_food.estimated.length} waarden geschat uit een gelijkaardig product (met ≈)',
+                                                ),
+                                              if (_food.barcode != null) tr('Barcode ${_food.barcode}', 'Barcode ${_food.barcode}'),
+                                            ].join('\n'),
+                                          ),
+                                          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Close', 'Sluiten')))],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
-                          if (s.novaFor(_food.ref, food: _food) case final nova?)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Row(
-                                children: [
-                                  LegendItem.box(novaColor(p, nova), w: 10, h: 10, radius: 3),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    tr('${nova.label} (NOVA ${nova.group})', '${nova.label} (NOVA ${nova.group})'),
-                                    style: TextStyle(fontSize: 13, color: p.ink2),
+                                if (s.novaFor(_food.ref, food: _food) case final nova?)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Row(
+                                      children: [
+                                        LegendItem.box(novaColor(p, nova), w: 10, h: 10, radius: 3),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          tr('${nova.label} (NOVA ${nova.group})', '${nova.label} (NOVA ${nova.group})'),
+                                          style: TextStyle(fontSize: 13, color: p.ink2),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ],
-                              ),
+                              ],
                             ),
+                          ),
+                          const SizedBox(height: 12),
+                          AllergenBanner(food: _food),
+                          const SizedBox(height: 4),
+                          // Eerst hoeveel en bij welke maaltijd, daarna wat het bijdraagt
+                          _amountPanel(p),
+                          const SizedBox(height: 10),
+                          _MacroTiles(amounts: amounts, targets: s.targets),
+                          if (!widget.pickOnly) ...[const SizedBox(height: 10), _ImpactPanel(added: amounts, editing: widget.entry)],
+                          const SizedBox(height: 10),
+                          _ValuesPanel(
+                            amounts: amounts,
+                            per100: withDerived(_food.per100g),
+                            grams: _grams,
+                            targets: s.targets,
+                            estimates: estimates,
+                            sourceLabel: _food.source.label,
+                            fromLabel: fromLabel,
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    AllergenBanner(food: _food),
-                    const SizedBox(height: 4),
-                    // Eerst hoeveel en bij welke maaltijd, daarna wat het bijdraagt
-                    _amountPanel(p),
-                    const SizedBox(height: 10),
-                    _MacroTiles(amounts: amounts, targets: s.targets),
-                    if (!widget.pickOnly) ...[const SizedBox(height: 10), _ImpactPanel(added: amounts, editing: widget.entry)],
-                    const SizedBox(height: 10),
-                    _ValuesPanel(
-                      amounts: amounts,
-                      grams: _grams,
-                      targets: s.targets,
-                      estimates: estimates,
-                      sourceLabel: _food.source.label,
-                      fromLabel: fromLabel,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -830,10 +908,12 @@ class _BeforeAfterBar extends StatelessWidget {
   }
 }
 
-/// Alle waarden van deze hoeveelheid in twee kolommen, met het deel van je dagdoel.
+/// Alle waarden van deze hoeveelheid (of per 100 g) in twee kolommen, met het deel van je dagdoel.
+/// Volgorde zoals op een etiket; aminozuren in een eigen, ingeklapt blok onderaan.
 class _ValuesPanel extends StatefulWidget {
   const _ValuesPanel({
     required this.amounts,
+    required this.per100,
     required this.grams,
     required this.targets,
     required this.estimates,
@@ -841,6 +921,9 @@ class _ValuesPanel extends StatefulWidget {
     required this.fromLabel,
   });
   final NutrientMap amounts;
+
+  /// Dezelfde waarden per 100 g, als vaste referentie om producten te vergelijken.
+  final NutrientMap per100;
   final double grams;
   final Map<String, Target> targets;
   final Map<String, String> estimates;
@@ -853,56 +936,140 @@ class _ValuesPanel extends StatefulWidget {
 
 class _ValuesPanelState extends State<_ValuesPanel> {
   bool _all = false;
+  bool _per100 = false;
+  bool _amino = false;
+
+  /// Eerst de regels van een voedingsetiket, in die volgorde; daarna de rest van vet en koolhydraten.
+  static const _labelOrder = ['energy', 'fat', 'sfa', 'carbs', 'sugars', 'fiber', 'protein', 'salt'];
+  static const _moreFatsCarbs = [
+    'mufa',
+    'pufa',
+    'omega3',
+    'ala',
+    'epa_dha',
+    'epa',
+    'dpa',
+    'dha',
+    'omega6',
+    'la',
+    'aa',
+    'trans',
+    'cholesterol',
+    'starch',
+  ];
+
+  /// Voedingsstoffen in etiketvolgorde, zonder aminozuren: etiket, meer vet/koolhydraten, vitaminen,
+  /// mineralen (zonder zout, dat staat al bovenaan), en tot slot de overige stoffen.
+  static List<Nutrient> get _ordered {
+    final byKey = {for (final n in nutrients) n.key: n};
+    final first = [..._labelOrder, ..._moreFatsCarbs].map((k) => byKey[k]).whereType<Nutrient>().toList();
+    final taken = first.map((n) => n.key).toSet();
+    Iterable<Nutrient> group(NutrientGroup g) => nutrients.where((n) => n.group == g && !taken.contains(n.key));
+    return [
+      ...first,
+      ...group(NutrientGroup.vitamins),
+      ...group(NutrientGroup.minerals),
+      ...group(NutrientGroup.general),
+      ...group(NutrientGroup.carbs),
+      ...group(NutrientGroup.fats),
+      ...group(NutrientGroup.other),
+    ];
+  }
+
+  static List<Nutrient> get _aminoAcids => [
+    for (final n in nutrients)
+      if (n.group == NutrientGroup.protein && n.key != 'protein') n,
+  ];
+
+  /// Uitleg bij een geschatte waarde, in een venster (een tooltip bij tikken werkte niet betrouwbaar).
+  void _showEstimate(Nutrient n, String text) => showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('${n.name} ≈'),
+      content: Text(text),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Close', 'Sluiten')))],
+    ),
+  );
+
+  Widget _cell(Nutrient n, NutrientMap values) {
+    final p = context.pal;
+    final v = values[n.key];
+    final t = widget.targets[n.key];
+    final ref = t?.goal ?? t?.upper;
+    final est = widget.estimates[n.key];
+    final cell = Container(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: p.line)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(
+            child: Text(
+              est == null ? n.name : '${n.name} ≈',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, color: p.ink2),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            v == null ? '–' : '${formatAmount(v, n)} ${n.unit}',
+            style: numStyle(12, weight: FontWeight.w500, color: p.ink, style: est == null ? null : FontStyle.italic),
+          ),
+          SizedBox(
+            width: 38,
+            child: Text(
+              v == null || ref == null || ref <= 0 ? '' : fmtPct(v / ref),
+              textAlign: TextAlign.right,
+              style: numStyle(11, weight: FontWeight.w400, color: t?.isLimit == true && v != null && v > ref! ? p.high : p.ink3),
+            ),
+          ),
+        ],
+      ),
+    );
+    return est == null ? cell : InkWell(onTap: () => _showEstimate(n, est), child: cell);
+  }
+
+  /// Cellen in twee kolommen (of één op smalle schermen), kolom per kolom gevuld.
+  Widget _grid(List<Widget> cells) => LayoutBuilder(
+    builder: (context, c) {
+      final cols = c.maxWidth >= 300 ? 2 : 1;
+      final rows = (cells.length / cols).ceil();
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var col = 0; col < cols; col++) ...[
+            if (col > 0) const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var r = 0; r < rows; r++)
+                    if (col * rows + r < cells.length) cells[col * rows + r],
+                ],
+              ),
+            ),
+          ],
+        ],
+      );
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final list = [
-      for (final n in nutrients)
-        if (n.key != 'energy' && (_all || widget.amounts.containsKey(n.key))) n,
-    ];
+    final values = _per100 ? widget.per100 : widget.amounts;
+    bool show(Nutrient n) => _all || values.containsKey(n.key);
     final cells = [
-      for (final n in list)
-        () {
-          final v = widget.amounts[n.key];
-          final t = widget.targets[n.key];
-          final ref = t?.goal ?? t?.upper;
-          final est = widget.estimates[n.key];
-          final cell = Container(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: p.line)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Expanded(
-                  child: Text(
-                    est == null ? n.name : '${n.name} ≈',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12.5, color: p.ink2),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  v == null ? '–' : '${formatAmount(v, n)} ${n.unit}',
-                  style: numStyle(12, weight: FontWeight.w500, color: p.ink, style: est == null ? null : FontStyle.italic),
-                ),
-                SizedBox(
-                  width: 38,
-                  child: Text(
-                    v == null || ref == null || ref <= 0 ? '' : fmtPct(v / ref),
-                    textAlign: TextAlign.right,
-                    style: numStyle(11, weight: FontWeight.w400, color: t?.isLimit == true && v != null && v > ref! ? p.high : p.ink3),
-                  ),
-                ),
-              ],
-            ),
-          );
-          return est == null ? cell : Tooltip(message: est, triggerMode: TooltipTriggerMode.tap, child: cell);
-        }(),
+      for (final n in _ordered)
+        if (show(n)) _cell(n, values),
+    ];
+    final amino = [
+      for (final n in _aminoAcids)
+        if (show(n)) _cell(n, values),
     ];
 
     return Panel(
@@ -912,33 +1079,40 @@ class _ValuesPanelState extends State<_ValuesPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(
-            tr('Per ${fmtInt(widget.grams)} g', 'Per ${fmtInt(widget.grams)} g'),
+            _per100 ? tr('Per 100 g', 'Per 100 g') : tr('Per ${fmtInt(widget.grams)} g', 'Per ${fmtInt(widget.grams)} g'),
             trailing: Text(tr('% of your daily goal', '% van je dagdoel'), style: TextStyle(fontSize: 12, color: p.ink3)),
           ),
+          const SizedBox(height: 8),
+          // Altijd ook per 100 g, als vaste referentie
+          Segmented<bool>(
+            height: 30,
+            fontSize: 12.5,
+            items: [(false, tr('This amount', 'Deze hoeveelheid')), (true, tr('Per 100 g', 'Per 100 g'))],
+            selected: _per100,
+            onChanged: (v) => setState(() => _per100 = v),
+          ),
           const SizedBox(height: 6),
-          LayoutBuilder(
-            builder: (context, c) {
-              final cols = c.maxWidth >= 300 ? 2 : 1;
-              final rows = (cells.length / cols).ceil();
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var col = 0; col < cols; col++) ...[
-                    if (col > 0) const SizedBox(width: 18),
+          _grid(cells),
+          if (amino.isNotEmpty) ...[
+            InkWell(
+              onTap: () => setState(() => _amino = !_amino),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var r = 0; r < rows; r++)
-                            if (col * rows + r < cells.length) cells[col * rows + r],
-                        ],
+                      child: Text(
+                        tr('Amino acids (${amino.length})', 'Aminozuren (${amino.length})'),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.ink2),
                       ),
                     ),
+                    Icon(_amino ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 20, color: p.ink3),
                   ],
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            ),
+            if (_amino) _grid(amino),
+          ],
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
