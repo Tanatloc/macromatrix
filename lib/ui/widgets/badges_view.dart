@@ -237,7 +237,7 @@ Future<void> pickTitle(BuildContext context) async {
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: Text(
-                  tr('Shown under your name for friends.', 'Staat onder je naam bij vrienden.'),
+                  tr('Shown with your avatar for friends.', 'Zichtbaar bij je avatar voor vrienden.'),
                   style: TextStyle(fontSize: 13, color: pal.ink2),
                 ),
               ),

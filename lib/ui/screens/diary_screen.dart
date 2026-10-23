@@ -18,6 +18,7 @@ import 'food_detail_screen.dart';
 import 'nutrient_detail_screen.dart';
 import 'nutrients_screen.dart';
 import 'planner_screen.dart';
+import 'profile_screen.dart';
 import 'scan_screen.dart';
 import 'supplements_screen.dart';
 import 'recap_screen.dart';
@@ -45,6 +46,13 @@ class DiaryScreen extends StatelessWidget {
   Widget _build(BuildContext context) {
     final s = context.watch<AppState>();
     final empty = !s.entries.any((e) => !e.foodRef.startsWith('supp:'));
+    // 'Profiel invullen' en 'Doelen' horen bij de doelen, niet bovenaan het Profiel bij je level (P03)
+    final onOpenProfile = this.onOpenProfile == null
+        ? null
+        : () {
+            this.onOpenProfile!();
+            showProfileGoals();
+          };
     if (isDesktop(context)) return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile);
     final selected = _selectedIn(s);
     final size = MediaQuery.sizeOf(context);
@@ -154,15 +162,15 @@ class _DayBar extends StatelessWidget {
                 : null,
           ),
           Expanded(
+            // De titel krijgt een vaste ruimte tussen de pijlen, zodat die niet verschuiven als de datum langer wordt
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
                   tooltip: tr('Previous day', 'Vorige dag'),
                   icon: Icon(Icons.chevron_left_rounded, color: p.ink),
                   onPressed: () => s.shiftDay(-1),
                 ),
-                Flexible(
+                Expanded(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(10),
                     onTap: () => pickDay(context),
@@ -173,6 +181,7 @@ class _DayBar extends StatelessWidget {
                         fit: BoxFit.scaleDown,
                         child: Text(
                           title,
+                          textAlign: TextAlign.center,
                           maxLines: 1,
                           style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: p.ink, letterSpacing: -0.3),
                         ),
@@ -1041,6 +1050,25 @@ class _BudgetCard extends StatelessWidget {
   }
 }
 
+/// Maaltijd die in de naam van een opgeslagen maaltijd staat ('Ontbijt', 'Lunch met eieren', 'Snacks'), of null.
+@visibleForTesting
+Meal? mealInName(String name) {
+  final words = name.toLowerCase().split(RegExp(r'[^a-zà-ÿ]+'));
+  for (final w in words) {
+    switch (w) {
+      case 'breakfast' || 'ontbijt':
+        return Meal.breakfast;
+      case 'lunch' || 'middagmaal':
+        return Meal.lunch;
+      case 'dinner' || 'avondeten' || 'avondmaal' || 'diner' || 'supper':
+        return Meal.dinner;
+      case 'snack' || 'snacks' || 'tussendoortje':
+        return Meal.snacks;
+    }
+  }
+  return null;
+}
+
 class _StartCard extends StatelessWidget {
   const _StartCard();
 
@@ -1133,8 +1161,8 @@ class _StartCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             tr(
-              'As soon as you log something, these 25 boxes fill up with your vitamins and minerals. You see right away where you stand.',
-              'Zodra je iets logt, vullen deze 25 vakjes zich met je vitaminen en mineralen. Je ziet meteen waar je staat.',
+              'After your first meal you\'ll see how close you are to all 25 vitamins and minerals, right here on Today.',
+              'Na je eerste maaltijd zie je hier meteen hoe dicht je bij alle 25 vitaminen en mineralen zit.',
             ),
             style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
           ),
@@ -1146,10 +1174,12 @@ class _StartCard extends StatelessWidget {
               sub: m.items.map((i) => i.name).join(' · '),
               meta: '${fmtInt(m.kcal)} kcal',
               onTap: () {
-                s.addSavedMeal(m, meal);
+                // Een opgeslagen 'Ontbijt' hoort bij het ontbijt, ook als je het om 12 uur logt (P60)
+                final target = mealInName(m.name) ?? meal;
+                s.addSavedMeal(m, target);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(tr('${m.name} added to ${meal.label.toLowerCase()}', '${m.name} toegevoegd aan ${meal.label.toLowerCase()}')),
+                    content: Text(tr('${m.name} added to ${target.label.toLowerCase()}', '${m.name} toegevoegd aan ${target.label.toLowerCase()}')),
                   ),
                 );
               },
@@ -1342,7 +1372,7 @@ class _MealCardState extends State<_MealCard> {
                       IconButton(
                         tooltip: tr('Add to ${meal.label.toLowerCase()}', 'Toevoegen aan ${meal.label.toLowerCase()}'),
                         visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.add_circle_outline_rounded, size: 20, color: p.brand),
+                        icon: Icon(Icons.add_rounded, size: 20, color: p.brand),
                         onPressed: () => openAddFood(context, meal),
                       ),
                       menu,
@@ -1380,7 +1410,7 @@ class _MealCardState extends State<_MealCard> {
                         style: TextButton.styleFrom(alignment: Alignment.centerLeft, padding: const EdgeInsets.fromLTRB(14, 6, 14, 10)),
                         onPressed: () => openAddFood(context, meal),
                         icon: const Icon(Icons.add_rounded, size: 18),
-                        label: Text(tr('Add to ${meal.label.toLowerCase()}', 'Voeg toe aan ${meal.label.toLowerCase()}')),
+                        label: Text(tr('Add to ${meal.label.toLowerCase()}', 'Toevoegen aan ${meal.label.toLowerCase()}')),
                       ),
                     ],
                   ),
@@ -1676,7 +1706,7 @@ class _ExerciseCard extends StatelessWidget {
               style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6)),
               onPressed: () => addExercise(context),
               icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(tr('Add exercise', 'Voeg beweging toe')),
+              label: Text(tr('Add exercise', 'Beweging toevoegen')),
             ),
           ),
         ],
