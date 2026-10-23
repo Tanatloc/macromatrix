@@ -76,4 +76,14 @@ void main() {
     expect(db.recent(), isEmpty);
     expect(db.recent(withDeleted: true).single.grams, 80);
   });
+
+  test('gewone keuze: wit brood met sneetje, halfvolle melk, gewone kaas, geen fastfoodkip', () {
+    expect(box('bread').name.toLowerCase(), isNot(matches(RegExp(r'pitt?a|bagel|panini'))));
+    expect(quick('bread').name.toLowerCase(), contains('bread'));
+    expect(quick('milk').name.toLowerCase(), contains('semi-skimmed'));
+    expect(quick('cheese').name.toLowerCase(), matches(RegExp(r'gouda|cheddar|edam|emmenta')));
+    for (final f in [box('chicken'), quick('chicken')]) {
+      expect(f.name.toLowerCase(), isNot(contains('fast food')));
+    }
+  });
 }

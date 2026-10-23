@@ -159,7 +159,8 @@ double foodQueryScore(Food f, String rawQuery) {
       !RegExp(r'\b(raw|dry|uncooked|rauw|droog)\b').hasMatch(query)) {
     s -= 30;
   }
-  if (RegExp(r'\b(yolk|white|powder|dried|flour|substitute|frozen)\b').hasMatch(n) &&
+  // "White" alleen bij eieren (eiwit): wit brood en witte rijst zijn gewoon de gewone
+  if ((RegExp(r'\b(yolk|powder|dried|flour|substitute|frozen)\b').hasMatch(n) || (RegExp(r'\begg').hasMatch(n) && RegExp(r'\bwhite\b').hasMatch(n))) &&
       !query.contains(RegExp(r'yolk|white|powder|dried|flour|frozen|whey|protein'))) {
     s -= 15;
   }
@@ -176,6 +177,17 @@ double foodQueryScore(Food f, String rawQuery) {
   // Gehakt, lactosevrij en andere bijzondere vormen alleen als je ze noemt (P156)
   if (RegExp(r'\b(minced?|ground (beef|meat|pork|turkey|chicken))\b').hasMatch(n) && !RegExp(r'minc|gehakt|ground').hasMatch(query)) s -= 15;
   if (RegExp(r'\blactose\b|\blow lactose\b').hasMatch(n) && !RegExp(r'lactos').hasMatch(query)) s -= 15;
+  // Fastfood en restaurant alleen als je het noemt ("chicken" is geen fastfoodkip)
+  if (RegExp(r'\b(fast food|restaurant|takeaway|take-away|drive-in)\b').hasMatch(n) && !RegExp(r'fast|restaurant|take').hasMatch(query)) s -= 15;
+  // Brood is een gewoon brood (wit, bruin, volkoren), geen pita, bagel of panini tenzij je die noemt
+  if (RegExp(r'\bbread\b').hasMatch(n) &&
+      RegExp(r'\b(pitt?a|bagel|panini|naan|ciabatta|focaccia|brioche|rolls?|buns?|wraps?|tortilla|crumbs?|pudding|garlic|fried|croissant|chapati|matzo|soda|malt|fruit)\b').hasMatch(n) &&
+      !RegExp(r'pitt?a|bagel|panini|naan|ciabatta|focaccia|brioche|roll|bun|wrap|tortilla|crumb|pudding|garlic|fried|croissant|chapati|matzo|soda|malt|fruit|broodje').hasMatch(query)) {
+    s -= 10;
+  }
+  // Alleen "melk" of "kaas": de gewoonste soort (halfvolle melk; gouda, cheddar, edam, emmentaler)
+  if (RegExp(r'^(milk|melk)$').hasMatch(rawQuery.trim().toLowerCase()) && RegExp(r'semi-skimmed|half-skimmed|\b1[.,]5 ?%').hasMatch(n)) s += 6;
+  if (RegExp(r'^(cheese|kaas)$').hasMatch(rawQuery.trim().toLowerCase()) && RegExp(r'\b(gouda|cheddar|edam|emmenth?al(er)?)\b').hasMatch(n)) s += 6;
   // Bijproducten en merkproducten van ketens zijn zelden wat iemand bedoelt
   if (RegExp(r'\b(rendered|grease|drippings|skin only|by-products?)\b|(?<!%\s?)\bfat\b(?!\s*\d)')
           .hasMatch(n.replaceAll(RegExp(r'[\d.,]+\s*%\s*fat'), '')) &&
