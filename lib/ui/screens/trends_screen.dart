@@ -43,6 +43,9 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final targets = {for (final k in keys) k: s.targetsForDate(parseDay(k), burned: burned[k] ?? 0)};
 
     final processing = ProcessingCard(share: s.processingBetween(from, to), period: true);
+    // Suiker per dag alleen in de weekweergave; met "Let op suiker" bovenaan
+    final sugar = days <= 7 && daily.isNotEmpty ? _sugar(s, p, keys, daily, targets) : null;
+    final sugarFirst = sugar != null && s.sugarFocus;
 
     Widget pair(Widget a, Widget b) => Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,21 +78,23 @@ class _PeriodTrendsState extends State<PeriodTrends> {
               else if (wide) ...[
                 _minis(p, keys, daily, targets),
                 const SizedBox(height: 12),
+                if (sugarFirst) ...[pair(sugar, processing), const SizedBox(height: 12)],
                 pair(_energy(s, p, keys, daily, targets, from), _macros(s, p, keys, daily, from)),
                 const SizedBox(height: 12),
                 pair(_heatmap(p, keys, daily, targets), _weight(s, p, keys, from)),
-                const SizedBox(height: 12),
-                pair(processing, const SizedBox()),
+                if (!sugarFirst) ...[const SizedBox(height: 12), pair(processing, sugar ?? const SizedBox())],
                 const SizedBox(height: 18),
                 _averages(s, p, daily, columns: 2),
               ] else ...[
                 _minis(p, keys, daily, targets),
                 const SizedBox(height: 10),
+                if (sugarFirst) ...[sugar, const SizedBox(height: 10)],
                 _energy(s, p, keys, daily, targets, from),
                 const SizedBox(height: 10),
                 _macros(s, p, keys, daily, from),
                 const SizedBox(height: 10),
                 _heatmap(p, keys, daily, targets),
+                if (sugar != null && !sugarFirst) ...[const SizedBox(height: 10), sugar],
                 const SizedBox(height: 10),
                 processing,
                 const SizedBox(height: 18),
@@ -424,6 +429,154 @@ class _PeriodTrendsState extends State<PeriodTrends> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Suiker per dag (P184): vrije suikers tegenover je maximum, met alle suikers en koolhydraten erbij, en de
+  /// bloedsuikermetingen van die dag ernaast. Een tik opent het verloop van de vrije suikers.
+  Widget _sugar(AppState s, Palette p, List<String> keys, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets) {
+    final free = nutrientByKey['free_sugars']!;
+    final glucose = <String, List<double>>{};
+    for (final b in s.user.biometricHistory('glucose', from: keys.first)) {
+      if (b.day.compareTo(keys.last) <= 0) glucose.putIfAbsent(b.day, () => []).add(b.value);
+    }
+    double? max(String d) => targets[d]?['free_sugars']?.upper;
+    // Vandaag is nog bezig: telt niet mee in het gemiddelde
+    final today = dayKey(logicalNow());
+    final done = [
+      for (final k in keys)
+        if (k != today && daily[k] != null) k,
+    ];
+    final avg = done.isEmpty ? null : done.map((k) => daily[k]!['free_sugars']).reduce((a, b) => a + b) / done.length;
+    final over = done.where((k) => max(k) != null && daily[k]!['free_sugars'] > max(k)!).length;
+    final scaleMax = [
+      for (final k in keys) ...[daily[k]?['sugars'] ?? 0, max(k) ?? 0],
+    ].fold<double>(1, math.max);
+    void open() => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NutrientDetailScreen(nutrient: free, from: widget.from, to: widget.to),
+      ),
+    );
+
+    Widget bar(String d) {
+      final t = daily[d];
+      if (t == null) return Container(height: 10, decoration: BoxDecoration(border: Border.all(color: p.line), borderRadius: BorderRadius.circular(4)));
+      final f = t['free_sugars'], all = math.max(t['sugars'], f), limit = max(d);
+      final tooMuch = limit != null && f > limit;
+      return LayoutBuilder(
+        builder: (context, c) => SizedBox(
+          height: 10,
+          child: Stack(
+            children: [
+              Container(decoration: BoxDecoration(color: p.track, borderRadius: BorderRadius.circular(4))),
+              // Alle suikers licht, de vrije suikers donker eroverheen
+              Container(
+                width: c.maxWidth * all / scaleMax,
+                decoration: BoxDecoration(color: p.carbs.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(4)),
+              ),
+              Container(
+                width: c.maxWidth * f / scaleMax,
+                decoration: BoxDecoration(color: tooMuch ? p.highFill : p.carbs, borderRadius: BorderRadius.circular(4)),
+              ),
+              if (limit != null) Positioned(left: (c.maxWidth * limit / scaleMax - 1).clamp(0, c.maxWidth - 2), top: 0, bottom: 0, child: Container(width: 2, color: p.ink)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    String extra(String d) => [
+      if (daily[d] case final t?) tr('carbs ${fmtInt(t['carbs'])} g', 'koolhydr. ${fmtInt(t['carbs'])} g'),
+      if (glucose[d] case final g?) tr('glucose ${g.map(fmtDec).join(' · ')} mmol/L', 'bloedsuiker ${g.map(fmtDec).join(' · ')} mmol/L'),
+    ].join('  ·  ');
+
+    return Panel(
+      shadow: false,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Sugar per day', 'Suiker per dag'),
+            trailing: Tooltip(
+              triggerMode: TooltipTriggerMode.tap,
+              message: nutrientNote('free_sugars')!,
+              child: Icon(Icons.info_outline_rounded, size: 16, color: p.ink3),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: StatTile(boxed: false, label: tr('Free sugars, avg.', 'Vrije suikers, gem.'), value: avg == null ? '–' : '${fmtInt(avg)} g'),
+              ),
+              Expanded(
+                child: StatTile(boxed: false, label: tr('Maximum', 'Maximum'), value: max(keys.last) == null ? '–' : '${fmtInt(max(keys.last)!)} g'),
+              ),
+              Expanded(
+                child: StatTile(boxed: false, label: tr('Days over', 'Dagen erboven'), value: '$over / ${done.length}'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const SizedBox(width: 56),
+              const Spacer(),
+              Text(tr('free / all g', 'vrij / alle g'), style: numStyle(10.5, weight: FontWeight.w400, color: p.ink3)),
+            ],
+          ),
+          for (final d in keys)
+            InkWell(
+              key: ValueKey('sugar-$d'),
+              onTap: open,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 56,
+                          child: Text(
+                            DateFormat('EEE d', appLocale).format(parseDay(d)),
+                            style: TextStyle(fontSize: 12, color: d == today ? p.ink : p.ink2, fontWeight: d == today ? FontWeight.w600 : null),
+                          ),
+                        ),
+                        Expanded(child: bar(d)),
+                        SizedBox(
+                          width: 74,
+                          child: Text(
+                            daily[d] == null ? '–' : '${fmtInt(daily[d]!['free_sugars'])} / ${fmtInt(daily[d]!['sugars'])}',
+                            textAlign: TextAlign.right,
+                            style: numStyle(
+                              12,
+                              color: max(d) != null && (daily[d]?['free_sugars'] ?? 0) > max(d)! ? p.high : p.ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (extra(d).isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 56, top: 2),
+                        child: Text(extra(d), style: numStyle(10.5, weight: FontWeight.w400, color: glucose[d] != null ? p.ink2 : p.ink3)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 6),
+          ChartLegend(
+            items: [
+              (LegendItem.box(p.carbs, w: 10, h: 10, radius: 3), tr('free sugars', 'vrije suikers')),
+              (LegendItem.box(p.carbs.withValues(alpha: 0.3), w: 10, h: 10, radius: 3), tr('from fruit and milk', 'uit fruit en melk')),
+              (LegendItem.box(p.ink, w: 2, h: 10), 'max'),
+            ],
+          ),
         ],
       ),
     );

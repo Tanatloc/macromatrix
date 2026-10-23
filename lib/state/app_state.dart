@@ -27,6 +27,7 @@ import '../nutrition/allergens.dart';
 import '../nutrition/badges.dart';
 import '../nutrition/bioavailability.dart';
 import '../nutrition/food_groups.dart';
+import '../nutrition/free_sugars.dart';
 import '../nutrition/gap_plan.dart';
 import '../nutrition/health.dart';
 import '../nutrition/insights.dart';
@@ -207,7 +208,7 @@ class AppState extends ChangeNotifier {
     }
     _level = null;
     _entries = user.entriesFor(day);
-    _totals = NutrientTotals.sumOf(_entries.map((e) => withDerived(e.amounts)));
+    _totals = NutrientTotals.sumOf(_entries.map(entryValues));
     _exercise = user.exerciseFor(day);
     _biometrics = user.biometricsFor(day);
     _note = user.note(day);
@@ -1020,7 +1021,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// Totalen van een plan, met de doelen van die dag.
-  NutrientTotals planTotals(String day) => NutrientTotals.sumOf([for (final i in planFor(day)) withDerived(scale(i.item.per100g, i.item.grams))]);
+  NutrientTotals planTotals(String day) => NutrientTotals.sumOf([
+    for (final i in planFor(day)) _withSugars(i.item.per100g, i.item.foodRef, i.item.name, i.item.grams),
+  ]);
 
   // ── Boodschappenlijst ──
 
@@ -1149,7 +1152,7 @@ class AppState extends ChangeNotifier {
     _refresh();
   }
 
-  NutrientTotals totalsFor(Meal meal) => NutrientTotals.sumOf(entriesFor(meal).map((e) => withDerived(e.amounts)));
+  NutrientTotals totalsFor(Meal meal) => NutrientTotals.sumOf(entriesFor(meal).map(entryValues));
 
   /// Terug naar de dag van vandaag (bv. via het tabblad Vandaag).
   void goToToday() => setDate(logicalNow());
@@ -1339,7 +1342,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// Totalen van een selectie regels.
-  NutrientTotals totalsOf(Iterable<DiaryEntry> entries) => NutrientTotals.sumOf(entries.map((e) => withDerived(e.amounts)));
+  NutrientTotals totalsOf(Iterable<DiaryEntry> entries) => NutrientTotals.sumOf(entries.map(entryValues));
 
   // ── Uitgelichte voedingsstoffen (bovenaan het dagboek, zelf te kiezen) ──
 
@@ -1548,7 +1551,7 @@ class AppState extends ChangeNotifier {
     for (final e in user.entriesBetween(dayKey(from), dayKey(to))) {
       byDay.putIfAbsent(e.day, () => []).add(e);
     }
-    return {for (final e in byDay.entries) e.key: NutrientTotals.sumOf(e.value.map((x) => withDerived(x.amounts)))};
+    return {for (final e in byDay.entries) e.key: NutrientTotals.sumOf(e.value.map(entryValues))};
   }
 
   // ── Level en avatar ──
@@ -1573,7 +1576,7 @@ class AppState extends ChangeNotifier {
       final sig = '$_targetsVersion|${entries.map((e) => '${e.id}:${e.grams}').join(',')}';
       final hit = _dayScores[d];
       if (hit != null && hit.$1 == sig) return hit.$2;
-      final v = NutrientTotals.sumOf(entries.map((x) => withDerived(x.amounts))).values;
+      final v = NutrientTotals.sumOf(entries.map(entryValues)).values;
       final t = targetsForDate(parseDay(d));
       bool ok(String k) => t[k] != null && levelOf(v[k] ?? 0, t[k]) == Level.ok;
       final o6 = v['omega6'], o3 = v['omega3'];
@@ -1937,6 +1940,33 @@ class AppState extends ChangeNotifier {
 
   void deleteCustomFood(Food f) {
     user.deleteFood(f.ref);
+    notifyListeners();
+  }
+
+  // ── Suiker (P41, P183) ──
+
+  /// Label per voedingsmiddel, voor de vrije suikers: uit de ingebouwde databank, of bij een merkproduct dat van
+  /// zijn basisproduct. Eigen producten en recepten hebben er geen (dan beslist de naam).
+  final _labelCache = <String, FoodLabel?>{};
+
+  FoodLabel? _labelFor(String ref) => _labelCache.putIfAbsent(ref, () {
+    if (FoodDb.isDbRef(ref)) return foods.byRef(ref)?.label;
+    if (!ref.startsWith('off:')) return null;
+    final proxy = user.food(ref)?.proxyRef;
+    return proxy != null && FoodDb.isDbRef(proxy) ? foods.byRef(proxy)?.label : null;
+  });
+
+  NutrientMap _withSugars(NutrientMap per100g, String ref, String name, double grams) =>
+      withDerived(scale(withFreeSugars(per100g, label: _labelFor(ref), name: name), grams));
+
+  /// Voedingswaarden van een dagboekregel zoals ze in de totalen tellen: met afgeleide waarden en vrije suikers.
+  NutrientMap entryValues(DiaryEntry e) => _withSugars(e.per100g, e.foodRef, e.name, e.grams);
+
+  /// "Let op suiker": koolhydraten en (vrije) suikers vooraan bij Vandaag, en suiker per dag in de week.
+  bool get sugarFocus => user.setting('ui')?['sugarFocus'] == true;
+
+  void setSugarFocus(bool v) {
+    user.setSetting('ui', {...?user.setting('ui'), 'sugarFocus': v});
     notifyListeners();
   }
 }

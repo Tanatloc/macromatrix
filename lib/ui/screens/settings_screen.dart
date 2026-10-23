@@ -186,6 +186,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (h) => h == null ? null : s.setDayStart(h),
             ),
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(tr('Keep an eye on sugar', 'Let op suiker')),
+            subtitle: Text(
+              tr(
+                'Handy with diabetes: carbs, sugars and free sugars first on Today, and sugar per day in the week overview.',
+                'Handig bij diabetes: koolhydraten, suikers en vrije suikers eerst bij Vandaag, en suiker per dag in het weekoverzicht.',
+              ),
+            ),
+            value: s.sugarFocus,
+            onChanged: s.setSugarFocus,
+          ),
           title(tr('Exercise', 'Beweging')),
           // Gewone ListTile met losse schakelaar: onderaan het scherm zette een tik ergens op de brede rij
           // hem per ongeluk om; nu wisselt alleen de schakelaar zelf.

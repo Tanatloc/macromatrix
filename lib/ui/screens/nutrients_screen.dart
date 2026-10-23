@@ -203,6 +203,7 @@ class KeyNutrients extends StatelessWidget {
     this.onShowAll,
     this.columns = 1,
     this.isToday = true,
+    this.sugarFocus,
   });
 
   final NutrientMap values;
@@ -215,7 +216,13 @@ class KeyNutrients extends StatelessWidget {
   final int columns;
   final bool isToday;
 
-  static const basics = ['energy', 'protein', 'carbs', 'sugars', 'fiber', 'fat', 'sfa', 'sodium'];
+  /// "Let op suiker" (P41); null = de instelling uit AppState.
+  final bool? sugarFocus;
+
+  static const basics = ['energy', 'protein', 'carbs', 'sugars', 'free_sugars', 'fiber', 'fat', 'sfa', 'sodium'];
+
+  /// Met "Let op suiker": koolhydraten en suikers bovenaan, meteen onder energie.
+  static const sugarBasics = ['energy', 'carbs', 'sugars', 'free_sugars', 'fiber', 'protein', 'fat', 'sfa', 'sodium'];
 
   /// De vitaminen en mineralen onder je doel, de grootste tekorten eerst.
   static List<String> shortfalls(NutrientMap values, Map<String, Target> targets, {int limit = 10}) {
@@ -240,8 +247,9 @@ class KeyNutrients extends StatelessWidget {
       complete: !incomplete.contains(k),
       onTap: () => open(nutrientByKey[k]!),
     );
+    final sugar = sugarFocus ?? Provider.of<AppState?>(context)?.sugarFocus ?? false;
     final basics = [
-      for (final k in KeyNutrients.basics)
+      for (final k in sugar ? KeyNutrients.sugarBasics : KeyNutrients.basics)
         if (!hidden.contains(k)) k,
     ];
     final basicsPanel = Panel(
@@ -249,7 +257,14 @@ class KeyNutrients extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [PanelTitle(tr('The basics', 'De basis')), const SizedBox(height: 4), for (final (i, k) in basics.indexed) row(i, k)],
+        children: [
+          PanelTitle(
+            tr('The basics', 'De basis'),
+            subtitle: sugar ? tr('Carbs and sugar first: you keep an eye on sugar', 'Koolhydraten en suiker eerst: je let op suiker') : null,
+          ),
+          const SizedBox(height: 4),
+          for (final (i, k) in basics.indexed) row(i, k),
+        ],
       ),
     );
     final lowPanel = Panel(

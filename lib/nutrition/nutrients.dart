@@ -61,6 +61,8 @@ const nutrients = <Nutrient>[
   Nutrient('carbs', 'Koolhydraten', 'g', NutrientGroup.carbs),
   Nutrient('fiber', 'Vezels', 'g', NutrientGroup.carbs, indent: 1),
   Nutrient('sugars', 'Suikers', 'g', NutrientGroup.carbs, indent: 1),
+  // Geschat uit het label of de naam (zie free_sugars.dart): suikers buiten heel fruit, groenten en gewone melk
+  Nutrient('free_sugars', 'Vrije suikers', 'g', NutrientGroup.carbs, indent: 2, derived: true),
   Nutrient('starch', 'Zetmeel', 'g', NutrientGroup.carbs, indent: 1),
 
   // Vetten
@@ -150,6 +152,7 @@ const _englishNames = {
   'carbs': 'Carbohydrates',
   'fiber': 'Fiber',
   'sugars': 'Sugars',
+  'free_sugars': 'Free sugars',
   'starch': 'Starch',
   'fat': 'Fat',
   'sfa': 'Saturated fat',
@@ -214,4 +217,17 @@ const _englishNames = {
   'beta_carotene': 'Beta-carotene',
   'lycopene': 'Lycopene',
   'lutein_zeaxanthin': 'Lutein + zeaxanthin',
+};
+
+/// Korte uitleg bij een voedingsstof die niet vanzelf spreekt, of null.
+String? nutrientNote(String key) => switch (key) {
+  'free_sugars' => tr(
+    'Added sugar plus the sugar in honey, syrups and fruit juice. Sugar in whole fruit, vegetables, legumes and plain milk or yoghurt does not count. Estimated from the kind of product. The WHO advises less than 10% of your energy.',
+    'Toegevoegde suiker plus de suiker in honing, siropen en vruchtensap. Suiker in heel fruit, groenten, peulvruchten en gewone melk of yoghurt telt niet mee. Geschat uit het soort product. De WHO raadt minder dan 10% van je energie aan.',
+  ),
+  'sugars' => tr(
+    'All sugars together, also those in fruit and milk. For your maximum, look at free sugars.',
+    'Alle suikers samen, ook die in fruit en melk. Kijk voor je maximum naar de vrije suikers.',
+  ),
+  _ => null,
 };
