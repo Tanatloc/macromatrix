@@ -523,8 +523,10 @@ class Segmented<T> extends StatelessWidget {
                     height: height,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: value == selected ? p.surface : Colors.transparent,
+                      // De gekozen optie staat duidelijk af tegen de donkere achtergrond (ook in donkere modus)
+                      color: value == selected ? p.surface2 : Colors.transparent,
                       borderRadius: BorderRadius.circular(9),
+                      border: value == selected ? Border.all(color: p.lineStrong) : null,
                       boxShadow: value == selected ? const [BoxShadow(color: Color(0x14000000), blurRadius: 2, offset: Offset(0, 1))] : null,
                     ),
                     child: Text(

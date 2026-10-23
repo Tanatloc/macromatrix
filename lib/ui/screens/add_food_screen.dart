@@ -483,10 +483,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                           child: Text(switch (_scope) {
-                            _Scope.brands =>
-                              _online == null
-                                  ? tr('Press Enter to search branded products.', 'Druk op Enter om merkproducten te zoeken.')
-                                  : tr('No branded products found.', 'Geen merkproducten gevonden.'),
+                            _Scope.brands => _error != null
+                                ? tr("Couldn't reach branded products. Check your connection and try again.",
+                                    'Merkproducten zijn nu niet bereikbaar. Controleer je verbinding en probeer opnieuw.')
+                                : _online == null
+                                ? tr('Press Enter to search branded products.', 'Druk op Enter om merkproducten te zoeken.')
+                                : tr('No branded products found.', 'Geen merkproducten gevonden.'),
                             _Scope.mine => tr(
                               'No products of your own found. Create one with the plus at the top right.',
                               'Geen eigen producten gevonden. Maak er een met het plusje rechtsboven.',

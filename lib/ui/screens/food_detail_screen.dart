@@ -617,44 +617,52 @@ class _MacroTiles extends StatelessWidget {
       return g == null || g <= 0 ? '' : fmtPct((amounts[k] ?? 0) / g);
     }
 
+    String sub(String k) {
+      final pct = share(k);
+      return pct.isEmpty ? tr('no goal', 'geen doel') : tr('$pct of goal', '$pct van doel');
+    }
+
     final tiles = [
-      ('kcal', fmtInt(amounts['energy'] ?? 0), tr('${share('energy')} of goal', '${share('energy')} van doel'), p.ink),
-      (tr('Protein', 'Eiwit'), '${fmtDec(amounts['protein'] ?? 0)} g', tr('${share('protein')} of goal', '${share('protein')} van doel'), p.protein),
-      (tr('Carbs', 'Koolh.'), '${fmtDec(amounts['carbs'] ?? 0)} g', tr('${share('carbs')} of goal', '${share('carbs')} van doel'), p.carbs),
-      (tr('Fat', 'Vet'), '${fmtDec(amounts['fat'] ?? 0)} g', tr('${share('fat')} of goal', '${share('fat')} van doel'), p.fat),
+      ('kcal', fmtInt(amounts['energy'] ?? 0), sub('energy'), p.ink),
+      (tr('Protein', 'Eiwit'), '${fmtDec(amounts['protein'] ?? 0)} g', sub('protein'), p.protein),
+      (tr('Carbs', 'Koolh.'), '${fmtDec(amounts['carbs'] ?? 0)} g', sub('carbs'), p.carbs),
+      (tr('Fat', 'Vet'), '${fmtDec(amounts['fat'] ?? 0)} g', sub('fat'), p.fat),
     ];
-    return Row(
-      children: [
-        for (final (i, (label, value, sub, color)) in tiles.indexed) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(
-            child: Panel(
-              shadow: false,
-              radius: 14,
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      LegendItem.box(color, w: 6, h: 6),
-                      const SizedBox(width: 5),
-                      Text(label, style: TextStyle(fontSize: 11, color: p.ink2)),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(value, style: numStyle(19)),
-                  ),
-                  Text(sub, style: TextStyle(fontSize: 11, color: p.ink3)),
-                ],
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, (label, value, sub, color)) in tiles.indexed) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: Panel(
+                shadow: false,
+                radius: 14,
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        LegendItem.box(color, w: 6, h: 6),
+                        const SizedBox(width: 5),
+                        Text(label, style: TextStyle(fontSize: 11, color: p.ink2)),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(value, style: numStyle(19)),
+                    ),
+                    Text(sub, style: TextStyle(fontSize: 11, color: p.ink3)),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -747,7 +755,10 @@ class _ImpactPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(a > 9.99 ? '>999%' : (a < 1 && (a * 100).round() >= 100 ? '99%' : fmtPct(a)), style: numStyle(13, color: limit ? (a > 1 ? p.high : p.ink) : (a >= 1 ? p.ok : p.low))),
+                        Text(
+                          a > 9.99 ? '>999%' : (a < 1 && (a * 100).round() >= 100 ? '99%' : fmtPct(a)),
+                          style: numStyle(13, color: limit ? (a > 1 ? p.high : p.ink) : (a >= 1 ? p.ok : p.low)),
+                        ),
                         Text(
                           tr('was ${fmtPct(b)}', 'was ${fmtPct(b)}'),
                           style: numStyle(10.5, weight: FontWeight.w400, color: p.ink3),
