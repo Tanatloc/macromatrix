@@ -10,6 +10,8 @@ import '../../nutrition/targets.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import 'kit.dart';
+import 'number_input.dart';
+import 'undo.dart';
 
 /// Uit Health Connect overgenomen (de id krijgt daar een vast voorvoegsel) in plaats van zelf toegevoegd.
 bool exerciseFromWatch(Exercise e) => e.id.startsWith('hc:');
@@ -168,11 +170,7 @@ class _GoalEffect extends StatelessWidget {
         _Ledger(tr('Goal without exercise', 'Doel zonder beweging'), fmtInt(base)),
         if (only != null) _Ledger(tr('This activity', 'Deze activiteit'), '+${fmtInt(only!.kcal)}', color: p.brand),
         if (others > 0.5)
-          _Ledger(
-            only == null ? tr('Exercise', 'Beweging') : tr('Other exercise', 'Andere beweging'),
-            '+${fmtInt(others)}',
-            color: p.brand,
-          ),
+          _Ledger(only == null ? tr('Exercise', 'Beweging') : tr('Other exercise', 'Andere beweging'), '+${fmtInt(others)}', color: p.brand),
         Divider(height: 12, color: p.line),
         _Ledger(tr('Goal today', 'Doel vandaag'), fmtInt(budget), strong: true),
       ],
@@ -189,7 +187,14 @@ class _ExerciseSheet extends StatelessWidget {
     final name = TextEditingController(text: e.name);
     final minutes = TextEditingController(text: e.minutes == null ? '' : '${e.minutes!.round()}');
     final kcal = TextEditingController(text: '${e.kcal.round()}');
-    double? parse(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
+    double? parse(TextEditingController c) => parseNum(c.text);
+    // Andere duur: verbrande energie schaalt mee, tot je die zelf aanpast
+    var kcalEdited = false;
+    void durationChanged(String _) {
+      final m = parse(minutes), old = e.minutes;
+      if (kcalEdited || m == null || old == null || old <= 0) return;
+      kcal.text = '${(e.kcal * m / old).round()}';
+    }
 
     final ok = await showDialog<bool>(
       context: context,
@@ -199,17 +204,24 @@ class _ExerciseSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(controller: name, decoration: InputDecoration(labelText: tr('Activity', 'Activiteit'))),
+            TextField(
+              controller: name,
+              decoration: InputDecoration(labelText: tr('Activity', 'Activiteit')),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: minutes,
               keyboardType: TextInputType.number,
+              onTap: selectAllOnTap(minutes),
+              onChanged: durationChanged,
               decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: kcal,
               keyboardType: TextInputType.number,
+              onTap: selectAllOnTap(kcal),
+              onChanged: (_) => kcalEdited = true,
               decoration: InputDecoration(labelText: tr('Burned', 'Verbrand'), suffixText: 'kcal'),
             ),
           ],
@@ -224,6 +236,7 @@ class _ExerciseSheet extends StatelessWidget {
     final burned = parse(kcal);
     final label = name.text.trim();
     if (burned == null || burned <= 0 || label.isEmpty) return;
+    if (!context.mounted || !await confirmExercise(context, parse(minutes), burned)) return;
     s.updateExercise(e, name: label, kcal: burned, minutes: parse(minutes));
   }
 
@@ -266,9 +279,7 @@ class _ExerciseSheet extends StatelessWidget {
               style: numStyle(30, color: p.brand, height: 1.2),
             ),
             Text(
-              watch
-                  ? tr('from your watch, via Health Connect', 'van je horloge, via Health Connect')
-                  : tr('added by yourself', 'zelf toegevoegd'),
+              watch ? tr('from your watch, via Health Connect', 'van je horloge, via Health Connect') : tr('added by yourself', 'zelf toegevoegd'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12.5, color: p.ink3),
             ),
@@ -276,13 +287,17 @@ class _ExerciseSheet extends StatelessWidget {
             Row(
               children: [
                 if (minutes > 0) ...[
-                  Expanded(child: StatTile(label: tr('Duration', 'Duur'), value: '${minutes.round()} min')),
+                  Expanded(
+                    child: StatTile(label: tr('Duration', 'Duur'), value: '${minutes.round()} min'),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: StatTile(label: tr('Pace', 'Tempo'), value: '${fmtDec(e.kcal / minutes)} kcal/min'),
                   ),
                 ] else
-                  Expanded(child: StatTile(label: tr('Duration', 'Duur'), value: tr('unknown', 'onbekend'))),
+                  Expanded(
+                    child: StatTile(label: tr('Duration', 'Duur'), value: tr('unknown', 'onbekend')),
+                  ),
               ],
             ),
             const SizedBox(height: 16),
@@ -322,8 +337,10 @@ class _ExerciseSheet extends StatelessWidget {
                   child: TextButton.icon(
                     style: TextButton.styleFrom(foregroundColor: p.high),
                     onPressed: () {
+                      final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(context);
                       s.deleteExercise(e);
+                      showUndo(null, tr('${e.name} removed', '${e.name} verwijderd'), () => s.restoreExercise(e), messenger: messenger);
                     },
                     icon: const Icon(Icons.delete_outline_rounded, size: 18),
                     label: Text(tr('Remove', 'Verwijderen')),
@@ -359,10 +376,7 @@ class _DaySheet extends StatelessWidget {
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: p.ink),
             ),
             const SizedBox(height: 2),
-            Text(
-              '${fmtInt(s.burnedKcal)} kcal',
-              style: numStyle(30, color: p.brand, height: 1.2),
-            ),
+            Text('${fmtInt(s.burnedKcal)} kcal', style: numStyle(30, color: p.brand, height: 1.2)),
             const SizedBox(height: 10),
             for (final e in s.exercise) ExerciseRow(e),
             const SizedBox(height: 14),
@@ -374,4 +388,11 @@ class _DaySheet extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Vraagt na bij een duur of verbranding die waarschijnlijk een tikfout is (30 min wordt snel 3030 min).
+Future<bool> confirmExercise(BuildContext context, double? minutes, double kcal) async {
+  if ((minutes ?? 0) <= 300 && kcal <= 2000) return true;
+  final what = minutes != null && minutes > 300 ? '${fmtInt(minutes)} min (${fmtNum(minutes / 60)} h)' : '${fmtInt(kcal)} kcal';
+  return confirmUnusual(context, tr('$what of exercise is a lot. Is that right?', '$what beweging is veel. Klopt dat?'));
 }

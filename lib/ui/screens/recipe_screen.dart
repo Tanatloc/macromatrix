@@ -8,6 +8,7 @@ import '../../state/app_state.dart';
 import '../widgets/nutrient_row.dart';
 import 'add_food_screen.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
 
 /// Recept maken of bewerken: ingrediënten met hun hoeveelheid, aantal porties en (optioneel) het gewicht na
 /// bereiding. Het recept wordt een voedingsmiddel dat je zoals elk product kunt toevoegen.
@@ -112,6 +113,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                     child: TextField(
                       controller: _servings,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onTap: selectAllOnTap(_servings),
                       decoration: InputDecoration(labelText: tr('Number of servings', 'Aantal porties')),
                       onChanged: (_) => setState(() {}),
                     ),
@@ -121,6 +123,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                     child: TextField(
                       controller: _cooked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onTap: selectAllOnTap(_cooked),
                       decoration: InputDecoration(
                         labelText: tr('Weight after cooking', 'Gewicht na bereiding'),
                         suffixText: 'g',

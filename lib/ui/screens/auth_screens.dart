@@ -18,6 +18,7 @@ import '../widgets/kit.dart';
 import '../widgets/logo.dart';
 import '../../i18n.dart';
 import '../../nutrition/allergens.dart';
+import '../widgets/number_input.dart';
 
 const siteUrl = 'https://app.divinenet.online';
 
@@ -697,6 +698,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       child: TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        onTap: selectAllOnTap(c),
         decoration: InputDecoration(labelText: label, suffixText: suffix),
       ),
     );

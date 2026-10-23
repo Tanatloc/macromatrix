@@ -11,6 +11,8 @@ import '../theme.dart';
 import '../widgets/charts.dart';
 import '../widgets/kit.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
+import '../widgets/undo.dart';
 
 /// Lichaam: metingen (gewicht, vetpercentage, bloeddruk, eigen metingen) met grafieken, en de vastentimer.
 class BodyScreen extends StatefulWidget {
@@ -32,7 +34,8 @@ class _BodyScreenState extends State<BodyScreen> {
     var type = types.first;
     final v1 = TextEditingController();
     final v2 = TextEditingController();
-    double? parse(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
+    double? parse(TextEditingController c) => parseNum(c.text);
+    String? error1, error2;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -55,14 +58,20 @@ class _BodyScreenState extends State<BodyScreen> {
                 controller: v1,
                 autofocus: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: type.secondLabel == null ? type.label : tr('Systolic', 'Bovendruk'), suffixText: type.unit),
+                onTap: selectAllOnTap(v1),
+                decoration: InputDecoration(
+                  labelText: type.secondLabel == null ? type.label : tr('Systolic', 'Bovendruk'),
+                  suffixText: type.unit,
+                  errorText: error1,
+                ),
               ),
               if (type.secondLabel != null) ...[
                 const SizedBox(height: 12),
                 TextField(
                   controller: v2,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: tr('Diastolic', 'Onderdruk'), suffixText: type.unit),
+                  onTap: selectAllOnTap(v2),
+                  decoration: InputDecoration(labelText: tr('Diastolic', 'Onderdruk'), suffixText: type.unit, errorText: error2),
                 ),
               ],
               const SizedBox(height: 8),
@@ -81,17 +90,54 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Save', 'Opslaan'))),
+            FilledButton(
+              onPressed: () {
+                // Onmogelijke waarden (vergeten komma, 645 kg) houden we hier al tegen
+                final (lo, hi) = _range(type.key);
+                setD(() {
+                  error1 = rangeError(v1.text, lo, hi, unit: type.unit);
+                  error2 = type.secondLabel == null ? null : rangeError(v2.text, lo, hi, unit: type.unit);
+                });
+                if (error1 == null && error2 == null) Navigator.pop(ctx, true);
+              },
+              child: Text(tr('Save', 'Opslaan')),
+            ),
           ],
         ),
       ),
     );
     final value = parse(v1);
+    if (!mounted) return;
+    if (ok == true && value != null && type.key == 'weight' && (value - s.currentWeight).abs() > 5) {
+      final ok2 = await confirmUnusual(
+        context,
+        tr(
+          '${fmt(value, 1)} kg is ${fmt((value - s.currentWeight).abs(), 1)} kg ${value > s.currentWeight ? 'more' : 'less'} than your last weight (${fmt(s.currentWeight, 1)} kg). Your goals are calculated from it.',
+          '${fmt(value, 1)} kg is ${fmt((value - s.currentWeight).abs(), 1)} kg ${value > s.currentWeight ? 'meer' : 'minder'} dan je vorige gewicht (${fmt(s.currentWeight, 1)} kg). Je doelen worden ermee berekend.',
+        ),
+      );
+      if (!ok2) return;
+    }
     if (ok == true && value != null) {
       s.addBiometric(type.key, value, value2: type.secondLabel == null ? null : parse(v2));
       setState(() => _chartType = type.key);
     }
   }
+
+  /// Redelijk bereik per soort meting; eigen metingen krijgen geen grens.
+  static (double, double) _range(String key) => switch (key) {
+    'weight' => (25, 300),
+    'body_fat' => (2, 70),
+    'lean_mass' || 'body_water' => (5, 150),
+    'waist' => (40, 200),
+    'blood_pressure' => (40, 260),
+    'heart_rate' => (25, 220),
+    'glucose' => (1, 35),
+    'ketones' => (0, 10),
+    'sleep' => (0, 24),
+    'steps' => (0, 150000),
+    _ => (double.negativeInfinity, double.infinity),
+  };
 
   Future<void> _newCustomType() async {
     final name = TextEditingController();
@@ -222,7 +268,14 @@ class _BodyScreenState extends State<BodyScreen> {
                           '${fmt(b.value, byKey[b.type]?.decimals ?? 1)}${b.value2 == null ? '' : '/${fmt(b.value2!, 0)}'} ${byKey[b.type]?.unit ?? ''}',
                           style: numStyle(13.5),
                         ),
-                        IconButton(icon: Icon(Icons.close, size: 18), tooltip: tr('Delete', 'Verwijderen'), onPressed: () => s.deleteBiometric(b)),
+                        IconButton(
+                          icon: Icon(Icons.close, size: 18),
+                          tooltip: tr('Delete', 'Verwijderen'),
+                          onPressed: () {
+                            s.deleteBiometric(b);
+                            showUndo(context, tr('Measurement removed', 'Meting verwijderd'), () => s.restoreBiometric(b));
+                          },
+                        ),
                       ],
                     ),
                     onTap: () => setState(() => _chartType = b.type),

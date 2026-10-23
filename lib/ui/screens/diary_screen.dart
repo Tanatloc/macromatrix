@@ -28,6 +28,8 @@ import '../widgets/exercise_view.dart';
 import '../widgets/gap_plan_view.dart';
 import '../widgets/nutrient_row.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
+import '../widgets/undo.dart';
 
 /// Vandaag: energie en macro's, de 25 vitaminen en mineralen, wat aandacht vraagt, een suggestie,
 /// de afgelopen week en de maaltijden.
@@ -1494,14 +1496,18 @@ Future<String?> _askName(BuildContext context, Meal meal) {
 /// Beweging toevoegen aan de gekozen dag: een activiteit en de duur, of zelf de kcal.
 Future<void> addExercise(BuildContext context) async {
   final s = context.read<AppState>();
-  ExerciseType? type = exerciseTypes.first;
-  final minutes = TextEditingController(text: '30');
+  // Begin bij wat je de vorige keer deed: de meeste mensen herhalen dezelfde activiteit
+  final recent = s.recentExercises;
+  final last = recent.firstOrNull;
+  ExerciseType? type = last == null ? exerciseTypes.first : exerciseTypes.where((t) => t.name == last.name).firstOrNull;
+  final minutes = TextEditingController(text: last?.minutes == null ? '30' : fmtNum(last!.minutes!, 0));
   final kcal = TextEditingController();
-  final name = TextEditingController();
-  double? parse(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
+  final name = TextEditingController(text: last != null && type == null ? last.name : '');
+  if (last != null && type == null) kcal.text = fmtNum(last.kcal, 0);
+  double? parse(TextEditingController c) => parseNum(c.text);
   double estimate() => (type?.met ?? 0) * s.currentWeight * (parse(minutes) ?? 0) / 60;
 
-  final ok = await showDialog<bool>(
+  final ok = await showDialog<Object>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setD) => AlertDialog(
@@ -1510,6 +1516,25 @@ Future<void> addExercise(BuildContext context) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (recent.isNotEmpty) ...[
+              Text(tr('Again', 'Opnieuw'), style: TextStyle(fontSize: 12.5, color: ctx.pal.ink3)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final e in recent)
+                    ActionChip(
+                      label: Text(
+                        e.minutes == null ? '${e.name} · ${fmtInt(e.kcal)} kcal' : '${e.name} · ${fmtNum(e.minutes!, 0)} min',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: () => Navigator.pop(ctx, e),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+            ],
             DropdownButtonFormField<ExerciseType?>(
               initialValue: type,
               isExpanded: true,
@@ -1535,6 +1560,7 @@ Future<void> addExercise(BuildContext context) async {
             TextField(
               controller: minutes,
               keyboardType: TextInputType.number,
+              onTap: selectAllOnTap(minutes),
               decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
               onChanged: (_) => setD(() {}),
             ),
@@ -1542,6 +1568,7 @@ Future<void> addExercise(BuildContext context) async {
             TextField(
               controller: kcal,
               keyboardType: TextInputType.number,
+              onTap: selectAllOnTap(kcal),
               decoration: InputDecoration(
                 labelText: tr('Burned (empty = estimate)', 'Verbrand (leeg = schatting)'),
                 suffixText: 'kcal',
@@ -1562,10 +1589,15 @@ Future<void> addExercise(BuildContext context) async {
       ),
     ),
   );
+  if (ok is Exercise) {
+    s.addExercise(ok.name, ok.kcal, minutes: ok.minutes);
+    return;
+  }
   if (ok != true) return;
   final burned = parse(kcal) ?? estimate();
   final label = type?.name ?? (name.text.trim().isEmpty ? tr('Exercise', 'Beweging') : name.text.trim());
-  if (burned > 0) s.addExercise(label, burned, minutes: parse(minutes));
+  if (burned <= 0 || !context.mounted || !await confirmExercise(context, parse(minutes), burned)) return;
+  s.addExercise(label, burned, minutes: parse(minutes));
 }
 
 class _ExerciseCard extends StatelessWidget {
@@ -2465,21 +2497,13 @@ List<DiaryEntry> _selectedIn(AppState s) {
 void _deleteWithUndo(BuildContext context, List<DiaryEntry> entries) {
   final s = context.read<AppState>();
   s.deleteEntries(entries);
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(
-          entries.length == 1
-              ? tr('${entries.first.name} removed', '${entries.first.name} verwijderd')
-              : tr('${entries.length} items removed', '${entries.length} items verwijderd'),
-        ),
-        // Met een knop blijft een SnackBar standaard staan tot je tikt; deze moet vanzelf verdwijnen
-        persist: false,
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(label: tr('Undo', 'Ongedaan maken'), onPressed: () => s.restoreEntries(entries)),
-      ),
-    );
+  showUndo(
+    context,
+    entries.length == 1
+        ? tr('${entries.first.name} removed', '${entries.first.name} verwijderd')
+        : tr('${entries.length} items removed', '${entries.length} items verwijderd'),
+    () => s.restoreEntries(entries),
+  );
 }
 
 Future<Meal?> _pickMeal(BuildContext context, {required String title}) => showModalBottomSheet<Meal>(

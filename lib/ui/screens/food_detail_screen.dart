@@ -17,6 +17,8 @@ import '../widgets/kit.dart';
 import 'custom_food_screen.dart';
 import 'recipe_screen.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
+import '../widgets/undo.dart';
 
 /// Hoeveelheid kiezen en alle voedingsstoffen van één product bekijken, met het effect op je dag.
 /// Ook om een dagboekregel te wijzigen, of (met [pickOnly]) om een ingrediënt voor een recept te kiezen.
@@ -102,9 +104,22 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     _qty.text = _fmt(quantity ?? (p == null ? 100 : 1));
   });
 
-  void _save() {
+  Future<void> _save() async {
     final s = context.read<AppState>();
     if (_grams <= 0) return;
+    // Een vergeten komma of cijfers tussen het oude getal maken van 100 g snel 100 kg: eerst vragen
+    final kcal = (_food.per100g['energy'] ?? 0) * _grams / 100;
+    if (_grams > 2000 || kcal > 3000) {
+      final amount = _grams >= 1000 ? '${fmtNum(_grams / 1000, 2)} kg' : '${_fmt(_grams)} g';
+      final ok = await confirmUnusual(
+        context,
+        tr(
+          '$amount of ${_food.name} is ${fmtInt(kcal)} kcal. Is that the right amount?',
+          '$amount ${_food.name} is ${fmtInt(kcal)} kcal. Is dat de juiste hoeveelheid?',
+        ),
+      );
+      if (!ok || !mounted) return;
+    }
     final quantity = _portion == null ? _grams : _quantity;
     if (widget.pickOnly) {
       Navigator.of(context).pop(
@@ -325,8 +340,11 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                         icon: Icons.delete_outline_rounded,
                         tooltip: tr('Remove from diary', 'Verwijderen uit dagboek'),
                         onPressed: () {
-                          s.deleteEntry(widget.entry!);
+                          final e = widget.entry!;
+                          final messenger = ScaffoldMessenger.of(context);
+                          s.deleteEntry(e);
                           Navigator.of(context).pop(true);
+                          showUndo(null, tr('${e.name} removed', '${e.name} verwijderd'), () => s.restoreEntries([e]), messenger: messenger);
                         },
                       ),
                     ],
@@ -451,6 +469,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                         controller: _qty,
                         textAlign: TextAlign.right,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onTap: selectAllOnTap(_qty),
                         style: numStyle(40, color: p.ink),
                         decoration: const InputDecoration(
                           isDense: true,

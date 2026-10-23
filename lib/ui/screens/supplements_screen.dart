@@ -8,6 +8,8 @@ import '../theme.dart';
 import '../widgets/kit.dart';
 import '../widgets/supplement_advice_view.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
+import '../widgets/undo.dart';
 
 /// Je supplementen: toevoegen uit de lijst of zelf samenstellen, en kiezen of ze elke dag vanzelf aangevinkt worden.
 class SupplementsScreen extends StatelessWidget {
@@ -88,7 +90,11 @@ class SupplementsScreen extends StatelessWidget {
                               IconButton(
                                 tooltip: tr('Remove', 'Verwijderen'),
                                 icon: Icon(Icons.delete_outline_rounded, color: pal.ink3),
-                                onPressed: () => s.removeSupplement(sup),
+                                onPressed: () {
+                                  final index = s.supplements.indexWhere((x) => x.id == sup.id);
+                                  s.removeSupplement(sup);
+                                  showUndo(context, tr('${sup.name} removed', '${sup.name} verwijderd'), () => s.restoreSupplement(sup, index));
+                                },
                               ),
                             ],
                           ),
@@ -319,6 +325,7 @@ class _CustomScreenState extends State<_CustomScreen> {
                           child: TextField(
                             controller: e.value,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            onTap: selectAllOnTap(e.value),
                             decoration: InputDecoration(suffixText: nutrientByKey[e.key]!.unit, isDense: true),
                           ),
                         ),

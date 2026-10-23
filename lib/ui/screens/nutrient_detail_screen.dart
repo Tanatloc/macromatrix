@@ -16,6 +16,8 @@ import '../widgets/kit.dart';
 import 'food_detail_screen.dart';
 import 'oracle_screen.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
+import '../widgets/undo.dart';
 
 /// Eén voedingsstof in detail: stand van de dag, verloop, waar het vandaan kwam, de rijkste bronnen ("Oracle")
 /// en je eigen doel.
@@ -48,49 +50,81 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     final standard = s.defaultTargets[n.key];
     final goal = TextEditingController(text: current?.goal == null ? '' : _plain(current!.goal!));
     final upper = TextEditingController(text: current?.upper == null ? '' : _plain(current!.upper!));
-    double? parse(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
+    double? parse(TextEditingController c) => parseNum(c.text);
+    String? goalError, upperError;
+    // Leeg mag (geen grens), maar geen tekst, geen negatief getal en geen minimum boven het maximum
+    bool validate() {
+      String? check(TextEditingController c) => c.text.trim().isEmpty ? null : rangeError(c.text, 0, 1e6, unit: n.unit);
+      goalError = check(goal);
+      upperError = check(upper);
+      final g = parse(goal), u = parse(upper);
+      if (goalError == null && upperError == null && g != null && u != null && g > u) {
+        upperError = tr('Must be at least the minimum (${_plain(g)} ${n.unit})', 'Moet minstens het minimum zijn (${_plain(g)} ${n.unit})');
+      }
+      return goalError == null && upperError == null;
+    }
 
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('Goal for ${inSentence(n.name)}', 'Doel voor ${inSentence(n.name)}')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: goal,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: tr('At least (recommended)', 'Minstens (aanbevolen)'),
-                suffixText: n.unit,
-                helperText: tr('Empty = no minimum', 'Leeg = geen minimum'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text(tr('Goal for ${inSentence(n.name)}', 'Doel voor ${inSentence(n.name)}')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: goal,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onTap: selectAllOnTap(goal),
+                decoration: InputDecoration(
+                  labelText: tr('At least (recommended)', 'Minstens (aanbevolen)'),
+                  suffixText: n.unit,
+                  helperText: tr('Empty = no minimum', 'Leeg = geen minimum'),
+                  errorText: goalError,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: upper,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: tr('At most (upper limit)', 'Hoogstens (bovengrens)'),
-                suffixText: n.unit,
-                helperText: tr('Empty = no upper limit', 'Leeg = geen bovengrens'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: upper,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onTap: selectAllOnTap(upper),
+                decoration: InputDecoration(
+                  labelText: tr('At most (upper limit)', 'Hoogstens (bovengrens)'),
+                  suffixText: n.unit,
+                  helperText: tr('Empty = no upper limit', 'Leeg = geen bovengrens'),
+                  errorText: upperError,
+                  errorMaxLines: 2,
+                ),
               ),
+              const SizedBox(height: 12),
+              Text(
+                tr('Default (EFSA): ${_describe(standard)}', 'Standaard (EFSA): ${_describe(standard)}'),
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          actions: [
+            if (s.settings.overrides.containsKey(n.key))
+              TextButton(onPressed: () => Navigator.pop(ctx, 'reset'), child: Text(tr('Default', 'Standaard'))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+            FilledButton(
+              onPressed: () {
+                var ok = false;
+                setD(() => ok = validate());
+                if (ok) Navigator.pop(ctx, 'save');
+              },
+              child: Text(tr('Save', 'Opslaan')),
             ),
-            const SizedBox(height: 12),
-            Text(tr('Default (EFSA): ${_describe(standard)}', 'Standaard (EFSA): ${_describe(standard)}'), style: Theme.of(ctx).textTheme.bodySmall),
           ],
         ),
-        actions: [
-          if (s.settings.overrides.containsKey(n.key))
-            TextButton(onPressed: () => Navigator.pop(ctx, 'reset'), child: Text(tr('Default', 'Standaard'))),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(tr('Save', 'Opslaan'))),
-        ],
       ),
     );
-    if (result == 'reset') s.setOverride(n.key, null);
-    if (result == 'save') s.setOverride(n.key, Target(goal: parse(goal), upper: parse(upper)));
+    if (result == null || !mounted) return;
+    // Een eigen grens is werk: wie per ongeluk op Standaard tikt, kan terug
+    final before = s.settings.overrides[n.key];
+    s.setOverride(n.key, result == 'reset' ? null : Target(goal: parse(goal), upper: parse(upper)));
+    showUndo(context, tr('Goal for ${inSentence(n.name)} changed', 'Doel voor ${inSentence(n.name)} aangepast'), () => s.setOverride(n.key, before));
   }
 
   String _plain(double v) => v == v.roundToDouble() ? '${v.round()}' : double.parse(v.toStringAsFixed(3)).toString().dec;

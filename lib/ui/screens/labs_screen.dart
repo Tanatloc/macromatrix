@@ -12,6 +12,8 @@ import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
 import '../widgets/supplement_advice_view.dart';
+import '../widgets/number_input.dart';
+import '../widgets/undo.dart';
 
 Level _level(int status) => switch (status) {
   -1 => Level.low,
@@ -285,6 +287,7 @@ class LabsScreen extends StatelessWidget {
                           controller: value,
                           autofocus: true,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onTap: selectAllOnTap(value),
                           decoration: InputDecoration(labelText: tr('Value', 'Waarde')),
                         ),
                       ),
@@ -422,7 +425,11 @@ class _MarkerSheet extends StatelessWidget {
                   color: p.highSoft,
                   child: Icon(Icons.delete_outline_rounded, color: p.high),
                 ),
-                onDismissed: (_) => context.read<AppState>().deleteLab(r.id),
+                onDismissed: (_) {
+                  final s = context.read<AppState>();
+                  s.deleteLab(r.id);
+                  showUndo(context, tr('Result removed', 'Uitslag verwijderd'), () => s.restoreLab(r.id));
+                },
                 child: _LabRow(r),
               ),
             const SizedBox(height: 4),

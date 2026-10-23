@@ -20,6 +20,7 @@ import 'planner_screen.dart';
 import 'shopping_screen.dart';
 import 'settings_screen.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
 
 /// Profiel en doelen: energie (doel, tempo, formule of adaptief), macro's, voorkeuren, eigen doelen per
 /// voedingsstof en het weekschema. De overige instellingen staan achter het tandwiel.
@@ -84,14 +85,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: StatefulBuilder(
           builder: (ctx, setS) {
             final p = ctx.read<AppState>().profile;
-            Widget field(String label, TextEditingController c, String suffix, void Function(double) onValue) => Expanded(
+            // Alleen waarden binnen een redelijk bereik tellen; daarbuiten blijft de oude waarde en staat er waarom
+            Widget field(String label, TextEditingController c, String suffix, double min, double max, void Function(double) onValue) => Expanded(
               child: TextField(
                 controller: c,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: label, suffixText: suffix),
+                onTap: selectAllOnTap(c),
+                decoration: InputDecoration(
+                  labelText: label,
+                  suffixText: suffix,
+                  errorText: rangeError(c.text, min, max, unit: suffix),
+                  errorMaxLines: 3,
+                ),
                 onChanged: (t) {
                   final v = _parse(t);
-                  if (v != null && v > 0) onValue(v);
+                  if (v != null && v >= min && v <= max) onValue(v);
+                  setS(() {});
                 },
               ),
             );
@@ -108,14 +117,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 12),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    field(tr('Born in', 'Geboren in'), birth, '', (v) {
-                      if (v > 1900 && v <= year - 18) _update(ctx.read<AppState>().profile.copyWith(birthYear: v.round()));
+                    field(tr('Born in', 'Geboren in'), birth, '', year - 100.0, year - 18.0, (v) {
+                      _update(ctx.read<AppState>().profile.copyWith(birthYear: v.round()));
                     }),
                     const SizedBox(width: 10),
-                    field(tr('Height', 'Lengte'), height, 'cm', (v) => _update(ctx.read<AppState>().profile.copyWith(heightCm: v))),
+                    field(tr('Height', 'Lengte'), height, 'cm', 120, 230, (v) => _update(ctx.read<AppState>().profile.copyWith(heightCm: v))),
                     const SizedBox(width: 10),
-                    field(tr('Weight', 'Gewicht'), weight, 'kg', (v) => _update(ctx.read<AppState>().profile.copyWith(weightKg: v))),
+                    field(tr('Weight', 'Gewicht'), weight, 'kg', 25, 300, (v) => _update(ctx.read<AppState>().profile.copyWith(weightKg: v))),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -334,6 +344,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         tdee: s.adaptiveTdee ?? formulaTdee(p, year),
         bmr: bmr(p, p.ageIn(year)),
         male: p.sex == Sex.male,
+        heightCm: p.heightCm,
         target: p.hasPlan ? p.targetWeightKg : null,
         date: p.hasPlan ? p.targetDate : null,
       ),
@@ -588,14 +599,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextField(
             controller: _energy,
             keyboardType: TextInputType.number,
+            onTap: selectAllOnTap(_energy),
             decoration: InputDecoration(
               labelText: tr('Custom energy goal (empty = calculate)', 'Eigen energiedoel (leeg = berekenen)'),
               suffixText: 'kcal',
               isDense: true,
+              errorText: rangeError(_energy.text, 1000, 6000, unit: 'kcal', optional: true),
+              errorMaxLines: 2,
             ),
             onChanged: (t) {
               final v = _parse(t);
-              _update(_p.copyWith(energyOverride: () => (v != null && v >= 800) ? v : null));
+              _update(_p.copyWith(energyOverride: () => (v != null && v >= 1000 && v <= 6000) ? v : null));
             },
           ),
         ],

@@ -6,6 +6,7 @@ import '../theme.dart';
 import 'kit.dart';
 import '../../day_clock.dart';
 import '../../i18n.dart';
+import 'number_input.dart';
 
 /// Doelgewicht met een datum, zoals de rekenhulp het teruggeeft.
 typedef WeightGoal = ({double target, DateTime date});
@@ -13,8 +14,18 @@ typedef WeightGoal = ({double target, DateTime date});
 /// Rekenhulp: van je huidige gewicht naar een doelgewicht in een aantal weken of maanden. Toont hoeveel je per dag
 /// mag eten en geeft het doel met de datum terug als je het als plan wil gebruiken.
 class WeightGoalDialog extends StatefulWidget {
-  const WeightGoalDialog({super.key, required this.current, required this.tdee, required this.bmr, required this.male, this.target, this.date});
+  const WeightGoalDialog({
+    super.key,
+    required this.current,
+    required this.tdee,
+    required this.bmr,
+    required this.male,
+    this.heightCm,
+    this.target,
+    this.date,
+  });
   final double current, tdee, bmr;
+  final double? heightCm;
   final bool male;
 
   /// Het plan dat er al is, om mee te beginnen.
@@ -59,13 +70,24 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
     // Zelfde rekenwijze als het plan in je profiel: weken tot de datum
     final months = reached == null ? null : daysBetween(t, reached) / 7 * 12 / 52;
     final valid = now != null && target != null && months != null && now >= 30 && target >= 30 && months > 0;
-    final plan = valid ? WeightPlan.of(current: now, target: target, months: months, tdee: widget.tdee, bmr: widget.bmr, male: widget.male) : null;
+    final plan = valid
+        ? WeightPlan.of(
+            current: now,
+            target: target,
+            months: months,
+            tdee: widget.tdee,
+            bmr: widget.bmr,
+            male: widget.male,
+            heightCm: widget.heightCm,
+          )
+        : null;
     final same = plan != null && (target! - now!).abs() < 0.1;
 
     Widget field(TextEditingController c, String label, String suffix) => Expanded(
       child: TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        onTap: selectAllOnTap(c),
         decoration: InputDecoration(labelText: label, suffixText: suffix, isDense: true),
         onChanged: (_) => setState(() {}),
       ),
@@ -113,38 +135,54 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
                   style: TextStyle(fontSize: 13, color: pal.ink2),
                 )
               else ...[
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: pal.brandSoft, borderRadius: BorderRadius.circular(14)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(tr('You can eat about', 'Je mag per dag ongeveer'), style: TextStyle(fontSize: 13, color: pal.ink2)),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(fmtInt(plan.dailyKcal), style: numStyle(30, color: pal.ink)),
-                          const SizedBox(width: 6),
-                          Text(tr('kcal per day', 'kcal eten'), style: TextStyle(fontSize: 14, color: pal.ink2)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        tr(
-                          'You ${plan.ratePerWeek < 0 ? 'lose' : 'gain'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week: '
-                              '${fmtInt(plan.dailyChange.abs())} kcal ${plan.ratePerWeek < 0 ? 'less' : 'more'} than you burn (${fmtInt(widget.tdee)} kcal) every day. '
-                              'Goal reached around ${DateFormat('d MMMM yyyy', appLocale).format(reached!)}.',
-                          '${plan.ratePerWeek < 0 ? 'Je valt' : 'Je komt'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week '
-                              '${plan.ratePerWeek < 0 ? 'af' : 'aan'}: elke dag ${fmtInt(plan.dailyChange.abs())} kcal '
-                              '${plan.ratePerWeek < 0 ? 'minder' : 'meer'} dan je verbruik (${fmtInt(widget.tdee)} kcal). '
-                              'Doel bereikt rond ${DateFormat('d MMMM yyyy', appLocale).format(reached)}.',
+                // Een onveilig plan krijgt geen geruststellend groen vak en geen negatief aantal kcal
+                if (plan.unsafe)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: pal.highSoft, borderRadius: BorderRadius.circular(14)),
+                    child: Text(
+                      plan.dailyKcal <= 0
+                          ? tr('This is not possible: you would have to eat less than nothing.', 'Dit kan niet: je zou minder dan niets moeten eten.')
+                          : tr(
+                              'This plan would mean eating only ${fmtInt(plan.dailyKcal)} kcal a day. Choose a later date or a different goal.',
+                              'Dit plan betekent maar ${fmtInt(plan.dailyKcal)} kcal per dag eten. Kies een latere datum of een ander doel.',
+                            ),
+                      style: TextStyle(fontSize: 13.5, height: 1.45, color: pal.ink),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: pal.brandSoft, borderRadius: BorderRadius.circular(14)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(tr('You can eat about', 'Je mag per dag ongeveer'), style: TextStyle(fontSize: 13, color: pal.ink2)),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(fmtInt(plan.dailyKcal), style: numStyle(30, color: pal.ink)),
+                            const SizedBox(width: 6),
+                            Text(tr('kcal per day', 'kcal eten'), style: TextStyle(fontSize: 14, color: pal.ink2)),
+                          ],
                         ),
-                        style: TextStyle(fontSize: 13, height: 1.45, color: pal.ink),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          tr(
+                            'You ${plan.ratePerWeek < 0 ? 'lose' : 'gain'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week: '
+                                '${fmtInt(plan.dailyChange.abs())} kcal ${plan.ratePerWeek < 0 ? 'less' : 'more'} than you burn (${fmtInt(widget.tdee)} kcal) every day. '
+                                'Goal reached around ${DateFormat('d MMMM yyyy', appLocale).format(reached!)}.',
+                            '${plan.ratePerWeek < 0 ? 'Je valt' : 'Je komt'} ${fmtDec(plan.ratePerWeek.abs(), 2)} kg per week '
+                                '${plan.ratePerWeek < 0 ? 'af' : 'aan'}: elke dag ${fmtInt(plan.dailyChange.abs())} kcal '
+                                '${plan.ratePerWeek < 0 ? 'minder' : 'meer'} dan je verbruik (${fmtInt(widget.tdee)} kcal). '
+                                'Doel bereikt rond ${DateFormat('d MMMM yyyy', appLocale).format(reached)}.',
+                          ),
+                          style: TextStyle(fontSize: 13, height: 1.45, color: pal.ink),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 for (final w in plan.warnings)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
@@ -176,7 +214,7 @@ class _WeightGoalDialogState extends State<WeightGoalDialog> {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Close', 'Sluiten'))),
-        if (plan != null && !same)
+        if (plan != null && !same && !plan.unsafe)
           FilledButton(
             onPressed: () => Navigator.pop<WeightGoal>(context, (target: target!, date: reached!)),
             child: Text(tr('Set as my goal', 'Als mijn doel instellen')),

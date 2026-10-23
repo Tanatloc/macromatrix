@@ -7,6 +7,7 @@ import '../../nutrition/nutrients.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../../i18n.dart';
+import '../widgets/number_input.dart';
 
 /// Eigen product invullen, met de waarden van het etiket (per 100 g).
 class CustomFoodScreen extends StatefulWidget {
@@ -75,6 +76,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
   Widget _field(Nutrient n) => TextFormField(
     controller: _values[n.key],
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    onTap: selectAllOnTap(_values[n.key]!),
     decoration: InputDecoration(labelText: n.name, suffixText: n.unit, isDense: true),
     validator: (t) => t == null || t.trim().isEmpty || _parse(t) != null ? null : tr('Not a valid number', 'Geen geldig getal'),
   );
@@ -139,6 +141,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                 TextFormField(
                   controller: _portionGrams,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onTap: selectAllOnTap(_portionGrams),
                   decoration: InputDecoration(
                     labelText: tr('Weight of one serving (optional)', 'Gewicht van één portie (optioneel)'),
                     suffixText: 'g',
@@ -155,6 +158,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                 TextFormField(
                   controller: _salt,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onTap: selectAllOnTap(_salt),
                   decoration: InputDecoration(labelText: tr('Salt', 'Zout'), suffixText: 'g', isDense: true),
                 ),
                 const SizedBox(height: 12),

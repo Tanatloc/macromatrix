@@ -198,7 +198,7 @@ EnergyEstimate? estimateEnergy(Map<String, double> kcalPerDay, Map<String, doubl
 
 /// Plan om van [current] naar [target] kg te gaan in [months] maanden, bij een verbruik van [tdee] kcal per dag.
 class WeightPlan {
-  WeightPlan._(this.weeks, this.ratePerWeek, this.dailyChange, this.dailyKcal, this.warnings);
+  WeightPlan._(this.weeks, this.ratePerWeek, this.dailyChange, this.dailyKcal, this.warnings, {this.unsafe = false});
 
   final double weeks;
 
@@ -212,6 +212,9 @@ class WeightPlan {
   final double dailyKcal;
   final List<String> warnings;
 
+  /// Te weinig eten of een ongezond doelgewicht: niet als plan aanbieden.
+  final bool unsafe;
+
   factory WeightPlan.of({
     required double current,
     required double target,
@@ -219,13 +222,21 @@ class WeightPlan {
     required double tdee,
     required double bmr,
     required bool male,
+    double? heightCm,
   }) {
     final weeks = months * 52 / 12;
     final rate = (target - current) / weeks;
     final change = rate * kcalPerKg / 7;
     final kcal = tdee + change;
     final minimum = male ? 1500.0 : 1200.0;
-    return WeightPlan._(weeks, rate, change, kcal, [
+    final bmi = heightCm == null || heightCm <= 0 ? null : target / ((heightCm / 100) * (heightCm / 100));
+    final underweight = bmi != null && bmi < 18.5 && target < current;
+    return WeightPlan._(weeks, rate, change, kcal, unsafe: kcal < minimum || underweight, [
+      if (underweight)
+        tr(
+          'A goal of ${target.round()} kg gives a BMI of ${bmi.toStringAsFixed(1)}, which is underweight. Choose a higher goal.',
+          'Een doel van ${target.round()} kg geeft een BMI van ${bmi.toStringAsFixed(1).dec}: dat is ondergewicht. Kies een hoger doel.',
+        ),
       if (rate < 0 && -rate > current * 0.01)
         tr(
           'More than 1% of your weight per week is hard to sustain and costs muscle. Better take more time.',

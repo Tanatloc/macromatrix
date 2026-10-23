@@ -670,6 +670,12 @@ class UserDb {
     return true;
   }
 
+  /// Een verwijderde rij terugzetten (alles wordt zacht verwijderd, voor "Ongedaan maken" en de synchronisatie).
+  void undelete(String table, String id) {
+    assert(const {'biometrics', 'exercise', 'labs'}.contains(table));
+    _db.execute('UPDATE $table SET deleted = 0, updated_at = ? WHERE id = ?', [_now(), id]);
+  }
+
   void deleteBiometric(String id) => _db.execute('UPDATE biometrics SET deleted = 1, updated_at = ? WHERE id = ?', [_now(), id]);
 
   List<Biometric> biometricsFor(String day) => [
@@ -745,6 +751,22 @@ class UserDb {
         kcal: (r['kcal'] as num).toDouble(),
       ),
   ];
+
+  /// Laatst gedane activiteiten (elk één keer, nieuwste eerst), zonder wat van het horloge kwam.
+  List<Exercise> recentExercises({int limit = 3}) {
+    final seen = <String>{};
+    return [
+      for (final r in _db.select("SELECT * FROM exercise WHERE deleted = 0 AND id NOT LIKE 'hc:%' ORDER BY day DESC, rowid DESC LIMIT 60"))
+        if (seen.add((r['name'] as String).toLowerCase()))
+          Exercise(
+            id: r['id'] as String,
+            day: r['day'] as String,
+            name: r['name'] as String,
+            minutes: (r['minutes'] as num?)?.toDouble(),
+            kcal: (r['kcal'] as num).toDouble(),
+          ),
+    ].take(limit).toList();
+  }
 
   /// Verbrande kcal per dag tussen twee dagen (voor trends).
   Map<String, double> exerciseKcalBetween(String from, String to) => {

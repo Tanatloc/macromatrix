@@ -502,6 +502,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void restoreLab(String id) {
+    user.undelete('labs', id);
+    _labs = null;
+    notifyListeners();
+  }
+
   void deleteLabDay(String day) {
     user.deleteLabDay(day);
     _labs = null;
@@ -892,6 +898,15 @@ class AppState extends ChangeNotifier {
   }
 
   /// Uit je lijst halen; wat je eerder innam, blijft in je dagboek.
+  /// Een net verwijderd supplement terugzetten, op zijn oude plaats.
+  void restoreSupplement(Supplement sup, int index) {
+    final list = [...supplements];
+    if (list.any((x) => x.id == sup.id)) return;
+    list.insert(index.clamp(0, list.length), sup);
+    _saveSupplements(list);
+    _refresh();
+  }
+
   void removeSupplement(Supplement sup) {
     _saveSupplements([
       for (final x in supplements)
@@ -1140,6 +1155,9 @@ class AppState extends ChangeNotifier {
     _refresh();
   }
 
+  /// Activiteiten die je onlangs deed, om ze met één tik te herhalen.
+  List<Exercise> get recentExercises => user.recentExercises();
+
   void updateExercise(Exercise e, {required String name, required double kcal, double? minutes}) {
     user.updateExercise(e.id, name: name, kcal: kcal, minutes: minutes);
     _refresh();
@@ -1147,6 +1165,11 @@ class AppState extends ChangeNotifier {
 
   void deleteExercise(Exercise e) {
     user.deleteExercise(e.id);
+    _refresh();
+  }
+
+  void restoreExercise(Exercise e) {
+    user.undelete('exercise', e.id);
     _refresh();
   }
 
@@ -1160,12 +1183,18 @@ class AppState extends ChangeNotifier {
 
   void addBiometric(String type, double value, {double? value2}) {
     user.addBiometric(day: day, type: type, value: value, value2: value2);
-    // Een nieuw gewicht vandaag of later geldt meteen voor de berekening van de doelen
-    if (type == 'weight' && !_date.isBefore(_dateOnly(logicalNow()))) {
-      saveProfile(_profile.copyWith(weightKg: value));
-      return;
-    }
+    if (type == 'weight' && _syncProfileWeight()) return;
     _refresh();
+  }
+
+  /// Je doelen rekenen altijd met je laatste gewicht: na een nieuwe of gewiste meting neemt het profiel dat over.
+  /// Zo draait het wissen van een foute meting (645 in plaats van 64,5 kg) ook de doelen terug.
+  /// Geeft true als het profiel (en dus alles) opnieuw berekend werd.
+  bool _syncProfileWeight() {
+    final w = currentWeight;
+    if ((w - _profile.weightKg).abs() < 0.05) return false;
+    saveProfile(_profile.copyWith(weightKg: w));
+    return true;
   }
 
   /// Na het overnemen uit Health Connect: alles opnieuw tonen; een nieuw gewicht van vandaag geldt meteen voor je doelen.
@@ -1180,6 +1209,13 @@ class AppState extends ChangeNotifier {
 
   void deleteBiometric(Biometric b) {
     user.deleteBiometric(b.id);
+    if (b.type == 'weight' && _syncProfileWeight()) return;
+    _refresh();
+  }
+
+  void restoreBiometric(Biometric b) {
+    user.undelete('biometrics', b.id);
+    if (b.type == 'weight' && _syncProfileWeight()) return;
     _refresh();
   }
 
