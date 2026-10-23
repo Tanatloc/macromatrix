@@ -249,7 +249,10 @@ HealthCheck? healthCheck(
   final sfa = pctEnergy('sfa', 9);
   final sodium = avg('sodium');
   final potassium = avg('potassium');
-  final sugars = pctEnergy('sugars', 4);
+  // Vrije suikers (frisdrank, sap, snoep, gezoete producten) als die geschat zijn: suiker uit heel fruit, groenten en
+  // gewone melk telt dan niet mee (WHO: minder dan 10% van je energie). Anders alle suiker samen, met ruimere grenzen.
+  final freeSugars = full.any((d) => d.$1.values.containsKey('free_sugars'));
+  final sugars = freeSugars ? pctEnergy('free_sugars', 4) : pctEnergy('sugars', 4);
   final epaDha = avg('epa_dha');
   final protein = weightKg > 0 ? avg('protein') / weightKg : 0.0;
   // Alcohol in standaardglazen van 10 g per week. Pas vanaf [alcoholMinDays] volledige dagen omrekenen naar een week:
@@ -499,9 +502,9 @@ HealthCheck? healthCheck(
     ),
     factor(
       'sugars',
-      tr('Sugar', 'Suiker'),
+      freeSugars ? tr('Free sugar', 'Vrije suiker') : tr('Sugar', 'Suiker'),
       '${fmtNum(sugars, 0)}% $ofEnergy',
-      rateDown(sugars, 15, 20),
+      freeSugars ? rateDown(sugars, 10, 15) : rateDown(sugars, 15, 20),
       isKnown: known('sugars'),
       bloodTips: labTips(['hba1c', 'glucose', 'triglycerides']),
       good: tr('Little sugar: good for your teeth, weight and blood sugar.', 'Weinig suiker: goed voor je tanden, je gewicht en je bloedsuiker.'),
@@ -517,10 +520,15 @@ HealthCheck? healthCheck(
         'Fewer soft drinks, juice, sweets, biscuits and sweetened dairy. Fruit is fine.',
         'Minder frisdrank, sap, snoep, koeken en gezoete zuivel. Fruit mag gewoon.',
       ),
-      note: tr(
-        'The app cannot tell added sugar apart, so this is all sugar together.',
-        'De app ziet niet welke suiker toegevoegd is, dus dit is alle suiker samen.',
-      ),
+      note: freeSugars
+          ? tr(
+              'Only free sugar counts here (soft drinks, juice, sweets, sweetened products), estimated per product. Sugar in whole fruit, vegetables and plain milk does not. Aim: under 10% of your energy (WHO).',
+              'Hier telt alleen vrije suiker (frisdrank, sap, snoep, gezoete producten), per product geschat. Suiker in heel fruit, groenten en gewone melk telt niet mee. Streef: minder dan 10% van je energie (WHO).',
+            )
+          : tr(
+              'The app cannot tell added sugar apart, so this is all sugar together.',
+              'De app ziet niet welke suiker toegevoegd is, dus dit is alle suiker samen.',
+            ),
     ),
     factor(
       'potassium',

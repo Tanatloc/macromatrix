@@ -517,7 +517,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   Widget _contributors(AppState s, Palette p, double total) {
     final rows = [
       for (final e in s.entries)
-        if ((withDerived(e.amounts)[n.key] ?? 0) > 0) (e, withDerived(e.amounts)[n.key]!),
+        if ((s.entryValues(e)[n.key] ?? 0) > 0) (e, s.entryValues(e)[n.key]!),
     ]..sort((a, b) => b.$2.compareTo(a.$2));
     final top = rows.take(5).toList();
     final rest = rows.skip(5).fold<double>(0, (a, r) => a + r.$2);
@@ -562,7 +562,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   Widget _periodContributors(AppState s, Palette p, double total, int logged) {
     final sums = <String, (String, double, int)>{};
     for (final e in s.user.entriesBetween(dayKey(widget.from!), dayKey(widget.to!))) {
-      final v = withDerived(e.amounts)[n.key] ?? 0;
+      final v = s.entryValues(e)[n.key] ?? 0;
       if (v <= 0) continue;
       final key = '${e.foodRef}|${e.name}';
       final prev = sums[key];
@@ -654,6 +654,18 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   );
 
   Widget _sources(AppState s, Palette p) {
+    // Vrije suiker wordt per gelogd product geschat, niet in de databank bewaard: geen lijst, wel uitleg
+    if (n.key == 'free_sugars') {
+      return Panel(
+        child: Text(
+          tr(
+            'Free sugar is mostly in soft drinks, fruit juice, sweets, biscuits, cake and sweetened yoghurt or cereals. Sugar in whole fruit, vegetables and plain milk does not count.',
+            'Vrije suiker zit vooral in frisdrank, fruitsap, snoep, koeken, gebak en gezoete yoghurt of ontbijtgranen. Suiker in heel fruit, groenten en gewone melk telt niet mee.',
+          ),
+          style: TextStyle(fontSize: 13.5, color: p.ink2, height: 1.4),
+        ),
+      );
+    }
     final isLimit = s.targets[n.key]?.isLimit ?? false;
     final recentRefs = <String>{};
     final mine = <(Food, double)>[];
