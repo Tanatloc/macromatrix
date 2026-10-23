@@ -5,6 +5,8 @@
 /// lichaamsgewicht). Energie: Mifflin-St Jeor x activiteitsfactor. Geen medisch advies.
 library;
 
+import 'dart:math' as math;
+
 import '../day_clock.dart';
 import '../i18n.dart';
 
@@ -218,7 +220,9 @@ Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal =
   final age = p.ageIn(year);
   final male = p.sex == Sex.male;
   final kcal = energyTarget(p, year, tdee: tdee) + extraKcal;
-  final mj = kcal * 4.184 / 1000;
+  // Energieafhankelijke vitaminen (B1, B3) rekenen we op je basisdoel, niet op de extra van een training:
+  // je behoefte stijgt niet merkbaar door één work-out, en zo schieten ze niet boven de veilige grens.
+  final mj = math.min(kcal, energyTarget(p, year, tdee: tdee)) * 4.184 / 1000;
   final kg = p.weightKg;
   // Essentiële aminozuren: mg per kg lichaamsgewicht -> g per dag
   Target aa(double mgPerKg) => Target(goal: mgPerKg * kg / 1000);

@@ -256,20 +256,37 @@ class _CustomScreenState extends State<_CustomScreen> {
     if (n != null) setState(() => _amounts[n.key] = TextEditingController());
   }
 
+  /// Een ruime maar realistische bovengrens voor wat een supplement per dosis kan bevatten.
+  static double _supplementCap(String key) {
+    const high = {'vit_a', 'vit_d', 'vit_k', 'b9', 'b12', 'biotin', 'b7', 'iodine', 'selenium', 'chromium', 'molybdenum'};
+    final unit = nutrientByKey[key]?.unit ?? 'mg';
+    if (high.contains(key) || unit == 'µg') return 100000; // µg
+    if (unit == 'g') return 500;
+    return 10000; // mg: ruim boven elke zinnige dosis
+  }
+
   void _save() {
     final values = <String, double>{'energy': 0};
+    String? tooBig;
     for (final e in _amounts.entries) {
-      final v = double.tryParse(e.value.text.trim().replaceAll(',', '.'));
-      if (v != null && v > 0) values[e.key] = v;
+      final v = parseNum(e.value.text);
+      if (v == null || v <= 0) continue;
+      // Een plausibele bovengrens per dosis: geen 999999 mg (dat ontregelt de score)
+      final cap = _supplementCap(e.key);
+      if (v > cap) {
+        tooBig = tr(
+          '${nutrientByKey[e.key]!.name}: at most ${fmtNum(cap)} ${nutrientByKey[e.key]!.unit} per dose',
+          '${nutrientByKey[e.key]!.name}: hoogstens ${fmtNum(cap)} ${nutrientByKey[e.key]!.unit} per dosis',
+        );
+        continue;
+      }
+      values[e.key] = v;
     }
-    if (_name.text.trim().isEmpty || values.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            tr('Enter a name and at least one nutrient with an amount.', 'Geef een naam en minstens één voedingsstof met een hoeveelheid.'),
-          ),
-        ),
-      );
+    final msg = _name.text.trim().isEmpty || values.length < 2
+        ? tr('Enter a name and at least one nutrient with an amount.', 'Geef een naam en minstens één voedingsstof met een hoeveelheid.')
+        : tooBig;
+    if (msg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       return;
     }
     Navigator.pop(
