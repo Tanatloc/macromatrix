@@ -7,6 +7,7 @@ import '../../data/food.dart';
 import '../../data/models.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/nutrients.dart';
+import '../../nutrition/portions.dart';
 import '../../nutrition/targets.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
@@ -74,8 +75,10 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final e = widget.entry;
     _time = e?.time;
     if (e != null) {
-      // Portie bestaat niet meer: terugvallen op gram
-      _portion = e.portionLabel == null ? null : _food.portions.where((p) => p.label == e.portionLabel).firstOrNull;
+      // Portie bestaat niet meer: terugvallen op gram (een geschatte portie zoals "1 slice (≈35 g)" telt mee)
+      _portion = e.portionLabel == null
+          ? null
+          : [..._food.portions, ...everydayPortions(_food)].where((p) => p.label == e.portionLabel).firstOrNull;
       _qty = TextEditingController(text: _fmt(_portion == null ? e.grams : e.quantity));
     } else if (widget.initialGrams != null) {
       _portion = widget.initialPortion;
@@ -121,8 +124,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
 
   void _setQuantity(double v) => setState(() => _qty.text = _fmt(math.max(0, v)));
 
-  /// Stap voor plus en min: halve porties, of in gram een rond getal dat bij de hoeveelheid past.
-  double get _step => _portion != null ? 0.5 : (_quantity >= 200 ? 25 : (_quantity >= 50 ? 10 : 5));
+  /// Plus en min: per portie (per halve onder 2), in gram per 10 tot 100 g en daarboven per 25 (P19).
+  void _stepBy({required bool up}) => _setQuantity(stepQuantity(_quantity, up: up, portion: _portion != null));
 
   void _choose(Portion? p, {double? quantity}) => setState(() {
     _portion = p;
@@ -571,9 +574,12 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   Widget _amountPanel(Palette p) {
     final options = <(Portion?, double, String, String)>[
       (null, 100, '100 g', ''),
-      for (final x in _food.portions.take(6)) (x, 1, x.label, '${_fmt(x.grams)} g'),
+      // Porties uit de databank, aangevuld met gewone porties (sneetje, glas, kom ...) als geschatting (P19)
+      for (final x in portionOptions(_food))
+        x is EverydayPortion ? (x, 1, x.short, '≈${_fmt(x.grams)} g') : (x, 1, x.label, '${_fmt(x.grams)} g'),
     ];
-    bool selected(Portion? x, double q) => x == null ? _portion == null : _portion == x;
+    // Op label: geschatte porties worden bij elke opbouw opnieuw gemaakt
+    bool selected(Portion? x, double q) => x == null ? _portion == null : _portion?.label == x.label;
     return Panel(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -581,7 +587,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
         children: [
           Row(
             children: [
-              StepButton(icon: Icons.remove_rounded, tooltip: tr('Less', 'Minder'), size: 44, onTap: () => _setQuantity(_quantity - _step)),
+              StepButton(icon: Icons.remove_rounded, tooltip: tr('Less', 'Minder'), size: 44, onTap: () => _stepBy(up: false)),
               Expanded(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -620,7 +626,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                   ],
                 ),
               ),
-              StepButton(icon: Icons.add_rounded, tooltip: tr('More', 'Meer'), size: 44, onTap: () => _setQuantity(_quantity + _step)),
+              StepButton(icon: Icons.add_rounded, tooltip: tr('More', 'Meer'), size: 44, onTap: () => _stepBy(up: true)),
             ],
           ),
           if (_portion != null)
