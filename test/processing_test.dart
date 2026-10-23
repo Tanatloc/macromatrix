@@ -29,6 +29,10 @@ void main() {
     expect(novaOfRecipe([(Nova.unprocessed, 400), (Nova.culinary, 200), (Nova.ultra, 30)]), Nova.unprocessed);
     expect(novaOfRecipe([(Nova.unprocessed, 300), (Nova.ultra, 300)]), Nova.ultra);
     expect(novaOfRecipe([(null, 500), (Nova.unprocessed, 100)]), isNull);
+    // Kleine stukjes ultrabewerkt tellen samen: saus + eiwitpoeder maken het recept niet 'onbewerkt' (P57)
+    expect(novaOfRecipe([(Nova.unprocessed, 500), (Nova.ultra, 60), (Nova.ultra, 40)]), Nova.processed);
+    // Samen ≥ 20% ultrabewerkt: ultrabewerkt
+    expect(novaOfRecipe([(Nova.unprocessed, 400), (Nova.ultra, 60), (Nova.ultra, 60)]), Nova.ultra);
   });
 
   test('share of energy', () {

@@ -132,20 +132,28 @@ Nova? novaOf(Food f) {
   return Nova.unprocessed;
 }
 
-/// Zelf gemaakt: een recept neemt de zwaarste groep over die een flink deel (≥ 20%) van de energie levert.
-/// Pasta met tomaat en olijfolie blijft zo onbewerkt; een recept met veel worst wordt ultrabewerkt.
+/// Zelf gemaakt: een recept neemt de zwaarste groep over die samen een flink deel (≥ 20%) van de energie levert.
+/// Pasta met tomaat en olijfolie blijft zo onbewerkt; een recept met veel worst wordt ultrabewerkt. Kleinere
+/// stukjes bewerkt of ultrabewerkt (een kant-en-klare saus, eiwitpoeder) tellen samen: vanaf 5% is het recept
+/// minstens "bewerkt", niet "onbewerkt".
 Nova? novaOfRecipe(List<(Nova?, double kcal)> ingredients) {
   final total = ingredients.fold(0.0, (a, i) => a + i.$2);
   if (total <= 0) return null;
-  Nova? worst;
+  final share = <Nova, double>{};
   var known = 0.0;
   for (final (n, kcal) in ingredients) {
     if (n == null) continue;
     known += kcal;
-    if (n == Nova.culinary || kcal / total < 0.2) continue;
-    if (worst == null || n.group > worst.group) worst = n;
+    share[n] = (share[n] ?? 0) + kcal / total;
   }
   if (known / total < 0.5) return null;
+  Nova? worst;
+  for (final e in share.entries) {
+    if (e.key == Nova.culinary || e.value < 0.2) continue;
+    if (worst == null || e.key.group > worst.group) worst = e.key;
+  }
+  final processedBits = (share[Nova.processed] ?? 0) + (share[Nova.ultra] ?? 0);
+  if ((worst == null || worst.group < Nova.processed.group) && processedBits >= 0.05) return Nova.processed;
   return worst ?? Nova.unprocessed;
 }
 

@@ -116,8 +116,8 @@ const labMarkers = <LabMarker>[
     low: 30,
     high: 100,
     lowText: (
-      'Low vitamin D. Food alone rarely fixes this: oily fish helps, but a supplement of 10–20 µg (400–800 IU) a day, especially from October to March, is usually needed. Discuss the dose with your doctor.',
-      'Weinig vitamine D. Met eten alleen lukt dat zelden: vette vis helpt, maar meestal is een supplement van 10–20 µg (400–800 IE) per dag nodig, zeker van oktober tot maart. Bespreek de dosis met je arts.',
+      'Low vitamin D (aim for 30–100 ng/mL, which is 75–250 nmol/L). Food alone rarely fixes this: oily fish helps, but usually a supplement of 10–25 µg (400–1000 IU) a day is needed, especially from October to March. Discuss the dose with your doctor.',
+      'Weinig vitamine D (streefwaarde 30–100 ng/mL, dat is 75–250 nmol/L). Met eten alleen lukt dat zelden: vette vis helpt, maar meestal is een supplement van 10–25 µg (400–1000 IE) per dag nodig, zeker van oktober tot maart. Bespreek de dosis met je arts.',
     ),
     highText: (
       'Very high vitamin D, usually from too many supplements. Check what you take and talk to your doctor.',
