@@ -26,6 +26,8 @@ NutrientMap withDerived(NutrientMap source) {
   derive('epa_dha', ['epa', 'dha'], factor: 1000); // g -> mg
   derive('met_cys', ['methionine', 'cystine']);
   derive('phe_tyr', ['phenylalanine', 'tyrosine']);
+  // Zout zoals op het etiket: natrium (mg) x 2,5 / 1000 = gram zout
+  if (n['sodium'] case final na? when !n.containsKey('salt')) n['salt'] = na * 2.5 / 1000;
   return n;
 }
 

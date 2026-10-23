@@ -128,6 +128,7 @@ const nutrients = <Nutrient>[
   Nutrient('potassium', 'Kalium', 'mg', NutrientGroup.minerals, decimals: 0),
   Nutrient('selenium', 'Seleen', 'µg', NutrientGroup.minerals),
   Nutrient('sodium', 'Natrium', 'mg', NutrientGroup.minerals, decimals: 0),
+  Nutrient('salt', 'Zout', 'g', NutrientGroup.minerals, decimals: 1, derived: true),
   Nutrient('zinc', 'Zink', 'mg', NutrientGroup.minerals),
 
   // Overige
@@ -208,6 +209,7 @@ const _englishNames = {
   'potassium': 'Potassium',
   'selenium': 'Selenium',
   'sodium': 'Sodium',
+  'salt': 'Salt',
   'zinc': 'Zinc',
   'beta_carotene': 'Beta-carotene',
   'lycopene': 'Lycopene',

@@ -515,6 +515,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   );
 
   Widget _sources(AppState s, Palette p) {
+    final isLimit = s.targets[n.key]?.isLimit ?? false;
     final recentRefs = <String>{};
     final mine = <(Food, double)>[];
     for (final f in s.recentFoods()) {
@@ -538,7 +539,11 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(
-            tr('Richest sources', 'Rijkste bronnen'),
+            // Bij een stof waarvan minder beter is (zout, suiker, verzadigd vet) is dit geen aanrader maar een waarschuwing
+            isLimit ? tr('Highest in ${inSentence(n.name)}', 'Meeste ${inSentence(n.name)}') : tr('Richest sources', 'Rijkste bronnen'),
+            subtitle: isLimit
+                ? tr('Less of this is better — these foods have the most.', 'Minder hiervan is beter — deze producten bevatten het meest.')
+                : null,
             trailing: SizedBox(
               width: 190,
               child: Segmented<bool>(

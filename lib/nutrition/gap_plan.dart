@@ -36,7 +36,7 @@ class GapPlan {
 
 final _measure = RegExp(r'\b(cup|cups|tbsp|tsp|oz|fl|ml|dl|l|quart|pint)\b', caseSensitive: false);
 final _notAFood = RegExp(
-  r'\b(oil|supplement|powder|extract|fortified|infant|babyfood|yeast extract|spice|spices|salt|seasoning|herbs?)\b',
+  r'\b(oil|supplement|powder|extract|fortified|infant|babyfood|yeast extract|spice|spices|salt|seasoning|herbs?|gelatin(e|ou)?|gelatine|sweetener|aspartame|stevia|saccharin|meat extender|protein isolate|cod liver|fish oil|raising agent|baking|leaven)\b',
   caseSensitive: false,
 );
 
