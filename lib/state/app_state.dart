@@ -199,11 +199,24 @@ class AppState extends ChangeNotifier {
     _biometrics = user.biometricsFor(day);
     _note = user.note(day);
     _targets = targetsForDate(_date, burned: burnedKcal);
-    _defaultTargets = targetsFor(profileFor(_date), year: _date.year, extraKcal: _extraKcal(burnedKcal), tdee: adaptiveTdee);
+    _defaultTargets = targetsFor(
+      profileFor(_date),
+      year: _date.year,
+      extraKcal: _extraKcal(burnedKcal, profileFor(_date), _date.year),
+      tdee: adaptiveTdee,
+    );
   }
 
-  /// Beweging bij het doel optellen, behalve bij een adaptief verbruik: daar zit je gemiddelde beweging al in.
-  double _extraKcal(double burned) => _settings.addExercise && adaptiveTdee == null ? burned : 0;
+  /// Beweging bij het doel optellen. Je activiteitsniveau rekent al een deel beweging in (de factor boven zittend),
+  /// dus we tellen alleen de verbranding daarboven erbij. Zo telt een training niet dubbel.
+  double _extraKcal(double burned, Profile p, int year) {
+    if (!_settings.addExercise || adaptiveTdee != null) return 0;
+    final alreadyInFactor = bmr(p, p.ageIn(year)) * (p.activity.factor - Activity.sedentary.factor);
+    return math.max(0, burned - alreadyInFactor);
+  }
+
+  /// Hoeveel kcal beweging vandaag echt bij je doel komt (de verbranding boven wat je activiteitsniveau al inrekent).
+  double get exerciseKcalInGoal => _extraKcal(burnedKcal, profileFor(_date), _date.year);
 
   /// Profiel voor een dag, met de macroverdeling van het weekschema als die er is.
   Profile profileFor(DateTime d) {
@@ -213,7 +226,7 @@ class AppState extends ChangeNotifier {
 
   /// Richtwaarden voor een dag: profiel, weekschema, beweging en eigen doelen.
   Map<String, Target> targetsForDate(DateTime d, {double burned = 0}) {
-    final t = targetsFor(profileFor(d), year: d.year, extraKcal: _extraKcal(burned), tdee: adaptiveTdee);
+    final t = targetsFor(profileFor(d), year: d.year, extraKcal: _extraKcal(burned, profileFor(d), d.year), tdee: adaptiveTdee);
     return {...t, ..._settings.overrides}..removeWhere((k, _) => hiddenNutrients.contains(k));
   }
 

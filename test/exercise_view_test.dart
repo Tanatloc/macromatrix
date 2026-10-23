@@ -62,7 +62,8 @@ void main() {
     // Het doel loopt met de beweging mee op.
     final budget = state.targets['energy']!.goal!;
     expect(find.text(fmtInt(budget)), findsOneWidget);
-    expect(find.text('+${fmtInt(515)}'), findsOneWidget);
+    // De beweging die boven je activiteitsniveau uitkomt, komt bij je doel
+    expect(find.text('+${fmtInt(state.exerciseKcalInGoal)}'), findsOneWidget);
   });
 
   testWidgets('beweging van het horloge vertelt over het rustverbruik', (tester) async {

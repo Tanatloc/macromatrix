@@ -162,15 +162,16 @@ class _GoalEffect extends StatelessWidget {
       );
     }
 
-    final base = budget - burned;
-    final others = burned - (only?.kcal ?? burned);
+    final added = s.exerciseKcalInGoal;
+    final base = budget - added;
+    // Deel van de verbranding dat niet bovenop je doel komt, omdat je activiteitsniveau het al inrekent
+    final inFactor = burned - added;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Ledger(tr('Goal without exercise', 'Doel zonder beweging'), fmtInt(base)),
-        if (only != null) _Ledger(tr('This activity', 'Deze activiteit'), '+${fmtInt(only!.kcal)}', color: p.brand),
-        if (others > 0.5)
-          _Ledger(only == null ? tr('Exercise', 'Beweging') : tr('Other exercise', 'Andere beweging'), '+${fmtInt(others)}', color: p.brand),
+        _Ledger(tr('Exercise', 'Beweging'), '+${fmtInt(added)}', color: p.brand),
+        if (inFactor > 0.5) _Ledger(tr('Already in your activity level', 'Zit al in je activiteitsniveau'), '−${fmtInt(inFactor)}', color: p.ink3),
         Divider(height: 12, color: p.line),
         _Ledger(tr('Goal today', 'Doel vandaag'), fmtInt(budget), strong: true),
       ],
