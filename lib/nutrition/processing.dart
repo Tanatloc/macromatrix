@@ -39,6 +39,7 @@ final _ultra = _re(
   r'croissant|brioche|pastry|pastries|cereal bar|granola bar|protein bar|breakfast cereal|cornflakes|'
   r'mayonnaise|ketchup|dressing|stock cube|bouillon|gravy|sweetener|glucose syrup|liqueur|whisky|whiskey|vodka|gin|rum|'
   r'brandy|cognac|meat substitute|vegetarian burger|veggie|imitation|surimi|flavou?red|sweetened|french fries|'
+  r'(?:whey|casein|pea|soy|rice|hemp|egg white) protein|protein powder|protein isolate|protein concentrate|protein shake|'
   r'fruit yog(?:h)?urt)(?:e?s)?\b|yog(?:h)?urt\b.*\bfruit',
 );
 

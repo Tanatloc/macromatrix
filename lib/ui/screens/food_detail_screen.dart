@@ -677,12 +677,15 @@ class _ImpactPanel extends StatelessWidget {
     double before(String k) => math.max(0, (totals[k] ?? 0) - (own[k] ?? 0));
 
     final rows = <(Nutrient, double, double, bool)>[];
+    // Sporenelementen die bijna niemand bewust opvolgt: alleen tonen als dit product er echt veel van levert
+    const obscure = {'fluoride', 'molybdenum', 'chloride', 'chromium', 'manganese', 'copper'};
     for (final n in nutrients) {
       if (n.group == NutrientGroup.general || const {'protein', 'carbs', 'fat'}.contains(n.key)) continue;
       final t = s.targets[n.key];
       final add = added[n.key] ?? 0;
       if (t == null || add <= 0) continue;
       if (t.goal != null) {
+        if (obscure.contains(n.key) && add / t.goal! < 0.25) continue;
         rows.add((n, before(n.key) / t.goal!, (before(n.key) + add) / t.goal!, false));
       } else if (t.upper != null) {
         final after = (before(n.key) + add) / t.upper!;
