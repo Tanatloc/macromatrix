@@ -16,6 +16,7 @@ import '../data/plan.dart';
 import '../data/off_client.dart';
 import '../data/fdc_client.dart';
 import '../data/product_info.dart';
+import '../data/search_terms.dart';
 import '../data/user_db.dart';
 import '../import/importer.dart';
 import '../labs/lab_report.dart';
@@ -665,136 +666,79 @@ class AppState extends ChangeNotifier {
   }
 
   /// Gewone woorden die in de databank anders heten.
-  static const _quickAliases = {'toast': 'bread toasted', 'mince': 'minced beef', 'jacket potato': 'potato baked', 'oats': 'porridge oats'};
+  static const _quickAliases = {
+    'toast': 'bread toasted',
+    'mince': 'minced beef',
+    'jacket potato': 'potato baked',
+    'oats': 'porridge oats',
+    'cola zero': 'cola sweetener',
+    'coke zero': 'cola sweetener',
+    'coca cola zero': 'cola sweetener',
+    'cola light': 'cola sweetener',
+    'diet coke': 'cola sweetener',
+    'pepsi max': 'cola sweetener',
+    'griekse yoghurt': 'greek yogurt',
+    'halfvolle melk': 'semi-skimmed milk',
+    'magere melk': 'skimmed milk',
+    'volle melk': 'whole milk',
+    'turkse yoghurt': 'greek yogurt',
+  };
+
+  /// Losse woorden die de vertaling (search_terms.dart) niet kent.
+  static const _wordAliases = {'griekse': 'greek', 'grieks': 'greek'};
+
+  /// Wat je typte of zei, klaar om te zoeken: aliassen en Nederlandse buigings-e ("gekookte" = "gekookt").
+  static String _normalQuery(String query) {
+    final q = query.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+    final alias = _quickAliases[q];
+    if (alias != null) return alias;
+    return [
+      for (final w in q.split(' '))
+        if (_wordAliases[w] case final a?)
+          a
+        else if (w.length > 4 && w.endsWith('e') && searchTokens(w).join() == w && searchTokens(w.substring(0, w.length - 1)).join() != w.substring(0, w.length - 1))
+          w.substring(0, w.length - 1)
+        else
+          w,
+    ].join(' ');
+  }
+
+  /// Kandidaten voor een zoekterm, in de volgorde van de databank: bij een meervoud ("breads", "eieren") eerst het
+  /// enkelvoud. Een energiedrank alleen als je die vraagt (P151).
+  List<Food> _candidates(String query, {Food? first}) {
+    final singular = query.replaceAll(RegExp(r'(es|s|en)$'), '');
+    final seen = <String>{};
+    return [
+      for (final f in [
+        ?first,
+        if (singular != query && singular.length > 2) ...[...user.searchSaved(singular), ...foods.search(singular, limit: 150)],
+        ...user.searchSaved(query),
+        ...foods.search(query, limit: 200),
+      ])
+        if (!unaskedEnergyDrink(f, query) && seen.add(f.ref)) f,
+    ];
+  }
 
   List<(Food, double, Portion?)> resolveQuick(QuickItem q) {
-    final alias = _quickAliases[q.query.toLowerCase()];
-    if (alias != null) q = QuickItem(alias, grams: q.grams, count: q.count, unitGrams: q.unitGrams);
+    final typed = q.query.toLowerCase().trim();
+    final norm = _normalQuery(q.query);
+    if (norm != q.query.toLowerCase().trim()) q = QuickItem(norm, grams: q.grams, count: q.count, unitGrams: q.unitGrams);
     // Wat iemand zegt, is meestal bereid en heel: "rijst" is gekookte rijst, "eieren" zijn hele eieren
-    // Meervoud ("breads", "apples", "eieren"): ook het enkelvoud zoeken, en dat eerst
-    final singular = q.query.replaceAll(RegExp(r'(es|s|en)$'), '');
-    final seen = <String>{};
-    final picked = _quickPicks[q.query.toLowerCase()];
+    final picked = _quickPicks[typed] ?? _quickPicks[q.query.toLowerCase()];
     final pickedFood = picked == null ? null : (FoodDb.isDbRef(picked) ? foods.byRef(picked) : user.food(picked));
     // Wat je eerder at, is bijna altijd wat je bedoelt
     final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
-    var all = [
-      for (final f in [
-        ?pickedFood,
-        if (singular != q.query && singular.length > 2) ...[...user.searchSaved(singular), ...foods.search(singular, limit: 150)],
-        ...user.searchSaved(q.query),
-        ...foods.search(q.query, limit: 200),
-      ])
-        if (seen.add(f.ref)) f,
-    ];
+    var all = _candidates(q.query, first: pickedFood);
     // Niets gevonden: probeer de woorden aan elkaar ("volkorenbrood") en dan het laatste woord ("brood")
     final words = q.query.split(RegExp(r'\s+'));
     if (all.isEmpty && words.length > 1) all = searchLocal(words.join()).take(25).toList();
     if (all.isEmpty && words.length > 1) all = searchLocal(words.last).take(25).toList();
-    final queryWords = [
-      for (final w in q.query.toLowerCase().split(RegExp(r'\s+')))
-        if (w.length > 1) w,
-    ];
+    // Dezelfde score als het zoekvak (P152), plus je eigen keuzes en wat je eerder at
     double rank(int i, Food f) {
-      final n = f.name.toLowerCase();
-      var s = 20.0 - i * 0.15;
-      final query = q.query.toLowerCase();
+      var s = 20.0 - i * 0.15 + foodQueryScore(f, q.query);
       if (f.ref == picked) s += 200;
       if (mine.contains(f.ref)) s += 25;
-      // Hele woorden tellen: "egg" is geen eggplant, "cola" geen chocolate
-      final head = n.split(',').first;
-      for (final w in queryWords) {
-        final stem = w.replaceAll(RegExp(r'(es|s)$'), '');
-        if (RegExp('\\b${RegExp.escape(stem)}(es|s|ed)?\\b').hasMatch(n)) {
-          s += 4;
-          if (RegExp('\\b${RegExp.escape(stem)}(es|s|ed)?\\b').hasMatch(head)) s += 6;
-        } else if (n.contains(stem)) {
-          s -= 14;
-        }
-      }
-      // Een woord dat alleen iets anders beschrijft ("spinach spaghetti", "quinoa pasta") is niet het product zelf
-      final last = head.trim().split(RegExp(r'\s+')).last;
-      if (queryWords.length == 1 && !last.startsWith(queryWords.first.replaceAll(RegExp(r'(es|s)$'), '')) && head.split(RegExp(r'\s+')).length > 1) {
-        s -= 4;
-      }
-      // Elk extra woord maakt het een ander product ("batter pudding with semi-skimmed milk" is geen melk)
-      const plain = {'raw', 'boiled', 'cooked', 'plain', 'whole', 'fresh', 'infusion', 'ready-to-drink', 'prepared', 'average', 'all', 'types'};
-      final extra = head
-          .split(RegExp(r'[\s/()-]+'))
-          .where((w) => w.length > 2 && !plain.contains(w) && !query.contains(w.replaceAll(RegExp(r'(es|s)$'), '')));
-      s -= math.min(9, extra.length * 1.5);
-      // Een gerecht met het product erin, terwijl je het product zelf noemt
-      if (RegExp(r'(w/|\b(with|in|sauce|pudding|pie|soup|salad|sandwich)\b)').hasMatch(n) &&
-          !RegExp(r'\b(with|sauce|pudding|pie|soup|salad|sandwich)\b').hasMatch(query)) {
-        s -= 10;
-      }
-      if (RegExp(r'\b(coated|breaded|battered|french|swedish)\b').hasMatch(n) && !RegExp(r'coat|bread|batter|french|swedish').hasMatch(query)) {
-        s -= 12;
-      }
-      // Vleeswaren en kant-en-klare vormen alleen als je ze noemt
-      if (RegExp(r'\b(roll|loaf|luncheon|deli|sliced|nuggets?|patty|patties|takeaway|prepacked)\b').hasMatch(n) &&
-          !RegExp(r'roll|loaf|luncheon|deli|slice|nugget|patt|takeaway').hasMatch(query)) {
-        s -= 10;
-      }
-      // "Whey" of "protein shake" is eiwitpoeder, geen wei
-      if (RegExp(r'^whey$|protein').hasMatch(query) && n.contains('protein')) s += 15;
-      // Een ingrediënt in plaats van wat je eet of drinkt: melkpoeder, concentraat, energiedrank (whey en eiwit zijn wel poeder)
-      if (RegExp(r'\b(powder(ed)?|dry|dried|dehydrated|concentrate|bulk|energy drink)\b').hasMatch(n) &&
-          !RegExp(r'powder|dry|dried|dehydrated|concentrate|bulk|energy|whey|protein|cocoa|spice|curry|paprika|cinnamon').hasMatch(query)) {
-        s -= 25;
-      }
-      // Koffie en thee zijn de drank, niet gemalen bonen of bladeren
-      if (RegExp(r'\b(coffee|tea|cocoa)\b').hasMatch(n) &&
-          RegExp(r'\b(ground|grounds|beans?|leaves|leaf|instant|granules|dry)\b').hasMatch(n) &&
-          !RegExp(r'ground|bean|lea[fv]|instant|granule').hasMatch(query)) {
-        s -= 25;
-      }
-      // Cocktails en likeuren alleen als je ze noemt (koffie is geen Irish coffee)
-      if (RegExp(r'\b(irish|liqueur|cocktail|with (rum|whisky|whiskey|brandy|vodka)|spiked)\b').hasMatch(n) &&
-          !RegExp(r'irish|liqueur|cocktail|rum|whisk|brandy|vodka').hasMatch(query)) {
-        s -= 30;
-      }
-      // Eieren zijn kippeneieren, tenzij je een ander ei noemt
-      if (RegExp(r'\b(goose|duck|quail|turkey|emu|ostrich)\b').hasMatch(n) &&
-          RegExp(r'\begg').hasMatch(n) &&
-          !RegExp(r'goose|duck|quail|turkey|emu|ostrich').hasMatch(query)) {
-        s -= 30;
-      }
-      // Bereid krijgt voorrang bij vlees, vis, granen, eieren en aardappelen; fruit en zuivel liefst zoals ze zijn
-      final cookable = RegExp(
-        r'\b(chicken|beef|pork|turkey|lamb|fish|salmon|cod|tuna|rice|pasta|spaghetti|noodles?|quinoa|potato(es)?|lentils?|beans?|egg|eggs|kip|rijst|vis|aardappel(en)?)\b',
-      );
-      if (cookable.hasMatch(n) && RegExp(r'\b(cooked|boiled|baked|grilled|roasted|steamed|whole)\b').hasMatch(n)) s += 12;
-      if (RegExp(r'\b(fried|deep fried|candied|canned|syrup|chips|sweetened)\b').hasMatch(n) &&
-          !RegExp(r'fried|candied|canned|syrup|chips|sweet').hasMatch(query)) {
-        s -= 15;
-      }
-      if (!isEverydayFood(f) && !(n.contains('protein') && RegExp(r'whey|protein').hasMatch(query))) s -= 30;
-      if (RegExp(r'\b(rice|pasta|spaghetti|noodles?|quinoa|lentils?|beans?|oats?|barley|couscous|bulgur)\b').hasMatch(n) &&
-          RegExp(r'\b(raw|dry|uncooked)\b').hasMatch(n)) {
-        s -= 30;
-      }
-      if (RegExp(r'\b(yolk|white|powder|dried|flour|substitute|frozen)\b').hasMatch(n) &&
-          !query.contains(RegExp(r'yolk|white|powder|dried|flour|frozen|whey|protein'))) {
-        s -= 15;
-      }
-      // Bijproducten en merkproducten van ketens zijn zelden wat iemand bedoelt
-      if (RegExp(r'\b(rendered|grease|drippings|skin only|by-products?)\b|(?<!%\s?)\bfat\b(?!\s*\d)')
-              .hasMatch(n.replaceAll(RegExp(r'[\d.,]+\s*%\s*fat'), '')) &&
-          !RegExp(r'fat|vet').hasMatch(query)) {
-        s -= 20;
-      }
-      if (RegExp(r"^[A-Z0-9 &'.-]{4,},").hasMatch(f.name)) s -= 12;
-      // Orgaanvlees en dieetvarianten alleen als je ze zelf noemt
-      if (RegExp(r'\b(liver|kidney|heart|gizzard|giblets|tongue|lever)\b').hasMatch(n) &&
-          !RegExp(r'liver|kidney|heart|gizzard|tongue|lever').hasMatch(query)) {
-        s -= 25;
-      }
-      if (RegExp(r'\b(gluten free|low fat|reduced|diet|light|sugar free|unsalted|low sodium)\b').hasMatch(n) &&
-          !RegExp(r'gluten|low|reduced|diet|light|free|unsalted').hasMatch(query)) {
-        s -= 10;
-      }
-      return s - n.length / 15;
+      return s;
     }
 
     final hits = [for (final (i, f) in all.indexed) (rank(i, f), f)]..sort((a, b) => b.$1.compareTo(a.$1));
@@ -848,7 +792,12 @@ class AppState extends ChangeNotifier {
       return (f, n * (typical ?? 100), null);
     }
 
-    return [for (final h in hits.take(6)) amount(h.$2)];
+    // Dezelfde naam uit dezelfde bron is geen echte keuze (P177)
+    final shown = <String>{};
+    return [
+      for (final h in hits)
+        if (shown.add('${h.$2.name.toLowerCase()}|${h.$2.source.name}')) h.$2,
+    ].take(6).map(amount).toList();
   }
 
   /// "Wat moet ik nog eten?": 2 à 3 producten die je grootste tekorten van vandaag samen aanvullen.
@@ -1660,15 +1609,34 @@ class AppState extends ChangeNotifier {
 
   List<Food> recentFoods() => [for (final e in user.recent()) foodFor(e)];
 
-  /// Lokaal zoeken: eigen producten en recepten eerst, dan de ingebouwde database.
+  /// Lokaal zoeken: eigen producten, recepten en de ingebouwde database, gerangschikt zoals Snel loggen (P152):
+  /// het gewone, bereide product boven rauwe rijst, kipgehakt of melkpoeder. Favorieten eerst, dan wat je al eens
+  /// at, dan de rest.
   List<Food> searchLocal(String q) {
-    final all = [...user.searchSaved(q), ...foods.search(q)];
-    // Favorieten eerst, dan wat je al eens at, dan de rest
+    final norm = _normalQuery(q);
+    final seen = <String>{};
+    // Met een alias ("oats") ook wat je letterlijk typte, erachter
+    final all = [
+      for (final f in [..._candidates(norm), if (norm != q.toLowerCase().trim()) ..._candidates(q.toLowerCase().trim())])
+        if (seen.add(f.ref)) f,
+    ];
+    // Niets gevonden: de woorden aan elkaar ("volkoren brood") of alleen het laatste woord
+    final words = norm.split(' ');
+    if (all.isEmpty && words.length > 1) all.addAll(_candidates(words.join()));
+    if (all.isEmpty && words.length > 1) all.addAll(_candidates(words.last));
+    double score(int i, Food f) =>
+        20.0 -
+        i * 0.15 +
+        foodQueryScore(f, norm) +
+        // Eigen producten en recepten zijn geen "gewoon eten" voor de score, maar wel precies wat je zoekt
+        (FoodDb.isDbRef(f.ref) ? 0 : (f.source == FoodSource.recipe ? 40 : 10));
+    final ranked = [for (final (i, f) in all.indexed) (score(i, f), f)]..sort((a, b) => b.$1.compareTo(a.$1));
+    final top = [for (final (_, f) in ranked.take(80)) f];
     final fav = favoriteRefs.toSet();
     final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
     int group(Food f) => fav.contains(f.ref) ? 0 : (mine.contains(f.ref) ? 1 : 2);
     return [
-      for (final g in [0, 1, 2]) ...all.where((f) => group(f) == g),
+      for (final g in [0, 1, 2]) ...top.where((f) => group(f) == g),
     ];
   }
 

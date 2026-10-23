@@ -460,7 +460,6 @@ class UserDb {
     return rows.length;
   }
 
-  /// Laatst gebruikte voedingsmiddelen (één regel per product), nieuwste eerst.
   /// Hoe vaak elk product de laatste [days] dagen gelogd werd (voor "vaak gegeten" bovenaan).
   Map<String, int> logCounts({int days = 60}) {
     final d = DateTime.now().subtract(Duration(days: days));
@@ -474,12 +473,14 @@ class UserDb {
     };
   }
 
-  List<DiaryEntry> recent({int limit = 40}) => [
+  /// Laatst gebruikte voedingsmiddelen (één regel per product), nieuwste eerst. Met [withDeleted] tellen ook gewiste
+  /// regels mee: wis je de enige regel van een product, dan blijft het in "Recent gebruikt" staan (P64).
+  List<DiaryEntry> recent({int limit = 40, bool withDeleted = false}) => [
     for (final r in _db.select(
       '''
           SELECT * FROM (
             SELECT *, rowid AS rid, ROW_NUMBER() OVER (PARTITION BY food_ref ORDER BY created_at DESC, rowid DESC) AS n
-            FROM diary WHERE deleted = 0 AND food_ref NOT LIKE 'supp:%'
+            FROM diary WHERE ${withDeleted ? '' : 'deleted = 0 AND '}food_ref NOT LIKE 'supp:%'
           ) WHERE n = 1
           ORDER BY created_at DESC, rid DESC LIMIT ?''',
       [limit],

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/food.dart';
@@ -188,7 +189,8 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     if (food != null && mounted) _open(food);
   }
 
-  Future<void> _open(Food food) async {
+  /// [initialGrams]/[initialPortion]: met de hoeveelheid van een eerdere regel openen (P89).
+  Future<void> _open(Food food, {double? initialGrams, Portion? initialPortion}) async {
     // Merkproduct: eerst aanvullen met de micronutriënten van het gekoppelde basisproduct
     if (food.source == FoodSource.off) {
       setState(() => _loadingOnline = true);
@@ -198,12 +200,27 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     }
     final result = await Navigator.of(context).push<Object>(
       MaterialPageRoute(
-        builder: (_) => FoodDetailScreen(food: food, meal: widget.meal, pickOnly: widget.pickOnly, forPlan: widget.forPlan),
+        builder: (_) => FoodDetailScreen(
+          food: food,
+          meal: widget.meal,
+          pickOnly: widget.pickOnly,
+          forPlan: widget.forPlan,
+          initialGrams: initialGrams,
+          initialPortion: initialPortion,
+        ),
       ),
     );
     if (!mounted) return;
     if (result is ItemTemplate) Navigator.of(context).pop(result);
     if (result == true) Navigator.of(context).pop();
+  }
+
+  /// Een recente regel openen met dezelfde hoeveelheid als toen (P89). Eén portie blijft een portie; meer porties
+  /// worden gram, zodat de hoeveelheid exact klopt.
+  void _openEntry(AppState s, DiaryEntry e) {
+    final food = s.foodFor(e);
+    final portion = e.portionLabel == null || e.quantity != 1 ? null : food.portions.where((p) => p.label == e.portionLabel).firstOrNull;
+    _open(food, initialGrams: e.grams > 0 ? e.grams : null, initialPortion: portion);
   }
 
   Future<void> _newRecipe() async {
@@ -278,6 +295,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       ],
     };
     final showResults = q.isNotEmpty || _scope == _Scope.mine || _scope == _Scope.recipes;
+    final mealHits = widget.pickOnly || q.isEmpty || _scope != _Scope.all
+        ? const <SavedMeal>[]
+        : [
+            for (final m in _sortedMeals(s))
+              if (searchMatches(m.name, q) || m.items.any((i) => searchMatches(i.name, q))) m,
+          ];
 
     Widget card(Food f) => Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -310,7 +333,14 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                                 : tr('Add to', 'Toevoegen aan'),
                           ),
                           Text(
-                            widget.pickOnly && !widget.forPlan ? tr('Choose ingredient', 'Ingrediënt kiezen') : widget.meal.label,
+                            widget.pickOnly && !widget.forPlan
+                                ? tr('Choose ingredient', 'Ingrediënt kiezen')
+                                // Een andere dag dan vandaag: zeg welke (P59a)
+                                : !widget.pickOnly && !s.isToday
+                                ? '${widget.meal.label} · ${DateFormat('EEE d MMM', appLocale).format(s.date)}'
+                                : widget.meal.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.25, color: p.ink),
                           ),
                         ],
@@ -474,6 +504,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                             ],
                           ),
                         ),
+                      // Opgeslagen maaltijden die bij de zoekterm passen (P31)
+                      if (mealHits.isNotEmpty) ...[
+                        SectionHeader(tr('Saved meals', 'Opgeslagen maaltijden')),
+                        _mealsPanel(mealHits, p),
+                        const SizedBox(height: 12),
+                      ],
                       if (grouped)
                         for (final g in groups)
                           Padding(
@@ -535,18 +571,89 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     );
   }
 
+  /// Opgeslagen maaltijden als lijst (bij geen zoekterm, en de treffers bij een zoekterm: P31).
+  Widget _mealsPanel(List<SavedMeal> meals, Palette p) => Panel(
+    shadow: false,
+    radius: 16,
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    child: Column(
+      children: [
+        for (final (i, m) in meals.indexed)
+          InkWell(
+            onTap: () => _addMeal(m),
+            onLongPress: () => _deleteMeal(m),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                border: i == 0 ? null : Border(top: BorderSide(color: p.line)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
+                        ),
+                        Text(
+                          m.items.map((i) => i.name).join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: p.ink3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${fmtInt(m.kcal)} kcal',
+                    style: numStyle(12.5, weight: FontWeight.w400, color: p.ink2),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  /// Opgeslagen maaltijden; die met de naam van deze maaltijd ("Ontbijt met yoghurt" bij Ontbijt) eerst (P186).
+  List<SavedMeal> _sortedMeals(AppState s) {
+    final label = widget.meal.label.toLowerCase();
+    final meals = s.savedMeals();
+    final first = [
+      for (final m in meals)
+        if (m.name.toLowerCase().contains(label)) m,
+    ];
+    return [...first, ...meals.where((m) => !first.contains(m))];
+  }
+
   /// Zonder zoekterm: opgeslagen maaltijden en recent gebruikte producten.
   List<Widget> _idle(AppState s, Palette p) {
-    // Vaak gegeten eerst (je dagelijkse boterham zakt niet weg na één weekend), dan het laatst gegeten
-    var recent = s.user.recent(limit: 25);
-    if (_recentOrder == null) {
-      final counts = s.user.logCounts();
-      final byFreq = [...recent]..sort((a, b) => (counts[b.foodRef] ?? 0).compareTo(counts[a.foodRef] ?? 0));
-      _recentOrder = [for (final e in byFreq) e.foodRef];
-    }
+    // Vaak gegeten eerst (je dagelijkse boterham zakt niet weg na één weekend), dan het laatst gegeten. De lijst
+    // komt uit alles wat je de laatste 60 dagen at plus het recentste, niet alleen de laatste 25 producten (P172);
+    // ook een product waarvan je de enige regel wiste, blijft terug te vinden (P64).
+    final counts = s.user.logCounts();
+    final all = s.user.recent(limit: 400, withDeleted: true);
+    final pool = [
+      for (final (i, e) in all.indexed)
+        if (i < 30 || counts.containsKey(e.foodRef)) (i, e),
+    ];
+    // Vaakst eerst, bij gelijke stand het recentste (sort is niet stabiel)
+    pool.sort((a, b) {
+      final c = (counts[b.$2.foodRef] ?? 0).compareTo(counts[a.$2.foodRef] ?? 0);
+      return c != 0 ? c : a.$1.compareTo(b.$1);
+    });
+    var recent = [for (final (_, e) in pool.take(60)) e];
+    _recentOrder ??= [for (final e in recent) e.foodRef];
     final order = {for (final (i, r) in _recentOrder!.indexed) r: i};
     recent = [...recent]..sort((a, b) => (order[a.foodRef] ?? 999).compareTo(order[b.foodRef] ?? 999));
     final favorites = s.favorites();
+    final meals = widget.pickOnly ? const <SavedMeal>[] : _sortedMeals(s);
     return [
       if (favorites.isNotEmpty) ...[
         SectionHeader(tr('Favourites', 'Favorieten')),
@@ -606,56 +713,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
         ),
         const SizedBox(height: 16),
       ],
-      if (!widget.pickOnly && s.savedMeals().isNotEmpty) ...[
+      if (meals.isNotEmpty) ...[
         SectionHeader(tr('Saved meals', 'Opgeslagen maaltijden')),
-        Panel(
-          shadow: false,
-          radius: 16,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Column(
-            children: [
-              for (final (i, m) in s.savedMeals().indexed)
-                InkWell(
-                  onTap: () => _addMeal(m),
-                  onLongPress: () => _deleteMeal(m),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      border: i == 0 ? null : Border(top: BorderSide(color: p.line)),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                m.name,
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
-                              ),
-                              Text(
-                                m.items.map((i) => i.name).join(' · '),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: p.ink3),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          '${fmtInt(m.kcal)} kcal',
-                          style: numStyle(12.5, weight: FontWeight.w400, color: p.ink2),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
+        _mealsPanel(meals, p),
         const SizedBox(height: 16),
       ],
+
       SectionHeader(
         tr('Recently used', 'Recent gebruikt'),
         trailing: recent.isEmpty || widget.pickOnly ? null : tr('tap + for the same amount', 'tik + voor dezelfde hoeveelheid'),
@@ -677,7 +740,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
             children: [
               for (final (i, e) in recent.indexed)
                 InkWell(
-                  onTap: () => _open(s.foodFor(e)),
+                  onTap: () => _openEntry(s, e),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
