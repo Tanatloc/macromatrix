@@ -18,6 +18,7 @@ import 'add_food_screen.dart';
 import 'nutrient_detail_screen.dart';
 import 'nutrients_screen.dart';
 import 'shopping_screen.dart';
+import 'week_menu_screen.dart';
 
 /// Maaltijdplanner: zet vooraf klaar wat je (morgen) eet, zie meteen je Voedingsscore en wat er nog ontbreekt,
 /// en zet het daarna met één tik in je dagboek.
@@ -179,6 +180,15 @@ class _PlannerScreenState extends State<PlannerScreen> {
                       'Plan wat je gaat eten en zie je Voedingsscore nog voor je het eet. Daarna zet je het met één tik in je dagboek.',
                     ),
                     style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.tonalIcon(
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => WeekMenuScreen(start: _day))),
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                      label: Text(tr('Plan my week', 'Plan mijn week')),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   days,
