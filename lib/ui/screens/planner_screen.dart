@@ -307,7 +307,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
               PanelTitle(
                 tr('Plan for ${_dayLabel(_day)}', 'Plan voor ${_dayLabel(_day)}'),
                 trailing: Text(
-                  'Nutrient score $score',
+                  tr('Nutrient score $score', 'Voedingsscore $score'),
                   style: numStyle(13, weight: FontWeight.w600, color: p.ink),
                 ),
               ),

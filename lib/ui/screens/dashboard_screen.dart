@@ -207,15 +207,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                             child: Row(
                               children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                                    label: Text(tr('Monthly recap', 'Maandoverzicht')),
-                                    onPressed: () =>
-                                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => RecapScreen(from: from, year: false))),
+                                // In een lege maand valt er niets samen te vatten: alleen het jaar
+                                if (s.dailyTotals(from, to).isNotEmpty) ...[
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                                      label: Text(tr('Monthly recap', 'Maandoverzicht')),
+                                      onPressed: () =>
+                                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => RecapScreen(from: from, year: false))),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
+                                  const SizedBox(width: 8),
+                                ],
                                 Expanded(
                                   child: OutlinedButton.icon(
                                     icon: const Icon(Icons.celebration_rounded, size: 18),

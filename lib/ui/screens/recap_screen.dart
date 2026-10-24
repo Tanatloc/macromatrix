@@ -61,8 +61,27 @@ class RecapScreen extends StatelessWidget {
         children: [
           Narrow(
             child: r == null
+                // Lege periode: dezelfde nette lege kaart als op het Dashboard, met uitleg
                 ? Panel(
-                    child: Text(tr('Nothing logged in this period.', 'Niets gelogd in deze periode.'), style: TextStyle(color: p.ink2)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.event_note_rounded, color: p.ink3),
+                        const SizedBox(height: 10),
+                        Text(
+                          year ? tr('Nothing logged this year', 'Niets gelogd dit jaar') : tr('Nothing logged this month', 'Niets gelogd deze maand'),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          tr(
+                            'Your recap fills itself once you log a few days: your calendar, energy, most eaten foods and highlights.',
+                            'Je overzicht vult zich zodra je een paar dagen logt: je kalender, energie, wat je het vaakst at en je hoogtepunten.',
+                          ),
+                          style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
+                        ),
+                      ],
+                    ),
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

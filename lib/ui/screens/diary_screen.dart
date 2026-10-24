@@ -593,7 +593,9 @@ class _EnergyCard extends StatelessWidget {
     final budget = s.targets['energy']?.goal ?? 2000;
     final burned = s.exerciseKcalInGoal;
     final left = budget - eaten;
-    final over = left < 0;
+    // Tot 10% boven je doel is nog binnen de marge: geen rood, zoals in de weekgrafiek
+    final over = left < 0 && !withinEnergyMargin(eaten, budget);
+    final extra = left < 0 && !over;
 
     TextStyle label([bool strong = false]) => TextStyle(fontSize: 13, color: strong ? p.ink : p.ink2, fontWeight: strong ? FontWeight.w600 : null);
     Widget ledger(String name, String value, {Color? dot, Color? color, bool strong = false}) => Padding(
@@ -635,7 +637,10 @@ class _EnergyCard extends StatelessWidget {
                       if (burned > 0) ...[_BurnedPill(burned: burned), const SizedBox(height: 3)],
                       Text(fmtInt(left.abs()), style: numStyle(30, color: over ? p.high : p.ink, height: 1)),
                       const SizedBox(height: 4),
-                      Text(over ? tr('kcal over goal', 'kcal te veel') : tr('kcal left', 'kcal over'), style: TextStyle(fontSize: 12, color: p.ink2)),
+                      Text(
+                        over ? tr('kcal over goal', 'kcal te veel') : (extra ? tr('kcal extra', 'kcal extra') : tr('kcal left', 'kcal over')),
+                        style: TextStyle(fontSize: 12, color: p.ink2),
+                      ),
                     ],
                   ),
                 ),
@@ -673,7 +678,12 @@ class _EnergyCard extends StatelessWidget {
                     ),
                   ledger(tr('Eaten', 'Gegeten'), '−${fmtInt(eaten)}', dot: p.ink),
                   Divider(height: 10, color: p.line),
-                  ledger(over ? tr('Over goal', 'Te veel') : tr('Left', 'Over'), fmtInt(left.abs()), strong: true, color: over ? p.high : null),
+                  ledger(
+                    over ? tr('Over goal', 'Te veel') : (extra ? tr('Extra, within margin', 'Extra, binnen marge') : tr('Left', 'Over')),
+                    fmtInt(left.abs()),
+                    strong: true,
+                    color: over ? p.high : null,
+                  ),
                 ],
               ),
             ),
@@ -833,7 +843,7 @@ class _BurnedPill extends StatelessWidget {
 }
 
 /// Ring van het energiebudget: gegeten in inkt; het deel dat beweging erbij gaf in de merkkleur;
-/// wat je over het budget gaat in rood.
+/// wat je over het budget gaat in groen binnen ±10%, daarna in rood.
 class _EnergyRing extends CustomPainter {
   _EnergyRing({required this.eaten, required this.budget, required this.burned, required this.p});
   final double eaten;
@@ -857,7 +867,10 @@ class _EnergyRing extends CustomPainter {
     if (b > 0.01) canvas.drawArc(rect, start + math.pi * 2 * (1 - b), math.pi * 2 * b, false, arc(p.brand.withValues(alpha: 0.55)));
     final f = eaten / budget;
     if (f > 0) canvas.drawArc(rect, start, math.pi * 2 * math.min(1, f), false, arc(p.ink));
-    if (f > 1) canvas.drawArc(rect, start, math.pi * 2 * math.min(1, f - 1), false, arc(p.highFill));
+    // Erboven: binnen de marge van 10% groen, daarna rood (dezelfde regel als de weekgrafiek)
+    if (f > 1) {
+      canvas.drawArc(rect, start, math.pi * 2 * math.min(1, f - 1), false, arc(withinEnergyMargin(eaten, budget) ? p.okFill : p.highFill));
+    }
   }
 
   @override
@@ -2591,7 +2604,12 @@ class _GoalsPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 5),
-            Bar(fraction: goal <= 0 ? 0 : v / goal, color: tooMuch ? p.highFill : color, height: 8),
+            // Energie binnen ±10% groen, zoals in de weekgrafiek en de ring
+            Bar(
+              fraction: goal <= 0 ? 0 : v / goal,
+              color: tooMuch ? p.highFill : (key == 'energy' && withinEnergyMargin(v, goal) ? p.okFill : color),
+              height: 8,
+            ),
           ],
         ),
       );

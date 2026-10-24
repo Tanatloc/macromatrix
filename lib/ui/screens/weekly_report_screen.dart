@@ -140,7 +140,7 @@ class WeeklyReportScreen extends StatelessWidget {
       ?energyLine(r),
       ?weightLine(r),
       ?exerciseLine(r),
-      tr('Best: ${nutrients(r.best)}', 'Best: ${nutrients(r.best)}'),
+      if (r.best.isNotEmpty) tr('Best: ${nutrients(r.best)}', 'Best: ${nutrients(r.best)}'),
       tr('Needs attention: ${nutrients(r.worst)}', 'Verdient aandacht: ${nutrients(r.worst)}'),
       if (r.notes.isNotEmpty) ...[
         tr('Notes:', 'Notities:'),
@@ -333,14 +333,25 @@ class WeeklyReportScreen extends StatelessWidget {
                             children: [
                               PanelTitle(tr('Your strongest', 'Je sterkste')),
                               for (final b in r.best) nutrientRow(b, p.okFill),
+                              if (r.best.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 5),
+                                  child: Text(
+                                    tr(
+                                      'No vitamin or mineral reached its goal on most days yet.',
+                                      'Nog geen vitamine of mineraal die je op de meeste dagen haalde.',
+                                    ),
+                                    style: TextStyle(fontSize: 13, color: p.ink2),
+                                  ),
+                                ),
                               const SizedBox(height: 12),
                               PanelTitle(tr('Needs attention', 'Verdient aandacht')),
                               for (final w in r.worst) nutrientRow(w, p.lowFill),
                               const SizedBox(height: 6),
                               Text(
                                 tr(
-                                  'Average share of your daily goal, ${period(r)}. ▲▼ = change vs last week, in % of your goal. Amounts above the safe upper limit are not shown as strongest.',
-                                  'Gemiddeld deel van je dagdoel, ${period(r)}. ▲▼ = verschil met vorige week, in % van je doel. Wat boven de veilige bovengrens zit, staat niet bij je sterkste.',
+                                  'Average share of your daily goal, ${period(r)}. ▲▼ = change vs last week, in % of your goal. Amounts above the safe upper limit, or reached on fewer than half of the days, are not shown as strongest.',
+                                  'Gemiddeld deel van je dagdoel, ${period(r)}. ▲▼ = verschil met vorige week, in % van je doel. Wat boven de veilige bovengrens zit, of op minder dan de helft van de dagen op doel was, staat niet bij je sterkste.',
                                 ),
                                 style: TextStyle(fontSize: 11.5, color: p.ink3),
                               ),
