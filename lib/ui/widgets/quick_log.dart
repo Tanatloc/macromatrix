@@ -9,6 +9,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import '../../data/food.dart';
 import '../../data/user_db.dart';
 import '../../i18n.dart';
+import '../../nutrition/portions.dart' show stepQuantity;
 import '../../nutrition/quick_parse.dart';
 import '../../platform/cloud_voice.dart';
 import '../../state/app_state.dart';
@@ -16,6 +17,7 @@ import '../../sync/account.dart';
 import '../screens/add_food_screen.dart';
 import '../theme.dart';
 import 'kit.dart';
+import 'number_input.dart';
 import 'undo.dart';
 
 /// Spraak werkt in de Android-app en in Chrome/Edge; op Linux typ je de zin.
@@ -29,15 +31,60 @@ Future<void> showQuickLog(BuildContext context, {Meal? meal}) => showModalBottom
 );
 
 class _Line {
-  _Line(this.item, this.options) : choice = 0;
+  _Line(this.item, this.options) {
+    _reset();
+  }
   final QuickItem item;
   final List<(Food, double, Portion?)> options;
-  int choice;
+  int choice = 0;
+
+  /// De hoeveelheid die je met + en − aanpast: gram als het om een gewicht gaat, anders het aantal
+  /// (stuks, sneetjes, porties).
+  double n = 0;
+
   bool get found => options.isNotEmpty;
   (Food, double, Portion?) get pick => options[choice];
+  Food get food => pick.$1;
+  Portion? get portion => pick.$3;
+
+  /// Een gewicht als je er een noemde, of als er geen aantal of portie is ("ham" = 100 g).
+  bool get byWeight => item.grams != null || (item.count == null && portion == null);
+
+  /// Gewicht van één stuk of portie van de gekozen treffer.
+  double get _per => pick.$2 / (item.count ?? 1);
+  double get grams => byWeight ? n : n * _per;
+  double get kcal => (food.per100g['energy'] ?? 0) * grams / 100;
+  double get protein => (food.per100g['protein'] ?? 0) * grams / 100;
+
+  /// Zoals op het productscherm: boven 2 kg of 3.000 kcal eerst vragen (N65).
+  bool get unusual => grams > 2000 || kcal > 3000;
+
+  void _reset() => n = !found ? 0 : (byWeight ? pick.$2 : (item.count ?? 1));
+
+  /// Een andere treffer: het aantal blijft, een geschat gewicht past zich aan het nieuwe product aan.
+  void select(int i) {
+    final was = byWeight;
+    choice = i;
+    if (byWeight != was || (byWeight && item.grams == null)) _reset();
+  }
+
+  void step({required bool up}) {
+    final next = stepQuantity(n, up: up, portion: !byWeight);
+    if (next > 0) n = next;
+  }
+
+  String get amountLabel {
+    final g = _big(grams);
+    if (byWeight) return '$g g';
+    if (portion != null) return '${_count(n)} × ${portion!.label} ($g g)';
+    return '${_count(n)} × ≈${fmtInt(_per)} g ($g g)';
+  }
 }
 
 String _count(double n) => n == n.roundToDouble() ? '${n.round()}' : fmtDec(n);
+
+/// Een getal dat nergens meer in past ("1000 bananas"), ingekort.
+String _big(double v) => v > 99999 ? '> ${fmtInt(99999)}' : fmtInt(v);
 
 class _QuickLogSheet extends StatefulWidget {
   const _QuickLogSheet({required this.meal});
@@ -49,11 +96,21 @@ class _QuickLogSheet extends StatefulWidget {
 
 class _QuickLogSheetState extends State<_QuickLogSheet> {
   final _text = TextEditingController();
+  final _focus = FocusNode();
   final _speech = SpeechToText();
   late Meal _meal = widget.meal;
   List<_Line> _lines = const [];
   bool _listening = false;
   String? _speechError;
+
+  /// Melding bij een leeg veld of een zin zonder product.
+  String? _notice;
+
+  /// Na een korte typpauze vanzelf zoeken (N10); Enter en de knop werken ook.
+  Timer? _typing;
+
+  /// Een dubbele tik op het kruisje wist niet ook de regel die eronder opschuift (N04).
+  DateTime _lastRemove = DateTime(0);
 
   // Opnemen via de eigen server (toestellen zonder spraakherkenning, bv. GrapheneOS)
   CloudVoice? _cloud;
@@ -62,7 +119,9 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
 
   @override
   void dispose() {
+    _typing?.cancel();
     _text.dispose();
+    _focus.dispose();
     if (_listening) _speech.stop();
     _cloudTimer?.cancel();
     _cloud?.cancel();
@@ -128,9 +187,52 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
     }
   }
 
-  void _parse() {
+  /// De zin omzetten naar regels. Regels die al bestonden (zelfde stuk tekst), houden je gekozen treffer en
+  /// hoeveelheid. [auto] = na een typpauze: dan geen melding bij een leeg veld.
+  void _parse({bool auto = false}) {
+    _typing?.cancel();
     final s = context.read<AppState>();
-    setState(() => _lines = [for (final q in parseQuick(_text.text)) _Line(q, s.resolveQuick(q))]);
+    final text = _text.text.trim();
+    final old = {for (final l in _lines) l.item.toString(): l};
+    final items = parseQuick(text);
+    setState(() {
+      _lines = [for (final q in items) old.remove(q.toString()) ?? _Line(q, s.resolveQuick(q))];
+      _notice = auto
+          ? null
+          : text.isEmpty
+          ? tr(
+              'Type or say what you ate first, e.g. "2 eggs and a slice of bread".',
+              'Typ of zeg eerst wat je at, bv. "2 eieren en een sneetje brood".',
+            )
+          : items.isEmpty
+          ? tr('No food found in that sentence. Try e.g. "200 g chicken".', 'Geen product gevonden in die zin. Probeer bv. "200 g kip".')
+          : null;
+    });
+  }
+
+  void _onTyped(String _) {
+    _typing?.cancel();
+    setState(() => _notice = null);
+    _typing = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) _parse(auto: true);
+    });
+  }
+
+  void _clear() {
+    _typing?.cancel();
+    _text.clear();
+    setState(() {
+      _lines = const [];
+      _notice = null;
+    });
+    _focus.requestFocus();
+  }
+
+  void _remove(_Line l) {
+    final now = DateTime.now();
+    if (now.difference(_lastRemove) < const Duration(milliseconds: 450)) return;
+    _lastRemove = now;
+    setState(() => _lines = [..._lines]..remove(l));
   }
 
   Future<void> _listen() async {
@@ -266,17 +368,35 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
     _ => tr('Could not hear you ($code). Try again or type it.', 'Niet goed verstaan ($code). Probeer opnieuw of typ het.'),
   };
 
-  void _addAll() {
+  bool _adding = false;
+
+  Future<void> _addAll() async {
+    if (_adding) return;
     final s = context.read<AppState>();
+    // Een vergeten komma of "1000" in plaats van "1": eerst vragen, zoals op het productscherm (N65)
+    final odd = _lines.where((l) => l.found && l.grams > 0 && l.unusual).toList();
+    if (odd.isNotEmpty) {
+      _adding = true;
+      final ok = await confirmUnusual(
+        context,
+        [
+          for (final l in odd)
+            tr('${_weight(l.grams)} of ${l.food.name} is ${_big(l.kcal)} kcal.', '${_weight(l.grams)} ${l.food.name} is ${_big(l.kcal)} kcal.'),
+          tr('Is that the right amount?', 'Is dat de juiste hoeveelheid?'),
+        ].join('\n'),
+      );
+      _adding = false;
+      if (!ok || !mounted) return;
+    }
     final added = <AddedEntry>[];
     for (final l in _lines) {
-      if (!l.found) continue;
-      final (food, grams, portion) = l.pick;
+      if (!l.found || l.grams <= 0) continue;
       // Een andere treffer gekozen: die onthouden voor de volgende keer
-      if (l.choice != 0) s.rememberQuickPick(l.item.query, food.ref);
-      added.add(s.addFood(food, meal: _meal, grams: grams, quantity: portion == null ? grams : (l.item.count ?? 1), portionLabel: portion?.label));
+      if (l.choice != 0) s.rememberQuickPick(l.item.query, l.food.ref);
+      added.add(s.addFood(l.food, meal: _meal, grams: l.grams, quantity: l.portion == null ? l.grams : l.n, portionLabel: l.portion?.label));
     }
     final n = added.length;
+    if (n == 0) return;
     final messenger = ScaffoldMessenger.of(context);
     Navigator.pop(context);
     showUndo(
@@ -290,10 +410,15 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
     );
   }
 
+  static String _weight(double g) => g >= 1000 ? '${g >= 10000 ? _big(g / 1000) : fmtNum(g / 1000, 2)} kg' : '${fmtInt(g)} g';
+
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final found = _lines.where((l) => l.found).length;
+    final ready = _lines.where((l) => l.found && l.grams > 0).toList();
+    final found = ready.length;
+    final totalKcal = ready.fold(0.0, (a, l) => a + l.kcal);
+    final totalProtein = ready.fold(0.0, (a, l) => a + l.protein);
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
@@ -318,11 +443,18 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                   Expanded(
                     child: TextField(
                       controller: _text,
+                      focusNode: _focus,
                       autofocus: !speechSupported,
                       minLines: 1,
                       maxLines: 3,
                       textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(hintText: tr('e.g. 200 g chicken and a bowl of rice', 'bv. 200 g kip en een kom rijst')),
+                      decoration: InputDecoration(
+                        hintText: tr('e.g. 200 g chicken and a bowl of rice', 'bv. 200 g kip en een kom rijst'),
+                        suffixIcon: _text.text.isEmpty
+                            ? null
+                            : IconButton(tooltip: tr('Clear', 'Wissen'), icon: const Icon(Icons.close_rounded), onPressed: _clear),
+                      ),
+                      onChanged: _onTyped,
                       onSubmitted: (_) => _parse(),
                     ),
                   ),
@@ -356,6 +488,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                   onPressed: _parse,
                 ),
               ),
+              if (_notice != null) ...[const SizedBox(height: 6), Text(_notice!, style: TextStyle(fontSize: 12.5, color: p.ink2))],
               for (final l in _lines) ...[
                 const SizedBox(height: 8),
                 Container(
@@ -400,9 +533,35 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                                     l.pick.$1.name,
                                     style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: p.ink),
                                   ),
-                                  Text(
-                                    '${l.pick.$3 == null ? '${fmtInt(l.pick.$2)} g' : '${_count(l.item.count ?? 1)} × ${l.pick.$3!.label} (${fmtInt(l.pick.$2)} g)'} · ${fmtInt((l.pick.$1.per100g['energy'] ?? 0) * l.pick.$2 / 100)} kcal · "${l.item.query}"',
-                                    style: TextStyle(fontSize: 12, color: p.ink3),
+                                  Text('${l.amountLabel} · ${_big(l.kcal)} kcal · "${l.item.query}"', style: TextStyle(fontSize: 12, color: p.ink3)),
+                                  if (l.unusual)
+                                    Text(
+                                      tr('Unusually large. Check the amount.', 'Ongewoon veel. Kijk de hoeveelheid na.'),
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.high),
+                                    ),
+                                  const SizedBox(height: 2),
+                                  // Hoeveelheid aanpassen zonder het venster te verlaten (N10)
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _StepButton(
+                                        icon: Icons.remove_rounded,
+                                        tooltip: tr('Less', 'Minder'),
+                                        onPressed: () => setState(() => l.step(up: false)),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          l.byWeight ? '${_big(l.n)} g' : _count(l.n),
+                                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
+                                        ),
+                                      ),
+                                      _StepButton(
+                                        icon: Icons.add_rounded,
+                                        tooltip: tr('More', 'Meer'),
+                                        onPressed: () => setState(() => l.step(up: true)),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -417,10 +576,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                                       value: i,
                                       child: Row(
                                         children: [
-                                          if (i == l.choice)
-                                            Icon(Icons.check_rounded, size: 16, color: p.brand)
-                                          else
-                                            const SizedBox(width: 16),
+                                          if (i == l.choice) Icon(Icons.check_rounded, size: 16, color: p.brand) else const SizedBox(width: 16),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Column(
@@ -439,7 +595,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                                       ),
                                     ),
                                 ],
-                                onSelected: (i) => setState(() => l.choice = i),
+                                onSelected: (i) => setState(() => l.select(i)),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                                   child: Row(
@@ -447,7 +603,10 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                                     children: [
                                       Icon(Icons.swap_horiz_rounded, size: 18, color: p.ink2),
                                       const SizedBox(width: 3),
-                                      Text(tr('Other', 'Andere'), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.ink2)),
+                                      Text(
+                                        tr('Other', 'Andere'),
+                                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.ink2),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -455,7 +614,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                             IconButton(
                               tooltip: tr('Remove', 'Weghalen'),
                               icon: Icon(Icons.close_rounded, color: p.ink3),
-                              onPressed: () => setState(() => _lines = [..._lines]..remove(l)),
+                              onPressed: () => _remove(l),
                             ),
                           ],
                         ),
@@ -469,6 +628,21 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                   selected: _meal,
                   onChanged: (m) => setState(() => _meal = m),
                 ),
+                const SizedBox(height: 12),
+                // Het totaal vóór je toevoegt, zodat een ontbijt van 1.500 kcal opvalt (N10)
+                Row(
+                  children: [
+                    Text(tr('Total', 'Totaal'), style: TextStyle(fontSize: 14, color: p.ink2)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        tr('${_big(totalKcal)} kcal · ${_big(totalProtein)} g protein', '${_big(totalKcal)} kcal · ${_big(totalProtein)} g eiwit'),
+                        textAlign: TextAlign.end,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.ink),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 10),
                 FilledButton(
                   onPressed: _addAll,
@@ -481,4 +655,22 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
       ),
     );
   }
+}
+
+/// Kleine + of − naast de hoeveelheid van een regel.
+class _StepButton extends StatelessWidget {
+  const _StepButton({required this.icon, required this.tooltip, required this.onPressed});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton.outlined(
+    tooltip: tooltip,
+    onPressed: onPressed,
+    icon: Icon(icon, size: 18),
+    visualDensity: VisualDensity.compact,
+    constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+    padding: EdgeInsets.zero,
+  );
 }
