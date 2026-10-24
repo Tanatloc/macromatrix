@@ -1,5 +1,5 @@
 /// Gezondheidscheck voor een week: hoe je eetpatroon je gezondheid op termijn beïnvloedt, per factor
-/// (vezels, verzadigd vet, zout, ...) met een oordeel goed, oké of slecht, en een eindoordeel.
+/// (vezels, verzadigd vet, zout, ...) met een oordeel goed, oké of kan beter, en een eindoordeel.
 /// Grenzen volgen EFSA, de WHO en de Hoge Gezondheidsraad. Zonder Flutter, zodat het testbaar is.
 library;
 
@@ -23,7 +23,8 @@ enum HealthRating {
   String get label => switch (this) {
     good => tr('Good', 'Goed'),
     ok => tr('Okay', 'Oké'),
-    poor => tr('Poor', 'Slecht'),
+    // Geen "Slecht": wie net begint, moet zich niet gebuisd voelen
+    poor => tr('Room to improve', 'Kan beter'),
     unknown => tr('Unknown', 'Onbekend'),
   };
 
@@ -49,12 +50,16 @@ class HealthFactor {
     this.weight = 1,
     this.impact,
     this.gain = 0,
+    this.aim,
   });
 
   final String key, title;
 
   /// Bv. "23 g per dag".
   final String value;
+
+  /// Het doel waartegen het oordeel geldt, bv. "doel ≤ 5 g".
+  final String? aim;
   final HealthRating rating;
 
   /// Wat dit doet met je gezondheid.
@@ -95,11 +100,12 @@ class HealthFactor {
     weight: weight,
     impact: impact,
     gain: gain,
+    aim: aim,
   );
 }
 
 class HealthCheck {
-  const HealthCheck({required this.days, required this.factors, required this.score, required this.rating, this.labDay});
+  const HealthCheck({required this.days, required this.factors, required this.score, required this.rating, this.labDay, this.energyFirst = false});
 
   /// Dag (jjjj-mm-dd) van de bloedafname waarop het advies steunt, of null zonder bloedwaarden.
   final String? labDay;
@@ -111,6 +117,30 @@ class HealthCheck {
   /// 0–100.
   final int score;
   final HealthRating rating;
+
+  /// Je gewicht gaat tegen je plan in en je energie verklaart dat: dan is energie het eerste punt.
+  final bool energyFirst;
+
+  /// Wat goed gaat, zwaarste factoren eerst.
+  List<HealthFactor> get goingWell => [
+    for (final f in factors)
+      if (f.rating == HealthRating.good) f,
+  ];
+
+  /// Alles wat beter kan, belangrijkste eerst: energie als die ver van je doel zit, dan wat het meeste oplevert.
+  /// Het rapport toont er hooguit [maxWorkPoints]; de rest staat onder "Meer punten".
+  List<HealthFactor> get toWorkOn {
+    int energy(HealthFactor f) => f.key == 'energy' && (energyFirst || f.rating == HealthRating.poor) ? 0 : 1;
+    return [
+      for (final f in factors)
+        if (f.rating == HealthRating.ok || f.rating == HealthRating.poor) f,
+    ]..sort((a, b) {
+      if (energy(a) != energy(b)) return energy(a) - energy(b);
+      if (a.gain != b.gain) return b.gain.compareTo(a.gain);
+      if (a.rating != b.rating) return a.rating == HealthRating.poor ? -1 : 1;
+      return b.weight.compareTo(a.weight);
+    });
+  }
 
   /// Het punt waar je het meest wint, of null als alles goed is.
   HealthFactor? get biggestGain {
@@ -124,20 +154,211 @@ class HealthCheck {
   /// Ook beweging beoordeeld (stappen of activiteiten).
   bool get hasActivity => factors.any((f) => activityFactors.contains(f.key));
 
-  String get summary => switch (rating) {
-    HealthRating.good => tr(
-      'A healthy week. Keep it up: this protects your heart, blood vessels and gut in the long run.',
-      'Een gezonde week. Ga zo door: dit beschermt op termijn je hart, je bloedvaten en je darmen.',
+  /// Eerst wat goed gaat, dan in rustige taal waar je best begint. Geen sterftecijfers of ziektes: die staan bij
+  /// elk punt onder "Waarom het telt".
+  String get summary {
+    final good = [for (final f in goingWell.take(3)) f.title.toLowerCase()];
+    final and = tr('and', 'en');
+    final list = good.length < 2 ? good.join() : '${good.sublist(0, good.length - 1).join(', ')} $and ${good.last}';
+    final energy = factors.where((f) => f.key == 'energy').firstOrNull;
+    final rest = energyFirst
+        ? tr(
+            'Your weight is moving away from your plan, so energy is the main point this week.',
+            'Je gewicht gaat een andere kant op dan je plan, dus energie is deze week het belangrijkste punt.',
+          )
+        : energy?.rating == HealthRating.poor
+        ? tr('Your energy is far from your goal: start there.', 'Je energie zit ver van je doel: begin daar.')
+        : switch (rating) {
+            HealthRating.good => tr('A healthy week. Keep it up.', 'Een gezonde week. Ga zo door.'),
+            HealthRating.ok => tr(
+              'Below are the points that make the biggest difference.',
+              'Hieronder staan de punten die het meeste verschil maken.',
+            ),
+            HealthRating.poor => tr(
+              'There is room to improve. Start with the first point below: one small step at a time is enough.',
+              'Er is ruimte om te verbeteren. Begin met het eerste punt hieronder: één kleine stap tegelijk is genoeg.',
+            ),
+            HealthRating.unknown => '',
+          };
+    return [if (good.isNotEmpty) tr('Going well: $list.', 'Goed bezig: $list.'), rest].join(' ');
+  }
+}
+
+/// Zoveel werkpunten toont het rapport hooguit.
+const maxWorkPoints = 3;
+
+/// Je gewicht telt als stabiel als het over minstens [weightStableDays] dagen niet meer dan dit verandert (kg).
+const weightStableKg = 0.3;
+const weightStableDays = 12;
+
+/// Gewichtsverloop: de verandering (kg) volgens een rechte lijn door je wegingen, zodat één zware dag de trend
+/// niet omgooit.
+class WeightTrend {
+  const WeightTrend({required this.change, required this.days, required this.count});
+
+  /// Verandering over [days] dagen, van eerste tot laatste weging.
+  final double change;
+  final int days, count;
+
+  /// Over minstens twee weken gewogen en nauwelijks veranderd.
+  bool get stable => days >= weightStableDays && count >= 3 && change.abs() <= weightStableKg;
+
+  /// Duidelijk omhoog (1), omlaag (-1) of niet te zeggen (0). Pas vanaf een week wegen.
+  int get direction => days < 6 || count < 2 ? 0 : (change > weightStableKg ? 1 : (change < -weightStableKg ? -1 : 0));
+
+  /// Trend uit (dag, gewicht), of null bij minder dan twee wegingen.
+  static WeightTrend? of(List<(DateTime, double)> points) {
+    if (points.length < 2) return null;
+    final sorted = [...points]..sort((a, b) => a.$1.compareTo(b.$1));
+    final t0 = sorted.first.$1;
+    final xs = [for (final p in sorted) p.$1.difference(t0).inHours / 24];
+    final ys = [for (final p in sorted) p.$2];
+    final n = xs.length;
+    final mx = xs.reduce((a, b) => a + b) / n, my = ys.reduce((a, b) => a + b) / n;
+    var sxy = 0.0, sxx = 0.0;
+    for (var i = 0; i < n; i++) {
+      sxy += (xs[i] - mx) * (ys[i] - my);
+      sxx += (xs[i] - mx) * (xs[i] - mx);
+    }
+    final slope = sxx == 0 ? 0.0 : sxy / sxx;
+    return WeightTrend(change: slope * xs.last, days: xs.last.round(), count: n);
+  }
+}
+
+/// Hoe je energie zich verhoudt tot je doel, samen gelezen met je gewicht.
+enum EnergyCase {
+  /// Binnen de marge van je doel.
+  onTarget,
+  under,
+  over,
+
+  /// Je gewicht blijft gelijk (of gaat de andere kant op) bij wat je logt: je doel klopt waarschijnlijk niet.
+  goalOff,
+
+  /// Je logt minder dan je doel, maar je komt aan: waarschijnlijk is niet alles gelogd.
+  missingLogs,
+
+  /// Je gewicht gaat tegen je plan in, en je energie verklaart dat.
+  againstPlan,
+}
+
+/// Energie tegenover je doel, met [margin] als deel van het doel dat nog "op doel" is.
+EnergyCase energyCase({required double eaten, required double goal, WeightTrend? trend, Goal plan = Goal.maintain, double margin = 0.1}) {
+  if (goal <= 0 || (eaten - goal).abs() / goal <= margin) return EnergyCase.onTarget;
+  final under = eaten < goal;
+  if (trend != null && trend.stable) {
+    // Stabiel terwijl je wil aankomen (onder je doel) of afvallen (boven je doel): dan klopt het doel wel, en
+    // verklaart je eten waarom het niet lukt
+    return (under && plan == Goal.gain) || (!under && plan == Goal.lose) ? EnergyCase.againstPlan : EnergyCase.goalOff;
+  }
+  final dir = trend?.direction ?? 0;
+  if (under) {
+    if (dir > 0) return EnergyCase.missingLogs;
+    if (dir < 0 && plan != Goal.lose) return EnergyCase.againstPlan;
+  } else {
+    if (dir < 0) return EnergyCase.goalOff;
+    if (dir > 0 && plan != Goal.gain) return EnergyCase.againstPlan;
+  }
+  return under ? EnergyCase.under : EnergyCase.over;
+}
+
+/// Uitleg en advies bij [c]. Nooit blind "eet 900 kcal meer": wie op hetzelfde gewicht blijft, heeft eerder een
+/// verkeerd doel of logt niet alles.
+({String effect, String advice}) energyMessage(
+  EnergyCase c, {
+  required double eaten,
+  required double goal,
+  WeightTrend? trend,
+  Goal plan = Goal.maintain,
+}) {
+  final gapKcal = (eaten - goal).abs();
+  final gap = fmtNum(gapKcal, 0);
+  final round = '${fmtNum(gapKcal / 100, 0)}00';
+  final at = fmtNum((eaten / 50).round() * 50, 0);
+  final under = eaten < goal;
+  final moved = trend == null
+      ? ''
+      : ' (${trend.change > 0 ? '+' : '−'}${fmtNum(trend.change.abs())} kg ${tr('in ${trend.days} days', 'in ${trend.days} dagen')})';
+  final want = switch (plan) {
+    Goal.lose => tr('lose weight', 'afvallen'),
+    Goal.gain => tr('gain weight', 'aankomen'),
+    Goal.maintain => tr('keep your weight', 'je gewicht behouden'),
+  };
+  return switch (c) {
+    EnergyCase.onTarget => (effect: tr('You eat about what your goal asks for.', 'Je eet ongeveer wat je doel vraagt.'), advice: ''),
+    EnergyCase.goalOff when under => (
+      effect: tr(
+        'Your weight is stable at about $at kcal a day: your goal may be too high, or not everything is logged.',
+        'Je gewicht is stabiel bij ongeveer $at kcal per dag: je doel ligt misschien te hoog, of niet alles is gelogd.',
+      ),
+      advice: tr(
+        'Check that you log everything (drinks, cooking oil, snacks). If you do, lower your energy goal.',
+        'Kijk na of je alles logt (drank, olie bij het koken, tussendoortjes). Doe je dat, verlaag dan je energiedoel.',
+      ),
     ),
-    HealthRating.ok => tr(
-      'Okay, but there is room for improvement. Below you can see what is going well and what would make the biggest difference.',
-      'Oké, maar het kan beter. Hieronder zie je wat goed gaat en wat het meeste verschil zou maken.',
+    EnergyCase.goalOff => (
+      effect: (trend?.direction ?? 0) < 0
+          ? tr(
+              'Your weight is going down$moved at about $at kcal a day: your goal may be too low.',
+              'Je gewicht gaat omlaag$moved bij ongeveer $at kcal per dag: je doel ligt misschien te laag.',
+            )
+          : tr(
+              'Your weight is stable at about $at kcal a day: your goal may be too low, or portions are logged too large.',
+              'Je gewicht is stabiel bij ongeveer $at kcal per dag: je doel ligt misschien te laag, of je logt te grote porties.',
+            ),
+      advice: tr('If your portions are logged correctly, raise your energy goal.', 'Als je porties juist gelogd zijn, verhoog dan je energiedoel.'),
     ),
-    HealthRating.poor => tr(
-      'Not a good week. If you carry on like this, it raises your risk of heart and vascular disease and diabetes. Start with the first point below.',
-      'Geen goede week. Als je zo verdergaat, verhoogt dat je kans op hart- en vaatziekten en diabetes. Begin met het eerste punt hieronder.',
+    EnergyCase.missingLogs => (
+      effect: tr(
+        'Your weight is going up$moved although you logged $gap kcal a day below your goal: probably not everything is logged.',
+        'Je gewicht gaat omhoog$moved terwijl je $gap kcal per dag onder je doel logde: waarschijnlijk is niet alles gelogd.',
+      ),
+      advice: tr(
+        'Also log drinks, snacks, sauces and cooking oil, and compare again next week.',
+        'Log ook drank, tussendoortjes, sauzen en olie bij het koken, en vergelijk volgende week opnieuw.',
+      ),
     ),
-    HealthRating.unknown => '',
+    EnergyCase.againstPlan => (
+      effect: under
+          ? tr(
+              'You ate on average $gap kcal a day below your goal and your weight is going down$moved, while you want to $want.',
+              'Je at gemiddeld $gap kcal per dag onder je doel en je gewicht gaat omlaag$moved, terwijl je wil $want.',
+            )
+          : tr(
+              'You ate on average $gap kcal a day above your goal and your weight is going up$moved, while you want to $want.',
+              'Je at gemiddeld $gap kcal per dag boven je doel en je gewicht gaat omhoog$moved, terwijl je wil $want.',
+            ),
+      advice: under
+          ? tr(
+              'Add about $round kcal a day: an extra snack, a bigger portion of your usual meal or a glass of milk.',
+              'Voeg ongeveer $round kcal per dag toe: een extra tussendoortje, een grotere portie van je gewone maaltijd of een glas melk.',
+            )
+          : tr(
+              'Eat about $round kcal a day less: a smaller portion, fewer snacks or fewer sweet drinks.',
+              'Eet ongeveer $round kcal per dag minder: een kleinere portie, minder tussendoortjes of minder zoete drank.',
+            ),
+    ),
+    _ => (
+      effect: tr(
+        'You ate on average $gap kcal a day ${under ? 'below' : 'above'} your goal.',
+        'Je at gemiddeld $gap kcal per dag ${under ? 'onder' : 'boven'} je doel.',
+      ),
+      advice: under
+          ? tr(
+                  'If you logged everything, add about $round kcal a day: an extra snack or a bigger portion.',
+                  'Als je alles logde, voeg dan ongeveer $round kcal per dag toe: een extra tussendoortje of een grotere portie.',
+                ) +
+                (plan == Goal.gain
+                    ? ''
+                    : tr(
+                        ' Weigh yourself now and then: if your weight stays the same, your goal is probably too high.',
+                        ' Weeg je af en toe: blijft je gewicht gelijk, dan ligt je doel waarschijnlijk te hoog.',
+                      ))
+          : tr(
+              'Eat about $round kcal a day less: a smaller portion, fewer snacks or fewer sweet drinks.',
+              'Eet ongeveer $round kcal per dag minder: een kleinere portie, minder tussendoortjes of minder zoete drank.',
+            ),
+    ),
   };
 }
 
@@ -173,7 +394,8 @@ bool isFullDay(NutrientTotals t, Map<String, Target> targets) => t['energy'] >= 
 
 /// Gezondheidscheck over [days] (totalen en doelen per dag). [weightKg] voor eiwit per kilo; [age], [heightCm] en
 /// [trains] (krachttraining of veel sport) geven persoonlijk advies, net als [labs]: je laatste bloedwaarden per stof
-/// (zie lib/labs/markers.dart). Null als er te weinig volledig gelogde dagen zijn.
+/// (zie lib/labs/markers.dart). [weightTrend] en [plan] (afvallen, behouden, aankomen) lezen je energie samen met je
+/// gewicht (zie [energyCase]). Null als er te weinig volledig gelogde dagen zijn.
 HealthCheck? healthCheck(
   List<(NutrientTotals, Map<String, Target>)> days, {
   required double weightKg,
@@ -182,6 +404,8 @@ HealthCheck? healthCheck(
   bool trains = false,
   Map<String, LabResult> labs = const {},
   ActivityWeek activity = const ActivityWeek(),
+  WeightTrend? weightTrend,
+  Goal plan = Goal.maintain,
 }) {
   final full = [
     for (final d in days)
@@ -216,12 +440,14 @@ HealthCheck? healthCheck(
     double weight = 1,
     bool isKnown = true,
     String? unknown,
+    String? aim,
   }) {
     final r = isKnown ? rating : HealthRating.unknown;
     return HealthFactor(
       key: key,
       title: title,
       value: value,
+      aim: aim,
       rating: r,
       effect: switch (r) {
         HealthRating.good => good,
@@ -244,6 +470,7 @@ HealthCheck? healthCheck(
 
   final perDay = tr('per day', 'per dag');
   final ofEnergy = tr('of your energy', 'van je energie');
+  String aimOf(String s) => tr('goal $s', 'doel $s');
 
   final fiber = avg('fiber');
   final sfa = pctEnergy('sfa', 9);
@@ -370,32 +597,25 @@ HealthCheck? healthCheck(
   final kcalEaten = energy / n;
   final kcalGap = kcalEaten - kcalGoal;
   final kcalOff = kcalGoal <= 0 ? 0.0 : kcalGap.abs() / kcalGoal;
-  final under = kcalGap < 0;
+  // Samen gelezen met je gewicht: bij een stabiel gewicht ligt het eerder aan je doel of aan wat je niet logt
+  final eCase = energyCase(eaten: kcalEaten, goal: kcalGoal, trend: weightTrend, plan: plan);
+  final eText = energyMessage(eCase, eaten: kcalEaten, goal: kcalGoal, trend: weightTrend, plan: plan);
   final factors = [
     if (kcalGoal > 0)
       factor(
         'energy',
         tr('Energy', 'Energie'),
         '${fmtNum(kcalEaten, 0)} / ${fmtNum(kcalGoal, 0)} kcal $perDay',
-        kcalOff <= 0.1 ? HealthRating.good : (kcalOff <= 0.2 ? HealthRating.ok : HealthRating.poor),
-        good: tr('You eat about what your goal asks for.', 'Je eet ongeveer wat je doel vraagt.'),
-        ok: tr(
-          'You ate on average ${fmtNum(kcalGap.abs(), 0)} kcal a day ${under ? 'below' : 'above'} your goal.',
-          'Je at gemiddeld ${fmtNum(kcalGap.abs(), 0)} kcal per dag ${under ? 'onder' : 'boven'} je doel.',
-        ),
-        poor: tr(
-          'You ate on average ${fmtNum(kcalGap.abs(), 0)} kcal a day ${under ? 'below' : 'above'} your goal, so your weight will not go the way you planned.',
-          'Je at gemiddeld ${fmtNum(kcalGap.abs(), 0)} kcal per dag ${under ? 'onder' : 'boven'} je doel, dus je gewicht gaat niet de kant op die je plande.',
-        ),
-        advice: under
-            ? tr(
-                'Add about ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal a day: an extra snack, a bigger portion of your usual meal or a glass of milk.',
-                'Voeg ongeveer ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal per dag toe: een extra tussendoortje, een grotere portie van je gewone maaltijd of een glas melk.',
-              )
-            : tr(
-                'Eat about ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal a day less: a smaller portion, fewer snacks or fewer sweet drinks.',
-                'Eet ongeveer ${fmtNum(kcalGap.abs() / 100, 0)}00 kcal per dag minder: een kleinere portie, minder tussendoortjes of minder zoete drank.',
-              ),
+        switch (eCase) {
+          EnergyCase.onTarget => HealthRating.good,
+          EnergyCase.goalOff || EnergyCase.missingLogs => HealthRating.ok,
+          EnergyCase.againstPlan => HealthRating.poor,
+          _ => kcalOff <= 0.2 ? HealthRating.ok : HealthRating.poor,
+        },
+        good: eText.effect,
+        ok: eText.effect,
+        poor: eText.effect,
+        advice: eText.advice,
         weight: 2,
       ),
     factor(
@@ -405,6 +625,7 @@ HealthCheck? healthCheck(
       rateDown(sodium, 2000, 2400),
       weight: 2,
       isKnown: known('sodium'),
+      aim: aimOf('≤ 5 g'),
       good: tr('Little salt: good for your blood pressure.', 'Weinig zout: goed voor je bloeddruk.'),
       ok: tr('A bit too much salt. That can raise your blood pressure slightly.', 'Iets te veel zout. Dat kan je bloeddruk wat doen stijgen.'),
       poor: tr(
@@ -424,6 +645,7 @@ HealthCheck? healthCheck(
       rateDown(sfa, 10, 12),
       weight: 2,
       isKnown: known('sfa'),
+      aim: aimOf('≤ 10%'),
       bloodTips: labTips(['ldl', 'non_hdl', 'hdl']),
       good: tr(
         'Little saturated fat: that keeps your LDL cholesterol low and protects your heart and blood vessels.',
@@ -449,6 +671,7 @@ HealthCheck? healthCheck(
       rateUp(fiber, 25, 18),
       weight: 2,
       isKnown: known('fiber'),
+      aim: aimOf('≥ 25 g'),
       tips: fiberTips,
       bloodTips: [
         if (labs['ldl']?.value.status == 1 || labs['non_hdl']?.value.status == 1)
@@ -477,8 +700,9 @@ HealthCheck? healthCheck(
     factor(
       'micro',
       tr('Vitamins and minerals', 'Vitaminen en mineralen'),
-      'Nutrient score ${micro.round()}',
+      tr('${micro.round()}% of your goals met', '${micro.round()}% van je doelen gehaald'),
       rateUp(micro, 85, 70),
+      aim: aimOf('≥ 85%'),
       weight: 2,
       tips: microTips,
       bloodTips: labTips(['vit_d', 'ferritin', 'transferrin_sat', 'b12', 'folate', 'hemoglobin', 'magnesium']),
@@ -506,6 +730,7 @@ HealthCheck? healthCheck(
       '${fmtNum(sugars, 0)}% $ofEnergy',
       freeSugars ? rateDown(sugars, 10, 15) : rateDown(sugars, 15, 20),
       isKnown: known('sugars'),
+      aim: aimOf(freeSugars ? '< 10%' : '< 15%'),
       bloodTips: labTips(['hba1c', 'glucose', 'triglycerides']),
       good: tr('Little sugar: good for your teeth, weight and blood sugar.', 'Weinig suiker: goed voor je tanden, je gewicht en je bloedsuiker.'),
       ok: tr(
@@ -536,6 +761,7 @@ HealthCheck? healthCheck(
       '${fmtNum(potassium, 0)} mg $perDay',
       rateUp(potassium, 3500, 2500),
       isKnown: known('potassium'),
+      aim: aimOf('≥ 3500 mg'),
       good: tr('Enough potassium: it helps keep your blood pressure low.', 'Genoeg kalium: dat helpt je bloeddruk laag te houden.'),
       ok: tr(
         'A bit too little potassium. Potassium counters the effect of salt on your blood pressure.',
@@ -553,6 +779,7 @@ HealthCheck? healthCheck(
       '${fmtNum(epaDha, 0)} mg $perDay',
       rateUp(epaDha, 250, 100),
       isKnown: known('epa_dha'),
+      aim: aimOf('≥ 250 mg'),
       good: tr('Enough omega-3 (EPA and DHA): good for your heart and brain.', 'Genoeg omega-3 (EPA en DHA): goed voor je hart en je hersenen.'),
       ok: tr('Somewhat little omega-3 (EPA and DHA).', 'Wat weinig omega-3 (EPA en DHA).'),
       poor: tr(
@@ -572,6 +799,7 @@ HealthCheck? healthCheck(
           : '${fmtNum(protein)} g ${tr('per kg', 'per kg')} · ${fmtNum(proteinOfGoal * 100, 0)}% ${tr('of your goal', 'van je doel')}',
       proteinRating,
       isKnown: weightKg > 0,
+      aim: proteinGoal == null ? aimOf('≥ ${fmtNum(proteinMinPerKg, 2)} g/kg') : aimOf('${fmtNum(proteinGoal, 0)} g $perDay'),
       tips: kidneys ? const [] : proteinTips,
       bloodTips: labTips(['egfr']),
       good: proteinOfGoal == null
@@ -598,8 +826,11 @@ HealthCheck? healthCheck(
       alcoholKnown
           ? tr('${fmtNum(glasses)} drinks per week', '${fmtNum(glasses)} glazen per week')
           : tr('${fmtNum(drinksLogged)} drinks in $n days', '${fmtNum(drinksLogged)} glazen in $n dagen'),
-      rateDown(glasses, 1, 7),
+      // Zelfde grens als de uitleg en het advies (Hoge Gezondheidsraad: hooguit 10 glazen per week): eronder "oké",
+      // erboven "kan beter"
+      rateDown(glasses, 1, 10),
       isKnown: alcoholKnown,
+      aim: tr('at most 10 a week, less is better', 'hooguit 10 per week, minder is beter'),
       unknown: tr(
         'Too few fully logged days to work out a weekly figure. Log at least $alcoholMinDays days.',
         'Te weinig volledig gelogde dagen om een weekcijfer te berekenen. Log minstens $alcoholMinDays dagen.',
@@ -607,16 +838,16 @@ HealthCheck? healthCheck(
       bloodTips: labTips(['ggt', 'alt', 'uric_acid']),
       good: tr('Little or no alcohol: the best for your health.', 'Weinig of geen alcohol: het beste voor je gezondheid.'),
       ok: tr(
-        'Some alcohol. There is no safe amount: the less, the better.',
-        'Wat alcohol. Er bestaat geen veilige hoeveelheid: hoe minder, hoe beter.',
+        'Some alcohol, within the limit of 10 drinks a week. Still, every drink counts: the less, the better.',
+        'Wat alcohol, binnen de grens van 10 glazen per week. Toch telt elk glas: hoe minder, hoe beter.',
       ),
       poor: tr(
-        'A lot of alcohol. That raises your risk of cancer, liver disease and high blood pressure, and you sleep worse.',
-        'Veel alcohol. Dat verhoogt je kans op kanker, leverziekte en hoge bloeddruk, en je slaapt slechter.',
+        'More than 10 drinks a week. That raises your risk of cancer, liver disease and high blood pressure, and you sleep worse.',
+        'Meer dan 10 glazen per week. Dat verhoogt je kans op kanker, leverziekte en hoge bloeddruk, en je slaapt slechter.',
       ),
       advice: tr(
-        'Drink less than 10 drinks a week and keep several days a week without alcohol.',
-        'Drink minder dan 10 glazen per week en houd een paar dagen per week zonder alcohol.',
+        'Stay at 10 drinks a week or less and keep several days a week without alcohol.',
+        'Blijf op hooguit 10 glazen per week en houd een paar dagen per week zonder alcohol.',
       ),
       note: tr('One drink = 10 g of alcohol.', 'Eén glas = 10 g alcohol.'),
     ),
@@ -635,21 +866,27 @@ HealthCheck? healthCheck(
   if (activity.tracksExercise || activity.exercises.isNotEmpty) {
     // Intensiteit uit de verbrande energie: MET = kcal per minuut × 200 / (3,5 × kg). Intensief (≥ 6 MET) telt dubbel,
     // licht (< 3 MET) niet mee
-    var minutes = 0.0;
+    var minutes = 0.0, logged = 0.0;
     for (final e in activity.exercises) {
       final m = e.minutes;
       if (m == null || m <= 0) continue;
+      logged += m;
       final met = weightKg > 0 ? e.kcal / m * 200 / (3.5 * weightKg) : 4;
       minutes += m * (met >= 6 ? 2 : (met >= 3 ? 1 : 0));
     }
     minutes *= days7;
     exerciseMinutes = minutes;
+    // Eén getal dat overeenkomt met wat je logde, en erbij hoe het meetelt (intensief dubbel, lopende week omgerekend)
+    final counted = fmtNum(minutes, 0), raw = fmtNum(logged, 0);
     factors.add(
       factor(
         'exercise',
         tr('Exercise', 'Bewegen'),
-        tr('${fmtNum(minutes, 0)} min per week', '${fmtNum(minutes, 0)} min per week'),
+        counted == raw
+            ? tr('$raw min per week', '$raw min per week')
+            : tr('$raw min logged, counts as $counted min a week', '$raw min gelogd, telt als $counted min per week'),
         rateUp(minutes, 150, 75),
+        aim: aimOf('≥ 150 min'),
         weight: 2,
         good: tr(
           'Enough exercise: that lowers your risk of heart disease, type 2 diabetes, some cancers and depression, and you sleep better.',
@@ -683,6 +920,7 @@ HealthCheck? healthCheck(
         tr('Strength training', 'Krachttraining'),
         tr('$strengthDays ${strengthDays == 1 ? 'day' : 'days'} per week', '$strengthDays ${strengthDays == 1 ? 'dag' : 'dagen'} per week'),
         strengthDays >= 2 ? HealthRating.good : (strengthDays == 1 ? HealthRating.ok : HealthRating.poor),
+        aim: aimOf(tr('2 days', '2 dagen')),
         good: tr(
           'Enough strength training: strong muscles and bones, better blood sugar, and less risk of falling as you get older.',
           'Genoeg krachttraining: sterke spieren en botten, een betere bloedsuiker, en minder kans om te vallen als je ouder wordt.',
@@ -714,6 +952,7 @@ HealthCheck? healthCheck(
         tr('Steps', 'Stappen'),
         '${fmtNum(steps, 0)} $perDay',
         rateUp(steps, older ? 6000 : 8000, older ? 4000 : 5000),
+        aim: aimOf('${older ? '6000' : '8000'} $perDay'),
         good: tr(
           'Enough steps: people who walk this much every day live longer and healthier on average.',
           'Genoeg stappen: wie elke dag zoveel stapt, leeft gemiddeld langer en gezonder.',
@@ -765,12 +1004,17 @@ HealthCheck? healthCheck(
     HealthRating.unknown => 3,
   };
   factors.sort((a, b) => order(a) != order(b) ? order(a) - order(b) : b.weight.compareTo(a.weight));
+  var rating = score >= 80 ? HealthRating.good : (score >= 50 ? HealthRating.ok : HealthRating.poor);
+  // Een energie ver van je doel past niet bij "een gezonde week"
+  final energyPoor = factors.any((f) => f.key == 'energy' && f.rating == HealthRating.poor);
+  if (energyPoor && rating == HealthRating.good) rating = HealthRating.ok;
   return HealthCheck(
     days: n,
     labDay: labs.values.map((r) => r.day).fold<String?>(null, (a, d) => a == null || d.compareTo(a) > 0 ? d : a),
     factors: factors,
     score: score,
-    rating: score >= 80 ? HealthRating.good : (score >= 50 ? HealthRating.ok : HealthRating.poor),
+    rating: rating,
+    energyFirst: kcalGoal > 0 && eCase == EnergyCase.againstPlan,
   );
 }
 
@@ -952,11 +1196,12 @@ Map<String, (String, double)> healthImpact({
         );
 
   // Alcohol en levensverwachting op 40 jaar, tegenover minder dan 10 glazen per week (Wood 2018)
-  out['alcohol'] = glasses < 10
+  // (zelfde grens als het oordeel: tot 10 glazen is "oké")
+  out['alcohol'] = glasses <= 10
       ? (
           tr(
-            'Under 10 drinks a week large studies see no measurable loss of life expectancy, though every drink slightly raises your cancer risk.',
-            'Onder 10 glazen per week zien grote studies geen meetbaar verlies aan levensverwachting, al verhoogt elk glas je kans op kanker licht.',
+            'Up to 10 drinks a week large studies see no measurable loss of life expectancy, though every drink slightly raises your cancer risk.',
+            'Tot 10 glazen per week zien grote studies geen meetbaar verlies aan levensverwachting, al verhoogt elk glas je kans op kanker licht.',
           ),
           0,
         )

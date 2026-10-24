@@ -58,6 +58,29 @@ class HealthPanel extends StatelessWidget {
       );
     }
     final level = levelOfRating(c.rating);
+    // Geen tweede score naast de Voedingsscore: alleen het oordeel in woorden, en in woorden hoe het tegenover
+    // vorige week staat
+    final vsLastWeek = switch (change) {
+      null => null,
+      final d when d >= 5 => tr('Better than last week', 'Beter dan vorige week'),
+      final d when d <= -5 => tr('Less good than last week', 'Minder goed dan vorige week'),
+      _ => tr('About the same as last week', 'Ongeveer zoals vorige week'),
+    };
+    final work = c.toWorkOn;
+    final shown = work.take(maxWorkPoints).toList();
+    final more = [
+      ...work.skip(maxWorkPoints),
+      for (final f in c.factors)
+        if (f.rating == HealthRating.unknown) f,
+    ];
+    final labDay = c.labDay == null ? null : _day(c.labDay!);
+    Widget heading(String text) => Padding(
+      padding: const EdgeInsets.only(top: 14, bottom: 2),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.ink2),
+      ),
+    );
     return Panel(
       shadow: false,
       child: Column(
@@ -87,19 +110,18 @@ class HealthPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text('${c.score}', style: numStyle(24, color: p.ink)),
-                        Text(' / 100', style: numStyle(13, color: p.ink3)),
-                      ],
-                    ),
-                    if (change != null)
+                    if (vsLastWeek != null)
                       Text(
-                        '${change! > 0 ? '▲' : (change! < 0 ? '▼' : '=')} ${change!.abs()} ${tr('vs last week', 't.o.v. vorige week')}',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: change! >= 0 ? p.ok : p.low),
+                        vsLastWeek,
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: change! >= 5 ? p.ok : (change! <= -5 ? p.low : p.ink2)),
                       ),
+                    Text(
+                      tr(
+                        'Averages of ${c.days} fully logged ${c.days == 1 ? 'day' : 'days'}',
+                        'Gemiddelden van ${c.days} volledig gelogde ${c.days == 1 ? 'dag' : 'dagen'}',
+                      ),
+                      style: TextStyle(fontSize: 12, color: p.ink3),
+                    ),
                   ],
                 ),
               ),
@@ -107,34 +129,17 @@ class HealthPanel extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(c.summary, style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink)),
-          if (c.biggestGain case final g?) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              decoration: BoxDecoration(color: p.brandSoft, borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.trending_up_rounded, size: 20, color: p.brand),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '${tr('Biggest gain', 'Grootste winst')}: ${g.title.toLowerCase()}. ',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          TextSpan(text: g.impact),
-                        ],
-                      ),
-                      style: TextStyle(fontSize: 13, height: 1.4, color: p.ink),
-                    ),
-                  ),
-                ],
+          // Eerst wat goed gaat, dan hooguit drie werkpunten met meteen wat je kunt doen
+          if (c.goingWell.isNotEmpty) ...[heading(tr('Going well', 'Goed bezig')), for (final f in c.goingWell) _FactorRow(f, labDay: labDay)],
+          if (shown.isNotEmpty) ...[heading(tr('To work on', 'Werkpunten')), for (final f in shown) _FactorRow(f, labDay: labDay, showAdvice: true)],
+          if (more.isNotEmpty)
+            _MoreInfo(
+              title: tr('More points (${more.length})', 'Meer punten (${more.length})'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final f in more) _FactorRow(f, labDay: labDay)],
               ),
             ),
-          ],
           const SizedBox(height: 8),
           if (c.labDay != null && c.factors.any((f) => f.bloodTips.isNotEmpty)) ...[
             const SizedBox(height: 8),
@@ -151,14 +156,13 @@ class HealthPanel extends StatelessWidget {
               ],
             ),
           ],
-          for (final f in c.factors) _FactorRow(f, labDay: c.labDay == null ? null : _day(c.labDay!)),
           const SizedBox(height: 6),
           _MoreInfo(
             title: tr('About these figures', 'Over deze cijfers'),
             child: Text(
               tr(
-                'Based on ${c.days} fully logged days and the guidelines of EFSA, the WHO and the Belgian Superior Health Council. The impact figures come from large studies: averages and associations that show roughly what is at stake, not a prediction for you. Not medical advice.',
-                'Op basis van ${c.days} volledig gelogde dagen en de richtlijnen van EFSA, de WHO en de Hoge Gezondheidsraad. De cijfers over impact komen uit grote studies: gemiddelden en verbanden die tonen wat ongeveer op het spel staat, geen voorspelling voor jou. Geen medisch advies.',
+                'Averages of ${c.days} fully logged days, judged against the guidelines of EFSA, the WHO and the Belgian Superior Health Council. The figures under "Why it matters" come from large studies: averages and associations that show roughly what is at stake, not a prediction for you. Not medical advice.',
+                'Gemiddelden van ${c.days} volledig gelogde dagen, beoordeeld met de richtlijnen van EFSA, de WHO en de Hoge Gezondheidsraad. De cijfers onder "Waarom het telt" komen uit grote studies: gemiddelden en verbanden die tonen wat ongeveer op het spel staat, geen voorspelling voor jou. Geen medisch advies.',
               ),
               style: TextStyle(fontSize: 11.5, color: p.ink3),
             ),
@@ -183,10 +187,12 @@ class HealthPanel extends StatelessWidget {
   }
 }
 
-/// Eén factor: naam, waarde en oordeel; aantikken toont wat je kunt doen.
+/// Eén factor: naam, waarde, doel en oordeel; aantikken toont de uitleg. Bij een werkpunt ([showAdvice]) staat wat
+/// je kunt doen er meteen onder.
 class _FactorRow extends StatefulWidget {
-  const _FactorRow(this.f, {this.labDay});
+  const _FactorRow(this.f, {this.labDay, this.showAdvice = false});
   final HealthFactor f;
+  final bool showAdvice;
 
   /// Datum van de bloedafname, al opgemaakt (bv. 20/10/2025).
   final String? labDay;
@@ -231,6 +237,12 @@ class _FactorRowState extends State<_FactorRow> {
                           text: '  ${f.value}',
                           style: numStyle(12.5, color: p.ink3),
                         ),
+                        // Het doel waartegen het oordeel geldt
+                        if (f.aim != null && f.rating != HealthRating.unknown)
+                          TextSpan(
+                            text: ' · ${f.aim}',
+                            style: TextStyle(fontSize: 12, color: p.ink3),
+                          ),
                       ],
                     ),
                   ),
@@ -252,37 +264,36 @@ class _FactorRowState extends State<_FactorRow> {
                 Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: p.ink3),
               ],
             ),
-            if (_open) ...[
+            if (_open)
               Padding(
                 padding: const EdgeInsets.only(left: 20, top: 4),
                 child: Text(f.effect, style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2)),
               ),
+            if (f.advice != null && f.advice!.isNotEmpty && (_open || widget.showAdvice))
+              Padding(
+                padding: const EdgeInsets.only(left: 20, top: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.lightbulb_outline_rounded, size: 16, color: p.brand),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(f.advice!, style: TextStyle(fontSize: 13, height: 1.4, color: p.ink)),
+                    ),
+                  ],
+                ),
+              ),
+            if (_open) ...[
+              // Cijfers uit grote studies (ook over levensverwachting): niet standaard in beeld, wel voor wie wil
               if (f.impact != null)
                 Padding(
-                  padding: const EdgeInsets.only(left: 20, top: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.insights_rounded, size: 15, color: p.brand),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(f.impact!, style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink)),
-                      ),
-                    ],
-                  ),
-                ),
-              if (f.advice != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 20, top: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.lightbulb_outline_rounded, size: 16, color: p.brand),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(f.advice!, style: TextStyle(fontSize: 13, height: 1.4, color: p.ink)),
-                      ),
-                    ],
+                  padding: const EdgeInsets.only(left: 20, top: 4),
+                  child: _MoreInfo(
+                    title: tr('Why it matters', 'Waarom het telt'),
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 21, bottom: 4),
+                      child: Text(f.impact!, style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink)),
+                    ),
                   ),
                 ),
               if (f.bloodTips.isNotEmpty) ...[

@@ -4,11 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../i18n.dart';
+import '../../nutrition/health.dart';
 import '../../nutrition/nutrients.dart';
 import '../../nutrition/report.dart';
 import '../../state/app_state.dart';
 import '../../sync/friends.dart';
 import '../theme.dart';
+import 'profile_screen.dart';
 import '../widgets/avatar.dart';
 import '../widgets/health_view.dart';
 import '../widgets/kit.dart';
@@ -24,7 +26,14 @@ class WeeklyReportScreen extends StatelessWidget {
     return '${f.format(m)} – ${f.format(DateTime(m.year, m.month, m.day + 6))}';
   }
 
-  /// Gemiddelde energie tegenover je doel, bv. "Energy: 1650 of 2400 kcal a day (750 kcal deficit)".
+  /// Over welke dagen de gemiddelden gaan, bv. "average of 5 fully logged days".
+  static String period(WeeklyReport r) => tr(
+    'average of ${r.days} fully logged ${r.days == 1 ? 'day' : 'days'}',
+    'gemiddelde van ${r.days} volledig gelogde ${r.days == 1 ? 'dag' : 'dagen'}',
+  );
+
+  /// Gemiddelde energie tegenover je doel, bv. "Energy: 1650 of 2400 kcal a day (750 kcal deficit; average of 5
+  /// fully logged days)".
   static String? energyLine(WeeklyReport r) {
     final avg = r.kcalAvg, goal = r.kcalGoal, balance = r.energyBalance;
     if (avg == null || goal == null || balance == null) return null;
@@ -35,37 +44,78 @@ class WeeklyReportScreen extends StatelessWidget {
     final change = r.kcalChange;
     final vs = change == null ? '' : ' · ${change >= 0 ? '+' : ''}$change kcal ${tr('vs last week', 't.o.v. vorige week')}';
     return tr(
-      'Energy: ${fmtNum(avg, 0)} of ${fmtNum(goal, 0)} kcal a day ($kind)$vs',
-      'Energie: ${fmtNum(avg, 0)} van ${fmtNum(goal, 0)} kcal per dag ($kind)$vs',
+      'Energy: ${fmtNum(avg, 0)} of ${fmtNum(goal, 0)} kcal a day ($kind; ${period(r)})$vs',
+      'Energie: ${fmtNum(avg, 0)} van ${fmtNum(goal, 0)} kcal per dag ($kind; ${period(r)})$vs',
     );
   }
 
-  /// Gewicht over de week, bv. "Weight: 81.2 kg (−0.6 kg this week)", of null zonder weging.
+  /// Gewicht over de week, bv. "Weight: 81.2 kg at your last weigh-in (−0.6 kg this week)", of null zonder weging.
+  /// Met de trend over twee weken als je gewicht stabiel is.
   static String? weightLine(WeeklyReport r) {
     final end = r.weightEnd;
     if (end == null) return null;
     final c = r.weightChange;
     final change = c == null ? '' : ' (${c > 0 ? '+' : (c < 0 ? '−' : '±')}${fmtNum(c.abs())} kg ${tr('this week', 'deze week')})';
-    return tr('Weight: ${fmtNum(end)} kg$change', 'Gewicht: ${fmtNum(end)} kg$change');
+    final t = r.weightTrend;
+    final stable = t != null && t.stable ? tr(' · stable over ${t.days} days', ' · stabiel over ${t.days} dagen') : '';
+    return tr('Weight: ${fmtNum(end)} kg at your last weigh-in$change$stable', 'Gewicht: ${fmtNum(end)} kg bij je laatste weging$change$stable');
   }
 
-  /// Beweging, bv. "Exercise: 3 sessions, 140 min, 950 kcal", of null zonder activiteiten.
+  /// Beweging, bv. "Exercise: 3 sessions, 140 min logged, 950 kcal", of null zonder activiteiten.
   static String? exerciseLine(WeeklyReport r) {
     final e = r.exercise;
     if (e.sessions == 0) return null;
-    final min = e.minutes > 0 ? ', ${fmtNum(e.minutes, 0)} min' : '';
+    final min = e.minutes > 0 ? ', ${fmtNum(e.minutes, 0)} min ${tr('logged', 'gelogd')}' : '';
     return tr(
       'Exercise: ${e.sessions} ${e.sessions == 1 ? 'session' : 'sessions'}$min, ${fmtNum(e.kcal, 0)} kcal',
       'Beweging: ${e.sessions} ${e.sessions == 1 ? 'activiteit' : 'activiteiten'}$min, ${fmtNum(e.kcal, 0)} kcal',
     );
   }
 
-  /// Verschil tegenover vorige week in procentpunt, bv. "▲ 12", of null.
+  /// Verschil tegenover vorige week in procent van je doel, bv. "▲ 12%", of null. Begrensd op 999, want een
+  /// week met een enkele uitschieter gaf "▲ 95248".
   static String? delta(WeeklyReport r, String key) {
     final d = r.changeFor(key);
     if (d == null) return null;
     final pts = (d * 100).round();
-    return pts == 0 ? '=' : '${pts > 0 ? '▲' : '▼'} ${pts.abs()}';
+    if (pts == 0) return '=';
+    return '${pts > 0 ? '▲' : '▼'} ${pts.abs() > 999 ? '>999' : pts.abs()}%';
+  }
+
+  /// Je gemiddelde dagdoel voor een stof, bv. "goal 300 mg", of null.
+  static String? goalText(WeeklyReport r, Nutrient n) {
+    final g = r.goals[n.key];
+    if (g == null || g <= 0) return null;
+    final shown = fmtNum(g, g < 10 ? 1 : 0);
+    return tr('goal $shown ${n.unit}', 'doel $shown ${n.unit}');
+  }
+
+  /// Koolhydraten, suiker en bloedsuiker, bij "Let op suiker".
+  static List<String> sugarLines(SugarWeek w) {
+    final perDay = tr('a day', 'per dag');
+    final carbGoal = w.carbsGoal;
+    return [
+      carbGoal == null
+          ? tr('Carbohydrates: ${fmtNum(w.carbs, 0)} g $perDay', 'Koolhydraten: ${fmtNum(w.carbs, 0)} g $perDay')
+          : tr(
+              'Carbohydrates: ${fmtNum(w.carbs, 0)} g $perDay (goal ${fmtNum(carbGoal, 0)} g) · ${w.carbDaysOver} of ${w.days} days above',
+              'Koolhydraten: ${fmtNum(w.carbs, 0)} g $perDay (doel ${fmtNum(carbGoal, 0)} g) · ${w.carbDaysOver} van ${w.days} dagen erboven',
+            ),
+      tr('Sugars: ${fmtNum(w.sugars, 0)} g $perDay', 'Suikers: ${fmtNum(w.sugars, 0)} g $perDay'),
+      if (w.freeSugars case final f?)
+        w.freeSugarsMax == null
+            ? tr('Free sugar: ${fmtNum(f, 0)} g $perDay', 'Vrije suiker: ${fmtNum(f, 0)} g $perDay')
+            : tr(
+                'Free sugar: ${fmtNum(f, 0)} g $perDay (max ${fmtNum(w.freeSugarsMax!, 0)} g) · ${w.freeSugarDaysOver} of ${w.days} days above',
+                'Vrije suiker: ${fmtNum(f, 0)} g $perDay (max ${fmtNum(w.freeSugarsMax!, 0)} g) · ${w.freeSugarDaysOver} van ${w.days} dagen erboven',
+              ),
+      w.glucose == null
+          ? tr('Blood glucose: no readings this week', 'Bloedsuiker: geen metingen deze week')
+          : tr(
+              'Blood glucose: ${fmtNum(w.glucose!)} mmol/L on average (${w.glucoseCount} ${w.glucoseCount == 1 ? 'reading' : 'readings'} this week)',
+              'Bloedsuiker: gemiddeld ${fmtNum(w.glucose!)} mmol/L (${w.glucoseCount} ${w.glucoseCount == 1 ? 'meting' : 'metingen'} deze week)',
+            ),
+    ];
   }
 
   /// Tekst om te delen of te kopiëren.
@@ -81,12 +131,12 @@ class WeeklyReportScreen extends StatelessWidget {
     return [
       tr('My MacroMatrix week (${_range(r.monday)})', 'Mijn MacroMatrix-week (${_range(r.monday)})'),
       tr(
-        'Nutrient score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change vs last week)'}',
-        'Nutrient score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change t.o.v. vorige week)'}',
+        'Nutrient score: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change vs last week)'}, ${period(r)}',
+        'Voedingsscore: ${r.score}${change == null ? '' : ' (${change >= 0 ? '+' : ''}$change t.o.v. vorige week)'}, ${period(r)}',
       ),
       tr('Full days logged: ${r.days}/7 · streak: $streak', 'Volledig gelogde dagen: ${r.days}/7 · reeks: $streak'),
-      if (r.health != null)
-        tr('Health: ${r.health!.rating.label} (${r.health!.score}/100)', 'Gezondheid: ${r.health!.rating.label} (${r.health!.score}/100)'),
+      if (r.health != null) tr('Health: ${r.health!.rating.label}', 'Gezondheid: ${r.health!.rating.label}'),
+      if (r.sugar != null) ...sugarLines(r.sugar!),
       ?energyLine(r),
       ?weightLine(r),
       ?exerciseLine(r),
@@ -100,21 +150,19 @@ class WeeklyReportScreen extends StatelessWidget {
     ].join('\n');
   }
 
-  /// Tip bij een duidelijk energieprobleem: dat gaat voor op een vitamine of mineraal.
+  /// Tip bij een duidelijk energieprobleem: dat gaat voor op een vitamine of mineraal. Dezelfde uitleg als bij
+  /// energie in het gezondheidsdeel, samen gelezen met je gewicht: nooit blind "eet 900 kcal meer".
   static String? energyTip(WeeklyReport r) {
-    final balance = r.energyBalance;
-    if (r.energyOff == 0 || balance == null) return null;
-    final gap = fmtNum(balance.abs(), 0);
-    return r.energyOff < 0
-        ? tr(
-            'You ate about $gap kcal a day less than your goal. Eating too little for a long time costs muscle and energy and makes it hard to reach your other nutrients: add a snack or a bigger portion at a main meal.',
-            'Je at ongeveer $gap kcal per dag minder dan je doel. Lang te weinig eten kost spiermassa en energie en maakt je andere voedingsstoffen moeilijk haalbaar: voeg een tussendoortje toe of neem een grotere portie bij een hoofdmaaltijd.',
-          )
-        : tr(
-            'You ate about $gap kcal a day more than your goal. Smaller portions or fewer snacks and sugary drinks bring you closer.',
-            'Je at ongeveer $gap kcal per dag meer dan je doel. Kleinere porties of minder tussendoortjes en suikerdranken brengen je dichterbij.',
-          );
+    final avg = r.kcalAvg, goal = r.kcalGoal;
+    if (r.energyOff == 0 || avg == null || goal == null) return null;
+    final c = r.energyCase;
+    if (c == EnergyCase.onTarget) return null;
+    final m = energyMessage(c, eaten: avg, goal: goal, trend: r.weightTrend, plan: r.plan);
+    return '${m.effect} ${m.advice}';
   }
+
+  /// Bij de tip een knop naar je energiedoel: als je gewicht zegt dat het doel niet klopt.
+  static bool suggestGoalChange(WeeklyReport r) => energyTip(r) != null && r.energyCase == EnergyCase.goalOff;
 
   @override
   Widget build(BuildContext context) {
@@ -128,21 +176,25 @@ class WeeklyReportScreen extends StatelessWidget {
     Widget nutrientRow((Nutrient, double) x, Color color) {
       final (n, frac) = x;
       final d = r == null ? null : delta(r, n.key);
+      final g = r == null ? null : goalText(r, n);
+      // Doel en verschil met vorige week onder de naam, zodat de naam de volle breedte houdt (geen "Magnesiu m")
+      final sub = [?g, if (d != null) '$d ${tr('vs last week', 't.o.v. vorige week')}'].join(' · ');
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           children: [
             Expanded(
-              child: Text(n.name, style: TextStyle(fontSize: 14, color: p.ink)),
-            ),
-            // Tegenover vorige week, in procentpunt van je doel
-            if (d != null)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(d, style: numStyle(11.5, color: p.ink3)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(n.name, style: TextStyle(fontSize: 14, color: p.ink)),
+                  if (sub.isNotEmpty) Text(sub, style: TextStyle(fontSize: 11.5, color: p.ink3)),
+                ],
               ),
+            ),
+            const SizedBox(width: 8),
             SizedBox(
-              width: 110,
+              width: 80,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(value: frac.clamp(0.0, 1.0), minHeight: 8, backgroundColor: p.track, color: color),
@@ -201,6 +253,25 @@ class WeeklyReportScreen extends StatelessWidget {
                       children: [
                         Text(_range(monday), style: TextStyle(fontSize: 13, color: p.ink3)),
                         const SizedBox(height: 10),
+                        // "Let op suiker": koolhydraten, suiker en bloedsuiker eerst
+                        if (r.sugar case final sugar?) ...[
+                          Panel(
+                            shadow: false,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                PanelTitle(tr('Carbs and sugar', 'Koolhydraten en suiker'), subtitle: period(r)),
+                                const SizedBox(height: 6),
+                                for (final line in sugarLines(sugar))
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(line, style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         // Score
                         Panel(
                           child: Row(
@@ -211,7 +282,7 @@ class WeeklyReportScreen extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Nutrient score', style: TextStyle(fontSize: 13, color: p.ink2)),
+                                    Text(tr('Nutrient score', 'Voedingsscore'), style: TextStyle(fontSize: 13, color: p.ink2)),
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.baseline,
                                       textBaseline: TextBaseline.alphabetic,
@@ -227,8 +298,8 @@ class WeeklyReportScreen extends StatelessWidget {
                                     ),
                                     Text(
                                       tr(
-                                        '${r.days} of 7 days fully logged · ${s.streak.current}-day streak',
-                                        '${r.days} van 7 dagen volledig gelogd · reeks van ${s.streak.current}',
+                                        'Average of ${r.days} fully logged ${r.days == 1 ? 'day' : 'days'} (of 7) · ${s.streak.current}-day streak',
+                                        'Gemiddelde van ${r.days} volledig gelogde ${r.days == 1 ? 'dag' : 'dagen'} (van 7) · reeks van ${s.streak.current}',
                                       ),
                                       style: TextStyle(fontSize: 12.5, color: p.ink3),
                                     ),
@@ -268,8 +339,8 @@ class WeeklyReportScreen extends StatelessWidget {
                               const SizedBox(height: 6),
                               Text(
                                 tr(
-                                  'Average share of your daily goal on fully logged days. ▲▼ = change vs last week.',
-                                  'Gemiddeld deel van je dagdoel op volledig gelogde dagen. ▲▼ = verschil met vorige week.',
+                                  'Average share of your daily goal, ${period(r)}. ▲▼ = change vs last week, in % of your goal. Amounts above the safe upper limit are not shown as strongest.',
+                                  'Gemiddeld deel van je dagdoel, ${period(r)}. ▲▼ = verschil met vorige week, in % van je doel. Wat boven de veilige bovengrens zit, staat niet bij je sterkste.',
                                 ),
                                 style: TextStyle(fontSize: 11.5, color: p.ink3),
                               ),
@@ -304,6 +375,21 @@ class WeeklyReportScreen extends StatelessWidget {
                                             ),
                                         style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink),
                                       ),
+                                      // Je gewicht zegt dat het doel niet klopt: meteen naar je energiedoel
+                                      if (suggestGoalChange(r))
+                                        TextButton.icon(
+                                          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                          icon: const Icon(Icons.tune_rounded, size: 18),
+                                          label: Text(tr('Adjust your energy goal', 'Je energiedoel aanpassen')),
+                                          onPressed: () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => Scaffold(
+                                                appBar: AppBar(title: Text(tr('Your goals', 'Je doelen'))),
+                                                body: const ProfileScreen(),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -405,7 +491,7 @@ class WeeklyReportCard extends StatelessWidget {
                 Text(
                   tr(
                         'Nutrient score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} full days logged',
-                        'Nutrient score ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} volledige dagen gelogd',
+                        'Voedingsscore ${r.score}${r.change == null ? '' : ' (${r.change! >= 0 ? '+' : ''}${r.change})'} · ${r.days} volledige dagen gelogd',
                       ) +
                       (r.health == null ? '' : ' · ${tr('health', 'gezondheid')}: ${r.health!.rating.label.toLowerCase()}'),
                   style: TextStyle(fontSize: 12.5, color: p.ink2),
