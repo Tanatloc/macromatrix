@@ -1600,11 +1600,17 @@ class AppState extends ChangeNotifier {
 
   /// Je hele dag van gisteren kopiëren (alle maaltijden, zonder supplementen). Hetzelfde product dat er al staat,
   /// wordt samengevoegd tot één regel. Geef het resultaat aan [undoAdds] om het ongedaan te maken (N57).
-  List<AddedEntry> copyDayFromYesterday() {
-    final from = dayKey(_date.subtract(const Duration(days: 1)));
+  List<AddedEntry> copyDayFromYesterday() => copyDay(from: DateTime(_date.year, _date.month, _date.day - 1));
+
+  /// De hele dag [from] kopiëren naar [to] (standaard de gekozen dag), met samenvoegen zoals
+  /// [copyDayFromYesterday]. Werkt ook naar een andere dag dan de gekozen, bv. morgen. Geef het resultaat aan
+  /// [undoAdds] om het ongedaan te maken (N58).
+  List<AddedEntry> copyDay({required DateTime from, DateTime? to}) {
+    final fromKey = dayKey(from), toKey = to == null ? day : dayKey(to);
+    if (fromKey == toKey) return const [];
     final added = [
       for (final m in Meal.values)
-        for (final c in user.copyMealMerged(fromDay: from, meal: m, toDay: day))
+        for (final c in user.copyMealMerged(fromDay: fromKey, meal: m, toDay: toKey))
           AddedEntry(c.id, prevGrams: c.prevGrams, prevQuantity: c.prevQuantity),
     ];
     _refresh();

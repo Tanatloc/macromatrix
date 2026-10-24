@@ -205,10 +205,22 @@ class _DayBar extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: IconButton(
-                  tooltip: tr('Note for this day', 'Notitie bij deze dag'),
-                  icon: Icon(hasNote ? Icons.sticky_note_2_rounded : Icons.sticky_note_2_outlined, color: hasNote ? p.brand : p.ink2),
-                  onPressed: () => editNote(context),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: tr('Note for this day', 'Notitie bij deze dag'),
+                      icon: Icon(hasNote ? Icons.sticky_note_2_rounded : Icons.sticky_note_2_outlined, color: hasNote ? p.brand : p.ink2),
+                      onPressed: () => editNote(context),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: tr('Day menu', 'Menu van de dag'),
+                      icon: Icon(Icons.more_horiz_rounded, color: p.ink2),
+                      onPressed: () => openDayMenu(context),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -239,31 +251,83 @@ Future<void> pickDay(BuildContext context) async {
 /// (Amerikaans), dus Brits Engels; in het Nederlands nl_BE in plaats van de Engelse kalender van vroeger (N46).
 Locale get pickerLocale => isNl ? const Locale('nl', 'BE') : const Locale('en', 'GB');
 
+/// Een dag in een melding: today/yesterday/tomorrow, anders bv. 'Mon 20 Oct' (met jaar als het een ander jaar is).
+String dayName(DateTime d) {
+  final now = logicalNow();
+  return switch (daysBetween(now, d)) {
+    0 => tr('today', 'vandaag'),
+    -1 => tr('yesterday', 'gisteren'),
+    1 => tr('tomorrow', 'morgen'),
+    _ => DateFormat(d.year == now.year ? 'EEE d MMM' : 'EEE d MMM yyyy', appLocale).format(d),
+  };
+}
+
+bool _isRelative(DateTime d) => daysBetween(logicalNow(), d).abs() <= 1;
+
 /// Gisteren kopiëren naar de gekozen dag: [meal], of zonder maaltijd de hele dag. Staat er al iets, dan eerst
 /// vragen; hetzelfde product wordt één regel, en de melding heeft "Ongedaan maken" (N57).
-Future<void> copyFromYesterday(BuildContext context, {Meal? meal}) async {
+Future<void> copyFromYesterday(BuildContext context, {Meal? meal}) {
   final s = context.read<AppState>();
-  final already = meal == null ? s.entries.where((e) => !e.foodRef.startsWith('supp:')).length : s.entriesFor(meal).length;
+  return _copyDayWithUndo(
+    context,
+    from: DateTime(s.date.year, s.date.month, s.date.day - 1),
+    to: s.date,
+    meal: meal,
+    run: () => meal == null ? s.copyDayFromYesterday() : s.copyMealFromYesterday(meal),
+  );
+}
+
+/// De hele dag [from] kopiëren naar [to] (standaard de gekozen dag), met dezelfde vraag en "Ongedaan maken" als
+/// [copyFromYesterday] (N58).
+Future<void> copyDay(BuildContext context, {required DateTime from, DateTime? to}) {
+  final s = context.read<AppState>();
+  final target = to ?? s.date;
+  return _copyDayWithUndo(
+    context,
+    from: from,
+    to: target,
+    run: () => s.copyDay(from: from, to: target),
+  );
+}
+
+Future<void> _copyDayWithUndo(
+  BuildContext context, {
+  required DateTime from,
+  required DateTime to,
+  Meal? meal,
+  required List<AddedEntry> Function() run,
+}) async {
+  final s = context.read<AppState>();
+  final toKey = dayKey(to);
+  final toShown = toKey == s.day;
+  // Wat er al staat op de dag waarnaar je kopieert (zonder supplementen, die worden niet gekopieerd)
+  final onTarget = toShown ? s.entries : s.user.entriesBetween(toKey, toKey);
+  final already = onTarget.where((e) => !e.foodRef.startsWith('supp:') && (meal == null || e.meal == meal)).length;
+  final fromName = dayName(from), toName = dayName(to);
   if (already > 0) {
-    final where = meal == null ? tr('this day', 'deze dag') : meal.label.toLowerCase();
+    final items = already == 1 ? 'item' : 'items';
+    final where = meal != null
+        ? meal.label.toLowerCase()
+        : toShown
+        ? tr('this day', 'deze dag')
+        : toName;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          meal == null
-              ? tr(
-                  'This day already has $already ${already == 1 ? 'item' : 'items'}',
-                  'Deze dag heeft al $already ${already == 1 ? 'item' : 'items'}',
-                )
+          meal != null
+              ? tr('${meal.label} already has $already $items', '${meal.label} heeft al $already $items')
+              : toShown
+              ? tr('This day already has $already $items', 'Deze dag heeft al $already $items')
               : tr(
-                  '${meal.label} already has $already ${already == 1 ? 'item' : 'items'}',
-                  '${meal.label} heeft al $already ${already == 1 ? 'item' : 'items'}',
+                  '${toBeginningOfSentenceCase(toName)} already has $already $items',
+                  '${toBeginningOfSentenceCase(toName)} heeft al $already $items',
                 ),
         ),
         content: Text(
           tr(
-            'Yesterday\'s items are added to $where. A product that is already there gets the amount added, not a second line.',
-            'De items van gisteren komen erbij in $where. Een product dat er al staat, krijgt de hoeveelheid erbij, geen tweede regel.',
+            'The items of $fromName are added to $where. A product that is already there gets the amount added, not a second line.',
+            'De items van $fromName komen erbij in $where. Een product dat er al staat, krijgt de hoeveelheid erbij, geen tweede regel.',
           ),
         ),
         actions: [
@@ -274,23 +338,28 @@ Future<void> copyFromYesterday(BuildContext context, {Meal? meal}) async {
     );
     if (ok != true || !context.mounted) return;
   }
-  final added = meal == null ? s.copyDayFromYesterday() : s.copyMealFromYesterday(meal);
+  final added = run();
   if (!context.mounted) return;
   final m = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
   if (added.isEmpty) {
+    // 'gisteren' zonder 'op', een datum met: "You logged nothing yesterday" / "Op ma 20 okt logde je niets"
+    final rel = _isRelative(from);
+    final what = meal?.label.toLowerCase();
     m.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 4),
-        content: Text(
-          meal == null
-              ? tr('You logged nothing yesterday.', 'Gisteren logde je niets.')
-              : tr('You had no ${meal.label.toLowerCase()} yesterday.', 'Gisteren had je geen ${meal.label.toLowerCase()}.'),
-        ),
+        content: Text(switch ((what, rel)) {
+          (null, true) => tr('You logged nothing $fromName.', '${toBeginningOfSentenceCase(fromName)} logde je niets.'),
+          (null, false) => tr('You logged nothing on $fromName.', 'Op $fromName logde je niets.'),
+          (_, true) => tr('You had no $what $fromName.', '${toBeginningOfSentenceCase(fromName)} had je geen $what.'),
+          (_, false) => tr('You had no $what on $fromName.', 'Op $fromName had je geen $what.'),
+        }),
       ),
     );
     return;
   }
   final n = added.length;
+  final items = n == 1 ? 'item' : 'items';
   var armed = false;
   Timer(const Duration(milliseconds: 500), () => armed = true);
   // Korter dan de gewone melding (4-5 s): ze bedekte anders lang een regel van de maaltijd die je net kopieerde
@@ -299,7 +368,12 @@ Future<void> copyFromYesterday(BuildContext context, {Meal? meal}) async {
       persist: false,
       duration: const Duration(milliseconds: 4500),
       behavior: SnackBarBehavior.floating,
-      content: Text(tr('Copied $n ${n == 1 ? 'item' : 'items'} from yesterday', '$n ${n == 1 ? 'item' : 'items'} van gisteren gekopieerd')),
+      // Naar de dag die je bekijkt: "van gisteren"; naar een andere dag: "naar morgen"
+      content: Text(
+        toShown
+            ? tr('Copied $n $items from $fromName', '$n $items van $fromName gekopieerd')
+            : tr('Copied $n $items to $toName', '$n $items gekopieerd naar $toName'),
+      ),
       action: SnackBarAction(
         label: tr('Undo', 'Ongedaan maken'),
         onPressed: () {
@@ -310,6 +384,95 @@ Future<void> copyFromYesterday(BuildContext context, {Meal? meal}) async {
       ),
     ),
   );
+}
+
+/// 'Kopieer dag van…': een eerdere dag kiezen. Alleen dagen waarop je iets logde zijn te kiezen, de rest staat
+/// grijs; standaard gisteren, of anders de laatste gelogde dag daarvoor (N58).
+Future<void> pickDayToCopyFrom(BuildContext context) async {
+  final s = context.read<AppState>();
+  final logged = s.user.loggedDays();
+  final earlier = logged.where((d) => d.compareTo(s.day) < 0).toList()..sort();
+  if (earlier.isEmpty) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(tr('No earlier day has items yet.', 'Er is nog geen eerdere dag met items.'))));
+    return;
+  }
+  final yesterday = DateTime(s.date.year, s.date.month, s.date.day - 1);
+  final picked = await showDatePicker(
+    context: context,
+    initialDate: logged.contains(dayKey(yesterday)) ? yesterday : DateTime.parse(earlier.last),
+    firstDate: DateTime.parse(earlier.first),
+    lastDate: yesterday,
+    selectableDayPredicate: (d) => logged.contains(dayKey(d)),
+    helpText: tr('Copy day from', 'Kopieer dag van'),
+    builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),
+  );
+  if (picked != null && context.mounted) await copyDay(context, from: picked);
+}
+
+/// 'Kopieer deze dag naar…': standaard de dag erna, maar elke andere dag kan ook (N58).
+Future<void> pickDayToCopyTo(BuildContext context) async {
+  final s = context.read<AppState>();
+  final today = logicalNow();
+  final from = s.date;
+  final next = DateTime(from.year, from.month, from.day + 1);
+  final last = DateTime(today.year, today.month, today.day + 60);
+  final picked = await showDatePicker(
+    context: context,
+    initialDate: next,
+    firstDate: DateTime(today.year - 2),
+    lastDate: next.isAfter(last) ? next : last,
+    selectableDayPredicate: (d) => dayKey(d) != dayKey(from),
+    helpText: tr('Copy this day to', 'Kopieer deze dag naar'),
+    builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),
+  );
+  if (picked != null && context.mounted) await copyDay(context, from: from, to: picked);
+}
+
+/// Menu van de dag: een hele dag kopiëren, van een eerdere dag, of naar morgen of een andere dag (N58).
+Future<void> openDayMenu(BuildContext context) async {
+  final s = context.read<AppState>();
+  final hasItems = s.entries.any((e) => !e.foodRef.startsWith('supp:'));
+  final from = s.date;
+  final next = DateTime(from.year, from.month, from.day + 1);
+  final v = await showModalBottomSheet<String>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.content_copy_rounded),
+            title: Text(tr('Copy day from…', 'Kopieer dag van…')),
+            subtitle: Text(tr('Pick an earlier day with items', 'Kies een eerdere dag met items')),
+            onTap: () => Navigator.pop(ctx, 'from'),
+          ),
+          if (hasItems) ...[
+            ListTile(
+              leading: const Icon(Icons.redo_rounded),
+              title: Text(tr('Copy this day to ${dayName(next)}', 'Kopieer deze dag naar ${dayName(next)}')),
+              onTap: () => Navigator.pop(ctx, 'next'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_outlined),
+              title: Text(tr('Copy this day to…', 'Kopieer deze dag naar…')),
+              onTap: () => Navigator.pop(ctx, 'to'),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+  if (v == null || !context.mounted) return;
+  switch (v) {
+    case 'from':
+      await pickDayToCopyFrom(context);
+    case 'next':
+      await copyDay(context, from: from, to: next);
+    case 'to':
+      await pickDayToCopyTo(context);
+  }
 }
 
 /// Vandaag op een pc: links wat je logt (maaltijden, supplementen, beweging), rechts hoe je dag ervoor staat
@@ -517,6 +680,8 @@ class _Header extends StatelessWidget {
           SquareButton(icon: Icons.calendar_today_outlined, tooltip: tr('Pick a day', 'Kies een dag'), onPressed: () => pickDay(context)),
           const SizedBox(width: 6),
           SquareButton(icon: Icons.chevron_right_rounded, tooltip: tr('Next day', 'Volgende dag'), onPressed: () => s.shiftDay(1)),
+          const SizedBox(width: 6),
+          SquareButton(icon: Icons.more_horiz_rounded, tooltip: tr('Day menu', 'Menu van de dag'), onPressed: () => openDayMenu(context)),
           if (add != null) ...[const SizedBox(width: 12), SizedBox(height: 40, child: add)],
         ],
       ),
