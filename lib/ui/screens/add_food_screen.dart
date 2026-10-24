@@ -620,16 +620,8 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     ),
   );
 
-  /// Opgeslagen maaltijden; die met de naam van deze maaltijd ("Ontbijt met yoghurt" bij Ontbijt) eerst (P186).
-  List<SavedMeal> _sortedMeals(AppState s) {
-    final label = widget.meal.label.toLowerCase();
-    final meals = s.savedMeals();
-    final first = [
-      for (final m in meals)
-        if (m.name.toLowerCase().contains(label)) m,
-    ];
-    return [...first, ...meals.where((m) => !first.contains(m))];
-  }
+  /// Opgeslagen maaltijden; die van deze maaltijd eerst (P186).
+  List<SavedMeal> _sortedMeals(AppState s) => sortSavedMeals(s.savedMeals(), widget.meal);
 
   /// Zonder zoekterm: opgeslagen maaltijden en recent gebruikte producten.
   List<Widget> _idle(AppState s, Palette p) {
@@ -1014,4 +1006,19 @@ class _ResultCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Opgeslagen maaltijden met die van [meal] eerst: eerst wat bij die maaltijd bewaard werd, dan wat de naam
+/// draagt ("Ontbijt met yoghurt" bij Ontbijt) zonder zelf een andere maaltijd te hebben, dan de rest.
+@visibleForTesting
+List<SavedMeal> sortSavedMeals(List<SavedMeal> meals, Meal meal) {
+  final label = meal.label.toLowerCase();
+  int rank(SavedMeal m) => m.mealIndex == meal.index
+      ? 0
+      : m.mealIndex == null && m.name.toLowerCase().contains(label)
+      ? 1
+      : 2;
+  return [
+    for (final r in [0, 1, 2]) ...meals.where((m) => rank(m) == r),
+  ];
 }

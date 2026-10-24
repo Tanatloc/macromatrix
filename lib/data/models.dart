@@ -172,10 +172,13 @@ class ItemTemplate {
 }
 
 class SavedMeal {
-  const SavedMeal({required this.id, required this.name, required this.items});
+  const SavedMeal({required this.id, required this.name, required this.items, this.mealIndex});
   final String id;
   final String name;
   final List<ItemTemplate> items;
+
+  /// Maaltijd waarbij hij opgeslagen werd (index in Meal), of null bij oudere maaltijden.
+  final int? mealIndex;
 
   double get kcal => items.fold(0, (a, i) => a + i.kcal);
 }
