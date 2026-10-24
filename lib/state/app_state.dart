@@ -1366,7 +1366,7 @@ class AppState extends ChangeNotifier {
   }
 
   void saveMealFromEntries(String name, Iterable<DiaryEntry> entries) {
-    user.saveMeal(name, [for (final e in entries) templateOf(e)]);
+    user.saveMeal(name, [for (final e in entries) templateOf(e)], meal: entries.map((e) => e.meal).toSet().singleOrNull);
     notifyListeners();
   }
 
@@ -1405,7 +1405,7 @@ class AppState extends ChangeNotifier {
   }
 
   void saveMealFromDiary(String name, Meal meal) {
-    user.saveMeal(name, [for (final e in entriesFor(meal)) templateOf(e)]);
+    user.saveMeal(name, [for (final e in entriesFor(meal)) templateOf(e)], meal: meal);
     notifyListeners();
   }
 

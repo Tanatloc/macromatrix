@@ -184,6 +184,14 @@ class UserDb {
         PRAGMA user_version = 4;
       ''');
     }
+    if (version < 5) {
+      // Opgeslagen maaltijden onthouden bij welke maaltijd ze horen (leeg bij oudere)
+      final cols = {for (final r in _db.select('PRAGMA table_info(meals)')) r['name']};
+      _db.execute('''
+        ${cols.contains('meal') ? '' : 'ALTER TABLE meals ADD COLUMN meal INTEGER;'}
+        PRAGMA user_version = 5;
+      ''');
+    }
   }
 
   // ── Synchronisatie ──
@@ -196,7 +204,7 @@ class UserDb {
       'id', 'day', 'meal', 'food_ref', 'name', 'brand', 'grams', 'portion_label', 'quantity', 'nutrients', //
       'created_at', 'updated_at', 'deleted', 'time', 'repeat_id',
     ]),
-    SyncTable('meals', 'id', ['id', 'name', 'items', 'updated_at', 'deleted']),
+    SyncTable('meals', 'id', ['id', 'name', 'items', 'updated_at', 'deleted', 'meal']),
     SyncTable('biometrics', 'id', ['id', 'day', 'time', 'type', 'value', 'value2', 'updated_at', 'deleted']),
     SyncTable('notes', 'day', ['day', 'text', 'updated_at']),
     SyncTable('exercise', 'id', ['id', 'day', 'name', 'minutes', 'kcal', 'updated_at', 'deleted']),
@@ -627,16 +635,21 @@ class UserDb {
     id: r['id'] as String,
     name: r['name'] as String,
     items: [for (final i in jsonDecode(r['items'] as String) as List) ItemTemplate.fromJson((i as Map).cast<String, Object?>())],
+    mealIndex: switch (r['meal']) {
+      final int i when i >= 0 && i < Meal.values.length => i,
+      _ => null,
+    },
   );
 
   List<SavedMeal> savedMeals() => [for (final r in _db.select('SELECT * FROM meals WHERE deleted = 0 ORDER BY name COLLATE NOCASE')) _meal(r)];
 
-  void saveMeal(String name, List<ItemTemplate> items, {String? id}) =>
-      _db.execute('INSERT OR REPLACE INTO meals (id, name, items, updated_at, deleted) VALUES (?,?,?,?,0)', [
+  void saveMeal(String name, List<ItemTemplate> items, {String? id, Meal? meal}) =>
+      _db.execute('INSERT OR REPLACE INTO meals (id, name, items, updated_at, deleted, meal) VALUES (?,?,?,?,0,?)', [
         id ?? _uuid.v4(),
         name,
         jsonEncode([for (final i in items) i.toJson()]),
         _now(),
+        meal?.index,
       ]);
 
   void deleteMeal(String id) => _db.execute('UPDATE meals SET deleted = 1, updated_at = ? WHERE id = ?', [_now(), id]);

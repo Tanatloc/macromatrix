@@ -1064,6 +1064,13 @@ class _BudgetCard extends StatelessWidget {
   }
 }
 
+/// Waar een opgeslagen maaltijd heen gaat: de maaltijd waarbij hij bewaard werd, anders wat in de naam staat,
+/// anders [fallback] (volgens het uur).
+Meal savedMealTarget(SavedMeal m, Meal fallback) {
+  final i = m.mealIndex;
+  return i != null && i >= 0 && i < Meal.values.length ? Meal.values[i] : mealInName(m.name) ?? fallback;
+}
+
 /// Maaltijd die in de naam van een opgeslagen maaltijd staat ('Ontbijt', 'Lunch met eieren', 'Snacks'), of null.
 @visibleForTesting
 Meal? mealInName(String name) {
@@ -1189,7 +1196,7 @@ class _StartCard extends StatelessWidget {
               meta: '${fmtInt(m.kcal)} kcal',
               onTap: () {
                 // Een opgeslagen 'Ontbijt' hoort bij het ontbijt, ook als je het om 12 uur logt (P60)
-                final target = mealInName(m.name) ?? meal;
+                final target = savedMealTarget(m, meal);
                 s.addSavedMeal(m, target);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -1988,9 +1995,15 @@ class _UsualStrip extends StatelessWidget {
                   TextButton(
                     style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 28)),
                     onPressed: () {
-                      for (final e in usual) {
-                        s.addAgain(e, meal);
-                      }
+                      final added = [for (final e in usual) s.addAgain(e, meal)];
+                      showUndo(
+                        context,
+                        tr(
+                          '${added.length} items added to ${meal.label.toLowerCase()}',
+                          '${added.length} items toegevoegd aan ${meal.label.toLowerCase()}',
+                        ),
+                        () => s.undoAdds(added),
+                      );
                     },
                     child: Text(tr('Add all', 'Alles toevoegen')),
                   ),
@@ -2006,11 +2019,11 @@ class _UsualStrip extends StatelessWidget {
                     avatar: Icon(Icons.add_rounded, size: 18, color: p.brand),
                     label: Text('${e.name.split(',').first} · ${amount(e)}', overflow: TextOverflow.ellipsis),
                     onPressed: () {
-                      s.addAgain(e, meal);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(tr('${e.name} added to ${meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${meal.label.toLowerCase()}')),
-                        ),
+                      final added = s.addAgain(e, meal);
+                      showUndo(
+                        context,
+                        tr('${e.name} added to ${meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${meal.label.toLowerCase()}'),
+                        () => s.undoAdds([added]),
                       );
                     },
                   ),
