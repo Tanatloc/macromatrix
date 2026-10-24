@@ -1,0 +1,1 @@
+New: scan a nutrition label when a barcode isn't found (and optionally share it with Open Food Facts), import recipes from a link or photo, Pro with unlimited photos, extra colour themes, supporter badges and titles, and an extended year recap. Celebrations now appear at the top and close by themselves, and accepting a friend request shows your new friend straight away.
