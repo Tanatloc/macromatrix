@@ -97,11 +97,16 @@ bool fitsPreferences(Food f, Set<DietPref> prefs) {
   bool any(List<String> list, [Set<String>? w]) => list.any((w ?? words).contains);
   bool dairy() => any(_dairy, dairyWords);
   final v = f.per100g;
+  // Met een label uit de databank telt ook de voedingsgroep: kikkerbillen, zwaardvis of riddervis staan niet in de
+  // woordenlijsten maar zijn wel vlees of vis
+  final group = f.label?.group;
+  final meat = any(_meat) || group == 'meat' || group == 'poultry' || group == 'processed meat';
+  final fish = any(_fish) || group == 'fish' || group == 'shellfish';
   for (final p in prefs) {
     final excluded = switch (p) {
-      DietPref.pescatarian => any(_meat),
-      DietPref.vegetarian => any(_meat) || any(_fish),
-      DietPref.vegan => any(_meat) || any(_fish) || dairy() || any(_egg) || any(_honey),
+      DietPref.pescatarian => meat,
+      DietPref.vegetarian => meat || fish,
+      DietPref.vegan => meat || fish || dairy() || any(_egg) || any(_honey),
       DietPref.lactoseFree => dairy() && !_lactoseFree.hasMatch(full),
       DietPref.glutenFree => any(_gluten),
       DietPref.noNuts => any(_nuts),
