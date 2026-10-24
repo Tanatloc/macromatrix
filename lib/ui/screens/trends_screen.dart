@@ -97,9 +97,10 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 _minis(p, keys, daily, targets),
                 const SizedBox(height: 12),
                 if (sugarFirst) ...[pair(sugar, processing), const SizedBox(height: 12)],
-                pair(_energy(s, p, keys, daily, targets, from), _macros(s, p, keys, daily, targets)),
+                // Gewicht in de bovenste rij, naast energie: het stond na alle voedingsstoffen (N44)
+                pair(_energy(s, p, keys, daily, targets, from), _weight(s, p, keys, from, logged: daily.isNotEmpty)),
                 const SizedBox(height: 12),
-                pair(_heatmap(p, keys, daily, targets), _weight(s, p, keys, from, logged: daily.isNotEmpty)),
+                pair(_heatmap(p, keys, daily, targets), _macros(s, p, keys, daily, targets)),
                 if (!sugarFirst) ...[const SizedBox(height: 12), pair(processing, sugar ?? const SizedBox())],
                 const SizedBox(height: 18),
                 _averages(s, p, daily, targets, columns: 2),
@@ -110,6 +111,9 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 if (sugarFirst) ...[sugar, const SizedBox(height: 10)],
                 _energy(s, p, keys, daily, targets, from),
                 const SizedBox(height: 10),
+                // Gewicht meteen na energie in plaats van onderaan (N44)
+                _weight(s, p, keys, from, logged: daily.isNotEmpty),
+                const SizedBox(height: 10),
                 _macros(s, p, keys, daily, targets),
                 const SizedBox(height: 10),
                 _heatmap(p, keys, daily, targets),
@@ -119,7 +123,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 const SizedBox(height: 18),
                 _averages(s, p, daily, targets),
               ],
-              if (daily.isEmpty || !wide) ...[const SizedBox(height: 10), _weight(s, p, keys, from, logged: daily.isNotEmpty)],
+              if (daily.isEmpty) ...[const SizedBox(height: 10), _weight(s, p, keys, from, logged: daily.isNotEmpty)],
             ],
           ),
         );

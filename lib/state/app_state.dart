@@ -1867,7 +1867,10 @@ class AppState extends ChangeNotifier {
 
   /// Met [moment] het meetmoment (bv. bloedsuiker 'fasting'), alleen op dit toestel. Geeft de id van de meting.
   String addBiometric(String type, double value, {double? value2, String? moment}) {
-    final id = user.addBiometric(day: day, type: type, value: value, value2: value2);
+    // Het uur erbij als je voor vandaag meet: zo zijn twee metingen op één dag uit elkaar te houden (N78)
+    final now = DateTime.now();
+    final time = day == dayKey(logicalNow()) ? '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}' : null;
+    final id = user.addBiometric(day: day, type: type, value: value, value2: value2, time: time);
     if (moment != null) user.setBiometricMoment(id, moment);
     if (type == 'weight' && _syncProfileWeight()) return id;
     _refresh();

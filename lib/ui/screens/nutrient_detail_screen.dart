@@ -461,9 +461,23 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
 
   Widget _history(AppState s, Palette p, Target? target) {
     final to = _end(s);
-    final from = to.subtract(Duration(days: _days - 1));
-    final daily = s.dailyTotals(from, to);
-    final keys = [for (var i = 0; i < _days; i++) dayKey(from.add(Duration(days: i)))];
+    var from = to.subtract(Duration(days: _days - 1));
+    var daily = s.dailyTotals(from, to);
+    // Bij 30 en 90 dagen met pas recent gegevens begint de as bij de eerste gelogde dag (minstens een week), in
+    // plaats van driekwart lege grafiek; het gemiddelde heet dan "sinds" die dag (N95)
+    DateTime? since;
+    if (_days > 7 && daily.isNotEmpty) {
+      final first = parseDay(daily.keys.reduce((a, b) => a.compareTo(b) <= 0 ? a : b));
+      final weekStart = to.subtract(const Duration(days: 6));
+      final start = first.isAfter(weekStart) ? weekStart : first;
+      if (start.isAfter(from)) {
+        from = DateTime(start.year, start.month, start.day, to.hour, to.minute);
+        since = first;
+        daily = s.dailyTotals(from, to);
+      }
+    }
+    final span = since == null ? _days : (to.difference(from).inHours / 24).round() + 1;
+    final keys = [for (var i = 0; i < span; i++) dayKey(from.add(Duration(days: i)))];
     final values = [for (final k in keys) daily[k]?[n.key]];
     final t = s.targetsForDate(to)[n.key];
     final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
@@ -483,11 +497,12 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
         children: [
           PanelTitle(
             tr('Last $_days days', 'Laatste $_days dagen'),
+            // Grote periodeknoppen (minstens 44 px hoog) met duidelijke letters (N94)
             trailing: SizedBox(
-              width: 150,
+              width: 168,
               child: Segmented<int>(
-                height: 24,
-                fontSize: 11.5,
+                height: 40,
+                fontSize: 13.5,
                 items: const [(7, '7d'), (30, '30d'), (90, '90d')],
                 selected: _days,
                 onChanged: (d) => setState(() {
@@ -497,6 +512,11 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               ),
             ),
           ),
+          if (since != null)
+            Text(
+              tr('Data since ${DateFormat('d MMM', appLocale).format(since)}', 'Gegevens sinds ${DateFormat('d MMM', appLocale).format(since)}'),
+              style: TextStyle(fontSize: 12, color: p.ink3),
+            ),
           const SizedBox(height: 12),
           if (values.every((v) => v == null))
             Padding(
@@ -551,7 +571,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             else
               Padding(
                 padding: const EdgeInsets.only(right: DayBarsChart.axisGutter),
-                child: DayAxis(from: from, days: _days),
+                child: DayAxis(from: from, days: span),
               ),
             ChartLegend(
               items: [
@@ -559,8 +579,26 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                 if (t?.goal != null) (LegendItem.box(p.lowFill.withValues(alpha: 0.55)), tr('below target', 'onder doel')),
                 if (t?.upper != null) (LegendItem.box(p.highFill), tr('above max', 'boven max')),
                 (LegendItem.box(p.brand, w: 14, h: 2), tr('7-day average', '7-daags gemiddelde')),
-                if (long && mean != null) (LegendItem.box(p.ink2, w: 14, h: 1), tr('$_days-day average', '$_days-daags gemiddelde')),
-                if (t != null) (LegendItem.box(p.ink, w: 14, h: 1), t.isLimit ? 'maximum' : tr('goal', 'doel')),
+                if (long && mean != null)
+                  (
+                    LegendItem.box(p.ink2, w: 14, h: 1),
+                    since == null
+                        ? tr('$_days-day average', '$_days-daags gemiddelde')
+                        : tr('average since ${DateFormat('d MMM', appLocale).format(since)}', 'gemiddelde sinds ${DateFormat('d MMM', appLocale).format(since)}'),
+                  ),
+                // Het doel is in de grafiek gestippeld, dus ook in de legende; de donkere staaf is vandaag (N95)
+                if (t != null)
+                  (
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < 3; i++)
+                          Container(width: 3, height: 1, margin: EdgeInsets.only(right: i < 2 ? 2.5 : 0), color: p.ink),
+                      ],
+                    ),
+                    t.isLimit ? 'maximum' : tr('goal', 'doel'),
+                  ),
+                if (_isTodayDate(to)) (LegendItem.box(p.ink), tr('today', 'vandaag')),
               ],
             ),
           ],

@@ -210,15 +210,15 @@ void main() {
       expect(s.user.biometricMoment(b.id), 'fasting');
       expect(glucoseInMgdl(s), isTrue);
       expect(find.text('141 mg/dL'), findsOneWidget);
-      expect(find.text('Fasting'), findsNWidgets(2)); // de vastenkaart en het meetmoment
+      expect(find.text('Fasting'), findsOneWidget); // de vastenkaart
+      expect(find.textContaining(RegExp(r'^Fasting · \d\d:\d\d$')), findsOneWidget); // meetmoment en uur (N78)
 
-      // Bij de volgende meting staat mg/dL al klaar; wisselen naar mmol/L rekent het getal om
+      // Bij de volgende meting staan bloedsuiker (de open grafiek, N78) en mg/dL al klaar; wisselen naar mmol/L
+      // rekent het getal om
       await tester.tap(find.text('Measurement'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Weight (kg)'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Blood glucose (mg/dL)').last);
-      await tester.pumpAndSettle();
+      expect(find.text('Weight (kg)'), findsNothing);
+      expect(find.text('Blood glucose (mg/dL)'), findsOneWidget);
       await tester.enterText(find.byType(TextField).first, '99');
       await tester.pump();
       await tester.tap(find.text('mmol/L'));
