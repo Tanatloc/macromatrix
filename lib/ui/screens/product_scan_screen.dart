@@ -561,6 +561,12 @@ class _OriginCard extends StatelessWidget {
       _ =>
         origin.place == null
             ? tr('The manufacturer did not say where it is made.', 'De fabrikant zegt niet waar het gemaakt wordt.')
+            // Buiten de EU en de VS: geen landnaam, dus niet "geregistreerd in Buiten de EU en de VS"
+            : origin.region == Region.other
+            ? tr(
+                'Barcode registered outside the EU and US. That is where the brand is based, not always where it is made.',
+                'Barcode geregistreerd buiten de EU en de VS. Daar zit het merk, niet altijd waar het gemaakt wordt.',
+              )
             : tr(
                 'Barcode registered in ${origin.place}. That is where the brand is based, not always where it is made.',
                 'Barcode geregistreerd in ${origin.place}. Daar zit het merk, niet altijd waar het gemaakt wordt.',
