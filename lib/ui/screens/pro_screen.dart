@@ -192,7 +192,7 @@ class _ProScreenState extends State<ProScreen> {
                         tr('New AI features as they arrive', 'Nieuwe AI-functies zodra ze er zijn'),
                         color: p.brand,
                       ),
-                      bullet(Icons.palette_outlined, tr('Extra colour themes', 'Extra kleuren voor de app'), color: p.brand),
+                      bullet(Icons.palette_outlined, tr('Extra colours and backgrounds', 'Extra kleuren en achtergronden'), color: p.brand),
                       bullet(
                         Icons.favorite_border_rounded,
                         tr('A Supporter badge your friends can see', 'Een Supporter-badge dat je vrienden zien'),

@@ -411,6 +411,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Gekozen achtergrond (zie backdrops in theme.dart); net als [accent] alleen in gebruik zolang Pro loopt.
+  String get backdrop => (user.setting('ui')?['backdrop'] as String?) ?? 'standard';
+
+  void setBackdrop(String id) {
+    user.setSetting('ui', {...?user.setting('ui'), 'backdrop': id});
+    notifyListeners();
+  }
+
   // ── Voorkeuren en suggesties ──
 
   late Set<DietPref> _preferences;

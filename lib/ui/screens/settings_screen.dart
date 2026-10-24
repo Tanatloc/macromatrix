@@ -331,6 +331,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 12),
           const AccentPicker(),
+          const SizedBox(height: 14),
+          const BackdropPicker(),
           title(tr('Diary', 'Dagboek')),
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -652,6 +654,94 @@ class AccentPicker extends StatelessWidget {
                                   color: (b == Brightness.dark ? a.darkOn : Colors.white).withValues(alpha: 0.9),
                                 )
                               : null,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Achtergrond van de app: standaard (gratis) of een extra achtergrond met Pro, zoals bij [AccentPicker].
+class BackdropPicker extends StatelessWidget {
+  const BackdropPicker({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final pal = context.pal;
+    final isPro = proOf(context)?.isPro ?? false;
+    final current = effectiveBackdrop(s.backdrop, pro: isPro);
+    final b = Theme.of(context).brightness;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(tr('Background', 'Achtergrond'), style: TextStyle(fontSize: 13, color: pal.ink2)),
+            const SizedBox(width: 8),
+            const ProTag(),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            for (final d in backdrops)
+              Builder(
+                builder: (context) {
+                  final locked = d.pro && !isPro;
+                  final on = d.id == current;
+                  final (bg, card) = d.swatchFor(b);
+                  return Semantics(
+                    button: true,
+                    selected: on,
+                    label: locked ? tr('${d.name} (Pro)', '${d.name} (Pro)') : d.name,
+                    excludeSemantics: true,
+                    child: InkWell(
+                      key: ValueKey('backdrop-${d.id}'),
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => locked ? openProScreen(context) : s.setBackdrop(d.id),
+                      child: SizedBox(
+                        width: 64,
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: bg,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: on ? pal.ink : pal.lineStrong, width: on ? 2.5 : 1),
+                              ),
+                              alignment: Alignment.center,
+                              child: Container(
+                                width: 30,
+                                height: 16,
+                                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(4)),
+                                alignment: Alignment.center,
+                                child: on
+                                    ? Icon(Icons.check_rounded, size: 13, color: pal.ink)
+                                    : locked
+                                    ? Icon(Icons.lock_outline_rounded, size: 11, color: pal.ink3)
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              d.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, color: on ? pal.ink : pal.ink2),
+                            ),
+                          ],
                         ),
                       ),
                     ),

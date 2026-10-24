@@ -77,6 +77,7 @@ class MacroMatrixApp extends StatelessWidget {
     final chosen = context.select<AppState, String>((s) => s.accent);
     final pro = context.select<Pro?, bool>((p) => p?.isPro ?? false);
     final accent = effectiveAccent(chosen, pro: pro);
+    final backdrop = effectiveBackdrop(context.select<AppState, String>((s) => s.backdrop), pro: pro);
     // Andere taal: nieuwe locale, en _LanguageRebuild bouwt alle schermen opnieuw op. Geen nieuwe sleutel meer op
     // MaterialApp: dat gooide alles weg (terug naar het eerste tabblad, open schermen dicht, dag bleef staan) (P15).
     return ValueListenableBuilder<AppLang>(
@@ -87,8 +88,8 @@ class MacroMatrixApp extends StatelessWidget {
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         title: 'MacroMatrix',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light, accent: accent),
-        darkTheme: buildTheme(Brightness.dark, accent: accent),
+        theme: buildTheme(Brightness.light, accent: accent, backdrop: backdrop),
+        darkTheme: buildTheme(Brightness.dark, accent: accent, backdrop: backdrop),
         themeMode: switch (mode) {
           'light' => ThemeMode.light,
           'dark' => ThemeMode.dark,

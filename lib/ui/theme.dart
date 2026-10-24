@@ -164,6 +164,37 @@ class Palette extends ThemeExtension<Palette> {
     shadow: shadow,
   );
 
+  /// Dezelfde kleuren op een andere achtergrond (zie [backdrops]); status- en macrokleuren blijven gelijk.
+  Palette withSurfaces(Surfaces v) => Palette(
+    bg: v.bg,
+    surface: v.surface,
+    surface2: v.surface2,
+    sunken: v.sunken,
+    line: v.line,
+    lineStrong: v.lineStrong,
+    ink: ink,
+    ink2: ink2,
+    ink3: ink3,
+    brand: brand,
+    brandSoft: brandSoft,
+    onBrand: onBrand,
+    protein: protein,
+    carbs: carbs,
+    fat: fat,
+    fiber: fiber,
+    low: low,
+    lowFill: lowFill,
+    lowSoft: lowSoft,
+    ok: ok,
+    okFill: okFill,
+    okSoft: okSoft,
+    high: high,
+    highFill: highFill,
+    highSoft: highSoft,
+    track: v.track,
+    shadow: shadow,
+  );
+
   @override
   Palette copyWith() => this;
 
@@ -252,12 +283,156 @@ const accents = <Accent>[
     darkSoft: Color(0xFF1C2229),
     darkOn: Color(0xFF0E141B),
   ),
+  Accent(
+    'rose',
+    'Rose',
+    'Roos',
+    light: Color(0xFFB0325F),
+    lightSoft: Color(0xFFF7E3EA),
+    dark: Color(0xFFF28BAE),
+    darkSoft: Color(0xFF331722),
+    darkOn: Color(0xFF2A0614),
+  ),
+  Accent(
+    'forest',
+    'Forest',
+    'Woud',
+    light: Color(0xFF2F6B2F),
+    lightSoft: Color(0xFFE4EFE2),
+    dark: Color(0xFF8FD18A),
+    darkSoft: Color(0xFF16291A),
+    darkOn: Color(0xFF0A2209),
+  ),
+  Accent(
+    'sunset',
+    'Sunset',
+    'Zonsondergang',
+    light: Color(0xFFB4471F),
+    lightSoft: Color(0xFFF8E6DD),
+    dark: Color(0xFFF4A07A),
+    darkSoft: Color(0xFF33201A),
+    darkOn: Color(0xFF2B0F03),
+  ),
+  Accent(
+    'lavender',
+    'Lavender',
+    'Lavendel',
+    light: Color(0xFF5B4FC4),
+    lightSoft: Color(0xFFE9E7F8),
+    dark: Color(0xFFADA6F5),
+    darkSoft: Color(0xFF1E1C38),
+    darkOn: Color(0xFF150F3D),
+  ),
 ];
 
 Accent accentById(String? id) => accents.firstWhere((a) => a.id == id, orElse: () => accents.first);
 
 /// De kleur die echt gebruikt wordt: de gekozen met Pro, anders petrol.
 String effectiveAccent(String chosen, {required bool pro}) => pro ? accentById(chosen).id : defaultAccent;
+
+/// Vlakken van een achtergrond: achtergrond, kaarten, licht vlak, verzonken vlak, lijnen en lege balk.
+@immutable
+class Surfaces {
+  const Surfaces(this.bg, this.surface, this.surface2, this.sunken, this.line, this.lineStrong, this.track);
+  final Color bg, surface, surface2, sunken, line, lineStrong, track;
+}
+
+/// Een achtergrond om uit te kiezen bij Instellingen → Weergave. Standaard is gratis; de andere zijn voor Pro, net als
+/// de extra kleuren. Alleen de vlakken veranderen: tekst, status- en macrokleuren blijven dezelfde, zodat alles even
+/// leesbaar blijft. Zonder eigen versie voor licht of donker blijft dat de standaard.
+@immutable
+class Backdrop {
+  const Backdrop(this.id, this.en, this.nl, {this.light, this.dark});
+  final String id, en, nl;
+  final Surfaces? light, dark;
+
+  String get name => tr(en, nl);
+  bool get pro => id != defaultBackdrop;
+
+  Palette apply(Palette p, Brightness b) {
+    final v = b == Brightness.dark ? dark : light;
+    return v == null ? p : p.withSurfaces(v);
+  }
+
+  /// Achtergrond en kaart, om een staal te tonen.
+  (Color, Color) swatchFor(Brightness b) {
+    final base = b == Brightness.dark ? Palette.dark : Palette.light;
+    final v = b == Brightness.dark ? dark : light;
+    return (v?.bg ?? base.bg, v?.surface ?? base.surface);
+  }
+}
+
+const defaultBackdrop = 'standard';
+
+const backdrops = <Backdrop>[
+  Backdrop('standard', 'Standard', 'Standaard'),
+  Backdrop(
+    'paper',
+    'Paper',
+    'Papier',
+    light: Surfaces(
+      Color(0xFFF3EDE1),
+      Color(0xFFFFFCF6),
+      Color(0xFFFAF5EA),
+      Color(0xFFEFE8DA),
+      Color(0xFFE2D8C5),
+      Color(0xFFD2C6AF),
+      Color(0xFFE9E1D1),
+    ),
+    dark: Surfaces(
+      Color(0xFF14110D),
+      Color(0xFF1C1813),
+      Color(0xFF221D17),
+      Color(0xFF17130F),
+      Color(0xFF2E2820),
+      Color(0xFF3D362B),
+      Color(0xFF28231C),
+    ),
+  ),
+  Backdrop(
+    'mist',
+    'Mist',
+    'Mist',
+    light: Surfaces(
+      Color(0xFFEEF1F5),
+      Color(0xFFFFFFFF),
+      Color(0xFFF7F9FB),
+      Color(0xFFE9EDF2),
+      Color(0xFFDAE0E8),
+      Color(0xFFC8D0DB),
+      Color(0xFFE3E8EE),
+    ),
+    dark: Surfaces(
+      Color(0xFF0B0E13),
+      Color(0xFF131821),
+      Color(0xFF181E28),
+      Color(0xFF0F131A),
+      Color(0xFF222A36),
+      Color(0xFF313B49),
+      Color(0xFF1E2530),
+    ),
+  ),
+  // Echt zwart in het donker (spaart batterij op OLED-schermen); licht blijft standaard
+  Backdrop(
+    'midnight',
+    'Midnight',
+    'Middernacht',
+    dark: Surfaces(
+      Color(0xFF000000),
+      Color(0xFF0B0C0E),
+      Color(0xFF111316),
+      Color(0xFF060708),
+      Color(0xFF1C1F23),
+      Color(0xFF2B2F35),
+      Color(0xFF181B1F),
+    ),
+  ),
+];
+
+Backdrop backdropById(String? id) => backdrops.firstWhere((a) => a.id == id, orElse: () => backdrops.first);
+
+/// De achtergrond die echt gebruikt wordt: de gekozen met Pro, anders de standaard.
+String effectiveBackdrop(String chosen, {required bool pro}) => pro ? backdropById(chosen).id : defaultBackdrop;
 
 extension PaletteContext on BuildContext {
   Palette get pal => Theme.of(this).extension<Palette>()!;
@@ -280,9 +455,10 @@ TextStyle numStyle(double size, {FontWeight weight = FontWeight.w600, Color? col
 /// Rand van een chip in het donker (zie [buildTheme]).
 const chipEdgeDark = Color(0xFF6B727B);
 
-/// Met [accent] een andere merkkleur (alleen voor Pro; de app geeft hier de standaard door als Pro niet loopt).
-ThemeData buildTheme(Brightness b, {String accent = defaultAccent}) {
-  final p = accentById(accent).apply(b == Brightness.dark ? Palette.dark : Palette.light, b);
+/// Met [accent] een andere merkkleur en met [backdrop] een andere achtergrond (alleen voor Pro; de app geeft hier de
+/// standaard door als Pro niet loopt).
+ThemeData buildTheme(Brightness b, {String accent = defaultAccent, String backdrop = defaultBackdrop}) {
+  final p = backdropById(backdrop).apply(accentById(accent).apply(b == Brightness.dark ? Palette.dark : Palette.light, b), b);
   final scheme = ColorScheme(
     brightness: b,
     primary: p.brand,

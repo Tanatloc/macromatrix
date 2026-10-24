@@ -501,6 +501,50 @@ void main() {
     });
   });
 
+  group('extra achtergronden', () {
+    test('alleen met Pro; alleen de vlakken veranderen, tekst en status blijven', () {
+      expect(effectiveBackdrop('paper', pro: false), defaultBackdrop);
+      expect(effectiveBackdrop('paper', pro: true), 'paper');
+      expect(effectiveBackdrop('bestaat-niet', pro: true), defaultBackdrop);
+      final paper = buildTheme(Brightness.light, backdrop: 'paper').extension<Palette>()!;
+      expect(paper.bg, backdropById('paper').light!.bg);
+      expect(paper.ink3, Palette.light.ink3);
+      expect(paper.high, Palette.light.high);
+      expect(paper.brand, Palette.light.brand);
+      // Middernacht is alleen in het donker anders
+      expect(buildTheme(Brightness.light, backdrop: 'midnight').extension<Palette>()!.bg, Palette.light.bg);
+      expect(buildTheme(Brightness.dark, backdrop: 'midnight').extension<Palette>()!.bg, const Color(0xFF000000));
+      // Kleur en achtergrond samen
+      final both = buildTheme(Brightness.dark, accent: 'rose', backdrop: 'mist').extension<Palette>()!;
+      expect(both.brand, accentById('rose').dark);
+      expect(both.bg, backdropById('mist').dark!.bg);
+      expect(backdrops.where((d) => !d.pro).map((d) => d.id), [defaultBackdrop]);
+    });
+
+    testWidgets('zonder Pro: slotje, een tik opent Pro en verandert niets', (tester) async {
+      final s = newState();
+      await pump(tester, s, newPro(s, FakeProRemote()), const Scaffold(body: BackdropPicker()));
+      expect(find.byIcon(Icons.lock_outline_rounded), findsNWidgets(backdrops.length - 1));
+      await tester.tap(find.byKey(const ValueKey('backdrop-paper')));
+      await tester.pumpAndSettle();
+      expect(s.backdrop, defaultBackdrop);
+      expect(find.byType(ProScreen), findsOneWidget);
+    });
+
+    testWidgets('met Pro: kiezen kan, en de keuze blijft bewaard als Pro afloopt', (tester) async {
+      final s = newState();
+      final pro = newPro(s, FakeProRemote())..setDebugPro(true);
+      await pump(tester, s, pro, const Scaffold(body: BackdropPicker()));
+      await tester.tap(find.byKey(const ValueKey('backdrop-mist')));
+      await tester.pumpAndSettle();
+      expect(s.backdrop, 'mist');
+      pro.setDebugPro(false);
+      expect(effectiveBackdrop(s.backdrop, pro: pro.isPro), defaultBackdrop);
+      expect(s.backdrop, 'mist');
+      pro.setDebugPro(null);
+    });
+  });
+
   group('Supporter-badge', () {
     test('uit friend_list_v2; oude friend_list zonder kolom geeft geen badge', () {
       final row = {'other': 'a', 'name': 'An', 'state': 'friend', 'level': 3};
