@@ -298,3 +298,34 @@ section.block { padding: 88px 0; }
 .dl-card .small { font-size: 13.5px; color: var(--ink-3); margin: 0; }
 .dl-card code { font-size: 12.5px; word-break: break-all; }
 @media (max-width: 760px) { .download { grid-template-columns: 1fr; } }
+
+/* Gratis en Supporter */
+.plans { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; align-items: start; }
+.plan { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); }
+.plan-pro { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); }
+.plan-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+.plan-head h3 { margin: 0; font-size: 22px; letter-spacing: -0.02em; font-weight: 600; }
+.plan-price { margin: 0 0 18px; color: var(--ink-2); font-size: 15px; }
+.plan-head .plan-price { margin: 0; }
+.plan-price .num { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; color: var(--ink); }
+.plan-price .nw { white-space: nowrap; }
+.plan-price .or { margin: 0 4px; color: var(--ink-3); }
+.plan-pro .ticks li::before { background: var(--brand); }
+.soon { font-size: 13px; font-weight: 600; color: var(--brand); background: var(--brand-soft); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
+.plan-why { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 15px; }
+.plan-why b { color: var(--ink); }
+.plan-note { margin: 10px 0 0; font-size: 13.5px; color: var(--ink-3); }
+@media (max-width: 860px) { .plans { grid-template-columns: 1fr; } }
+.social-list { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 960px) { .social-list { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .social-list { grid-template-columns: 1fr; } }
+
+/* Eenvoudige lijst zonder iconen */
+.plain-list { margin: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 48px; }
+.plain-list div { padding: 16px 0; border-top: 1px solid var(--line); }
+.plain-list dt { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+.plain-list dd { margin: 0; color: var(--ink-2); font-size: 15px; }
+@media (max-width: 760px) { .plain-list { grid-template-columns: 1fr; } }
+.oss { margin-top: 28px; display: flex; gap: 20px 32px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 22px 24px; border: 1px dashed var(--line-strong); border-radius: var(--radius); }
+.oss b { font-size: 17px; }
+.oss p { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; max-width: 46em; }
