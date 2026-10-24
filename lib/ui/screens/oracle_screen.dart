@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/food.dart';
-import '../../data/user_db.dart';
 import '../../i18n.dart';
 import '../../nutrition/nutrients.dart';
 import '../../nutrition/values.dart';
@@ -359,7 +358,7 @@ class _OracleScreenState extends State<OracleScreen> {
     return InkWell(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => FoodDetailScreen(food: f, meal: Meal.forHour(DateTime.now().hour)),
+          builder: (_) => FoodDetailScreen(food: f, meal: context.read<AppState>().adviceMeal),
         ),
       ),
       child: Container(

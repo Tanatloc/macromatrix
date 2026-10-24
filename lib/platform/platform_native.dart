@@ -18,6 +18,9 @@ const isWeb = false;
 /// Barcode scannen met de camera kan op gsm, niet op een pc.
 bool get canScanBarcodes => Platform.isAndroid || Platform.isIOS;
 
+/// Alleen nodig in de browser (zie platform_web.dart); hier staat de database gewoon in de app-map.
+Future<bool> askPersistentStorage() async => true;
+
 /// Opent de ingebouwde voedingsdatabase (gekopieerd naar de app-map, opnieuw na een update) en de
 /// database van de gebruiker.
 Future<(FoodDb, UserDb)> openDatabases() async {

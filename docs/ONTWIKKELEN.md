@@ -21,8 +21,11 @@ wordt door GitHub Actions getest, gebouwd (`tool/build_site.sh`) en uitgerold. D
 bij Namecheap. 
 
 - `/`: homepage, met `/privacy/` en `/voorwaarden/` (statische pagina's in `site/`, zelfde ontwerp als de app).
-- `/app/`: de app zelf (Flutter-web). Zonder account kom je niet verder dan het welkomscherm;
-  `/app/?start=register` en `/app/?start=login` openen meteen het juiste scherm (knoppen op de homepage).
+- `/app/`: de app zelf (Flutter-web). Je begint op het welkomscherm: account maken, inloggen of "Use without an
+  account" (dan alles alleen in IndexedDB van die browser; de app vraagt `navigator.storage.persist()`).
+  `/app/?start=register` en `/app/?start=login` openen meteen het juiste scherm; "Open in browser" gaat naar `/app/`.
+  Maak je later een account, dan gaat alles mee; bij inloggen op een bestaand account wint het profiel van het
+  account (`UserDb.yieldUnsentSettings`).
 
 In de browser draait SQLite als WebAssembly (`web/sqlite3.wasm`, van de releases van sqlite3.dart, versie gelijk
 aan het pakket): de voedingsdatabase in het geheugen, je eigen gegevens in IndexedDB. Zoeken in Open Food Facts gaat

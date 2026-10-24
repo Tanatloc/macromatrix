@@ -199,6 +199,10 @@ class Account extends ChangeNotifier {
     if (previous != null && previous != user?.id) {
       db.wipeUserData();
       onRemoteChanges();
+    } else if (previous == null) {
+      // Nog nooit gesynchroniseerd (meestal: eerst zonder account gebruikt). Alles van hier gaat mee naar het
+      // account, maar een bestaand profiel in het account wordt niet overschreven door dat van dit toestel.
+      db.yieldUnsentSettings();
     }
     notifyListeners();
     _watchRemote();

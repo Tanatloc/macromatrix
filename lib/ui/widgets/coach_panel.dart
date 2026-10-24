@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase/supabase.dart' show SupabaseClient;
 
 import '../../i18n.dart';
 import '../../nutrition/coach.dart';
@@ -18,6 +19,7 @@ import '../../platform/ai_request.dart';
 import '../../platform/coach_request.dart';
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
+import '../../sync/ai_report.dart';
 import '../../sync/features.dart';
 import '../../sync/pro.dart' show PhotoQuota, utcDayKey;
 import '../theme.dart';
@@ -32,6 +34,13 @@ CoachRequest coachRequest = CoachRequest();
 
 /// Het token van je account, of null als je niet ingelogd bent. Te vervangen in tests.
 String? Function(BuildContext context) coachToken = (context) => context.read<Account?>()?.client?.auth.currentSession?.accessToken;
+
+/// Meldingen van een AI-tekst (ai_report). Te vervangen in tests.
+@visibleForTesting
+AiReporter coachReporter = const AiReporter();
+
+/// De Supabase-verbinding voor een melding, of null zonder account. Te vervangen in tests.
+SupabaseClient? Function(BuildContext context) coachClient = (context) => context.read<Account?>()?.client;
 
 /// Op true zodra de server zegt dat de coach er (nog) niet is (migratie niet uitgevoerd of geen model): dan verbergt
 /// het weekrapport hem tot de app opnieuw start.
@@ -144,6 +153,30 @@ class _CoachPanelState extends State<CoachPanel> {
     if (mounted) setState(() => _busy = false);
   }
 
+  /// De tekst melden (vlagje onder de coach, Google Play-beleid voor generatieve AI): eerst een korte vraag met een
+  /// optionele notitie, dan naar ai_report met de samenvatting, de tips, de week en het model.
+  Future<void> _report(CoachResult result) async {
+    // null: geannuleerd; anders de (eventueel lege) notitie
+    final extra = await showDialog<String>(context: context, builder: (_) => const _ReportDialog());
+    if (extra == null || !mounted) return;
+    final text = [result.summary, '', for (final (i, t) in result.tips.indexed) '${i + 1}. $t'].join('\n');
+    final meta = 'week ${dayKey(widget.report.monday)} · model ${result.model ?? 'unknown'} · lang ${result.lang}';
+    final r = await coachReporter.report(coachClient(context), kind: 'coach', text: text, note: extra.isEmpty ? meta : '$meta\n$extra');
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(switch (r) {
+          AiReportResult.reported => tr("Thanks, we'll look at it.", 'Bedankt, we bekijken het.'),
+          AiReportResult.limit => tr(
+            "You've sent a lot of reports today. Try again tomorrow.",
+            'Je stuurde vandaag al veel meldingen. Probeer morgen opnieuw.',
+          ),
+          AiReportResult.failed => tr("Couldn't send the report. Try again later.", 'De melding kon niet weg. Probeer later opnieuw.'),
+        }),
+      ),
+    );
+  }
+
   static String _errorText(String code) => switch (code) {
     'quota' => tr("That was today's last one. You can write it again tomorrow.", 'Dat was de laatste voor vandaag. Morgen kan het weer.'),
     'too_many' => tr('You asked a few times this hour. Try again later.', 'Je vroeg het dit uur al een paar keer. Probeer later opnieuw.'),
@@ -165,7 +198,8 @@ class _CoachPanelState extends State<CoachPanel> {
     final cache = CoachCache(s);
     final early = features?.isEarly(coachFeature) ?? false;
 
-    final range = '${DateFormat('d MMM', appLocale).format(widget.report.monday)} – '
+    final range =
+        '${DateFormat('d MMM', appLocale).format(widget.report.monday)} – '
         '${DateFormat('d MMM', appLocale).format(widget.report.monday.add(const Duration(days: 6)))}';
     final title = Row(
       children: [
@@ -228,6 +262,8 @@ class _CoachPanelState extends State<CoachPanel> {
     final result = cache.result(widget.report.monday);
     final quota = cache.quota(DateTime.now());
     final spent = quota != null && !quota.allowed;
+    // In een andere taal geschreven dan de app nu toont (SU-3): niet stil laten staan, maar zeggen en opnieuw aanbieden
+    final otherLang = result != null && result.lang != (isNl ? 'nl' : 'en');
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Panel(
@@ -251,6 +287,32 @@ class _CoachPanelState extends State<CoachPanel> {
               const SizedBox(height: 6),
               _CoachStats(report: widget.report),
               const SizedBox(height: 12),
+              if (otherLang)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    key: const ValueKey('coach-other-lang'),
+                    onTap: spent || _busy ? null : () => _write(s, cache),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.translate_rounded, size: 16, color: p.brand),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            result.lang == 'nl'
+                                ? tr('Written in Dutch. Write it again in English?', 'Geschreven in het Nederlands. Opnieuw schrijven in het Engels?')
+                                : tr(
+                                    'Written in English. Write it again in Dutch?',
+                                    'Geschreven in het Engels. Opnieuw schrijven in het Nederlands?',
+                                  ),
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.brand),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Text(
                 result.summary,
                 key: const ValueKey('coach-summary'),
@@ -279,7 +341,10 @@ class _CoachPanelState extends State<CoachPanel> {
                         height: 22,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(color: p.brandSoft, shape: BoxShape.circle),
-                        child: Text('${i + 1}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.brand)),
+                        child: Text(
+                          '${i + 1}',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.brand),
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -339,18 +404,88 @@ class _CoachPanelState extends State<CoachPanel> {
               ),
             ],
             const SizedBox(height: 4),
-            Text(
-              tr(
-                "Written by AI from your week's numbers. It can be wrong; it isn't medical advice.",
-                'Geschreven door AI op basis van de cijfers van je week. Het kan fout zijn; het is geen medisch advies.',
-              ),
-              style: TextStyle(fontSize: 11.5, color: p.ink3),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    tr(
+                      "Written by AI from your week's numbers. It can be wrong; it isn't medical advice.",
+                      'Geschreven door AI op basis van de cijfers van je week. Het kan fout zijn; het is geen medisch advies.',
+                    ),
+                    style: TextStyle(fontSize: 11.5, color: p.ink3),
+                  ),
+                ),
+                // Melden (Google Play-beleid voor generatieve AI), alleen als er een tekst staat
+                if (result != null)
+                  IconButton(
+                    key: const ValueKey('coach-report'),
+                    tooltip: tr('Report this text', 'Deze tekst melden'),
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    color: p.ink3,
+                    onPressed: () => _report(result),
+                    icon: const Icon(Icons.outlined_flag_rounded),
+                  ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+}
+
+/// De vraag of je de tekst wil melden, met een optionele notitie. Geeft de notitie terug, of null bij annuleren.
+class _ReportDialog extends StatefulWidget {
+  const _ReportDialog();
+
+  @override
+  State<_ReportDialog> createState() => _ReportDialogState();
+}
+
+class _ReportDialogState extends State<_ReportDialog> {
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(tr('Report this text?', 'Deze tekst melden?')),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          tr(
+            "Is something wrong, harmful or offensive? We'll get this text so we can look at it.",
+            'Klopt er iets niet, of is het schadelijk of kwetsend? Wij krijgen deze tekst en bekijken hem.',
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          key: const ValueKey('coach-report-note'),
+          controller: _note,
+          maxLength: 500,
+          maxLines: 3,
+          minLines: 1,
+          decoration: InputDecoration(hintText: tr("What's wrong? (optional)", 'Wat is er mis? (mag leeg)')),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel', 'Annuleren'))),
+      FilledButton(
+        key: const ValueKey('coach-report-send'),
+        onPressed: () => Navigator.pop(context, _note.text.trim()),
+        child: Text(tr('Report', 'Melden')),
+      ),
+    ],
+  );
 }
 
 /// Drie cijfers uit je week (niet van de AI): je score, je energie tegenover je doel en je grootste tekort.
@@ -362,14 +497,24 @@ class _CoachStats extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final r = report;
+    // Labels en onderschriften mogen op twee regels (SU-7: "goal 1,857 kc…" op een smalle gsm); alle tegels even hoog
     Widget tile(String label, String value, String? sub, {Color? subColor}) => Expanded(
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        decoration: BoxDecoration(color: p.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.line)),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: p.line),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: p.ink3)),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11.5, height: 1.25, color: p.ink3),
+            ),
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -377,7 +522,12 @@ class _CoachStats extends StatelessWidget {
               child: Text(value, style: numStyle(17, color: p.ink)),
             ),
             if (sub != null)
-              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: subColor ?? p.ink3)),
+              Text(
+                sub,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11.5, height: 1.25, color: subColor ?? p.ink3),
+              ),
           ],
         ),
       ),
@@ -386,27 +536,26 @@ class _CoachStats extends StatelessWidget {
     // Het laagste aandeel onder je doel (niet wat erboven zit, zoals te veel energie)
     final gaps = [...r.worst.where((w) => w.$2 < 1)]..sort((a, b) => a.$2.compareTo(b.$2));
     final gap = gaps.isEmpty ? null : gaps.first;
-    return Row(
-      children: [
-        tile(
-          tr('Score', 'Score'),
-          '${r.score}',
-          change == null || change == 0 ? null : '${change > 0 ? '▲' : '▼'} ${change.abs()}',
-          subColor: change == null ? null : (change > 0 ? p.ok : p.high),
-        ),
-        const SizedBox(width: 8),
-        tile(
-          tr('Energy', 'Energie'),
-          r.kcalAvg == null ? '–' : fmtInt(r.kcalAvg!),
-          r.kcalGoal == null ? null : tr('goal ${fmtInt(r.kcalGoal!)} kcal', 'doel ${fmtInt(r.kcalGoal!)} kcal'),
-        ),
-        const SizedBox(width: 8),
-        tile(
-          tr('Biggest gap', 'Grootste tekort'),
-          gap == null ? '–' : fmtPct(gap.$2),
-          gap?.$1.name,
-        ),
-      ],
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          tile(
+            tr('Score', 'Score'),
+            '${r.score}',
+            change == null || change == 0 ? null : '${change > 0 ? '▲' : '▼'} ${change.abs()}',
+            subColor: change == null ? null : (change > 0 ? p.ok : p.high),
+          ),
+          const SizedBox(width: 8),
+          tile(
+            tr('Energy', 'Energie'),
+            r.kcalAvg == null ? '–' : fmtInt(r.kcalAvg!),
+            r.kcalGoal == null ? null : tr('goal ${fmtInt(r.kcalGoal!)} kcal', 'doel ${fmtInt(r.kcalGoal!)} kcal'),
+          ),
+          const SizedBox(width: 8),
+          tile(tr('Biggest gap', 'Grootste tekort'), gap == null ? '–' : fmtPct(gap.$2), gap?.$1.name),
+        ],
+      ),
     );
   }
 }

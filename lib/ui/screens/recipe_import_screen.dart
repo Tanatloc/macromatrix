@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../data/user_db.dart' show Meal;
 import '../../i18n.dart';
 import '../../nutrition/quick_parse.dart';
+import '../../nutrition/recipe_line.dart';
 import '../../platform/ai_request.dart';
 import '../../platform/recipe_import.dart';
 import '../../state/app_state.dart';
@@ -27,14 +28,23 @@ RecipeImport recipeImport = RecipeImport();
 /// Eén ingrediënt in de lijst om na te kijken: de regel uit het recept, wat Snel loggen erin vond, of een product dat
 /// je zelf koos.
 class RecipeImportRow {
-  RecipeImportRow(this.text, this.line);
+  RecipeImportRow(this.text, this.line, {this.check = false, this.counted = true, this.why});
   String text;
   QuickLine? line;
 
   /// Zelf gekozen product met hoeveelheid (via Zoeken); gaat voor op [line].
   ItemTemplate? picked;
 
-  bool get ready => picked != null || (line != null && line!.found && line!.grams > 0);
+  /// Best nakijken: geen zekere treffer of een geschatte hoeveelheid. Gaat weg zodra je iets aan de regel doet.
+  bool check;
+
+  /// Telt mee in het recept. Water, "naar smaak" en een serveersuggestie niet, tot je ze zelf aanzet.
+  bool counted;
+
+  /// Waarom nakijken of niet meetellen (zie [RecipeMatch.why]).
+  final String? why;
+
+  bool get ready => counted && (picked != null || (line != null && line!.found && line!.grams > 0));
 
   ItemTemplate? get template {
     if (picked != null) return picked;
@@ -52,23 +62,41 @@ class RecipeImportRow {
   }
 }
 
-/// De regels van een recept omzetten naar rijen: opkuisen, dezelfde parser en zoeker als Snel loggen. Een regel met
-/// twee producten ("salt and pepper") geeft twee rijen; een regel zonder product één rij zonder treffer.
+/// De regels van een recept omzetten naar rijen (SU-1): elke regel wordt gelezen als hoeveelheid, product en
+/// notities ([parseRecipeLine]) en opgezocht met de zoeker van Snel loggen ([matchRecipeLine]). Eén regel geeft
+/// hoogstens één rij: "finely chopped" of "salt and pepper" maakt nooit een extra product. Kopjes ("For the sauce") en
+/// regels zonder product vallen weg. Zo voor een link en voor een foto.
 List<RecipeImportRow> recipeRows(List<String> lines, List<(Food, double, Portion?)> Function(QuickItem) resolve) {
   final rows = <RecipeImportRow>[];
   for (final raw in lines) {
-    final clean = cleanRecipeLine(raw);
-    if (clean.isEmpty) continue;
-    final items = parseQuick(clean);
-    if (items.isEmpty) {
-      rows.add(RecipeImportRow(raw, null));
-      continue;
-    }
-    for (final q in items) {
-      rows.add(RecipeImportRow(raw, QuickLine(q, resolve(q))));
-    }
+    final m = matchRecipeLine(raw, resolve);
+    if (m == null || m.line.food.isEmpty) continue;
+    rows.add(
+      RecipeImportRow(
+        raw.trim(),
+        m.options.isEmpty && !m.counted ? null : QuickLine(m.item, m.options),
+        check: m.check || (m.counted && m.options.isEmpty),
+        counted: m.counted,
+        why: m.options.isEmpty && m.counted ? 'none' : m.why,
+      ),
+    );
   }
   return rows;
+}
+
+/// Wat de nagekeken rijen samen geven, per portie.
+({double kcal, double protein, double carbs, double fat}) recipeImportPerServing(List<RecipeImportRow> rows, double servings) {
+  var kcal = 0.0, protein = 0.0, carbs = 0.0, fat = 0.0;
+  for (final r in rows) {
+    final t = r.ready ? r.template : null;
+    if (t == null) continue;
+    kcal += (t.per100g['energy'] ?? 0) * t.grams / 100;
+    protein += (t.per100g['protein'] ?? 0) * t.grams / 100;
+    carbs += (t.per100g['carbs'] ?? 0) * t.grams / 100;
+    fat += (t.per100g['fat'] ?? 0) * t.grams / 100;
+  }
+  final n = servings < 1 ? 1 : servings;
+  return (kcal: kcal / n, protein: protein / n, carbs: carbs / n, fat: fat / n);
 }
 
 /// Een recept importeren uit een link of een foto van een kookboekpagina (Pro). Daarna kijk je elke regel na (andere
@@ -165,11 +193,16 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
   }
 
   Future<void> _search(RecipeImportRow row) async {
-    final query = row.line?.item.query ?? cleanRecipeLine(row.text);
+    final query = row.line?.item.query ?? parseRecipeLine(row.text)?.food ?? cleanRecipeLine(row.text);
     final t = await Navigator.of(context).push<ItemTemplate>(
       MaterialPageRoute(builder: (_) => AddFoodScreen(meal: Meal.lunch, pickOnly: true, initialQuery: query)),
     );
-    if (t != null && mounted) setState(() => row.picked = t);
+    if (t != null && mounted) {
+      _touch(row, () {
+        row.picked = t;
+        row.counted = true;
+      });
+    }
   }
 
   Future<void> _editText(RecipeImportRow row) async {
@@ -202,11 +235,35 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
   Future<void> _create() async {
     final rows = _rows ?? const [];
     final items = [for (final r in rows) ?r.template];
-    final servings = (double.tryParse(_servings.text.trim().replaceAll(',', '.')) ?? 1).clamp(1, 1000).toDouble();
+    final servings = _servingCount;
     final draft = Recipe(ref: 'recipe:import', name: _name.text.trim(), servings: servings, ingredients: items);
     final food = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => RecipeScreen(draft: draft)));
     if (food != null && mounted) Navigator.of(context).pop(food);
   }
+
+  /// Waarom een regel nagekeken moet worden of niet meetelt, in gewone woorden.
+  String? _reason(RecipeImportRow row) {
+    if (!row.counted) {
+      return switch (row.why) {
+        'water' => tr('Not counted: water has no nutrients', 'Niet meegeteld: water heeft geen voedingsstoffen'),
+        'taste' => tr('Not counted: to taste, no amount', 'Niet meegeteld: naar smaak, geen hoeveelheid'),
+        'serve' => tr('Not counted: served on the side', 'Niet meegeteld: om erbij te serveren'),
+        _ => tr('Not counted', 'Niet meegeteld'),
+      };
+    }
+    if (!row.check) return null;
+    return switch (row.why) {
+      'amount' => tr('Check this: the amount is a guess', 'Kijk dit na: de hoeveelheid is geschat'),
+      'none' => tr('Check this: nothing found', 'Kijk dit na: niets gevonden'),
+      _ => tr('Check this: not sure this is the right product', 'Kijk dit na: niet zeker of dit het juiste product is'),
+    };
+  }
+
+  /// Iets aanpassen aan een regel = nagekeken.
+  void _touch(RecipeImportRow row, VoidCallback change) => setState(() {
+    change();
+    row.check = false;
+  });
 
   Widget _row(RecipeImportRow row) {
     final p = context.pal;
@@ -215,24 +272,48 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
     final String title, sub;
     if (picked != null) {
       title = picked.name;
-      sub = '${fmtInt(picked.grams)} g · ${fmtInt(picked.kcal)} kcal';
+      sub = '${picked.grams < 1 ? '<1' : fmtInt(picked.grams)} g · ${fmtInt(picked.kcal)} kcal';
     } else if (l != null && l.found) {
       title = l.food.name;
-      sub = '${l.amountLabel} · ${bigNum(l.kcal)} kcal';
+      sub = '${l.grams < 1 ? '<1 g' : l.amountLabel} · ${bigNum(l.kcal)} kcal';
     } else {
-      title = tr('Nothing found', 'Niets gevonden');
+      title = row.counted ? tr('Nothing found', 'Niets gevonden') : (l?.item.query ?? row.text);
       sub = tr('Tap Search to pick a product', 'Tik op Zoeken om een product te kiezen');
     }
-    final found = row.ready;
+    final reason = _reason(row);
+    final check = row.counted && row.check;
+    final active = row.ready;
+    final i = _rows!.indexOf(row);
     return Container(
-      key: ValueKey('recipe-row-${_rows!.indexOf(row)}'),
+      key: ValueKey('recipe-row-$i'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(14, 10, 6, 8),
-      decoration: BoxDecoration(border: Border.all(color: p.line), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: check ? p.highSoft : null,
+        border: Border.all(color: check ? p.high : p.line, width: check ? 1.5 : 1),
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('"${row.text}"', style: TextStyle(fontSize: 12, color: p.ink3), maxLines: 2, overflow: TextOverflow.ellipsis),
+          if (reason != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                children: [
+                  Icon(check ? Icons.error_outline_rounded : Icons.remove_circle_outline_rounded, size: 14, color: check ? p.high : p.ink3),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      reason,
+                      key: check ? ValueKey('recipe-check-$i') : null,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: check ? p.high : p.ink3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 2),
           Row(
             children: [
@@ -240,23 +321,23 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: found ? p.ink : p.ink3)),
-                    Text(sub, style: TextStyle(fontSize: 12, color: p.ink2)),
+                    Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: active ? p.ink : p.ink3)),
+                    Text(sub, style: TextStyle(fontSize: 12, color: active ? p.ink2 : p.ink3)),
                   ],
                 ),
               ),
-              if (picked == null && l != null && l.found) ...[
+              if (row.counted && picked == null && l != null && l.found) ...[
                 IconButton(
                   tooltip: tr('Less', 'Minder'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.remove_rounded, size: 18),
-                  onPressed: () => setState(() => l.step(up: false)),
+                  onPressed: () => _touch(row, () => l.step(up: false)),
                 ),
                 IconButton(
                   tooltip: tr('More', 'Meer'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  onPressed: () => setState(() => l.step(up: true)),
+                  onPressed: () => _touch(row, () => l.step(up: true)),
                 ),
               ],
               IconButton(
@@ -269,7 +350,13 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
           Wrap(
             spacing: 4,
             children: [
-              if (picked == null && l != null && l.options.length > 1)
+              if (!row.counted && (picked != null || (l != null && l.found)))
+                TextButton(
+                  key: ValueKey('recipe-count-$i'),
+                  onPressed: () => _touch(row, () => row.counted = true),
+                  child: Text(tr('Count it', 'Meetellen')),
+                ),
+              if (row.counted && picked == null && l != null && l.options.length > 1)
                 PopupMenuButton<int>(
                   tooltip: tr('Other match', 'Andere treffer'),
                   itemBuilder: (_) => [
@@ -283,7 +370,7 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
                         ),
                       ),
                   ],
-                  onSelected: (i) => setState(() => l.select(i)),
+                  onSelected: (i) => _touch(row, () => l.select(i)),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     child: Text(tr('Other', 'Andere'), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.ink2)),
@@ -293,6 +380,64 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
               TextButton(onPressed: () => _editText(row), child: Text(tr('Edit text', 'Tekst aanpassen'))),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  double get _servingCount => (double.tryParse(_servings.text.trim().replaceAll(',', '.')) ?? 1).clamp(1, 1000).toDouble();
+
+  /// Wat het recept per portie geeft, live terwijl je nakijkt (SU-1: vóór het bewaren een totaal zien).
+  Widget _totals({Key? key}) {
+    final p = context.pal;
+    final rows = _rows!;
+    final per = recipeImportPerServing(rows, _servingCount);
+    final toCheck = rows.where((r) => r.counted && r.check).length;
+    Widget macro(String label, double v, Color c) => Padding(
+      padding: const EdgeInsets.only(right: 14),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text('${fmtInt(v)} g $label', style: TextStyle(fontSize: 12.5, color: p.ink2)),
+        ],
+      ),
+    );
+    return Container(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(color: p.surface2, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(tr('Per serving', 'Per portie'), style: TextStyle(fontSize: 12.5, color: p.ink3)),
+          Text(
+            '${fmtInt(per.kcal)} kcal',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: p.ink),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            runSpacing: 4,
+            children: [
+              macro(tr('protein', 'eiwit'), per.protein, p.protein),
+              macro(tr('carbs', 'koolhydraten'), per.carbs, p.carbs),
+              macro(tr('fat', 'vet'), per.fat, p.fat),
+            ],
+          ),
+          if (toCheck > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              toCheck == 1
+                  ? tr('1 line to check: it is marked below.', '1 regel om na te kijken: die is hieronder gemarkeerd.')
+                  : tr('$toCheck lines to check: they are marked below.', '$toCheck regels om na te kijken: die zijn hieronder gemarkeerd.'),
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.high),
+            ),
+          ],
         ],
       ),
     );
@@ -373,7 +518,10 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: decimalInput,
           decoration: InputDecoration(labelText: tr('Number of servings', 'Aantal porties')),
+          onChanged: (_) => setState(() {}),
         ),
+        const SizedBox(height: 12),
+        _totals(key: const ValueKey('recipe-import-totals')),
         const SizedBox(height: 16),
         Text(
           tr('Check the ingredients', 'Kijk de ingrediënten na'),
@@ -381,14 +529,18 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
         ),
         Text(
           tr(
-            'Each line was looked up for you. Change the amount, pick another match, search yourself or remove it.',
-            'Elke regel werd voor je opgezocht. Pas de hoeveelheid aan, kies een andere treffer, zoek zelf of haal ze weg.',
+            'Each line was looked up for you. Change the amount, pick another match, search yourself or remove it. '
+                'Herbs and spices count for a few grams.',
+            'Elke regel werd voor je opgezocht. Pas de hoeveelheid aan, kies een andere treffer, zoek zelf of haal ze weg. '
+                'Kruiden en specerijen tellen voor een paar gram.',
           ),
           style: TextStyle(fontSize: 12.5, color: p.ink2),
         ),
         const SizedBox(height: 10),
         for (final r in rows) _row(r),
         const SizedBox(height: 8),
+        _totals(),
+        const SizedBox(height: 10),
         FilledButton(
           key: const ValueKey('recipe-import-create'),
           onPressed: ready == 0 ? null : _create,

@@ -91,7 +91,12 @@ void main() {
   testWidgets('zelfde product in een andere eenheid: één regel in gram, en Ongedaan maken zet de oude regel terug', (tester) async {
     final s = newState();
     s.addFood(skyr, meal: Meal.breakfast, grams: 250, quantity: 250);
-    await pump(tester, s, () => const FoodDetailScreen(food: skyr, meal: Meal.breakfast));
+    // Zonder meer zou het scherm met de laatste hoeveelheid (250 g) openen; hier bewust 1 kom
+    await pump(
+      tester,
+      s,
+      () => const FoodDetailScreen(food: skyr, meal: Meal.breakfast, initialGrams: 150, initialPortion: Portion('1 bowl', 150)),
+    );
     await add(tester);
     expect(s.entries, hasLength(1));
     expect(s.entries.single.grams, 400);

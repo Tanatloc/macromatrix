@@ -422,13 +422,16 @@ void main() {
     test('regels opzoeken zoals Snel loggen', () {
       final s = newState();
       final rows = recipeRows(['200 g flour', '2 eggs', 'salt and pepper', '(optional)'], s.resolveQuick);
-      expect(rows, hasLength(4));
+      // Eén regel = hoogstens één rij (SU-1): "salt and pepper" is één regel, "(optional)" geen ingrediënt
+      expect(rows, hasLength(3));
       expect(rows[0].ready, isTrue);
       expect(rows[0].template!.grams, 200);
       expect(rows[1].line!.item.count, 2);
       expect(rows[1].template!.grams, greaterThan(60));
       expect(rows[2].text, 'salt and pepper');
-      expect(rows[3].line!.item.query, contains('pepper'));
+      // Naar smaak zonder hoeveelheid: staat er, telt niet mee
+      expect(rows[2].counted, isFalse);
+      expect(rows[2].ready, isFalse);
     });
 
     testWidgets('link → nakijken → recept met porties ingevuld', (tester) async {
@@ -462,6 +465,17 @@ void main() {
       expect(pro.aiQuota(AiKind.recipe)!.used, 1);
       expect(find.text('Check the ingredients'), findsOneWidget);
       expect(find.text('"300 ml milk"'), findsOneWidget);
+      // Het totaal per portie staat er al vóór het bewaren, en verandert mee met het aantal porties
+      final totals = find.byKey(const ValueKey('recipe-import-totals'));
+      expect(totals, findsOneWidget);
+      String perServing() => tester.widget<Text>(find.descendant(of: totals, matching: find.textContaining('kcal')).first).data!;
+      final four = perServing();
+      await tester.enterText(find.byKey(const ValueKey('recipe-import-servings')), '2');
+      await tester.pumpAndSettle();
+      expect(perServing(), isNot(four));
+      await tester.enterText(find.byKey(const ValueKey('recipe-import-servings')), '4');
+      await tester.pumpAndSettle();
+      expect(perServing(), four);
       // Eén regel weghalen
       await tester.tap(find.descendant(of: find.byKey(const ValueKey('recipe-row-2')), matching: find.byIcon(Icons.close_rounded)));
       await tester.pumpAndSettle();
@@ -479,6 +493,40 @@ void main() {
       expect(saved.servings, 4);
       expect(saved.ingredients, hasLength(2));
       expect(result, isA<Food>());
+    });
+
+    testWidgets('nakijken: twijfel gemarkeerd, serveersuggestie telt pas mee na Meetellen (SU-1)', (tester) async {
+      final s = newState();
+      final server = FakeAiRemote()
+        ..status = ProStatus(until: DateTime.now().add(const Duration(days: 30)))
+        ..ai[AiKind.recipe] = q(0, 20, pro: true);
+      final pro = newPro(s, server);
+      await pro.refresh();
+      recipeImport = RecipeImport(
+        MockClient(
+          (req) async => jsonResponse({
+            'name': 'Soup',
+            'servings': 2,
+            'ingredients': ['400 g carrots', '1 pack zzqx blorp', 'crusty bread to serve (optional)'],
+            'source': 'jsonld',
+            'quota': {'allowed': true, 'used': 1, 'limit': 20, 'pro': true},
+          }),
+        ),
+      );
+      await pump(tester, s, pro, const RecipeImportScreen());
+      await tester.enterText(find.byKey(const ValueKey('recipe-url')), 'example.com/soup');
+      await tester.tap(find.byKey(const ValueKey('recipe-from-link')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('recipe-check-0')), findsNothing);
+      expect(find.byKey(const ValueKey('recipe-check-1')), findsOneWidget);
+      expect(find.text('1 line to check: it is marked below.'), findsNWidgets(2));
+      expect(find.text('Not counted: served on the side'), findsOneWidget);
+      // De twijfelregel telt mee (zichtbaar in het totaal) maar staat gemarkeerd; het brood nog niet
+      expect(find.text('Make recipe with 2 ingredients'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('recipe-count-2')));
+      await tester.pumpAndSettle();
+      expect(find.text('Not counted: served on the side'), findsNothing);
+      expect(find.text('Make recipe with 3 ingredients'), findsOneWidget);
     });
 
     testWidgets('zonder Pro: de uitleg met de Pro-knop, en de knoppen staan uit', (tester) async {

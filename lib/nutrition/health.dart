@@ -262,6 +262,40 @@ EnergyCase energyCase({required double eaten, required double goal, WeightTrend?
   return under ? EnergyCase.under : EnergyCase.over;
 }
 
+/// Hoe je [gapKcal] per dag bijeet, naar de grootte van het tekort (SP-6): "1500 kcal: een extra tussendoortje" klopt
+/// niet. Tot ±450 kcal een tussendoortje, tot ±1000 kcal een extra maaltijd, daarboven eerst nakijken of alles
+/// gelogd is (een tekort van een hele maaltijd of meer is meestal een vergeten maaltijd). [ifLogged]: "als je alles
+/// logde" ervoor, voor wie we niet weten of alles gelogd is.
+String eatMoreAdvice(double gapKcal, {bool ifLogged = false}) {
+  final round = gapKcal < 100 ? fmtNum(gapKcal, 0) : fmtGrouped((gapKcal / 100).round() * 100, 0);
+  if (gapKcal > 1000) {
+    return tr(
+      'That is more than a whole meal a day: first check that every meal, snack and drink is logged. If it is, add about $round kcal a day: an extra meal and one or two snacks.',
+      'Dat is meer dan een hele maaltijd per dag: kijk eerst na of elke maaltijd, elk tussendoortje en elke drank gelogd is. Is dat zo, voeg dan ongeveer $round kcal per dag toe: een extra maaltijd en een of twee tussendoortjes.',
+    );
+  }
+  if (gapKcal > 450) {
+    return ifLogged
+        ? tr(
+            'If you logged everything, add about $round kcal a day: an extra meal, or a snack and bigger portions at your main meals.',
+            'Als je alles logde, voeg dan ongeveer $round kcal per dag toe: een extra maaltijd, of een tussendoortje en grotere porties bij je hoofdmaaltijden.',
+          )
+        : tr(
+            'Add about $round kcal a day: an extra meal, or a snack and bigger portions at your main meals.',
+            'Voeg ongeveer $round kcal per dag toe: een extra maaltijd, of een tussendoortje en grotere porties bij je hoofdmaaltijden.',
+          );
+  }
+  return ifLogged
+      ? tr(
+          'If you logged everything, add about $round kcal a day: an extra snack (a yoghurt with fruit, a handful of nuts) or a bigger portion.',
+          'Als je alles logde, voeg dan ongeveer $round kcal per dag toe: een extra tussendoortje (een yoghurt met fruit, een handvol noten) of een grotere portie.',
+        )
+      : tr(
+          'Add about $round kcal a day: an extra snack (a yoghurt with fruit, a handful of nuts), a bigger portion of your usual meal or a glass of milk.',
+          'Voeg ongeveer $round kcal per dag toe: een extra tussendoortje (een yoghurt met fruit, een handvol noten), een grotere portie van je gewone maaltijd of een glas melk.',
+        );
+}
+
 /// Uitleg en advies bij [c]. Nooit blind "eet 900 kcal meer": wie op hetzelfde gewicht blijft, heeft eerder een
 /// verkeerd doel of logt niet alles.
 ({String effect, String advice}) energyMessage(
@@ -329,10 +363,7 @@ EnergyCase energyCase({required double eaten, required double goal, WeightTrend?
               'Je at gemiddeld $gap kcal per dag boven je doel en je gewicht gaat omhoog$moved, terwijl je wil $want.',
             ),
       advice: under
-          ? tr(
-              'Add about $round kcal a day: an extra snack, a bigger portion of your usual meal or a glass of milk.',
-              'Voeg ongeveer $round kcal per dag toe: een extra tussendoortje, een grotere portie van je gewone maaltijd of een glas melk.',
-            )
+          ? eatMoreAdvice(gapKcal)
           : tr(
               'Eat about $round kcal a day less: a smaller portion, fewer snacks or fewer sweet drinks.',
               'Eet ongeveer $round kcal per dag minder: een kleinere portie, minder tussendoortjes of minder zoete drank.',
@@ -344,10 +375,7 @@ EnergyCase energyCase({required double eaten, required double goal, WeightTrend?
         'Je at gemiddeld $gap kcal per dag ${under ? 'onder' : 'boven'} je doel.',
       ),
       advice: under
-          ? tr(
-                  'If you logged everything, add about $round kcal a day: an extra snack or a bigger portion.',
-                  'Als je alles logde, voeg dan ongeveer $round kcal per dag toe: een extra tussendoortje of een grotere portie.',
-                ) +
+          ? eatMoreAdvice(gapKcal, ifLogged: true) +
                 (plan == Goal.gain
                     ? ''
                     : tr(
