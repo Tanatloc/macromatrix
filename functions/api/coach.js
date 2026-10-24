@@ -5,7 +5,8 @@
 // Orakel van de app) en de tips van vorige week met hoe die stoffen sindsdien veranderden). Geen dagboek, geen namen,
 // geen notities. Een tekstmodel van Workers AI schrijft
 // daarmee een korte samenvatting en 2 à 3 tips voor volgende week, in het Engels of het Nederlands.
-// Alleen voor ingelogde gebruikers. Er wordt niets bewaard: niet wat de app stuurt, niet wat het model schrijft.
+// Alleen voor ingelogde gebruikers. Er wordt niets bewaard: niet wat de app stuurt, niet wat het model schrijft (tenzij
+// de gebruiker de tekst in de app meldt: dan bewaart ai_report die, migratie 20261105000000_ai_reports).
 // Dagteller ai_quota_use('coach'): 3 met Pro, 1 zonder Pro maar pas als de functie voor iedereen open staat
 // (migratie 20261103000000_coach). Anders dan bij /api/label werkt dit niet zonder teller: die houdt ook de vroege
 // toegang bij. Ontbreekt de migratie, dan not_configured (de app verbergt de coach dan).
@@ -73,8 +74,14 @@ export function cleanWeek(raw) {
   const macros = {};
   for (const k of ['protein', 'carbs', 'fat', 'fiber']) {
     const p = pair(raw.macros?.[k], 2000);
-    if (p) macros[k] = { ...p, unit: 'g' };
+    if (p) macros[k] = { ...p, unit: 'g', pct_of_target: p.goal ? Math.round((100 * p.avg) / p.goal) : null };
   }
+  // Macro's onder hun doel als uitdrukkelijk tekort met %, zodat het model eiwit op 47 % niet als "een goede basis"
+  // ziet (SU-2): het las de grammen eerder niet als tekort
+  const macroGaps = Object.entries(macros)
+    .filter(([, m]) => m.pct_of_target != null && m.pct_of_target < 90)
+    .map(([k, m]) => ({ nutrient: k, pct_of_target: m.pct_of_target }))
+    .sort((a, b) => a.pct_of_target - b.pct_of_target);
   const weight =
     raw.weight && typeof raw.weight === 'object'
       ? {
@@ -114,6 +121,19 @@ export function cleanWeek(raw) {
   const ratio = energy?.goal ? energy.avg / energy.goal : null;
   const energyNote =
     ratio == null ? null : ratio > 1.1 && goal !== 'gain' ? 'clearly_above_goal' : ratio < 0.75 ? 'far_below_goal' : null;
+  const belowTarget = list(raw.low, 5, (x) => {
+    const name = label(x?.name);
+    const pct = num(x?.pct, 0, 1000);
+    return name && pct != null ? { nutrient: name, pct_of_target: pct } : null;
+  });
+  // Hoeveel kcal per dag er ontbreekt, als het duidelijk minder is dan het doel: zo kan de tip even groot zijn
+  const energyGap = ratio != null && ratio < 0.9 ? Math.round(energy.goal - energy.avg) : null;
+  // Alles onder 80 % van het doel: dat mag de coach nooit prijzen
+  const under80 = [
+    ...(ratio != null && ratio < 0.8 ? ['energy'] : []),
+    ...macroGaps.filter((m) => m.pct_of_target < 80).map((m) => m.nutrient),
+    ...belowTarget.filter((b) => b.pct_of_target < 80).map((b) => b.nutrient),
+  ];
   const week = {
     lang,
     days_logged: days,
@@ -121,12 +141,11 @@ export function cleanWeek(raw) {
     goal,
     energy_kcal: energy,
     energy_note: energyNote,
+    energy_gap_kcal_per_day: energyGap,
     macros,
-    below_target: list(raw.low, 5, (x) => {
-      const name = label(x?.name);
-      const pct = num(x?.pct, 0, 1000);
-      return name && pct != null ? { nutrient: name, pct_of_target: pct } : null;
-    }),
+    macros_below_target: macroGaps,
+    below_target: belowTarget,
+    never_praise: under80,
     above_upper_limit: list(raw.high, 5, (x) => {
       const name = label(x?.name);
       const pct = num(x?.pct, 0, 5000);
@@ -179,8 +198,13 @@ export function systemPrompt(lang) {
     'so eating close to it is right; never push below it. nutrient_score (0-100) is how close the vitamins and minerals',
     'came to their targets. below_target lists the nutrients furthest under target (in % of target); above_upper_limit',
     'lists what went over a safe upper limit (in % of that limit). Macros are grams per day against the target.',
-    'Base the tips on the biggest gaps first: below_target, protein and fibre under target, and anything in above_upper_limit',
-    '(for sodium: less salty processed food, not "less food").',
+    'macros_below_target lists the macros under target with their % of target; protein there is a real gap, as',
+    'important as anything in below_target.',
+    'Base the tips on the biggest gaps first: below_target, macros_below_target (protein and fibre), and anything in',
+    'above_upper_limit (for sodium: less salty processed food, not "less food").',
+    'never_praise lists everything under 80% of its target. Never call any of these good, steady, solid, enough or a',
+    'base, and never say they "went well": they are things to work on. Only praise what is not in never_praise.',
+    'When protein is in never_praise, the summary names protein as one of the things to work on.',
     'Do not call foods "high calorie" or "bad". Never suggest salt, seaweed or iodised salt when sodium is over its limit.',
     '',
     'options: for each gap nutrient, a few everyday foods that already fit this person\'s diet and allergies, each with a',
@@ -194,8 +218,13 @@ export function systemPrompt(lang) {
     'energy_note: if it is "clearly_above_goal", one of the tips is about energy: a mild, concrete swap based on',
     'top_foods_by_energy or options, such as a smaller portion of fries with a side salad, water instead of a sweet drink,',
     'or half the usual pasta with extra vegetables. Never suggest eating below the goal, skipping meals or fasting, and',
-    'do not give a kcal number. If it is "far_below_goal", gently encourage eating enough (for example an extra snack',
-    'or a fuller lunch) instead.',
+    'do not give a kcal number. If it is "far_below_goal", one tip is about eating enough instead, and its size must',
+    'match energy_gap_kcal_per_day (the kcal per day still missing). For "maintain" or "gain" with a big gap (400 kcal',
+    'or more), suggest additions that together come close to that amount, for example a fuller lunch plus a snack such',
+    'as yoghurt with granola and a handful of nuts, and say "about N kcal more a day" (N is energy_gap_kcal_per_day',
+    'rounded to 50). Never call a big gap "a bit more", "a little more" or "slightly larger", and one banana is not',
+    'enough for it. For "lose", gently',
+    'encourage eating enough (an extra snack or a fuller lunch).',
     '',
     'last_week: if present, these are the tips from last week and, per nutrient, the average before and now (in % of',
     'target). Then the summary starts with one short sentence on how last week\'s plan went, using one before/now pair',
@@ -216,6 +245,7 @@ export function systemPrompt(lang) {
     '  For example: vegetarian means no meat or fish, vegan also no dairy, eggs or honey, gluten_free no wheat, rye or barley.',
     '- Use the foods in "top_foods_by_energy" only to make tips fit what this person already eats.',
     '- Do not invent numbers that are not in the data.',
+    '- In the app, nutrient_score is called "Nutrient score" in English and "Voedingsscore" in Dutch; use only that name.',
     '',
     'Example of the tone and length (this person had last_week, fibre as a past gap and energy clearly above the goal;',
     'use your own data, not these foods or numbers):',
@@ -227,6 +257,8 @@ export function systemPrompt(lang) {
 
 // Een tip met een dosis ("400 mg", "1000 IU") of een caloriedoel past niet bij wat we beloven: die valt weg
 const DOSE = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|ug|iu|ie)\b/i;
+// "about 800 kcal more a day" is een aanvulling (SU-2), geen caloriedoel
+const MORE = /\b(?:more|extra|additional|meer)\b/i;
 const KCAL_TARGET = /\b(?:eat|aim for|eet|mik op|houd)\b[^.]{0,30}\b\d{3,4}\s*(?:kcal|calories|calorieën)\b/i;
 
 function cleanText(v, max) {
@@ -279,7 +311,7 @@ export function cleanCoach(raw) {
   if (!summary || summary.length < 20) return { error: 'bad_output' };
   const tips = (Array.isArray(raw.tips) ? raw.tips : [])
     .map((t) => cleanText(typeof t === 'object' && t ? (t.tip ?? t.text) : t, 320))
-    .filter((t) => t && t.length >= 10 && !DOSE.test(t) && !KCAL_TARGET.test(t))
+    .filter((t) => t && t.length >= 10 && !DOSE.test(t) && !(KCAL_TARGET.test(t) && !MORE.test(t)))
     .slice(0, 3);
   if (tips.length === 0) return { error: 'bad_output' };
   return { summary, tips };
@@ -291,10 +323,83 @@ const SCHEMA = {
   required: ['summary', 'tips'],
 };
 
+// --- Nakijken of de samenvatting de cijfers tegenspreekt (SU-2): "a steady base of protein" bij 47 % eiwit, of
+// "a bit more energy" bij 800 kcal per dag tekort. Bewust eenvoudig: per zin een woord voor de stof met in de buurt
+// een lovend woord en geen woord dat het tekort benoemt.
+
+const ESC = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Woorden voor de macro's en voor energie, in beide talen
+const NUTRIENT_WORDS = {
+  energy: 'energy|energie|kcal|calories?|calorieën|intake|inname',
+  protein: 'proteins?|eiwit(?:ten)?',
+  fiber: 'fib(?:er|re)s?|vezels?',
+  carbs: 'carbs?|carbohydrates?|koolhydraten',
+  fat: 'fats?|vetten|vet',
+};
+const POSITIVE =
+  /\b(?:good|great|steady|solid|strong|enough|plenty|ample|nice|healthy|decent|balanced|base|went well|did well|on track|goede?|stevige?|degelijke?|voldoende|genoeg|mooie?|basis|prima|sterke?)\b/i;
+const NEGATIVE =
+  /\b(?:low|lower|below|under|short|less|lack\w*|miss\w*|few|deficit|gap|not|far|more|increase|raise|work on|lage?|onder|weinig|tekort|meer|niet|mist|ver)\b/i;
+// "a bit more energy" bij een groot tekort
+const SMALL = /\b(?:a bit|a little|slightly|somewhat|a touch|a tad|een beetje|een tikje|iets meer|wat meer)\b/i;
+
+// Het stuk van de zin rond elke vermelding van [re]
+function windows(sentence, re) {
+  const out = [];
+  for (const m of sentence.matchAll(new RegExp(`\\b(?:${re})\\b`, 'gi'))) {
+    out.push(sentence.slice(Math.max(0, m.index - 35), m.index + m[0].length + 40));
+  }
+  return out;
+}
+
+const splitSentences = (t) => (t.match(/[^.!?]+(?:[.!?]+["')]*|$)\s*/g) ?? [t]).map((z) => z.trim()).filter(Boolean);
+
+// De zinnen van [summary] die iets onder 80 % van het doel prijzen, of een groot energietekort klein maken
+export function contradictions(summary, week) {
+  const low = week.never_praise ?? [];
+  if (!low.length) return [];
+  const words = low.map((n) => NUTRIENT_WORDS[n] ?? ESC(String(n).toLowerCase()));
+  const ratio = week.energy_kcal?.goal ? week.energy_kcal.avg / week.energy_kcal.goal : null;
+  const bigGap = ratio != null && ratio < 0.75;
+  return splitSentences(summary).filter((z) => {
+    if (words.some((w) => windows(z, w).some((x) => POSITIVE.test(x) && !NEGATIVE.test(x)))) return true;
+    return bigGap && windows(z, NUTRIENT_WORDS.energy).some((x) => SMALL.test(x));
+  });
+}
+
+// De tips die een groot energietekort klein maken ("a slightly larger serving", "a bit more rice") bij behouden of
+// aankomen: daar hoort een tip van de grootte van het tekort
+export function smallEnergyTips(tips, week) {
+  const gap = week.energy_gap_kcal_per_day ?? 0;
+  if (week.goal === 'lose' || gap < 400) return [];
+  const energy = new RegExp(`\\b(?:${NUTRIENT_WORDS.energy})\\b`, 'i');
+  return tips.filter((t) => energy.test(t) && SMALL.test(t));
+}
+
+// De correctie bij de tweede poging: wat fout was en de echte cijfers
+export function correctionText(bad, week) {
+  const facts = [
+    ...(week.energy_kcal?.goal && week.energy_gap_kcal_per_day
+      ? [`energy is ${Math.round((100 * week.energy_kcal.avg) / week.energy_kcal.goal)}% of the goal (${week.energy_gap_kcal_per_day} kcal a day short)`]
+      : []),
+    ...(week.macros_below_target ?? []).map((m) => `${m.nutrient} is ${m.pct_of_target}% of target`),
+    ...(week.below_target ?? []).map((b) => `${b.nutrient} is ${b.pct_of_target}% of target`),
+  ];
+  return [
+    `Your previous answer contradicted the data: ${bad.map((z) => `"${z}"`).join(' ')}`,
+    `The facts: ${facts.join('; ')}.`,
+    'Write it again. Do not praise anything in never_praise, and size the energy tip to the real gap.',
+  ].join('\n');
+}
+
 // De vraag aan het model (ook bruikbaar om de prompt los te proberen). [retry]: tweede poging na een antwoord in de
-// verkeerde taal, met die taal nog eens apart gevraagd.
-export function coachInput(week, { retry = false } = {}) {
-  const system = systemPrompt(week.lang) + (retry ? `\nAnswer only in ${LANG_NAME[week.lang] ?? 'English'}.` : '');
+// verkeerde taal, met die taal nog eens apart gevraagd. [correction]: tweede poging na een tegenspraak.
+export function coachInput(week, { retry = false, correction = null } = {}) {
+  const system =
+    systemPrompt(week.lang) +
+    (retry ? `\nAnswer only in ${LANG_NAME[week.lang] ?? 'English'}.` : '') +
+    (correction ? `\n\n${correction}` : '');
   return {
     messages: [
       { role: 'system', content: system },
@@ -310,18 +415,36 @@ export function coachInput(week, { retry = false } = {}) {
   };
 }
 
-// Model vragen en nakijken, met één nieuwe poging als het in de verkeerde taal antwoordde. Gooit TimeoutError als
-// [ms] samen op is.
+// Model vragen en nakijken, met hoogstens één nieuwe poging: als het in de verkeerde taal antwoordde, of als de
+// samenvatting de cijfers tegensprak. Spreekt ook de tweede die nog tegen, dan vallen die zinnen weg. Gooit
+// TimeoutError als [ms] samen op is.
 export async function askCoach(ai, week, ms) {
   const deadline = Date.now() + ms;
-  let out;
-  for (const retry of [false, true]) {
+  let opts = {};
+  for (const last of [false, true]) {
     const left = deadline - Date.now();
     if (left <= 0) throw new TimeoutError(`na ${ms} ms`);
-    const r = await withTimeout(ai.run(TEXT_MODEL, coachInput(week, { retry })), left);
-    out = cleanCoach(modelObject(r));
+    const r = await withTimeout(ai.run(TEXT_MODEL, coachInput(week, opts)), left);
+    const out = cleanCoach(modelObject(r));
     if (out.error) return out;
-    if (!wrongLanguage(`${out.summary} ${out.tips.join(' ')}`, week.lang)) return out;
+    if (wrongLanguage(`${out.summary} ${out.tips.join(' ')}`, week.lang)) {
+      if (last) return { error: 'bad_output' };
+      opts = { retry: true };
+      continue;
+    }
+    const bad = contradictions(out.summary, week);
+    const small = smallEnergyTips(out.tips, week);
+    if (!bad.length && !small.length) return out;
+    if (!last) {
+      opts = { correction: correctionText([...bad, ...small], week) };
+      continue;
+    }
+    const summary = splitSentences(out.summary)
+      .filter((z) => !bad.includes(z))
+      .join(' ');
+    // Een te kleine energietip valt weg, zolang er een andere tip overblijft
+    const tips = out.tips.length > small.length ? out.tips.filter((t) => !small.includes(t)) : out.tips;
+    return summary.length >= 20 ? { summary, tips } : { error: 'bad_output' };
   }
   return { error: 'bad_output' };
 }
@@ -369,7 +492,8 @@ export async function onRequestPost({ request, env }) {
   try {
     const out = await askCoach(env.AI, input.week, Number(env.COACH_TIMEOUT_MS) || TIMEOUT_MS);
     if (out.error) return json({ error: out.error, quota }, 502);
-    return json({ ...out, lang: input.week.lang, quota });
+    // Het model gaat mee, zodat een melding van de tekst (ai_report) zegt welk model hem schreef
+    return json({ ...out, lang: input.week.lang, model: TEXT_MODEL, quota });
   } catch (e) {
     if (e instanceof TimeoutError) return json({ error: 'timeout', quota }, 504);
     return json({ error: 'failed', quota }, 502);

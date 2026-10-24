@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -18,6 +20,8 @@ import 'package:macromatrix/platform/ai_request.dart';
 import 'package:macromatrix/platform/coach_request.dart';
 import 'package:macromatrix/state/app_state.dart';
 import 'package:macromatrix/sync/account.dart';
+import 'package:macromatrix/sync/ai_report.dart';
+import 'package:supabase/supabase.dart' show SupabaseClient;
 import 'package:macromatrix/sync/features.dart';
 import 'package:macromatrix/sync/friends.dart' show mondayOf;
 import 'package:macromatrix/sync/pro.dart';
@@ -45,6 +49,18 @@ class FakeCoach extends CoachRequest {
       lastQuota = e.quota;
       throw e;
     }
+    return result;
+  }
+}
+
+/// Nagebootste ai_report: onthoudt wat gemeld werd.
+class FakeReporter extends AiReporter {
+  final calls = <({String kind, String text, String? note})>[];
+  AiReportResult result = AiReportResult.reported;
+
+  @override
+  Future<AiReportResult> report(SupabaseClient? client, {required String kind, required String text, String? note}) async {
+    calls.add((kind: kind, text: text, note: note));
     return result;
   }
 }
@@ -276,7 +292,10 @@ void main() {
         ),
       );
       // Een andere week (twee weken geleden) telt niet
-      cache.save(monday: DateTime(2026, 9, 28), result: const CoachResult(summary: 'Old week.', tips: ['Old tip here.']));
+      cache.save(
+        monday: DateTime(2026, 9, 28),
+        result: const CoachResult(summary: 'Old week.', tips: ['Old tip here.']),
+      );
       final w = await coachWeekFor(s, cache, report);
       final last = w['last_week'] as Map;
       expect(last['tips'], ['Add a handful of lentils to your soup.', 'Have a pear as a snack.']);
@@ -288,7 +307,10 @@ void main() {
       expect(cache.result(previous)!.focus, ['fiber', 'vit_k']);
       // Zonder focus (oudere bewaarde samenvatting): de tekorten van vorige week
       final changes = coachLastWeek(report, const CoachResult(summary: 'x', tips: ['A tip here.']))!['changes'] as List;
-      expect([for (final c in changes) (c as Map)['nutrient']], [nutrientByKey['vit_d']!.name, nutrientByKey['vit_k']!.name, nutrientByKey['fiber']!.name]);
+      expect(
+        [for (final c in changes) (c as Map)['nutrient']],
+        [nutrientByKey['vit_d']!.name, nutrientByKey['vit_k']!.name, nutrientByKey['fiber']!.name],
+      );
       // Lange tips worden ingekort
       final long = coachLastWeek(report, CoachResult(summary: 'x', tips: ['x' * 300]))!['tips'] as List;
       expect((long.single as String).length, 200);
@@ -341,8 +363,8 @@ void main() {
       return (s, f);
     }
 
-    Future<void> pump(WidgetTester tester, AppState s, Features? f, {WeeklyReport? report}) async {
-      tester.view.physicalSize = const Size(412, 1600);
+    Future<void> pump(WidgetTester tester, AppState s, Features? f, {WeeklyReport? report, double width = 412}) async {
+      tester.view.physicalSize = Size(width, 1600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
@@ -456,5 +478,109 @@ void main() {
       expect(find.byKey(const ValueKey('coach-error')), findsOneWidget);
       expect(tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('coach-write'))).onPressed, isNotNull);
     });
+
+    testWidgets('melden: het vlagje stuurt de tekst, de tips, de week en het model naar ai_report', (tester) async {
+      final reporter = FakeReporter();
+      coachReporter = reporter;
+      addTearDown(() => coachReporter = const AiReporter());
+      final (s, f) = await setup(pro: true);
+      CoachCache(s).save(
+        monday: _monday,
+        result: const CoachResult(
+          summary: 'Protein was well below target.',
+          tips: ['Add 120 g of salmon to dinner.', 'Have a yoghurt with nuts.'],
+          model: '@cf/openai/gpt-oss-120b',
+        ),
+      );
+      await pump(tester, s, f);
+      expect(find.byTooltip('Report this text'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('coach-report')));
+      await tester.pumpAndSettle();
+      expect(find.text('Report this text?'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('coach-report-note')), 'Says my protein is fine');
+      await tester.tap(find.byKey(const ValueKey('coach-report-send')));
+      await tester.pumpAndSettle();
+      final c = reporter.calls.single;
+      expect(c.kind, 'coach');
+      expect(c.text, 'Protein was well below target.\n\n1. Add 120 g of salmon to dinner.\n2. Have a yoghurt with nuts.');
+      expect(c.note, 'week 2026-10-12 · model @cf/openai/gpt-oss-120b · lang en\nSays my protein is fine');
+      expect(find.text("Thanks, we'll look at it."), findsOneWidget);
+      // Annuleren: niets gemeld
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('coach-report')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(reporter.calls, hasLength(1));
+    });
+
+    testWidgets('zonder tekst geen vlagje', (tester) async {
+      final (s, f) = await setup(pro: true);
+      await pump(tester, s, f);
+      expect(find.byKey(const ValueKey('coach-report')), findsNothing);
+    });
+
+    testWidgets('tekst in een andere taal dan de app: een hint die opnieuw schrijft', (tester) async {
+      final (s, f) = await setup(pro: true);
+      CoachCache(s).save(
+        monday: _monday,
+        result: const CoachResult(summary: 'Je eiwit bleef onder je doel.', tips: ['Eet een yoghurt met noten.'], lang: 'nl'),
+      );
+      await pump(tester, s, f);
+      expect(find.text('Written in Dutch. Write it again in English?'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('coach-other-lang')));
+      await tester.pumpAndSettle();
+      expect(coach.sent.single['lang'], 'en');
+      // Nu in het Engels: geen hint meer
+      expect(find.byKey(const ValueKey('coach-other-lang')), findsNothing);
+      expect(find.text(coach.result.summary), findsOneWidget);
+      // Bewaard met de taal erbij
+      expect(CoachCache(s).result(_monday)!.lang, 'en');
+    });
+
+    for (final (width, nl) in [(360.0, false), (360.0, true), (1280.0, false)]) {
+      testWidgets('tegels op ${width.round()} px (${nl ? 'nl' : 'en'}): niets afgekapt', (tester) async {
+        if (nl) {
+          setAppLang(AppLang.nl);
+          await initializeDateFormatting(appLocale);
+          addTearDown(() => setAppLang(AppLang.en));
+        }
+        // De echte letters (Geist), anders is elke letter in een test een vierkant en klopt de breedte niet
+        await tester.runAsync(() async {
+          for (final (family, files) in [
+            (kSans, ['Geist-Regular', 'Geist-Medium', 'Geist-SemiBold']),
+            (kMono, ['GeistMono-Regular', 'GeistMono-Medium', 'GeistMono-SemiBold']),
+          ]) {
+            final loader = FontLoader(family);
+            for (final f in files) {
+              loader.addFont(rootBundle.load('assets/fonts/$f.ttf'));
+            }
+            await loader.load();
+          }
+        });
+        final (s, f) = await setup(pro: true);
+        final report = WeeklyReport(
+          monday: _monday,
+          score: 47,
+          days: 3,
+          best: const [],
+          worst: [(nutrientByKey['vit_d']!, 0.04)],
+          kcalAvg: 1034,
+          kcalGoal: 1857,
+        );
+        CoachCache(s).save(
+          monday: _monday,
+          result: CoachResult(summary: 'Protein was well below target.', tips: const ['Add 120 g of salmon to dinner.'], lang: nl ? 'nl' : 'en'),
+        );
+        // Het weekrapport heeft 16 px marge aan elke kant
+        await pump(tester, s, f, report: report, width: width - 32);
+        expect(tester.takeException(), isNull);
+        for (final t in nl ? ['Grootste tekort', 'doel 1.857 kcal'] : ['Biggest gap', 'goal 1,857 kcal']) {
+          final para = tester.renderObject<RenderParagraph>(find.text(t));
+          expect(para.didExceedMaxLines, isFalse, reason: t);
+        }
+      });
+    }
   });
 }

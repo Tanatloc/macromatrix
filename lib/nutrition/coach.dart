@@ -73,9 +73,7 @@ String? coachFoodName(Food f, {required bool nl, bool anything = false}) {
   if (l == null) return null;
   if (!anything && (l.dish || _coachSkipGroups.contains(l.group) || _coachSkip.hasMatch(l.food))) return null;
   final special = '${l.food}|${l.part}';
-  final String? base = nl
-      ? (_foodNl[special] ?? _foodNl[l.food])
-      : (_foodEn.containsKey(special) ? _foodEn[special] : (_foodEn[l.food] ?? l.food));
+  final String? base = nl ? (_foodNl[special] ?? _foodNl[l.food]) : (_foodEn.containsKey(special) ? _foodEn[special] : (_foodEn[l.food] ?? l.food));
   if (base == null) return null;
   // Noten en zaden zijn altijd gedroogd: dat hoeft er niet bij
   final dry = l.state == 'dried' && l.group == 'nut/seed';
@@ -192,16 +190,21 @@ Map<String, Object?> coachWeek(
 /// Wat de coach schreef.
 @immutable
 class CoachResult {
-  const CoachResult({required this.summary, required this.tips, this.lang = 'en', this.focus = const []});
+  const CoachResult({required this.summary, required this.tips, this.lang = 'en', this.focus = const [], this.model});
   final String summary;
   final List<String> tips;
+
+  /// De taal waarin de tekst geschreven is ('en' of 'nl'), ook na een taalwissel in de app.
   final String lang;
+
+  /// Het model dat de tekst schreef (voor een melding), null bij een oudere bewaarde tekst.
+  final String? model;
 
   /// De stoffen waarvoor de app voorstellen meestuurde (sleutels), alleen op dit toestel: zo weet de coach volgende
   /// week waar de tips op mikten.
   final List<String> focus;
 
-  CoachResult withFocus(List<String> focus) => CoachResult(summary: summary, tips: tips, lang: lang, focus: focus);
+  CoachResult withFocus(List<String> focus) => CoachResult(summary: summary, tips: tips, lang: lang, focus: focus, model: model);
 
   static CoachResult? fromJson(Object? j) {
     if (j is! Map || j['summary'] is! String || j['tips'] is! List) return null;
@@ -215,6 +218,7 @@ class CoachResult {
       summary: summary,
       tips: tips.take(3).toList(),
       lang: j['lang'] == 'nl' ? 'nl' : 'en',
+      model: j['model'] is String && (j['model'] as String).length <= 100 ? j['model'] as String : null,
       focus: [
         for (final k in (j['focus'] as List?) ?? const [])
           if (k is String) k,
@@ -222,7 +226,7 @@ class CoachResult {
     );
   }
 
-  Map<String, Object?> toJson() => {'summary': summary, 'tips': tips, 'lang': lang, if (focus.isNotEmpty) 'focus': focus};
+  Map<String, Object?> toJson() => {'summary': summary, 'tips': tips, 'lang': lang, if (focus.isNotEmpty) 'focus': focus, 'model': ?model};
 }
 
 /// Bereidingen die in een Engelse naam niets toevoegen.
