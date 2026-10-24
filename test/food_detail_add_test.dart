@@ -80,6 +80,8 @@ void main() {
     expect(find.text('Skyr: 1 bowl added to breakfast (now 2)'), findsOneWidget);
     expect(s.entries.single.quantity, 2);
 
+    // Een tik in de eerste halve seconde telt niet (dubbeltik-bescherming)
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
     expect(s.entries.single.quantity, 1);
@@ -97,6 +99,8 @@ void main() {
     expect(s.entries.single.portionLabel, isNull);
     expect(find.text('Skyr: 1 bowl added to breakfast (now 400 g in one line)'), findsOneWidget);
 
+    // Een tik in de eerste halve seconde telt niet (dubbeltik-bescherming)
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
     expect(s.entries.single.grams, 250);
