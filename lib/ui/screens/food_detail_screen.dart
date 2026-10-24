@@ -325,7 +325,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final amounts = withDerived(scale(_food.per100g, _grams));
+    // Met de vrije suikers erbij, geschat zoals in de dagtotalen (label, ingrediënten van een recept, of de naam)
+    final per100 = s.per100gWithSugars(_food);
+    final amounts = scale(per100, _grams);
     final editing = widget.entry != null;
     final repeating = editing && _repeatsOf(s).isNotEmpty;
     final kcal = amounts['energy'] ?? 0;
@@ -552,7 +554,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                           const SizedBox(height: 10),
                           _ValuesPanel(
                             amounts: amounts,
-                            per100: withDerived(_food.per100g),
+                            per100: per100,
                             grams: _grams,
                             targets: s.targets,
                             estimates: estimates,
@@ -800,7 +802,7 @@ class _ImpactPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final own = editing == null ? const <String, double>{} : withDerived(editing!.amounts);
+    final own = editing == null ? const <String, double>{} : s.entryValues(editing!);
     final totals = s.totals.values;
     double before(String k) => math.max(0, (totals[k] ?? 0) - (own[k] ?? 0));
 
@@ -983,7 +985,7 @@ class _ValuesPanelState extends State<_ValuesPanel> {
   bool _amino = false;
 
   /// Eerst de regels van een voedingsetiket, in die volgorde; daarna de rest van vet en koolhydraten.
-  static const _labelOrder = ['energy', 'fat', 'sfa', 'carbs', 'sugars', 'fiber', 'protein', 'salt'];
+  static const _labelOrder = ['energy', 'fat', 'sfa', 'carbs', 'sugars', 'free_sugars', 'fiber', 'protein', 'salt'];
   static const _moreFatsCarbs = [
     'mufa',
     'pufa',

@@ -53,7 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = context.read<AppState>();
     final message = await saveTextFile(
       'macromatrix-diary-${dayKey(DateTime.now())}.csv',
-      diaryCsv(s.user),
+      diaryCsv(s.user, values: s.entryValues),
       subject: tr('Food diary', 'Voedingsdagboek'),
     );
     if (message != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
