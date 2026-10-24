@@ -158,6 +158,31 @@ class FoodDb {
     return [for (final r in rows) (_food(r), (r['score'] as num).toDouble())];
   }
 
+  /// Omgekeerd Orakel: voedingsmiddelen met het minst van een voedingsstof, per 100 g of per 100 kcal, eventueel
+  /// alleen uit voedingsgroepen [groups] (leeg = alles). Alleen gemeten waarden (0 telt mee, een ontbrekende waarde
+  /// niet) en geen producten onder [minEnergy] kcal per 100 g: water, thee en light frisdrank hebben van alles het
+  /// minst. Bij gelijke waarden eerst de kortste naam (de gewone vorm: "Wit brood" voor "Wit brood, met ...").
+  List<(Food, double)> leastIn(String key, {bool perKcal = false, Set<String> groups = const {}, int limit = 1500, double minEnergy = 10}) {
+    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(key)) return const [];
+    final value = _valueSql(key);
+    final score = perKcal ? '$value / json_extract(nutrients, \'\$.energy\') * 100' : value;
+    final inGroups = groups.isEmpty
+        ? ''
+        : "AND json_extract(CASE WHEN label != '' THEN label END, '\$.g') IN (${List.filled(groups.length, '?').join(',')})";
+    final rows = _db.select(
+      '''
+      SELECT *, $score AS score FROM foods
+      WHERE $value IS NOT NULL AND $value >= 0
+        AND json_extract(estimated, '\$.$key') IS NULL
+        AND json_extract(nutrients, '\$.energy') >= ?
+        AND lower(name) NOT LIKE '%babyfood%' AND lower(name) NOT LIKE '%infant formula%'
+        $inGroups
+      ORDER BY score ASC, length(name) ASC LIMIT ?''',
+      [math.max(minEnergy, perKcal ? 15.0 : 0.0), ...groups, limit],
+    );
+    return [for (final r in rows) (_food(r), (r['score'] as num).toDouble())];
+  }
+
   /// Waarden van een voedingsstof per 100 g voor alle producten met dit label-voedingsmiddel ([FoodLabel.food]),
   /// per "voedingsmiddel|groep|bereiding". Om uitschieters (tikfouten in een databank) te herkennen.
   Map<String, List<(String, double, List<String>)>> siblingValues(String key, Set<String> labelFoods) {

@@ -437,7 +437,8 @@ class AppState extends ChangeNotifier {
   /// gans met 3600 mg kalium, eend zonder vel met 46,7 g eiwit tegenover 23–27 g elders). Voor hoofdbestanddelen
   /// (eiwit, vet, koolhydraten…) kan hetzelfde product geen 1,6× verschillen; vitaminen en mineralen wel meer, daar
   /// geldt 3×. Alleen nagaan voor [head] (de kop van de lijst): dat is wat bovenaan zou komen.
-  bool Function(Food) _outlierCheck(String key, Iterable<Food> head) {
+  /// [low]: andersom, een waarde die veel lager ligt (voor het "minst"-Orakel: 0 g suiker in brood dat elders 5 g heeft).
+  bool Function(Food) _outlierCheck(String key, Iterable<Food> head, {bool low = false}) {
     final list = head.toList();
     final siblings = foods.siblingValues(key, {for (final f in list) ?f.label?.food});
     // Eiwit, koolhydraten en vezels liggen voor hetzelfde product dicht bij elkaar; vet en energie verschillen meer
@@ -447,6 +448,12 @@ class AppState extends ChangeNotifier {
         : const {'fat', 'energy', 'water', 'sfa', 'mufa', 'pufa'}.contains(key)
         ? 1.6
         : 3.0;
+    final lowTolerance = switch (nutrientByKey[key]?.unit) {
+      'g' || 'mg' => 0.5,
+      'kcal' => 5.0,
+      'µg' => 1.0,
+      _ => 0.0,
+    };
     return (Food f) {
       final l = f.label;
       if (l == null) return false;
@@ -459,6 +466,8 @@ class AppState extends ChangeNotifier {
       ]..sort();
       if (own == null || others.length < 2) return false;
       final median = others[others.length ~/ 2];
+      // Naar onder alleen als het verschil ook echt iets is (0 tegenover 0,1 g suiker in vlees is afronding)
+      if (low) return median > 0 && own * factor < median && median - own >= lowTolerance;
       return median > 0 && own > factor * median;
     };
   }
@@ -470,14 +479,20 @@ class AppState extends ChangeNotifier {
   /// Laat [everyday] van een gekozen groep niets over (eiwit in groenten: alleen poeders en meel), dan komen voor
   /// die groep toch de rijkste producten erin, en staat de groep in [relaxed] zodat het scherm dat kan zeggen. Het
   /// Orakel toonde anders "Top 0" (N12). Bij alle groepen samen geldt hetzelfde, met '' in [relaxed].
+  ///
+  /// [least]: omgekeerd, de voedingsmiddelen met het minst van de stof (brood met de minste suiker, N97), laagste
+  /// eerst. Zonder water, gewone thee en koffie, zout, kruiden, zoetstoffen en producten met bijna geen energie: die
+  /// hebben van alles het minst. Binnen een gekozen groep mag laag gewoon laag zijn.
   List<(Food, double)> oracle(
     String key, {
     OracleRank rank = OracleRank.per100g,
     int limit = 25,
     Set<String> groups = const {},
     bool everyday = false,
+    bool least = false,
     Set<String>? relaxed,
   }) {
+    if (least) return _oracleLeast(key, rank: rank, limit: limit, groups: groups, everyday: everyday, relaxed: relaxed);
     final perKcal = rank == OracleRank.per100kcal;
     // Met een groep dieper zoeken: de rijkste 1500 voor eiwit zijn vlees, vis en poeders, de eerste groente staat pas
     // rond plaats 40 en erwten of spinazie veel verder. Zoeken tot elke groep genoeg heeft (of alles bekeken is).
@@ -512,29 +527,8 @@ class AppState extends ChangeNotifier {
           ];
     // Uitschieters tussen databanken overslaan (zie [_outlierCheck]), gekeken naar de kop van wat getoond kan worden
     final outlier = _outlierCheck(key, pool.take(math.min(pool.length, limit * 6)).map((r) => r.$1));
-    // Gedroogd zeewier en spirulina zijn voor eiwit, vezels en energie poeders, geen groente (100 g nori eet niemand)
-    final macro = const {'protein', 'carbs', 'fiber', 'sugars', 'starch', 'fat', 'energy'}.contains(key);
-    bool driedAlgae(Food f) =>
-        RegExp(r'spirulina', caseSensitive: false).hasMatch(f.name) ||
-        (f.label?.kind == 'algae' && f.label?.state == 'dried') ||
-        RegExp(
-          r'\b(seaweed|laver|nori|kelp|wakame|agar)\b.*\bdried\b|\bdried\b.*\b(seaweed|laver|nori|kelp|wakame)\b',
-          caseSensitive: false,
-        ).hasMatch(f.name);
-
-    Map<Food, double> keep(Iterable<(Food, double)> from, {required bool everydayOnly}) {
-      final kept = <Food, double>{};
-      for (final (f, v) in from) {
-        if (outlier(f) || _regional.hasMatch(f.name)) continue;
-        if (everydayOnly && !isAdviceFood(f)) continue;
-        if (macro && driedAlgae(f)) continue;
-        if (!fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) continue;
-        if ((f.category ?? '').toLowerCase().contains('supplement') || f.label?.group == 'supplement') continue;
-        if (key != 'sodium' && key != 'chloride' && _salt.hasMatch(f.name)) continue;
-        kept[f] = rank == OracleRank.perPortion ? v * oraclePortion(f) / 100 : v;
-      }
-      return kept;
-    }
+    Map<Food, double> keep(Iterable<(Food, double)> from, {required bool everydayOnly}) =>
+        _oracleKeep(key, from, rank: rank, everydayOnly: everydayOnly, outlier: outlier);
 
     final kept = <Food, double>{};
     if (groups.isEmpty) {
@@ -557,6 +551,123 @@ class AppState extends ChangeNotifier {
     final ranked = [for (final f in one) (f, kept[f]!)]..sort((a, b) => b.$2.compareTo(a.$2));
     return ranked.take(limit).toList();
   }
+
+  /// Wat het Orakel van [from] overhoudt, met de waarde per 100 g, per 100 kcal of per portie ([rank]).
+  Map<Food, double> _oracleKeep(
+    String key,
+    Iterable<(Food, double)> from, {
+    required OracleRank rank,
+    required bool everydayOnly,
+    required bool Function(Food) outlier,
+    bool Function(Food)? skip,
+  }) {
+    // Gedroogd zeewier en spirulina zijn voor eiwit, vezels en energie poeders, geen groente (100 g nori eet niemand)
+    final macro = const {'protein', 'carbs', 'fiber', 'sugars', 'starch', 'fat', 'energy'}.contains(key);
+    bool driedAlgae(Food f) =>
+        RegExp(r'spirulina', caseSensitive: false).hasMatch(f.name) ||
+        (f.label?.kind == 'algae' && f.label?.state == 'dried') ||
+        RegExp(
+          r'\b(seaweed|laver|nori|kelp|wakame|agar)\b.*\bdried\b|\bdried\b.*\b(seaweed|laver|nori|kelp|wakame)\b',
+          caseSensitive: false,
+        ).hasMatch(f.name);
+    final kept = <Food, double>{};
+    for (final (f, v) in from) {
+      if (outlier(f) || _regional.hasMatch(f.name)) continue;
+      if (skip != null && skip(f)) continue;
+      if (everydayOnly && !isAdviceFood(f)) continue;
+      if (macro && driedAlgae(f)) continue;
+      if (!fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) continue;
+      if ((f.category ?? '').toLowerCase().contains('supplement') || f.label?.group == 'supplement') continue;
+      if (key != 'sodium' && key != 'chloride' && _salt.hasMatch(f.name)) continue;
+      kept[f] = rank == OracleRank.perPortion ? v * oraclePortion(f) / 100 : v;
+    }
+    return kept;
+  }
+
+  /// Het "minst"-Orakel (zie [oracle] met least). In SQL al op groep gefilterd: de producten met 0 g suiker zijn
+  /// duizenden stuks vlees, vis en olie, daartussen zou brood nooit bovenkomen.
+  List<(Food, double)> _oracleLeast(
+    String key, {
+    required OracleRank rank,
+    required int limit,
+    required Set<String> groups,
+    required bool everyday,
+    Set<String>? relaxed,
+  }) {
+    final perKcal = rank == OracleRank.per100kcal;
+    final depth = math.max(3000, limit * 60);
+    final cacheKey = '$key|$perKcal|$depth|${(groups.toList()..sort()).join(',')}';
+    final cached = _oracleLeastPool;
+    final List<(Food, double)> pool;
+    if (cached != null && cached.$1 == cacheKey) {
+      pool = cached.$2;
+    } else {
+      pool = foods.leastIn(key, perKcal: perKcal, groups: groups, limit: depth, minEnergy: oracleLeastMinKcal);
+      _oracleLeastPool = (cacheKey, pool);
+    }
+    final byGroup = {
+      for (final g in groups)
+        g: [
+          for (final r in pool)
+            if (r.$1.label?.group == g) r,
+        ],
+    };
+    // Kruiden alleen als je die groep zelf kiest; zoetstoffen, water, gewone thee en koffie nooit
+    bool skip(Food f) => isOracleLeastNoise(f) || (f.label?.group == 'herb/spice' && !groups.contains('herb/spice'));
+    // Uitschieters naar onder: een broodsoort met 0 g suiker waar dezelfde soort elders 5 g heeft is een fout
+    final outlier = _outlierCheck(key, pool.take(math.min(pool.length, limit * 12)).map((r) => r.$1), low: true);
+    Map<Food, double> keep(Iterable<(Food, double)> from, {required bool everydayOnly, bool plain = false}) =>
+        _oracleKeep(key, from, rank: rank, everydayOnly: everydayOnly, outlier: outlier, skip: plain ? (f) => skip(f) || !isEverydayFood(f) : skip);
+    // Blijft er van de gewone voedingsmiddelen niets over, dan eerst wat je gewoon eet (geen poeders, zemelen of
+    // droge mixen: die hebben per 100 g weinig suiker omdat ze nog water moeten krijgen), pas dan alles
+    Map<Food, double> keepRelaxed(Iterable<(Food, double)> from) {
+      final plain = keep(from, everydayOnly: false, plain: true);
+      return plain.isNotEmpty ? plain : keep(from, everydayOnly: false);
+    }
+
+    final kept = <Food, double>{};
+    if (groups.isEmpty) {
+      kept.addAll(keep(pool, everydayOnly: everyday));
+      if (everyday && kept.isEmpty) {
+        kept.addAll(keepRelaxed(pool));
+        if (kept.isNotEmpty) relaxed?.add('');
+      }
+    } else {
+      for (final g in groups) {
+        final part = keep(byGroup[g]!, everydayOnly: everyday);
+        if (everyday && part.isEmpty) {
+          part.addAll(keepRelaxed(byGroup[g]!));
+          if (part.isNotEmpty) relaxed?.add(g);
+        }
+        kept.addAll(part);
+      }
+    }
+    final one = [for (final g in groupFoods(kept.keys.toList())) g.main];
+    final ranked = [for (final f in one) (f, kept[f]!)]..sort((a, b) => a.$2.compareTo(b.$2));
+    return ranked.take(limit).toList();
+  }
+
+  /// Ondergrens in kcal per 100 g voor het "minst"-Orakel: daaronder zit water, thee, bouillon en light frisdrank.
+  static const oracleLeastMinKcal = 10.0;
+
+  /// Stoffen waarvoor het Orakel met "Let op suiker" standaard het minst zoekt (N97).
+  static const oracleLeastByDefault = {'carbs', 'sugars', 'free_sugars'};
+
+  /// Wat in het "minst"-Orakel nooit thuishoort, ook boven [oracleLeastMinKcal]: zoetstoffen (tabletten en poeders,
+  /// of drank die zijn zoet daaruit haalt), water, gewone thee en koffie.
+  static bool isOracleLeastNoise(Food f) =>
+      _sweetener.hasMatch(f.name) ||
+      f.label?.food == 'water' ||
+      (RegExp(r'\b(tea|coffee|thee|koffie|espresso|chicory)\b', caseSensitive: false).hasMatch(f.name) &&
+          !RegExp(r'milk|latte|cappuccino|sugar|syrup|cream|cake|biscuit|bun|bread|loaf|melk|suiker|koek', caseSensitive: false).hasMatch(f.name));
+
+  static final _sweetener = RegExp(
+    r'sweetener|aspartame|sucralose|saccharin|stevia|erythritol|xylitol|sorbitol|maltitol|acesulfame|cyclamate|zoetstof',
+    caseSensitive: false,
+  );
+
+  // Laatst opgevraagde kandidaten van het "minst"-Orakel: (stof|per kcal|diepte|groepen, kandidaten).
+  (String, List<(Food, double)>)? _oracleLeastPool;
 
   // Laatst opgevraagde kandidaten van het Orakel: het scherm vraagt bij elke herbouw opnieuw, en dieper zoeken in
   // een groep (tot alle producten) kost een halve seconde. (stof, kandidaten, of dat alle producten zijn).
