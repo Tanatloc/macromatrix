@@ -12,6 +12,8 @@ import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
 import '../widgets/nutrient_row.dart';
+import '../widgets/tap_guard.dart';
+import '../widgets/undo.dart';
 import 'add_food_screen.dart';
 import 'nutrient_detail_screen.dart';
 import 'nutrients_screen.dart';
@@ -30,6 +32,7 @@ class PlannerScreen extends StatefulWidget {
 }
 
 class _PlannerScreenState extends State<PlannerScreen> {
+  final _removeGuard = RemoveGuard();
   static DateTime get _today {
     final n = logicalNow();
     return DateTime(n.year, n.month, n.day);
@@ -249,7 +252,12 @@ class _PlannerScreenState extends State<PlannerScreen> {
                     tooltip: tr('Remove', 'Verwijderen'),
                     visualDensity: VisualDensity.compact,
                     icon: Icon(Icons.close_rounded, size: 18, color: p.ink3),
-                    onPressed: () => s.removeFromPlan(_key, i),
+                    onPressed: () {
+                      if (!_removeGuard.allow()) return;
+                      final day = _key, before = [...s.planFor(_key)];
+                      s.removeFromPlan(day, i);
+                      showUndo(context, tr('Removed from plan', 'Uit het plan gehaald'), () => s.setPlan(day, before));
+                    },
                   ),
                 ],
               ),

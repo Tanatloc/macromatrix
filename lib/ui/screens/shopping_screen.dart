@@ -7,6 +7,8 @@ import '../../i18n.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
+import '../widgets/tap_guard.dart';
+import '../widgets/undo.dart';
 
 /// Boodschappenlijst: zelf iets toevoegen, alles uit je planner, en producten voor de stoffen die je vaak tekortkomt.
 class ShoppingScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class ShoppingScreen extends StatefulWidget {
 }
 
 class _ShoppingScreenState extends State<ShoppingScreen> {
+  final _removeGuard = RemoveGuard();
   final _input = TextEditingController();
 
   @override
@@ -62,7 +65,12 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
     final onList = {for (final x in items) x.name.toLowerCase()};
 
     void toggle(int i) => s.saveShopping([...items]..[i] = items[i].toggled());
-    void remove(int i) => s.saveShopping([...items]..removeAt(i));
+    void remove(int i) {
+      if (!_removeGuard.allow()) return;
+      final before = [...items];
+      s.saveShopping([...items]..removeAt(i));
+      showUndo(context, tr('Removed from list', 'Van de lijst gehaald'), () => s.saveShopping(before));
+    }
 
     Widget row((int, ShoppingItem) e) {
       final (i, x) = e;

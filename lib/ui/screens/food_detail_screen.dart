@@ -879,7 +879,18 @@ class _ImpactPanel extends StatelessWidget {
     final rows = <(Nutrient, double, double, bool)>[];
     // Sporenelementen die bijna niemand bewust opvolgt: alleen tonen als dit product er echt veel van levert
     const obscure = {'fluoride', 'molybdenum', 'chloride', 'chromium', 'manganese', 'copper'};
+    // Suiker telt als vrije suikers (zoals in de dagscore): de suiker van heel fruit of gewone melk kleurt niets
+    // rood (N63). Met "Let op suiker" staat die regel altijd bovenaan, ook als het product geen vrije suiker heeft (N28).
+    final freeTarget = s.targets['free_sugars']?.upper;
+    final useFree = freeTarget != null && added.containsKey('free_sugars');
+    final sugarFirst = s.sugarFocus && useFree;
+    (Nutrient, double, double, bool)? sugarRow;
     for (final n in nutrients) {
+      if (useFree && n.key == 'sugars') continue;
+      if (sugarFirst && n.key == 'free_sugars') {
+        sugarRow = (n, before(n.key) / freeTarget, (before(n.key) + added[n.key]!) / freeTarget, true);
+        continue;
+      }
       // Geen aminozuren (eiwit staat al in de tegels erboven, en threonine of leucine zegt bijna niemand iets)
       if (n.group == NutrientGroup.general || n.group == NutrientGroup.protein || const {'carbs', 'fat'}.contains(n.key)) continue;
       final t = s.targets[n.key];
@@ -902,7 +913,9 @@ class _ImpactPanel extends StatelessWidget {
         return g != 0 && (gain(a) > 0.02 || gain(b) > 0.02) ? g : (b.$3 - b.$2).compareTo(a.$3 - a.$2);
       });
     final limits = rows.where((r) => r.$4).toList()..sort((a, b) => b.$3.compareTo(a.$3));
-    final shown = [...goals.take(limits.isEmpty ? 5 : 4), ...limits.take(1)];
+    final shown = [?sugarRow, ...goals.take(limits.isEmpty ? 5 : 4), ...limits.take(sugarRow == null ? 1 : 0)];
+    // Suiker zonder vrije suikers: zeggen waarom de balk niet groeit
+    final natural = useFree && (added['free_sugars'] ?? 0) < 0.05 && (added['sugars'] ?? 0) >= 1;
     if (shown.isEmpty) return const SizedBox.shrink();
 
     return Panel(
@@ -937,6 +950,14 @@ class _ImpactPanel extends StatelessWidget {
                           limit ? tr('${n.name} (max)', '${n.name} (max)') : n.name,
                           style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
                         ),
+                        if (natural && n.key == 'free_sugars')
+                          Text(
+                            tr(
+                              'Its ${fmtInt(added['sugars']!)} g sugar is natural (whole fruit, plain milk) and does not count',
+                              'De ${fmtInt(added['sugars']!)} g suiker is natuurlijk (heel fruit, gewone melk) en telt niet mee',
+                            ),
+                            style: TextStyle(fontSize: 11, color: p.ink3),
+                          ),
                         const SizedBox(height: 6),
                         _BeforeAfterBar(before: b, after: a, addColor: limit && a > 1 ? p.highFill : p.brand),
                       ],

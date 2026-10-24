@@ -71,3 +71,16 @@ class _NestedGuard extends NavigatorObserver {
 }
 
 final tapGuard = TapGuard();
+
+/// Een dubbele tik op × wist niet ook de regel die eronder opschuift (N04): kort na een verwijdering doet een
+/// volgende × niets.
+class RemoveGuard {
+  Timer? _lock;
+
+  /// True als deze verwijdering mag; zet dan de korte blokkering.
+  bool allow() {
+    if (_lock?.isActive ?? false) return false;
+    _lock = Timer(const Duration(milliseconds: 600), () {});
+    return true;
+  }
+}

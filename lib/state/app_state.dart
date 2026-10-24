@@ -1298,6 +1298,13 @@ class AppState extends ChangeNotifier {
     _savePlans(plans);
   }
 
+  /// Het plan van een dag vervangen (ongedaan maken van een verwijdering).
+  void setPlan(String day, List<PlannedItem> items) {
+    final plans = _plans;
+    plans[day] = items;
+    _savePlans(plans);
+  }
+
   void clearPlan(String day) {
     final plans = _plans..remove(day);
     _savePlans(plans);

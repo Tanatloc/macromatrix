@@ -12,6 +12,8 @@ import 'add_food_screen.dart';
 import 'food_detail_screen.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
+import '../widgets/tap_guard.dart';
+import '../widgets/undo.dart';
 
 /// Recept maken of bewerken: ingrediënten met hun hoeveelheid, aantal porties en (optioneel) het gewicht na
 /// bereiding. Het recept wordt een voedingsmiddel dat je zoals elk product kunt toevoegen.
@@ -28,6 +30,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
   late final _servings = TextEditingController(text: _fmt(widget.existing?.servings ?? 1));
   late final _cooked = TextEditingController(text: widget.existing?.cookedGrams == null ? '' : _fmt(widget.existing!.cookedGrams!));
   late final List<ItemTemplate> _items = [...?widget.existing?.ingredients];
+  final _removeGuard = RemoveGuard();
 
   static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : '$v'.dec;
   static double? _parse(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
@@ -259,7 +262,14 @@ class _RecipeScreenState extends State<RecipeScreen> {
                             IconButton(
                               tooltip: tr('Remove', 'Verwijderen'),
                               icon: const Icon(Icons.close, size: 18),
-                              onPressed: () => setState(() => _items.removeAt(i)),
+                              onPressed: () {
+                                if (!_removeGuard.allow()) return;
+                                final removed = _items[i];
+                                setState(() => _items.removeAt(i));
+                                showUndo(context, tr('Ingredient removed', 'Ingrediënt verwijderd'), () {
+                                  if (mounted) setState(() => _items.insert(i.clamp(0, _items.length), removed));
+                                });
+                              },
                             ),
                           ],
                         ),
