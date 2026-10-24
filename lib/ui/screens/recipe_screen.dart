@@ -93,7 +93,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
     final ref = item.foodRef;
     final food = (FoodDb.isDbRef(ref) ? s.foods.byRef(ref) : s.user.food(ref)) ?? item.toFood();
     // Met de portie van het recept: het detailscherm rekent de grammen om naar het aantal porties
-    final portion = item.portionLabel == null ? null : food.portions.where((p) => p.label == item.portionLabel).firstOrNull;
+    final portion = item.portionLabel == null ? null : food.portions.where((p) => samePortion(p.label, item.portionLabel)).firstOrNull;
     final t = await Navigator.of(context).push<ItemTemplate>(
       MaterialPageRoute(
         builder: (_) => FoodDetailScreen(food: food, meal: Meal.lunch, pickOnly: true, initialGrams: item.grams, initialPortion: portion),
@@ -204,7 +204,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                         // Als icoon blijft de eenheid altijd zichtbaar (suffixText verschijnt pas bij het typen)
                         suffixIcon: const Padding(padding: EdgeInsetsDirectional.only(end: 12), child: Text('g')),
                         suffixIconConstraints: const BoxConstraints(),
-                        helperText: tr('Optional (raw: ${recipe.rawGrams.round()} g)', 'Optioneel (rauw: ${recipe.rawGrams.round()} g)'),
+                        helperText: tr('Optional (raw: ${fmtInt(recipe.rawGrams)} g)', 'Optioneel (rauw: ${fmtInt(recipe.rawGrams)} g)'),
                         errorText: _cookedError,
                         errorMaxLines: 2,
                       ),
@@ -252,13 +252,13 @@ class _RecipeScreenState extends State<RecipeScreen> {
                         title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Text(
                           item.portionLabel == null
-                              ? '${_fmt(item.grams)} g'
-                              : '${_fmt(item.quantity)} × ${item.portionLabel} (${_fmt(item.grams)} g)',
+                              ? '${fmtInt(item.grams)} g'
+                              : '${fmtDec(item.quantity, 2)} × ${portionInLang(item.portionLabel!)} (${fmtInt(item.grams)} g)',
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('${item.kcal.round()} kcal'),
+                            Text('${fmtInt(item.kcal)} kcal'),
                             IconButton(
                               tooltip: tr('Remove', 'Verwijderen'),
                               icon: const Icon(Icons.close, size: 18),
@@ -280,7 +280,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
               if (_items.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Text(
-                  '${tr('Per serving', 'Per portie')} (${(recipe.totalGrams / recipe.servings).round()} g): ${(perServing['energy'] ?? 0).round()} kcal',
+                  '${tr('Per serving', 'Per portie')} (${fmtInt(recipe.totalGrams / recipe.servings)} g): ${fmtInt(perServing['energy'] ?? 0)} kcal',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),

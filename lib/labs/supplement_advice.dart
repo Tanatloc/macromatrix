@@ -64,14 +64,14 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
   final totals = supplementTotals(supplements);
   final out = <SupplementAdvice>[];
   String unit(String k) => nutrientByKey[k]?.unit ?? '';
-  String amount(String k) => '${fmtNum(totals[k] ?? 0)} ${unit(k)}';
+  String amount(String k) => '${fmtGrouped(totals[k] ?? 0)} ${unit(k)}';
   double? value(String key) => labs[key]?.value.standard;
   String? day(String key) => labs[key]?.day;
 
   // ── Vitamine D (ng/mL): < 20 tekort, 20–30 te weinig, 30–100 goed, > 100 te veel ──
   if (value('vit_d') case final d?) {
     final taking = totals['vit_d'] ?? 0;
-    final shown = '${fmtNum(d, 0)} ng/mL';
+    final shown = '${fmtGrouped(d, 0)} ng/mL';
     if (d > 100) {
       out.add(
         SupplementAdvice(
@@ -133,7 +133,7 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
   // ── IJzer (ferritine µg/L): een supplement alleen bij een tekort, en dan met de arts (de oorzaak telt) ──
   if (value('ferritin') case final f?) {
     final taking = totals['iron'] ?? 0;
-    final shown = '${fmtNum(f, 0)} µg/L';
+    final shown = '${fmtGrouped(f, 0)} µg/L';
     if (f < 30) {
       out.add(
         SupplementAdvice(
@@ -170,7 +170,7 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
   // ── B12 (ng/L): < 200 tekort, 200–300 grensgebied ──
   if (value('b12') case final b?) {
     final taking = totals['b12'] ?? 0;
-    final shown = '${fmtNum(b, 0)} ng/L';
+    final shown = '${fmtGrouped(b, 0)} ng/L';
     if (b < 300) {
       out.add(
         SupplementAdvice(
@@ -206,8 +206,8 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
         AdviceKind.suggest,
         tr('Folate: low', 'Foliumzuur: laag'),
         tr(
-          'Your folate is low (${fmtNum(v)} µg/L). 400 µg folic acid a day helps, together with more green vegetables and legumes.',
-          'Je foliumzuur is laag (${fmtNum(v)} µg/L). 400 µg foliumzuur per dag helpt, samen met meer groene groenten en peulvruchten.',
+          'Your folate is low (${fmtGrouped(v)} µg/L). 400 µg folic acid a day helps, together with more green vegetables and legumes.',
+          'Je foliumzuur is laag (${fmtGrouped(v)} µg/L). 400 µg foliumzuur per dag helpt, samen met meer groene groenten en peulvruchten.',
         ),
         catalogId: (totals['b9'] ?? 0) >= 400 ? null : 'folic',
         labDay: day('folate'),
@@ -222,8 +222,8 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
         AdviceKind.suggest,
         tr('Magnesium: low', 'Magnesium: laag'),
         tr(
-          'Your magnesium is low (${fmtNum(v, 2)} mmol/L). 200 mg a day (citrate or bisglycinate) is a common dose; more than 250 mg from supplements can upset your stomach.',
-          'Je magnesium is laag (${fmtNum(v, 2)} mmol/L). 200 mg per dag (citraat of bisglycinaat) is een gangbare dosis; meer dan 250 mg uit supplementen kan je maag van streek maken.',
+          'Your magnesium is low (${fmtGrouped(v, 2)} mmol/L). 200 mg a day (citrate or bisglycinate) is a common dose; more than 250 mg from supplements can upset your stomach.',
+          'Je magnesium is laag (${fmtGrouped(v, 2)} mmol/L). 200 mg per dag (citraat of bisglycinaat) is een gangbare dosis; meer dan 250 mg uit supplementen kan je maag van streek maken.',
         ),
         catalogId: (totals['magnesium'] ?? 0) >= 200 ? null : 'mg200',
         labDay: day('magnesium'),
@@ -246,8 +246,8 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
         AdviceKind.warning,
         tr('${n.name}: too much', '${n.name}: te veel'),
         tr(
-          'Your supplements together give ${amount(e.key)} ${n.name.toLowerCase()} a day, above the safe upper limit of ${fmtNum(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Leave one out or take a lower dose.',
-          'Je supplementen samen geven ${amount(e.key)} ${n.name.toLowerCase()} per dag, boven de veilige bovengrens van ${fmtNum(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Laat er één weg of neem een lagere dosis.',
+          'Your supplements together give ${amount(e.key)} ${inSentence(n.name)} a day, above the safe upper limit of ${fmtGrouped(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Leave one out or take a lower dose.',
+          'Je supplementen samen geven ${amount(e.key)} ${inSentence(n.name)} per dag, boven de veilige bovengrens van ${fmtGrouped(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Laat er één weg of neem een lagere dosis.',
         ),
       ),
     );

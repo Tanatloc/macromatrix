@@ -70,7 +70,7 @@ class ExerciseRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    e.name,
+                    exerciseNameInLang(e.name),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
@@ -271,7 +271,7 @@ class _ExerciseSheet extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              e.name,
+              exerciseNameInLang(e.name),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: p.ink),
             ),
@@ -343,7 +343,7 @@ class _ExerciseSheet extends StatelessWidget {
                       final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(context);
                       s.deleteExercise(e);
-                      showUndo(null, tr('${e.name} removed', '${e.name} verwijderd'), () => s.restoreExercise(e), messenger: messenger);
+                      showUndo(null, tr('${exerciseNameInLang(e.name)} removed', '${exerciseNameInLang(e.name)} verwijderd'), () => s.restoreExercise(e), messenger: messenger);
                     },
                     icon: const Icon(Icons.delete_outline_rounded, size: 18),
                     label: Text(tr('Remove', 'Verwijderen')),

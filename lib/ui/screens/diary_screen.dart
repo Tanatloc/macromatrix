@@ -623,7 +623,7 @@ class _EnergyCard extends StatelessWidget {
                       if (burned > 0) ...[_BurnedPill(burned: burned), const SizedBox(height: 3)],
                       Text(fmtInt(left.abs()), style: numStyle(30, color: over ? p.high : p.ink, height: 1)),
                       const SizedBox(height: 4),
-                      Text(over ? tr('kcal over goal', 'kcal te veel') : tr('kcal left', 'kcal over'), style: TextStyle(fontSize: 12, color: p.ink2)),
+                      Text(over ? tr('kcal over goal', 'kcal te veel') : tr('kcal left', 'kcal te gaan'), style: TextStyle(fontSize: 12, color: p.ink2)),
                     ],
                   ),
                 ),
@@ -639,9 +639,9 @@ class _EnergyCard extends StatelessWidget {
                       onTap: () => openDayExercise(context),
                       child: ledger(tr('Exercise', 'Beweging'), '+${fmtInt(burned)}', dot: p.brand, color: p.brand),
                     ),
-                  ledger(tr('Eaten', 'Gegeten'), '−${fmtInt(eaten)}', dot: p.ink),
+                  ledger(tr('Eaten', 'Gegeten'), fmtSigned(-eaten), dot: p.ink),
                   Divider(height: 10, color: p.line),
-                  ledger(over ? tr('Over goal', 'Te veel') : tr('Left', 'Over'), fmtInt(left.abs()), strong: true, color: over ? p.high : null),
+                  ledger(over ? tr('Over goal', 'Te veel') : tr('Left', 'Te gaan'), fmtInt(left.abs()), strong: true, color: over ? p.high : null),
                 ],
               ),
             ),
@@ -668,14 +668,18 @@ class _EnergyCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
+          // Dezelfde rijen als de Doelen-pagina op een gsm: eiwit, koolhydraten, vet, en met "Let op suiker" de suikergrens
           for (final (key, name) in [
             ('protein', tr('Protein', 'Eiwit')),
-            ('carbs', tr('Carbs', 'Koolhydr.')),
-            // Vezels horen bij de koolhydraten, niet onder vet
-            ('fiber', tr('Fiber', 'Vezels')),
+            ('carbs', tr('Carbs', 'Koolhydraten')),
             ('fat', tr('Fat', 'Vet')),
+            if (s.sugarFocus)
+              if (s.targets['sugars']?.upper != null)
+                ('sugars', tr('Sugars', 'Suikers'))
+              else if (s.targets['free_sugars']?.upper != null)
+                ('free_sugars', tr('Free sugars', 'Vrije suikers')),
           ])
-            _MacroLine(name: name, amount: s.totals[key], target: s.targets[key], color: p.macro(key), remaining: remaining),
+            _MacroLine(name: name, amount: s.totals[key], target: s.targets[key], color: key.contains('sugars') ? p.macro('carbs') : p.macro(key), remaining: remaining),
         ],
       ],
     );
@@ -696,7 +700,7 @@ class _MacroLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final goal = target?.goal ?? 0;
+    final goal = target?.goal ?? target?.upper ?? 0;
     // Boven het doel is alleen een waarschuwing bij een doel-om-ongeveer-te-halen (energie/koolh./vet) of een
     // bovengrens. Eiwit en vezels zijn "minstens": erboven is prima, niet rood "te veel".
     final tooMuch = levelOf(amount, target) == Level.high;
@@ -706,7 +710,7 @@ class _MacroLine extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 92,
+            width: 112,
             child: Row(
               children: [
                 LegendItem.box(color, w: 7, h: 7),
@@ -1608,7 +1612,7 @@ class _EntryRow extends StatelessWidget {
 
   static String _amountLabel(DiaryEntry e) {
     final g = '${_trim(e.grams)} g';
-    final label = e.portionLabel;
+    final label = e.portionLabel == null ? null : portionInLang(e.portionLabel!);
     if (label == null) return g;
     // Een geschatte portie draagt haar grammen al in de naam ("1 slice (≈35 g)"): niet nog eens "(35 g)" erachter
     final hasGrams = RegExp(r'\d\s*(g|ml)\)').hasMatch(label);
@@ -1651,7 +1655,7 @@ Future<void> addExercise(BuildContext context) async {
   // Begin bij wat je de vorige keer deed: de meeste mensen herhalen dezelfde activiteit
   final recent = s.recentExercises;
   final last = recent.firstOrNull;
-  ExerciseType? type = last == null ? exerciseTypes.first : exerciseTypes.where((t) => t.name == last.name).firstOrNull;
+  ExerciseType? type = last == null ? exerciseTypes.first : exerciseTypes.where((t) => t.name == exerciseNameInLang(last.name)).firstOrNull;
   final minutes = TextEditingController(text: last?.minutes == null ? '30' : fmtNum(last!.minutes!, 0));
   final kcal = TextEditingController();
   final name = TextEditingController(text: last != null && type == null ? last.name : '');
@@ -1680,7 +1684,7 @@ Future<void> addExercise(BuildContext context) async {
                   for (final e in recent)
                     ActionChip(
                       label: Text(
-                        e.minutes == null ? '${e.name} · ${fmtInt(e.kcal)} kcal' : '${e.name} · ${fmtNum(e.minutes!, 0)} min',
+                        e.minutes == null ? '${exerciseNameInLang(e.name)} · ${fmtInt(e.kcal)} kcal' : '${exerciseNameInLang(e.name)} · ${fmtNum(e.minutes!, 0)} min',
                         overflow: TextOverflow.ellipsis,
                       ),
                       onPressed: () => Navigator.pop(ctx, e),
@@ -1731,8 +1735,8 @@ Future<void> addExercise(BuildContext context) async {
                 helperText: type == null
                     ? null
                     : tr(
-                        'Estimate: ${estimate().round()} kcal (at ${fmtDec(s.currentWeight)} kg)',
-                        'Schatting: ${estimate().round()} kcal (bij ${fmtDec(s.currentWeight)} kg)',
+                        'Estimate: ${fmtInt(estimate())} kcal (at ${fmtDec(s.currentWeight)} kg)',
+                        'Schatting: ${fmtInt(estimate())} kcal (bij ${fmtDec(s.currentWeight)} kg)',
                       ),
               ),
             ),
@@ -2045,7 +2049,7 @@ class _UsualStrip extends StatelessWidget {
     if (usual.isEmpty) return const SizedBox.shrink();
     String amount(DiaryEntry e) => e.portionLabel == null
         ? '${fmtInt(e.grams)} g'
-        : '${e.quantity == e.quantity.roundToDouble() ? e.quantity.round() : e.quantity} × ${e.portionLabel}';
+        : '${e.quantity == e.quantity.roundToDouble() ? e.quantity.round() : fmtDec(e.quantity, 2)} × ${portionInLang(e.portionLabel!)}';
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Panel(

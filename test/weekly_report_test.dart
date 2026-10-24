@@ -66,7 +66,7 @@ void main() {
     expect(r.changeFor('vit_d'), isNull);
     expect(
       WeeklyReportScreen.energyLine(r),
-      'Energy: 1680 of 2400 kcal a day (720 kcal deficit; average of 5 fully logged days) · -220 kcal vs last week',
+      'Energy: 1,680 of 2,400 kcal a day (720 kcal deficit; average of 5 fully logged days) · -220 kcal vs last week',
     );
     expect(WeeklyReportScreen.energyTip(r), contains('720 kcal a day below your goal'));
     expect(WeeklyReportScreen.suggestGoalChange(r), isFalse);
@@ -85,7 +85,7 @@ void main() {
       weightTrend: const WeightTrend(change: -0.1, days: 13, count: 6),
     );
     expect(r.energyCase, EnergyCase.goalOff);
-    expect(WeeklyReportScreen.energyTip(r), contains('Your weight is stable at about 1700 kcal'));
+    expect(WeeklyReportScreen.energyTip(r), contains('Your weight is stable at about 1,700 kcal'));
     expect(WeeklyReportScreen.energyTip(r), isNot(contains('Add about')));
     expect(WeeklyReportScreen.suggestGoalChange(r), isTrue);
   });
@@ -130,7 +130,7 @@ void main() {
     final text = WeeklyReportScreen.shareText(report(notes: {'2026-10-14': 'Sick,\nlittle appetite'}), 4);
     expect(text, contains('Weight: 81.2 kg at your last weigh-in (−0.6 kg this week)'));
     expect(text, contains('Exercise: 3 sessions, 140 min logged, 950 kcal'));
-    expect(text, contains('Energy: 1680 of 2400 kcal'));
+    expect(text, contains('Energy: 1,680 of 2,400 kcal'));
     expect(text, contains('Nutrient score: 70 (+5 vs last week), average of 5 fully logged days'));
     expect(text, contains('Vitamin C 140% (▲ 20%)'));
     expect(text, contains('Needs attention: Energy 70% (▼ 10%)'));

@@ -94,5 +94,5 @@ String formatAmount(double value, Nutrient n) {
   var d = n.displayDecimals;
   // Kleine hoeveelheden met wat meer precisie, zodat er geen "0" staat bij sporen
   if (value != 0 && value.abs() < 1 && d < 2) d = 2;
-  return fmtNum(value, d);
+  return fmtGrouped(value, d);
 }

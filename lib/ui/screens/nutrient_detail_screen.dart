@@ -431,15 +431,15 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     return Row(
       children: [
         Expanded(
-          child: StatTile(label: tr('7-day avg.', '7-daags gem.'), value: avg(7) == null ? '–' : _amount(avg(7)!)),
+          child: StatTile(label: tr('7-day avg.', '7 d gem.'), value: avg(7) == null ? '–' : _amount(avg(7)!)),
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: StatTile(label: tr('30-day avg.', '30-daags gem.'), value: avg(30) == null ? '–' : _amount(avg(30)!)),
+          child: StatTile(label: tr('30-day avg.', '30 d gem.'), value: avg(30) == null ? '–' : _amount(avg(30)!)),
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: StatTile(label: tr('Days on target', 'Dagen op doel'), value: target == null ? '–' : '$ok / ${daily.length}'),
+          child: StatTile(label: tr('On target', 'Op doel'), value: target == null ? '–' : '$ok / ${daily.length}'),
         ),
       ],
     );

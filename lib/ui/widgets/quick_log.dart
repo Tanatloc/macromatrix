@@ -78,7 +78,7 @@ class _Line {
     if (byWeight) return '$g g';
     // "1 stuk (≈35 g)" draagt zijn grammen al: niet nog eens "(35 g)" erachter; bij meer dan één het totaal
     if (portion != null) {
-      final label = portion!.label;
+      final label = portionInLang(portion!.label);
       final hasGrams = RegExp(r'\d\s*(g|ml)\)').hasMatch(label);
       if (n == 1) return hasGrams ? label : '$label ($g g)';
       return hasGrams ? '${_count(n)} × $label = $g g' : '${_count(n)} × $label ($g g)';

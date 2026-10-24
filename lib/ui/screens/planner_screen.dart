@@ -238,7 +238,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                         Text(
                           x.item.portionLabel == null
                               ? '${fmtInt(x.item.grams)} g'
-                              : '${fmtDec(x.item.quantity, x.item.quantity == x.item.quantity.roundToDouble() ? 0 : 1)} × ${x.item.portionLabel}',
+                              : '${fmtDec(x.item.quantity, x.item.quantity == x.item.quantity.roundToDouble() ? 0 : 1)} × ${portionInLang(x.item.portionLabel!)}',
                           style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
                         ),
                       ],

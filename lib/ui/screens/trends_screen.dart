@@ -278,7 +278,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
       for (final r in rows)
         if (logged >= 5 && r.$2.where((c) => c == 2).length <= logged * 0.25) r.$1,
     ];
-    final weekday = isNl ? const ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'] : const ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final weekday = weekdayShort;
 
     Color cellColor(int? c) => switch (c) {
       0 => p.lowFill,
@@ -318,13 +318,16 @@ class _PeriodTrendsState extends State<PeriodTrends> {
               Expanded(
                 child: grid([
                   for (final (i, d) in keys.indexed)
-                    Text(
-                      weekday[parseDay(d).weekday - 1],
-                      textAlign: TextAlign.center,
-                      style: numStyle(
-                        9.5,
-                        weight: i == keys.length - 1 ? FontWeight.w600 : FontWeight.w400,
-                        color: i == keys.length - 1 ? p.ink : p.ink3,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        weekday[parseDay(d).weekday - 1],
+                        textAlign: TextAlign.center,
+                        style: numStyle(
+                          9.5,
+                          weight: i == keys.length - 1 ? FontWeight.w600 : FontWeight.w400,
+                          color: i == keys.length - 1 ? p.ink : p.ink3,
+                        ),
                       ),
                     ),
                 ]),
@@ -398,7 +401,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
               child: TextButton(
                 style: TextButton.styleFrom(padding: EdgeInsets.zero),
                 onPressed: () => setState(() => _allHeat = !_allHeat),
-                child: Text(_allHeat ? tr('Show less', 'Minder tonen') : tr('Show all ${rows.length}', 'Alle ${rows.length} tonen')),
+                child: Text(_allHeat ? tr('Show less', 'Minder tonen') : tr('Show all', 'Alles tonen')),
               ),
             ),
           ChartLegend(
@@ -737,7 +740,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Nutrient score', style: TextStyle(fontSize: 12, color: p.ink2)),
+                Text(tr('Nutrient score', 'Voedingsscore'), style: TextStyle(fontSize: 12, color: p.ink2)),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,

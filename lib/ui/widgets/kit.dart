@@ -18,19 +18,28 @@ final _ints = <String, NumberFormat>{};
 /// Geheel getal met duizendtallen volgens de taal (2,042 of 2.042).
 String fmtInt(num v) => _ints.putIfAbsent(appLocale, () => NumberFormat.decimalPattern(appLocale)).format(v.round());
 
-/// Getal met [d] decimalen, met punt (Engels) of komma (Nederlands).
-String fmtDec(num v, [int d = 1]) => fmtNum(v, d);
+/// Getal met hoogstens [d] decimalen en duizendtallen, met punt (Engels) of komma (Nederlands). Alleen om te tonen.
+String fmtDec(num v, [int d = 1]) => fmtGrouped(v, d);
 
-/// Naam midden in een zin: "Vitamine D" wordt "vitamine D", "Jodium" wordt "jodium", "B12" blijft.
-String inSentence(String name) =>
-    name.length > 1 && name[1] == name[1].toLowerCase() && name[1] != name[1].toUpperCase() ? name[0].toLowerCase() + name.substring(1) : name;
+/// Korte weekdagnamen, maandag eerst, altijd twee letters zodat geen twee dagen hetzelfde lijken
+/// ("Z" voor zaterdag en zondag): ma di wo do vr za zo, of Mo Tu We Th Fr Sa Su.
+List<String> get weekdayShort =>
+    isNl ? const ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'] : const ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-/// Percentage zonder decimalen. Rondt niet naar 100% als je er nog net niet bent (99,6% blijft 99%), en
+/// Verschil met teken ("+250", "−1,022"), en gewoon "0" als het afgerond niets is (geen "−0").
+String fmtSigned(num v) {
+  final r = v.round();
+  if (r == 0) return '0';
+  return '${r > 0 ? '+' : '−'}${fmtInt(r.abs())}';
+}
+
+/// Percentage zonder decimalen. Boven 999% staat er ">999%" (een uitschieter gaf "44094%"). Rondt niet naar 100% als je er nog net niet bent (99,6% blijft 99%), en
 /// niet naar 0% als er toch iets is (0,4% wordt 1%): anders lijkt een doel gehaald of een inname nul terwijl dat niet zo is.
 String fmtPct(double fraction) {
   final pct = (fraction * 100).round();
   if (fraction < 1 && pct >= 100) return '99%';
   if (fraction > 0 && pct == 0) return '1%';
+  if (pct > 999) return '>999%';
   return '$pct%';
 }
 
@@ -768,9 +777,10 @@ class StatTile extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Twee regels: een smalle tegel breekt het label tussen woorden in plaats van het af te knippen ("7-daags ge…")
         Text(
           label,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 11.5, color: p.ink3),
         ),
