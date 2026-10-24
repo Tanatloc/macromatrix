@@ -1648,120 +1648,193 @@ Future<String?> _askName(BuildContext context, Meal meal) {
 /// Beweging toevoegen aan de gekozen dag: een activiteit en de duur, of zelf de kcal.
 Future<void> addExercise(BuildContext context) async {
   final s = context.read<AppState>();
-  // Begin bij wat je de vorige keer deed: de meeste mensen herhalen dezelfde activiteit
+  // Leeg beginnen: de vorige activiteit staat klaar als "Opnieuw"-knop, niet al ingevuld (N66)
   final recent = s.recentExercises;
-  final last = recent.firstOrNull;
-  ExerciseType? type = last == null ? exerciseTypes.first : exerciseTypes.where((t) => t.name == last.name).firstOrNull;
-  final minutes = TextEditingController(text: last?.minutes == null ? '30' : fmtNum(last!.minutes!, 0));
+  Object? choice;
+  final minutes = TextEditingController(text: '30');
   final kcal = TextEditingController();
-  final name = TextEditingController(text: last != null && type == null ? last.name : '');
-  if (last != null && type == null) kcal.text = fmtNum(last.kcal, 0);
+  final name = TextEditingController();
   double? parse(TextEditingController c) => parseNum(c.text);
-  double estimate() => (type?.met ?? 0) * s.currentWeight * (parse(minutes) ?? 0) / 60;
+  ExerciseType? type() => choice is ExerciseType ? choice as ExerciseType : null;
+  double estimate() => (type()?.met ?? 0) * s.currentWeight * (parse(minutes) ?? 0) / 60;
+  // Ingevuld via "Opnieuw": die kcal schaalt mee met de duur, tot je de kcal zelf intypt
+  Exercise? base;
+  var kcalTyped = false;
+  // Even na het openen van de activiteitenlijst: tikken op de velden eronder negeren (N30)
+  var picking = false;
+  String? activityError, minutesError, kcalError;
+  final other = otherExercise(s);
 
-  final ok = await showDialog<Object>(
+  final ok = await showDialog<bool>(
     context: context,
     // Niet sluiten bij een tik naast het venster: je zou je ingevulde beweging verliezen (P10)
     barrierDismissible: false,
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setD) => AlertDialog(
-        title: Text(tr('Add exercise', 'Beweging toevoegen')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (recent.isNotEmpty) ...[
-              Text(tr('Again', 'Opnieuw'), style: TextStyle(fontSize: 12.5, color: ctx.pal.ink3)),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final e in recent)
-                    ActionChip(
-                      label: Text(
-                        e.minutes == null ? '${e.name} · ${fmtInt(e.kcal)} kcal' : '${e.name} · ${fmtNum(e.minutes!, 0)} min',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onPressed: () => Navigator.pop(ctx, e),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
-            ],
-            DropdownButtonFormField<ExerciseType?>(
-              initialValue: type,
-              isExpanded: true,
-              decoration: InputDecoration(labelText: tr('Activity', 'Activiteit')),
-              items: [
-                for (final t in exerciseTypes)
-                  DropdownMenuItem(
-                    value: t,
-                    child: Text(t.name, overflow: TextOverflow.ellipsis),
+      builder: (ctx, setD) {
+        void fillFrom(Exercise e) => setD(() {
+          final t = exerciseTypes.where((t) => t.name == e.name).firstOrNull;
+          choice = t ?? _otherExercise;
+          name.text = t == null ? e.name : '';
+          minutes.text = e.minutes == null ? '' : fmtNum(e.minutes!, 0);
+          kcal.text = '${e.kcal.round()}';
+          base = e;
+          kcalTyped = false;
+          activityError = minutesError = kcalError = null;
+        });
+
+        void submit() {
+          final m = parse(minutes);
+          final burned = parse(kcal) ?? estimate();
+          activityError = choice == null && parse(kcal) == null ? tr('Choose an activity', 'Kies een activiteit') : null;
+          minutesError = exerciseMinutesError(m, otherMinutes: other.minutes);
+          kcalError = activityError != null
+              ? null
+              : burned <= 0
+              ? tr('Enter how long or how many kcal you burned', 'Vul in hoe lang of hoeveel kcal je verbrandde')
+              : exerciseKcalError(burned, m, otherKcal: other.kcal);
+          if (activityError != null || minutesError != null || kcalError != null) return setD(() {});
+          Navigator.pop(ctx, true);
+        }
+
+        return AlertDialog(
+          title: Text(tr('Add exercise', 'Beweging toevoegen')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (recent.isNotEmpty) ...[
+                  Text(tr('Again', 'Opnieuw'), style: TextStyle(fontSize: 12.5, color: ctx.pal.ink3)),
+                  const SizedBox(height: 6),
+                  // Een tik vult de velden in; toevoegen doe je zelf, zodat je de duur nog kunt aanpassen (N19)
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final e in recent)
+                        ChoiceChip(
+                          selected: base?.id == e.id,
+                          showCheckmark: false,
+                          label: Text(
+                            e.minutes == null ? '${e.name} · ${fmtInt(e.kcal)} kcal' : '${e.name} · ${fmtNum(e.minutes!, 0)} min',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onSelected: (_) => fillFrom(e),
+                        ),
+                    ],
                   ),
-                DropdownMenuItem(value: null, child: Text(tr('Other (enter kcal yourself)', 'Andere (zelf kcal invullen)'))),
-              ],
-              onChanged: (t) => setD(() => type = t),
-            ),
-            const SizedBox(height: 12),
-            if (type == null) ...[
-              TextField(
-                controller: name,
-                decoration: InputDecoration(labelText: tr('Name, e.g. "Spinning"', 'Naam, bv. "Spinning"')),
-              ),
-              const SizedBox(height: 12),
-            ],
-            TextField(
-              controller: minutes,
-              keyboardType: TextInputType.number,
-              inputFormatters: wholeInput,
-              onTap: selectAllOnTap(minutes),
-              decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
-              onChanged: (_) => setD(() {}),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: kcal,
-              keyboardType: TextInputType.number,
-              inputFormatters: wholeInput,
-              onTap: selectAllOnTap(kcal),
-              decoration: InputDecoration(
-                labelText: tr('Burned (empty = estimate)', 'Verbrand (leeg = schatting)'),
-                suffixText: 'kcal',
-                helperText: type == null
-                    ? null
-                    : tr(
-                        'Estimate: ${estimate().round()} kcal (at ${fmtDec(s.currentWeight)} kg)',
-                        'Schatting: ${estimate().round()} kcal (bij ${fmtDec(s.currentWeight)} kg)',
+                  const SizedBox(height: 14),
+                ],
+                DropdownButtonFormField<Object>(
+                  initialValue: choice,
+                  isExpanded: true,
+                  hint: Text(tr('Choose an activity', 'Kies een activiteit')),
+                  decoration: InputDecoration(labelText: tr('Activity', 'Activiteit'), errorText: activityError),
+                  items: [
+                    for (final t in exerciseTypes)
+                      DropdownMenuItem(
+                        value: t,
+                        child: Text(t.name, overflow: TextOverflow.ellipsis),
                       ),
-              ),
+                    DropdownMenuItem(value: _otherExercise, child: Text(tr('Other (enter kcal yourself)', 'Andere (zelf kcal invullen)'))),
+                  ],
+                  onTap: () {
+                    setD(() => picking = true);
+                    Future<void>.delayed(const Duration(milliseconds: 450), () {
+                      if (ctx.mounted) setD(() => picking = false);
+                    });
+                  },
+                  onChanged: (v) => setD(() {
+                    if (v == choice) return;
+                    choice = v;
+                    activityError = kcalError = null;
+                    // Andere activiteit: de oude kcal past niet meer, tenzij je die zelf intypte (N30)
+                    if (!kcalTyped) {
+                      kcal.clear();
+                      base = null;
+                    }
+                    if (v != _otherExercise) name.clear();
+                  }),
+                ),
+                const SizedBox(height: 12),
+                IgnorePointer(
+                  ignoring: picking,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (choice == _otherExercise) ...[
+                        TextField(
+                          controller: name,
+                          decoration: InputDecoration(labelText: tr('Name, e.g. "Spinning"', 'Naam, bv. "Spinning"')),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      TextField(
+                        controller: minutes,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: wholeInput,
+                        onTap: selectAllOnTap(minutes),
+                        decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min', errorText: minutesError, errorMaxLines: 3),
+                        onChanged: (_) => setD(() {
+                          minutesError = kcalError = null;
+                          final m = parse(minutes), b = base, old = b?.minutes;
+                          if (!kcalTyped && b != null && old != null && old > 0 && m != null) kcal.text = '${(b.kcal * m / old).round()}';
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: kcal,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: wholeInput,
+                        onTap: selectAllOnTap(kcal),
+                        onChanged: (v) => setD(() {
+                          kcalTyped = v.trim().isNotEmpty;
+                          if (!kcalTyped) base = null;
+                          kcalError = activityError = null;
+                        }),
+                        decoration: InputDecoration(
+                          labelText: tr('Burned (empty = estimate)', 'Verbrand (leeg = schatting)'),
+                          suffixText: 'kcal',
+                          errorText: kcalError,
+                          errorMaxLines: 3,
+                          helperText: type() == null
+                              ? null
+                              : tr(
+                                  'Estimate: ${estimate().round()} kcal (at ${fmtDec(s.currentWeight)} kg)',
+                                  'Schatting: ${estimate().round()} kcal (bij ${fmtDec(s.currentWeight)} kg)',
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+            FilledButton(onPressed: submit, child: Text(tr('Add', 'Toevoegen'))),
           ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Add', 'Toevoegen'))),
-        ],
-      ),
+        );
+      },
     ),
   );
-  if (ok is Exercise) {
-    s.addExercise(ok.name, ok.kcal, minutes: ok.minutes);
-    return;
-  }
   if (ok != true) return;
+  final m = parse(minutes);
   final burned = parse(kcal) ?? estimate();
-  final label = type?.name ?? (name.text.trim().isEmpty ? tr('Exercise', 'Beweging') : name.text.trim());
-  if (burned <= 0) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(tr('Enter how long or how many kcal you burned.', 'Vul in hoe lang of hoeveel kcal je verbrandde.'))));
-    }
-    return;
-  }
-  if (!context.mounted || !await confirmExercise(context, parse(minutes), burned)) return;
-  s.addExercise(label, burned, minutes: parse(minutes));
+  final label = type()?.name ?? (name.text.trim().isEmpty ? tr('Exercise', 'Beweging') : name.text.trim());
+  if (!context.mounted || !await confirmExercise(context, m, burned)) return;
+  final before = {for (final x in s.exercise) x.id};
+  s.addExercise(label, burned, minutes: m);
+  // De beweging staat onderaan Vandaag, vaak buiten beeld: zeg dat ze erbij staat, met Ongedaan maken
+  final added = s.exercise.where((x) => !before.contains(x.id)).firstOrNull;
+  if (added == null || !context.mounted) return;
+  final what = m == null || m <= 0 ? '$label · ${fmtInt(burned)} kcal' : '$label · ${fmtNum(m, 0)} min';
+  showUndo(context, tr('$what added', '$what toegevoegd'), () => s.deleteExercise(added));
 }
+
+/// Keuze "Andere" in de activiteitenlijst (null betekent: nog niets gekozen).
+const _otherExercise = Object();
 
 class _ExerciseCard extends StatelessWidget {
   const _ExerciseCard();

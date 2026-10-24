@@ -197,42 +197,62 @@ class _ExerciseSheet extends StatelessWidget {
       kcal.text = '${(e.kcal * m / old).round()}';
     }
 
+    // Onmogelijke waarden (99.999 min) weigeren in het venster zelf, zodat je ingevulde tekst blijft staan
+    final other = otherExercise(s, except: e);
+    String? minutesError, kcalError;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('Edit exercise', 'Beweging aanpassen')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: name,
-              decoration: InputDecoration(labelText: tr('Activity', 'Activiteit')),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: minutes,
-              keyboardType: TextInputType.number,
-              inputFormatters: wholeInput,
-              onTap: selectAllOnTap(minutes),
-              onChanged: durationChanged,
-              decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: kcal,
-              keyboardType: TextInputType.number,
-              inputFormatters: wholeInput,
-              onTap: selectAllOnTap(kcal),
-              onChanged: (_) => kcalEdited = true,
-              decoration: InputDecoration(labelText: tr('Burned', 'Verbrand'), suffixText: 'kcal'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text(tr('Edit exercise', 'Beweging aanpassen')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: name,
+                decoration: InputDecoration(labelText: tr('Activity', 'Activiteit')),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: minutes,
+                keyboardType: TextInputType.number,
+                inputFormatters: wholeInput,
+                onTap: selectAllOnTap(minutes),
+                onChanged: (v) => setD(() {
+                  durationChanged(v);
+                  minutesError = kcalError = null;
+                }),
+                decoration: InputDecoration(labelText: tr('Duration', 'Duur'), suffixText: 'min', errorText: minutesError, errorMaxLines: 3),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: kcal,
+                keyboardType: TextInputType.number,
+                inputFormatters: wholeInput,
+                onTap: selectAllOnTap(kcal),
+                onChanged: (_) => setD(() {
+                  kcalEdited = true;
+                  kcalError = null;
+                }),
+                decoration: InputDecoration(labelText: tr('Burned', 'Verbrand'), suffixText: 'kcal', errorText: kcalError, errorMaxLines: 3),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+            FilledButton(
+              onPressed: () {
+                final m = parse(minutes);
+                minutesError = exerciseMinutesError(m, otherMinutes: other.minutes);
+                kcalError = exerciseKcalError(parse(kcal) ?? 0, m, otherKcal: other.kcal);
+                if (minutesError != null || kcalError != null) return setD(() {});
+                Navigator.pop(ctx, true);
+              },
+              child: Text(tr('Save', 'Opslaan')),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Save', 'Opslaan'))),
-        ],
       ),
     );
     if (ok != true) return;
@@ -398,4 +418,50 @@ Future<bool> confirmExercise(BuildContext context, double? minutes, double kcal)
   if ((minutes ?? 0) <= 300 && kcal <= 2000) return true;
   final what = minutes != null && minutes > 300 ? '${fmtInt(minutes)} min (${fmtNum(minutes / 60)} h)' : '${fmtInt(kcal)} kcal';
   return confirmUnusual(context, tr('$what of exercise is a lot. Is that right?', '$what beweging is veel. Klopt dat?'));
+}
+
+/// Bovengrenzen voor beweging: een dag telt 1440 minuten, en meer dan 25 kcal per minuut of 15.000 kcal
+/// per dag haalt zelfs een ultraloper niet. Wat erboven zit, is een tikfout (99.999 min) en wordt geweigerd.
+const maxExerciseMinutesPerDay = 1440.0;
+const maxExerciseKcalPerDay = 15000.0;
+const maxExerciseKcalPerMinute = 25.0;
+
+/// Foutmelding voor de duur, of null als die kan. [otherMinutes] is de rest van de beweging van die dag.
+String? exerciseMinutesError(double? minutes, {double otherMinutes = 0}) {
+  if (minutes == null || minutes <= 0) return null;
+  if (minutes > maxExerciseMinutesPerDay) {
+    return tr('A day has ${fmtInt(maxExerciseMinutesPerDay)} minutes', 'Een dag telt ${fmtInt(maxExerciseMinutesPerDay)} minuten');
+  }
+  if (minutes + otherMinutes > maxExerciseMinutesPerDay) {
+    return tr('With your other exercise that day this is more than 24 h', 'Samen met je andere beweging van die dag is dat meer dan 24 u');
+  }
+  return null;
+}
+
+/// Foutmelding voor de verbrande energie, of null als die kan. [otherKcal] is de rest van de beweging van die dag.
+String? exerciseKcalError(double kcal, double? minutes, {double otherKcal = 0}) {
+  if (kcal + otherKcal > maxExerciseKcalPerDay) {
+    return tr(
+      'More than ${fmtInt(maxExerciseKcalPerDay)} kcal in a day is not realistic',
+      'Meer dan ${fmtInt(maxExerciseKcalPerDay)} kcal op een dag is niet realistisch',
+    );
+  }
+  if (minutes != null && minutes > 0 && kcal / minutes > maxExerciseKcalPerMinute) {
+    return tr(
+      'That is ${fmtInt(kcal / minutes)} kcal per minute; even top athletes stay under ${fmtInt(maxExerciseKcalPerMinute)}',
+      'Dat is ${fmtInt(kcal / minutes)} kcal per minuut; zelfs topsporters blijven onder ${fmtInt(maxExerciseKcalPerMinute)}',
+    );
+  }
+  return null;
+}
+
+/// Minuten en kcal van de andere beweging op de gekozen dag (zonder [except]), voor de daggrenzen.
+({double minutes, double kcal}) otherExercise(AppState s, {Exercise? except}) {
+  var minutes = 0.0, kcal = 0.0;
+  for (final x in s.exercise) {
+    if (x.id == except?.id) continue;
+    minutes += x.minutes ?? 0;
+    kcal += x.kcal;
+  }
+  return (minutes: minutes, kcal: kcal);
 }
