@@ -36,7 +36,7 @@ import '../nutrition/report.dart';
 import '../nutrition/levels.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/preferences.dart';
-import '../nutrition/portions.dart' show typicalPieceGrams;
+import '../nutrition/portions.dart' show EverydayPortion, everydayPortions, typicalPieceGrams;
 import '../nutrition/processing.dart';
 import '../nutrition/supplements.dart';
 import '../nutrition/targets.dart';
@@ -944,8 +944,18 @@ class AppState extends ChangeNotifier {
 
   List<(Food, double, Portion?)> resolveQuick(QuickItem q) {
     final typed = q.query.toLowerCase().trim();
-    final norm = _normalQuery(q.query);
-    if (norm != q.query.toLowerCase().trim()) q = QuickItem(norm, grams: q.grams, count: q.count, unitGrams: q.unitGrams);
+    var norm = _normalQuery(q.query);
+    // Gewone woorden met een vaste bedoeling: een kroket is een aardappelkroket (geen falafel), melk halfvolle melk,
+    // thee gezette thee (geen ijsthee), whey eiwitpoeder
+    for (final (pattern, alias) in const [
+      (r'^(croquettes?|kroket(ten|je|jes)?|aardappelkroket(ten|je|jes)?)$', 'potato croquettes'),
+      (r'^(milk|melk)$', 'semi-skimmed milk'),
+      (r'^(tea|thee|black tea|zwarte thee)$', 'tea black infusion'),
+      (r'^(whey|whey protein|wei-eiwit)$', 'whey protein powder'),
+    ]) {
+      if (RegExp(pattern).hasMatch(norm)) norm = alias;
+    }
+    if (norm != q.query.toLowerCase().trim()) q = q.withQuery(norm);
     // Wat iemand zegt, is meestal bereid en heel: "rijst" is gekookte rijst, "eieren" zijn hele eieren
     final picked = _quickPicks[typed] ?? _quickPicks[q.query.toLowerCase()];
     final pickedFood = picked == null ? null : (FoodDb.isDbRef(picked) ? foods.byRef(picked) : user.food(picked));
@@ -956,10 +966,14 @@ class AppState extends ChangeNotifier {
     final words = q.query.split(RegExp(r'\s+'));
     if (all.isEmpty && words.length > 1) all = searchLocal(words.join()).take(25).toList();
     if (all.isEmpty && words.length > 1) all = searchLocal(words.last).take(25).toList();
+    // Hetzelfde basisproduct als bovenaan in het zoekvak, zodat Snel loggen en zoeken geen twee eierregels geven (N10)
+    final boxTop = all.isEmpty ? null : groupFoods(searchLocal(q.query)).firstOrNull?.main;
+    if (boxTop != null && !all.any((f) => f.ref == boxTop.ref)) all = [...all, boxTop];
     // Dezelfde score als het zoekvak (P152), plus je eigen keuzes en wat je eerder at
     double rank(int i, Food f) {
       var s = 20.0 - i * 0.15 + foodQueryScore(f, q.query);
       if (f.ref == picked) s += 200;
+      if (f.ref == boxTop?.ref) s += 20;
       if (mine.contains(f.ref)) s += 25;
       return s;
     }
@@ -1010,8 +1024,34 @@ class AppState extends ChangeNotifier {
     (Food, double, Portion?) amount(Food f) {
       if (q.grams != null) return (f, q.grams!, null);
       final n = q.count ?? 1;
+      final name = f.name.toLowerCase();
+      final unit = q.unit;
+      // Pizza: een punt ≈ 100 g, een hele ≈ 400 g ("een halve pizza" = 200 g, niet 60 g)
+      if (RegExp(r'\bpizzas?\b(?! ?(sauce|dough|base|topping|cheese|seasoning))').hasMatch(name) &&
+          (unit == null || unit == 'slice' || unit == 'thin slice' || unit == 'piece')) {
+        final whole = unit == null;
+        final short = whole ? tr('1 pizza', '1 pizza') : tr('1 slice', '1 punt');
+        final g = whole ? 400.0 : 100.0;
+        return (f, n * g, EverydayPortion(short, '$short (≈${g.round()} g)', g));
+      }
+      // Beleg en kaas: een plakje is ≈ 20 g, ook op een boterham zonder hoeveelheid ("2 sneetjes brood met ham")
+      final coldCut = RegExp(
+        r'\b(ham|salami|chorizo|prosciutto|pastrami|mortadella|turkey|chicken breast|luncheon|cheese|cheddar|gouda|edam|emmental)\b',
+      ).hasMatch(name);
+      final onBread =
+          q.after != null && RegExp(r'\b(bread|toast|brood|boterham|sandwich|roll|broodje|bagel|cracker|beschuit|wrap)').hasMatch(q.after!);
+      if (coldCut && (unit == 'slice' || unit == 'thin slice')) return (f, n * 20, null);
+      if (coldCut && unit == null && q.count == null && onBread) return (f, (q.afterCount ?? 1) * 20, null);
+      // In de koffie of thee: een scheutje melk (30 ml) of een klontje suiker, geen glas
+      final inHotDrink = q.after != null && RegExp(r'\b(coffee|tea|koffie|thee|espresso|cappuccino|latte)\b').hasMatch(q.after!);
+      if (inHotDrink && unit == null && q.count == null) {
+        if (RegExp(r'\b(milk|cream|melk|room)\b').hasMatch(name)) return (f, 30, null);
+        if (RegExp(r'\bsugar\b').hasMatch(name)) return (f, 5, null);
+      }
       // Een glas wijn is kleiner dan een glas water
-      if (q.unitGrams == 200 && RegExp(r'\b(wine|champagne|prosecco|cava|port|sherry)\b').hasMatch(f.name.toLowerCase())) return (f, n * 150, null);
+      if (unit == 'glass' && q.unitGrams == 200 && RegExp(r'\b(wine|champagne|prosecco|cava|port|sherry)\b').hasMatch(name)) {
+        return (f, n * 150, null);
+      }
       if (q.unitGrams != null) return (f, n * q.unitGrams!, null);
       // Beleg zonder hoeveelheid ("toast with butter") is een lepel, geen pakje
       if (q.count == null && RegExp(_spreads).hasMatch(q.query.toLowerCase())) return (f, 15, null);
@@ -1020,8 +1060,11 @@ class AppState extends ChangeNotifier {
         ..sort((a, b) => a.grams.compareTo(b.grams));
       final portion = ones.firstOrNull ?? f.portions.where((p) => p.grams >= 15 && p.grams <= 400).firstOrNull;
       if (portion != null) return (f, n * portion.grams, portion);
-      // Geen portie in de databank: een gewoon stukgewicht in plaats van 100 g per stuk
-      final typical = _typicalPieceGrams(f.name.toLowerCase());
+      // Geen portie in de databank: dezelfde gewone portie als op het productscherm (een glas, een mok, een kom)
+      final everyday = everydayPortions(f).firstOrNull;
+      if (everyday != null) return (f, n * everyday.grams, everyday);
+      // Anders een gewoon stukgewicht in plaats van 100 g per stuk
+      final typical = _typicalPieceGrams(name);
       return (f, n * (typical ?? 100), null);
     }
 

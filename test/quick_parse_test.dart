@@ -37,4 +37,25 @@ void main() {
     expect(nl.map((x) => x.query), ['kip', 'eieren', 'yoghurt']);
     expect(parseQuick('half a banana').single.count, 0.5);
   });
+
+  test('pint, rasher, halve pizza en een eenheid zonder product (N65)', () {
+    final pint = parseQuick('a pint of lager').single;
+    expect((pint.query, pint.unitGrams, pint.unit), ('lager', 568, 'pint'));
+    final half = parseQuick('half a pint of cider').single;
+    expect((half.query, half.count! * half.unitGrams!), ('cider', 284));
+    expect(parseQuick('een pint').single.query, 'beer');
+    final bacon = parseQuick('2 rashers of bacon').single;
+    expect((bacon.query, bacon.count, bacon.unitGrams), ('bacon', 2, 25));
+    final pizza = parseQuick('een halve pizza').single;
+    expect((pizza.query, pizza.count), ('pizza', 0.5));
+  });
+
+  test('0 eieren geeft geen regel; "met" onthoudt het product ervoor', () {
+    expect(parseQuick('0 eggs and 0 g butter'), isEmpty);
+    final r = parseQuick('two slices of bread with ham, coffee met melk');
+    expect(r.map((x) => x.query), ['bread', 'ham', 'coffee', 'melk']);
+    expect((r[1].after, r[1].afterCount), ('bread', 2));
+    expect(r[2].after, isNull);
+    expect(r[3].after, 'coffee');
+  });
 }

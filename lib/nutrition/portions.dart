@@ -42,6 +42,7 @@ double? typicalPieceGrams(String name) {
     r'\brice cake': 9,
     r'\bsausage': 60,
     r'\bhash brown': 60,
+    r'\bcroquet': 35,
     r'\bpotato\b': 150,
     r'\btomato\b': 120,
     r'\bcarrot': 60,
