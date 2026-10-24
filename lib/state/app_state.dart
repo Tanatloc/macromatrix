@@ -2294,6 +2294,8 @@ class AppState extends ChangeNotifier {
 
   void saveCustomFood(Food f) {
     user.saveFood(f);
+    // De verwerkingsgraad kan veranderd zijn (N72)
+    _novaCache.remove(f.ref);
     notifyListeners();
   }
 

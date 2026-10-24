@@ -2,6 +2,8 @@
 /// recepten en terugkerende items.
 library;
 
+import 'dart:math' as math;
+
 import '../i18n.dart';
 import '../nutrition/values.dart';
 import 'food.dart';
@@ -216,6 +218,9 @@ class Recipe {
   double get totalGrams => cookedGrams ?? rawGrams;
 
   /// Voedingswaarden van het hele recept, en per 100 g van het eindresultaat.
+  ///
+  /// Met een gewicht na bereiding is het verschil met het rauwe gewicht water: kookwater dat linzen of pasta opnemen
+  /// komt erbij, wat een saus inkookt gaat eraf (N76: een portie dal had maar 5 g water).
   NutrientMap get totals {
     final t = <String, double>{};
     for (final i in ingredients) {
@@ -223,8 +228,43 @@ class Recipe {
         t[e.key] = (t[e.key] ?? 0) + e.value;
       }
     }
+    if (cookedGrams case final cooked? when ingredients.isNotEmpty) {
+      final delta = cooked - rawGrams;
+      if (delta > 0) {
+        t['water'] = (t['water'] ?? 0) + delta;
+      } else if (t['water'] case final w?) {
+        // Er kan niet meer water verdampen dan er was
+        t['water'] = math.max(0, w + delta);
+      }
+    }
     return t;
   }
+
+  /// Hetzelfde product nog eens toevoegen telt bij de regel die er al staat, zoals in het dagboek (N75). Met dezelfde
+  /// portie komen de porties erbij; met een andere portie of in gram wordt het één regel in gram. Geeft de plaats van
+  /// de samengevoegde regel terug, of null als [add] een nieuwe regel werd.
+  static int? addIngredient(List<ItemTemplate> items, ItemTemplate add) {
+    final i = items.indexWhere((x) => x.foodRef == add.foodRef && _sameValues(x.per100g, add.per100g));
+    if (i < 0) {
+      items.add(add);
+      return null;
+    }
+    final old = items[i];
+    final samePortion = old.portionLabel == add.portionLabel;
+    final grams = old.grams + add.grams;
+    items[i] = ItemTemplate(
+      foodRef: old.foodRef,
+      name: old.name,
+      brand: old.brand,
+      grams: grams,
+      quantity: samePortion ? old.quantity + add.quantity : grams,
+      portionLabel: samePortion ? old.portionLabel : null,
+      per100g: old.per100g,
+    );
+    return i;
+  }
+
+  static bool _sameValues(NutrientMap a, NutrientMap b) => a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
 
   /// Als voedingsmiddel, zodat een recept overal gebruikt kan worden zoals een product.
   Food toFood() {

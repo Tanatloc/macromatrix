@@ -82,7 +82,16 @@ class _RecipeScreenState extends State<RecipeScreen> {
   Future<void> _addIngredient() async {
     final t = await Navigator.of(context)
         .push<ItemTemplate>(MaterialPageRoute(builder: (_) => const AddFoodScreen(meal: Meal.lunch, pickOnly: true)));
-    if (t != null) setState(() => _items.add(t));
+    if (t == null || !mounted) return;
+    // Hetzelfde product nog eens: bij de regel die er al staat, met Ongedaan maken (N75)
+    final before = [..._items];
+    final into = Recipe.addIngredient(_items, t);
+    setState(() {});
+    if (into == null) return;
+    final merged = _items[into];
+    showUndo(context, tr('Added to ${merged.name}: now ${_fmt(merged.grams)} g', 'Bij ${merged.name} geteld: nu ${_fmt(merged.grams)} g'), () {
+      if (mounted) setState(() => _items..clear()..addAll(before));
+    });
   }
 
   /// Een ingrediënt aanpassen: het detailscherm met de huidige hoeveelheid, en de regel vervangen door wat terugkomt.

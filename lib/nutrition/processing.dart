@@ -96,14 +96,17 @@ const _ultraFlags = {'sweetened', 'diet', 'instant', 'breaded'};
 const _processedFlags = {'salted', 'in syrup', 'in sauce', 'smoked'};
 
 /// NOVA-groep van een voedingsmiddel, of null als we het niet weten (supplementen, babyvoeding, eigen producten
-/// zonder herkenbare naam). Recepten: zie [novaOfRecipe].
+/// waarbij je geen groep koos). Recepten: zie [novaOfRecipe].
 Nova? novaOf(Food f) {
   final label = Nova.of(f.nova);
   if (label != null) return label;
   final l = f.label;
   final name = f.name;
   if (l == null) {
-    // Eigen of gescand product zonder NOVA op het etiket: alleen een duidelijke naam telt
+    // Eigen product: de groep die je zelf koos, anders onbekend. Eén woord in de naam zegt te weinig ("Honey
+    // protein yoghurt" is geen keukeningrediënt, N72).
+    if (f.source == FoodSource.custom) return null;
+    // Gescand product zonder NOVA op het etiket: alleen een duidelijke naam telt
     if (_ultra.hasMatch(name)) return Nova.ultra;
     if (f.source == FoodSource.off) return null;
     if (_processed.hasMatch(name)) return Nova.processed;
