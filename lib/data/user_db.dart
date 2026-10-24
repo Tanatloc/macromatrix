@@ -91,6 +91,9 @@ class SyncTable {
   final List<String> columns;
 }
 
+/// Zet op true nadat de migratie 20261024000000_meal_of_saved_meal.sql op Supabase staat.
+const syncSavedMealMeal = false;
+
 class UserDb {
   /// Opent de gebruikersdatabase en werkt het schema bij. Openen gebeurt per platform (lib/platform/).
   UserDb(this._db) {
@@ -204,7 +207,9 @@ class UserDb {
       'id', 'day', 'meal', 'food_ref', 'name', 'brand', 'grams', 'portion_label', 'quantity', 'nutrients', //
       'created_at', 'updated_at', 'deleted', 'time', 'repeat_id',
     ]),
-    SyncTable('meals', 'id', ['id', 'name', 'items', 'updated_at', 'deleted', 'meal']),
+    // De kolom 'meal' (bij welke maaltijd een opgeslagen maaltijd hoort) gaat pas mee zodra de server-migratie
+    // supabase/migrations/20261024000000_meal_of_saved_meal.sql toegepast is; tot dan blijft ze lokaal.
+    SyncTable('meals', 'id', ['id', 'name', 'items', 'updated_at', 'deleted', if (syncSavedMealMeal) 'meal']),
     SyncTable('biometrics', 'id', ['id', 'day', 'time', 'type', 'value', 'value2', 'updated_at', 'deleted']),
     SyncTable('notes', 'day', ['day', 'text', 'updated_at']),
     SyncTable('exercise', 'id', ['id', 'day', 'name', 'minutes', 'kcal', 'updated_at', 'deleted']),

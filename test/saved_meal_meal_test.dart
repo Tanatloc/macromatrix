@@ -29,7 +29,8 @@ void main() {
     expect(meals['Iets']!.mealIndex, isNull);
     // Ook via de synchronisatie
     final t = UserDb.syncTables.firstWhere((t) => t.name == 'meals');
-    expect(db.dirtyRows(t).firstWhere((r) => r['name'] == 'Kipcurry')['meal'], Meal.dinner.index);
+    // Gaat pas mee naar de server zodra de migratie daar staat (syncSavedMealMeal)
+    if (syncSavedMealMeal) expect(db.dirtyRows(t).firstWhere((r) => r['name'] == 'Kipcurry')['meal'], Meal.dinner.index);
   });
 
   test('oude databank zonder kolom meal: migratie en oude rijen laden nog', () {
