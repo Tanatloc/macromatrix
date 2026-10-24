@@ -15,6 +15,7 @@ import 'sync/account.dart';
 import 'i18n.dart';
 import 'sync/features.dart';
 import 'sync/friends.dart';
+import 'sync/play_purchase.dart';
 import 'sync/pro.dart';
 import 'ui/screens/auth_screens.dart';
 import 'ui/theme.dart';
@@ -50,7 +51,7 @@ Future<void> main() async {
   final reminders = Reminders(state);
   // Pro-status en fototeller: meteen gemaakt, zodat de status na het inloggen meteen opgehaald wordt (en de
   // vriendenlijst er de supporterbadges uit kan halen)
-  final pro = Pro(account);
+  final pro = Pro(account, purchases: purchaseProviderFor(account));
   // Vroege toegang: welke functies aan staan (bij de start, na het inloggen en als Pro verandert)
   final features = Features(account, pro: pro);
 

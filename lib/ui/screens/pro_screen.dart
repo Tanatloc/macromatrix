@@ -12,7 +12,7 @@ import '../widgets/pro_widgets.dart';
 import 'roadmap_screen.dart';
 
 /// Pro: eerlijk uitgelegd. Wat gratis blijft (bijna alles), wat Pro toevoegt en waarom, de prijzen, je status, en
-/// abonneren (voorlopig "Binnenkort", zie [PurchaseProvider]) of een aankoop herstellen.
+/// abonneren (via Google Play, of "Binnenkort" waar dat niet kan, zie [PurchaseProvider]) of een aankoop herstellen.
 class ProScreen extends StatefulWidget {
   const ProScreen({super.key});
 
@@ -51,14 +51,36 @@ class _ProScreenState extends State<ProScreen> {
           'That did not work. Check your connection and try again.',
           'Dat lukte niet. Controleer je verbinding en probeer opnieuw.',
         ),
+        PurchaseOutcome.pending => _pendingText,
+        PurchaseOutcome.signedOut => _loginText,
+        PurchaseOutcome.otherAccount => _otherAccountText,
+        PurchaseOutcome.notConfigured => _notConfiguredText,
+        PurchaseOutcome.notFound => tr('No subscription found.', 'Geen abonnement gevonden.'),
       };
     });
   }
 
+  static String get _loginText => tr('Log in first: Pro belongs to your account.', 'Log eerst in: Pro hoort bij je account.');
+
+  static String get _pendingText => tr(
+    'Payment pending. Pro turns on as soon as Google Play confirms your payment.',
+    'Betaling in behandeling. Pro gaat aan zodra Google Play je betaling bevestigt.',
+  );
+
+  static String get _otherAccountText => tr(
+    'This subscription already belongs to another MacroMatrix account. Log in with that account to use it.',
+    'Dit abonnement hoort al bij een ander MacroMatrix-account. Log in met dat account om het te gebruiken.',
+  );
+
+  static String get _notConfiguredText => tr(
+    "Your payment went through, but we can't switch Pro on just yet. It will turn on by itself soon; you don't need to pay again.",
+    'Je betaling is gelukt, maar we kunnen Pro nog niet meteen aanzetten. Het gaat binnenkort vanzelf aan; je hoeft niet opnieuw te betalen.',
+  );
+
   Future<void> _restore(Pro? pro) async {
     // Zonder account (of zonder verbinding met de server) is er niets om te herstellen
     if (pro == null || pro.remote == null) {
-      setState(() => _message = tr('Log in first: Pro belongs to your account.', 'Log eerst in: Pro hoort bij je account.'));
+      setState(() => _message = _loginText);
       return;
     }
     setState(() => _busy = true);
@@ -70,7 +92,16 @@ class _ProScreenState extends State<ProScreen> {
           ? tr('Pro is active on this account.', 'Pro staat aan op dit account.')
           : !pro.available
           ? tr('Pro is not available yet.', 'Pro is nog niet beschikbaar.')
-          : tr('No Pro found for this account.', 'Geen Pro gevonden voor dit account.');
+          : switch (pro.restoreOutcome) {
+              PurchaseOutcome.otherAccount => _otherAccountText,
+              PurchaseOutcome.notConfigured => _notConfiguredText,
+              PurchaseOutcome.pending => _pendingText,
+              PurchaseOutcome.failed => tr(
+                'That did not work. Check your connection and try again.',
+                'Dat lukte niet. Controleer je verbinding en probeer opnieuw.',
+              ),
+              _ => tr('No Pro found for this account.', 'Geen Pro gevonden voor dit account.'),
+            };
     });
   }
 
@@ -357,6 +388,8 @@ class _ProScreenState extends State<ProScreen> {
 
   Widget _prices(BuildContext context, Pro? pro) {
     final p = context.pal;
+    // De prijs van de winkel (in je eigen munt) als die er is, anders de vaste prijs in euro
+    String priceOf(ProPlan plan) => pro?.purchases.priceOf(plan) ?? plan.price;
     Widget option(ProPlan plan, String sub) {
       final on = _plan == plan;
       return Expanded(
@@ -375,7 +408,7 @@ class _ProScreenState extends State<ProScreen> {
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.ink2),
               ),
               const SizedBox(height: 4),
-              Text(plan.price, style: numStyle(22, color: p.ink)),
+              Text(priceOf(plan), key: ValueKey('pro-price-${plan.name}'), style: numStyle(22, color: p.ink)),
               Text(sub, style: TextStyle(fontSize: 12, color: p.ink3)),
             ],
           ),
@@ -402,8 +435,18 @@ class _ProScreenState extends State<ProScreen> {
           FilledButton(
             key: const ValueKey('pro-subscribe'),
             onPressed: _busy ? null : () => _subscribe(pro),
-            child: Text(tr('Subscribe · ${_plan.label}', 'Abonneren · ${_plan.label}')),
+            child: Text(tr('Subscribe · ${_plan.labelFor(priceOf(_plan))}', 'Abonneren · ${_plan.labelFor(priceOf(_plan))}')),
           ),
+          if (pro?.purchases.pending ?? false)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _pendingText,
+                key: const ValueKey('pro-pending'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink3),
+              ),
+            ),
         ],
       ),
     );

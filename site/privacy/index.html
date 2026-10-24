@@ -20,7 +20,7 @@
   <article class="doc">
     <span class="eyebrow">Privacy</span>
     <h1>Privacy policy</h1>
-    <p class="meta">Version of 27 October 2026</p>
+    <p class="meta">Version of 2 November 2026</p>
 
     <div class="box">
       <p style="margin:0"><b style="color:var(--ink)">In short.</b> We only store what is needed to make the app work: your account, your profile and what you log. Your data is stored in the EU, other users cannot access it (except friends you add yourself: they only see your name and your weekly score), we sell nothing and show no ads. You can export or permanently delete everything at any time.</p>
@@ -43,6 +43,7 @@
       <tr><td>Only if you log with a photo: a counter of how many photos you used per day (one number per day, kept for at most a week). No photos and no description of your meal are stored</td><td>Giving everyone 3 free photos per day, and limiting Pro to a fair 50 per day</td></tr>
       <tr><td>Only if you scan a label or import a recipe: a counter per kind of how many times you did that per day (one number per day, kept for at most a week). No photos, links or recipes are stored</td><td>Giving everyone 1 free label scan per day, limiting Pro to a fair 30 label scans and 20 recipe imports per day</td></tr>
       <tr><td>Only if you have Pro: until when it runs, where it came from (for example a gift or a store), whether friends may see your Supporter badge and the avatar frame you chose</td><td>Turning on the Pro extras on all your devices</td></tr>
+      <tr><td>Only if you subscribe through Google Play: the purchase token Google Play gives for your subscription, which product it is (monthly or yearly) and until when it is paid, linked to your account</td><td>Checking your subscription with Google Play, keeping Pro on while you pay (renewals, cancellations and refunds), and making sure one subscription belongs to one account</td></tr>
       <tr><td>Only if you vote on the roadmap ("What's next"): which items you voted on and when</td><td>Showing how many supporters want each item, and limiting everyone to 3 votes</td></tr>
       <tr><td>The moment you accepted the terms and this policy</td><td>Showing that you gave consent</td></tr>
     </table>
@@ -65,7 +66,8 @@
     <p>With Pro you can import a recipe from a link or from a photo of a cookbook page. For a link, our server on Cloudflare fetches that web page itself (the website sees our server, not you) and reads the recipe from it; if the page has no structured recipe, an AI model (Cloudflare Workers AI) reads the text of the page. A photo is made smaller on your device, sent with your login and read by the image model. Only the recipe name, the number of servings and the ingredient lines come back to the app, and you check everything before the recipe is saved. The link, the page and the photo are not stored. We count per account how many recipes you imported that day (up to 20 with Pro); only that number is stored.</p>
 
     <h2>Pro</h2>
-    <p>MacroMatrix is free; Pro is an optional subscription for unlimited photo logging and a few extras for supporters. For Pro we store until when it runs, where it came from, whether your Supporter badge is shown to friends and which avatar frame you chose. Paying in the app is not possible yet. When it is, the payment itself is handled by the store or payment provider, and we only receive whether your subscription is active, never your card details.</p>
+    <p>MacroMatrix is free; Pro is an optional subscription for unlimited photo logging and a few extras for supporters. For Pro we store until when it runs, where it came from, whether your Supporter badge is shown to friends and which avatar frame you chose.</p>
+    <p>On Android you can subscribe through Google Play. Google Play handles the payment itself, under its own privacy policy; we never see your card details, name or address from Google. We receive and store the purchase token of your subscription, which product it is (monthly or yearly) and until when it is paid, linked to your account. Our server uses the token to check your subscription with Google Play, also when Google tells us it was renewed, cancelled or refunded. So that Google can check that a purchase belongs to your account, the app sends Google a scrambled code made from your account ID (not your email address). The purchase data is deleted together with your account; your purchase history at Google stays with Google. Cancel a subscription in the Play Store (Payments and subscriptions); deleting your account does not cancel it.</p>
     <p>With Pro you can vote on the roadmap in "What's next" (at most 3 votes at a time). Your votes are stored linked to your account, so you can see and take back your own votes, and they are deleted together with your account. Other users only see how many votes an item has, never who voted. If your Pro ends, your votes stay stored but no longer count. Which new features are in early access for you follows from your Pro status; nothing extra is stored for that.</p>
 
     <h2 id="health-connect">Health Connect (Android)</h2>
@@ -92,9 +94,10 @@
       <tr><td>Brevo</td><td>Sending the emails with your code</td><td>France (EU)</td></tr>
       <tr><td>Cloudflare</td><td>Hosting the website and the web version of the app; passing on barcode lookups to USDA; reading meal photos, label photos, recipe pages and recipe photos with Workers AI (not stored). Cloudflare does not store your account data</td><td>Worldwide network, company in the US (EU standard contractual clauses)</td></tr>
       <tr><td>Open Food Facts</td><td>Searching branded products: only your search term or barcode, without your account. Only if you choose to share a scanned product: the barcode, name, brand, nutrition values and label photo, without your account (published openly under the ODbL)</td><td>France (EU)</td></tr>
+      <tr><td>Google Play</td><td>Only if you subscribe to Pro on Android: Google Play handles the payment as an independent party under its own privacy policy. Our server asks Google Play whether your subscription is active, using the purchase token</td><td>Ireland (EU), company group in the US</td></tr>
       <tr><td>USDA FoodData Central</td><td>Only if Open Food Facts does not know a product: the barcode, through our own server, so without your account or IP address</td><td>United States</td></tr>
     </table>
-    <p>These services only process your data on our behalf, under their data processing agreement (DPA), and may not use it for anything else. A copy of your data is kept on your own device, so the app also works without internet.</p>
+    <p>Apart from Google Play (see above), these services only process your data on our behalf, under their data processing agreement (DPA), and may not use it for anything else. A copy of your data is kept on your own device, so the app also works without internet.</p>
 
     <h2>How long do we keep it?</h2>
     <p>As long as your account exists. If you delete your account, your account and all your data are deleted right away. Copies in backups disappear within 30 days. An account you never confirmed is deleted after 30 days. A report is kept as long as we need it to handle the abuse, and is deleted when you or the person you reported delete their account.</p>

@@ -63,6 +63,11 @@ dependencies:
   camera: ^0.12.1
   zxing_lib: ^1.1.4
   dart_pdf_reader: ^2.2.0
+  crypto: ^3.0.7
+  # Google Play Billing, alleen gebruikt in lib/sync/play_store_plugin.dart. De F-Droid-build haalt deze twee
+  # regels weg (tool/fdroid_no_billing.sh): de Play-bibliotheek is niet vrij.
+  in_app_purchase: ^3.3.1
+  in_app_purchase_android: ^0.5.5
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -272,6 +272,10 @@ class Pro extends ChangeNotifier {
     _uid = account.user?.id;
     _loadCache();
     account.addListener(_changed);
+    // Na een aankoop die de server goedkeurde: de status opnieuw ophalen. De winkel klaar (of een betaling in
+    // afwachting): het Pro-scherm opnieuw tekenen.
+    purchases.attach(refresh);
+    if (purchases case final Listenable l) l.addListener(_purchasesChanged);
   }
 
   final Account account;
@@ -340,6 +344,7 @@ class Pro extends ChangeNotifier {
     available = true;
     aiAvailable = true;
     frameAvailable = true;
+    _rechecked = false;
     _loadCache();
     notifyListeners();
     if (uid != null) unawaited(refresh());
@@ -378,6 +383,26 @@ class Pro extends ChangeNotifier {
       loading = false;
       notifyListeners();
     }
+    _maybeRecheck();
+  }
+
+  void _purchasesChanged() {
+    notifyListeners();
+    _maybeRecheck();
+  }
+
+  /// Al stil nagekeken bij de winkel in deze sessie (voor dit account)?
+  bool _rechecked = false;
+
+  /// Loopt Pro binnen 3 dagen af (of is het al afgelopen, of nooit gehad)? Dan één keer per sessie stil bij de winkel
+  /// nakijken of er een abonnement loopt. Zo verlengt een vernieuwd abonnement Pro vanzelf (de server schuift until
+  /// op), en wordt een aankoop die nooit bij de server aankwam (app gestopt na het betalen) alsnog gekoppeld.
+  void _maybeRecheck() {
+    if (_rechecked || !purchases.available || account.user == null || remote == null || debugPro != null) return;
+    final until = status.until;
+    if (until != null && until.isAfter(_clock().add(const Duration(days: 3)))) return;
+    _rechecked = true;
+    unawaited(purchases.recheck());
   }
 
   /// Alleen de fototeller (bij het openen van Snel loggen).
@@ -497,7 +522,8 @@ class Pro extends ChangeNotifier {
     return ok;
   }
 
-  /// Abonneren via de [purchases]; bij succes de status opnieuw ophalen.
+  /// Abonneren via de [purchases]; bij succes de status opnieuw ophalen. Pro hoort bij een account: zonder inloggen
+  /// [PurchaseOutcome.signedOut].
   Future<PurchaseOutcome> subscribe(ProPlan plan) async {
     if (!purchases.available) return PurchaseOutcome.unavailable;
     final out = await purchases.subscribe(plan);
@@ -505,10 +531,14 @@ class Pro extends ChangeNotifier {
     return out;
   }
 
+  /// Wat de winkel bij het laatste herstel zei (null = geen winkel). Voor een duidelijke melding als het niet lukte,
+  /// bv. [PurchaseOutcome.otherAccount].
+  PurchaseOutcome? restoreOutcome;
+
   /// Een aankoop herstellen: eerst bij de winkel (als die er is), daarna altijd de status bij de server ophalen,
   /// want daar staat Pro (ook als het met de hand of via het web toegekend is). Geeft true als Pro nu loopt.
   Future<bool> restore() async {
-    if (purchases.available) await purchases.restore();
+    restoreOutcome = purchases.available ? await purchases.restore() : null;
     await refresh();
     return isPro;
   }
@@ -516,6 +546,7 @@ class Pro extends ChangeNotifier {
   @override
   void dispose() {
     account.removeListener(_changed);
+    if (purchases case final Listenable l) l.removeListener(_purchasesChanged);
     super.dispose();
   }
 }
