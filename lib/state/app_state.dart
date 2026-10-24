@@ -466,31 +466,101 @@ class AppState extends ChangeNotifier {
   /// "Orakel": de [limit] rijkste voedingsmiddelen voor een stof, gerangschikt per 100 g, per 100 kcal of per
   /// portie, eventueel alleen uit bepaalde voedingsgroepen ([groups], leeg = alles) en alleen gewone producten
   /// ([everyday]). Hetzelfde voedingsmiddel uit verschillende databanken telt één keer.
+  ///
+  /// Laat [everyday] van een gekozen groep niets over (eiwit in groenten: alleen poeders en meel), dan komen voor
+  /// die groep toch de rijkste producten erin, en staat de groep in [relaxed] zodat het scherm dat kan zeggen. Het
+  /// Orakel toonde anders "Top 0" (N12). Bij alle groepen samen geldt hetzelfde, met '' in [relaxed].
   List<(Food, double)> oracle(
     String key, {
     OracleRank rank = OracleRank.per100g,
     int limit = 25,
     Set<String> groups = const {},
     bool everyday = false,
+    Set<String>? relaxed,
   }) {
-    final candidates = foods.richestIn(key, perKcal: rank == OracleRank.per100kcal, limit: math.max(1500, limit * 30));
-    final kept = <Food, double>{};
-    // Uitschieters tussen databanken overslaan (zie [_outlierCheck])
-    final outlier = _outlierCheck(key, candidates.take(math.min(candidates.length, limit * 6)).map((r) => r.$1));
+    final perKcal = rank == OracleRank.per100kcal;
+    // Met een groep dieper zoeken: de rijkste 1500 voor eiwit zijn vlees, vis en poeders, de eerste groente staat pas
+    // rond plaats 40 en erwten of spinazie veel verder. Zoeken tot elke groep genoeg heeft (of alles bekeken is).
+    final depths = groups.isEmpty ? [math.max(1500, limit * 30)] : [math.max(1500, limit * 30), 8000, 40000];
+    var candidates = const <(Food, double)>[];
+    var byGroup = <String, List<(Food, double)>>{};
+    for (final depth in depths) {
+      // Eén keer opgehaald, en een diepere lijst dient ook voor een minder diepe
+      final cacheKey = '$key|$perKcal';
+      final cached = _oraclePool;
+      if (cached == null || cached.$1 != cacheKey || (cached.$2.length < depth && !cached.$3)) {
+        final list = foods.richestIn(key, perKcal: perKcal, limit: depth);
+        _oraclePool = (cacheKey, list, list.length < depth);
+      }
+      candidates = _oraclePool!.$2.take(depth).toList();
+      byGroup = {
+        for (final g in groups)
+          g: [
+            for (final r in candidates)
+              if (r.$1.label?.group == g) r,
+          ],
+      };
+      // Ruim genoeg: dezelfde producten uit meerdere databanken tellen één keer, en uitschieters vallen nog weg
+      final enough = byGroup.values.every((l) => l.where((r) => !everyday || isAdviceFood(r.$1)).length >= limit * 3);
+      if (enough || candidates.length < depth) break;
+    }
+    final pool = groups.isEmpty
+        ? candidates
+        : [
+            for (final r in candidates)
+              if (groups.contains(r.$1.label?.group)) r,
+          ];
+    // Uitschieters tussen databanken overslaan (zie [_outlierCheck]), gekeken naar de kop van wat getoond kan worden
+    final outlier = _outlierCheck(key, pool.take(math.min(pool.length, limit * 6)).map((r) => r.$1));
+    // Gedroogd zeewier en spirulina zijn voor eiwit, vezels en energie poeders, geen groente (100 g nori eet niemand)
+    final macro = const {'protein', 'carbs', 'fiber', 'sugars', 'starch', 'fat', 'energy'}.contains(key);
+    bool driedAlgae(Food f) =>
+        RegExp(r'spirulina', caseSensitive: false).hasMatch(f.name) ||
+        (f.label?.kind == 'algae' && f.label?.state == 'dried') ||
+        RegExp(
+          r'\b(seaweed|laver|nori|kelp|wakame|agar)\b.*\bdried\b|\bdried\b.*\b(seaweed|laver|nori|kelp|wakame)\b',
+          caseSensitive: false,
+        ).hasMatch(f.name);
 
-    for (final (f, v) in candidates) {
-      if (outlier(f) || _regional.hasMatch(f.name)) continue;
-      if (groups.isNotEmpty && !groups.contains(f.label?.group)) continue;
-      if (everyday && !isAdviceFood(f)) continue;
-      if (!fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) continue;
-      if ((f.category ?? '').toLowerCase().contains('supplement') || f.label?.group == 'supplement') continue;
-      if (key != 'sodium' && key != 'chloride' && _salt.hasMatch(f.name)) continue;
-      kept[f] = rank == OracleRank.perPortion ? v * oraclePortion(f) / 100 : v;
+    Map<Food, double> keep(Iterable<(Food, double)> from, {required bool everydayOnly}) {
+      final kept = <Food, double>{};
+      for (final (f, v) in from) {
+        if (outlier(f) || _regional.hasMatch(f.name)) continue;
+        if (everydayOnly && !isAdviceFood(f)) continue;
+        if (macro && driedAlgae(f)) continue;
+        if (!fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) continue;
+        if ((f.category ?? '').toLowerCase().contains('supplement') || f.label?.group == 'supplement') continue;
+        if (key != 'sodium' && key != 'chloride' && _salt.hasMatch(f.name)) continue;
+        kept[f] = rank == OracleRank.perPortion ? v * oraclePortion(f) / 100 : v;
+      }
+      return kept;
+    }
+
+    final kept = <Food, double>{};
+    if (groups.isEmpty) {
+      kept.addAll(keep(pool, everydayOnly: everyday));
+      if (everyday && kept.isEmpty) {
+        kept.addAll(keep(pool, everydayOnly: false));
+        if (kept.isNotEmpty) relaxed?.add('');
+      }
+    } else {
+      for (final g in groups) {
+        final part = keep(byGroup[g]!, everydayOnly: everyday);
+        if (everyday && part.isEmpty) {
+          part.addAll(keep(byGroup[g]!, everydayOnly: false));
+          if (part.isNotEmpty) relaxed?.add(g);
+        }
+        kept.addAll(part);
+      }
     }
     final one = [for (final g in groupFoods(kept.keys.toList())) g.main];
     final ranked = [for (final f in one) (f, kept[f]!)]..sort((a, b) => b.$2.compareTo(a.$2));
     return ranked.take(limit).toList();
   }
+
+  // Laatst opgevraagde kandidaten van het Orakel: het scherm vraagt bij elke herbouw opnieuw, en dieper zoeken in
+  // een groep (tot alle producten) kost een halve seconde. (stof, kandidaten, of dat alle producten zijn).
+  (String, List<(Food, double)>, bool)? _oraclePool;
 
   /// Portie voor de rangschikking "per portie": de eerste herkenbare portie (5–400 g), anders 100 g.
   static double oraclePortion(Food f) => f.portions.where((p) => p.grams >= 5 && p.grams <= 400).firstOrNull?.grams ?? 100;
@@ -1443,15 +1513,17 @@ class AppState extends ChangeNotifier {
     _refresh();
   }
 
-  /// Je hele dag van gisteren kopiëren (alle maaltijden, zonder supplementen). Geeft het aantal regels terug.
-  int copyDayFromYesterday() {
+  /// Je hele dag van gisteren kopiëren (alle maaltijden, zonder supplementen). Hetzelfde product dat er al staat,
+  /// wordt samengevoegd tot één regel. Geef het resultaat aan [undoAdds] om het ongedaan te maken (N57).
+  List<AddedEntry> copyDayFromYesterday() {
     final from = dayKey(_date.subtract(const Duration(days: 1)));
-    var n = 0;
-    for (final m in Meal.values) {
-      n += user.copyMeal(fromDay: from, meal: m, toDay: day);
-    }
+    final added = [
+      for (final m in Meal.values)
+        for (final c in user.copyMealMerged(fromDay: from, meal: m, toDay: day))
+          AddedEntry(c.id, prevGrams: c.prevGrams, prevQuantity: c.prevQuantity),
+    ];
     _refresh();
-    return n;
+    return added;
   }
 
   /// Wat je meestal eet bij [meal]: producten die je de afgelopen 30 dagen op minstens 3 dagen bij die maaltijd
@@ -1479,10 +1551,14 @@ class AppState extends ChangeNotifier {
     return addFood(foodFor(e), meal: meal, grams: last.grams, quantity: last.quantity, portionLabel: last.portionLabel);
   }
 
-  int copyMealFromYesterday(Meal meal) {
-    final n = user.copyMeal(fromDay: dayKey(_date.subtract(const Duration(days: 1))), meal: meal, toDay: day);
+  /// [meal] van gisteren kopiëren, met samenvoegen zoals [copyDayFromYesterday]. Geef het resultaat aan [undoAdds].
+  List<AddedEntry> copyMealFromYesterday(Meal meal) {
+    final added = [
+      for (final c in user.copyMealMerged(fromDay: dayKey(_date.subtract(const Duration(days: 1))), meal: meal, toDay: day))
+        AddedEntry(c.id, prevGrams: c.prevGrams, prevQuantity: c.prevQuantity),
+    ];
     _refresh();
-    return n;
+    return added;
   }
 
   static ItemTemplate templateOf(DiaryEntry e) => ItemTemplate(

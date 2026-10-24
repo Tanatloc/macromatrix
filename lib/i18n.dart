@@ -26,6 +26,13 @@ String tr(String en, String nl) => isNl ? nl : en;
 /// Locale voor datums en getallen.
 String get appLocale => isNl ? 'nl_BE' : 'en_GB';
 
+/// Taal van het toestel (of de browser): Nederlands als de eerste voorkeurstaal Nederlands is, anders Engels.
+AppLang get deviceLang {
+  final locales = PlatformDispatcher.instance.locales;
+  final first = locales.isEmpty ? PlatformDispatcher.instance.locale : locales.first;
+  return first.languageCode == 'nl' ? AppLang.nl : AppLang.en;
+}
+
 void setAppLang(AppLang lang) {
   Intl.defaultLocale = lang == AppLang.nl ? 'nl_BE' : 'en_GB';
   appLang.value = lang;

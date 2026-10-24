@@ -28,6 +28,44 @@ class _BodyScreenState extends State<BodyScreen> {
 
   static String fmt(double v, int decimals) => v.toStringAsFixed(decimals).dec;
 
+  // Verwijderde metingen van de laatste seconden: één "Ongedaan maken" zet ze allemaal terug. Een snelle dubbele
+  // tik op × wiste vroeger ook de meting die eronder schoof, en Ongedaan maken zette er maar één terug (N04).
+  final _deleted = <Biometric>[];
+  Timer? _deleteLock, _deleteBatch;
+
+  @override
+  void dispose() {
+    _deleteLock?.cancel();
+    _deleteBatch?.cancel();
+    super.dispose();
+  }
+
+  void _delete(AppState s, Biometric b) {
+    // Kort na een verwijdering geen nieuwe: de volgende × schuift onder de vinger
+    if (_deleteLock?.isActive ?? false) return;
+    _deleteLock = Timer(const Duration(milliseconds: 600), () {});
+    // Wat je binnen enkele seconden na elkaar wist, zet één Ongedaan maken samen terug
+    if (!(_deleteBatch?.isActive ?? false)) _deleted.clear();
+    _deleteBatch?.cancel();
+    _deleteBatch = Timer(const Duration(seconds: 8), () {});
+    _deleted.add(b);
+    s.deleteBiometric(b);
+    final batch = [..._deleted];
+    showUndo(
+      context,
+      batch.length == 1
+          ? tr('Measurement removed', 'Meting verwijderd')
+          : tr('${batch.length} measurements removed', '${batch.length} metingen verwijderd'),
+      () {
+        for (final d in batch) {
+          s.restoreBiometric(d);
+        }
+        _deleted.clear();
+        _deleteBatch?.cancel();
+      },
+    );
+  }
+
   /// Meting toevoegen, of met [existing] een bestaande aanpassen (de soort ligt dan vast, alleen de waarde verandert).
   Future<void> _addMeasurement({Biometric? existing}) async {
     final s = context.read<AppState>();
@@ -302,14 +340,7 @@ class _BodyScreenState extends State<BodyScreen> {
                           '${fmt(b.value, byKey[b.type]?.decimals ?? 1)}${b.value2 == null ? '' : '/${fmt(b.value2!, 0)}'} ${byKey[b.type]?.unit ?? ''}',
                           style: numStyle(13.5),
                         ),
-                        IconButton(
-                          icon: Icon(Icons.close, size: 18),
-                          tooltip: tr('Delete', 'Verwijderen'),
-                          onPressed: () {
-                            s.deleteBiometric(b);
-                            showUndo(context, tr('Measurement removed', 'Meting verwijderd'), () => s.restoreBiometric(b));
-                          },
-                        ),
+                        IconButton(icon: Icon(Icons.close, size: 18), tooltip: tr('Delete', 'Verwijderen'), onPressed: () => _delete(s, b)),
                       ],
                     ),
                     // Tikken: de meting aanpassen (en haar grafiek tonen)
