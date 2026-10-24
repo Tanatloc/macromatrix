@@ -141,6 +141,10 @@ class Friends extends ChangeNotifier {
   String name = '';
   List<Friend> list = const [];
   bool loading = false;
+
+  /// Elke laadbeurt krijgt een nummer: een oudere die later terugkomt (bv. van bij het openen van het tabblad)
+  /// mag de lijst van een nieuwere niet overschrijven, anders staat een aanvaard verzoek er weer.
+  int _loadGen = 0;
   String? error;
 
   Timer? _debounce;
@@ -314,6 +318,7 @@ class Friends extends ChangeNotifier {
     final client = account.client;
     if (client == null || !account.signedIn) return;
     loading = true;
+    final gen = ++_loadGen;
     notifyListeners();
     await _run(() async {
       final me = (await _me(newName)).first;
@@ -322,9 +327,11 @@ class Friends extends ChangeNotifier {
       if (!enabled) state.user.setSetting('friends', {'enabled': true});
       await pushScores();
       final rows = await client.rpc('friend_list', params: {'p_week': dayKey(mondayOf(DateTime.now()))}) as List;
+      if (gen != _loadGen) return;
       list = [for (final r in rows) Friend.fromRow((r as Map).cast<String, dynamic>())];
       try {
         final bs = await client.rpc('battle_list') as List;
+        if (gen != _loadGen) return;
         battles = [for (final r in bs) Battle.fromRow((r as Map).cast<String, dynamic>())];
         battlesAvailable = true;
         // Wat je hier al ziet, hoeft geen melding meer; en meldingen voor nieuwe uitdagingen inplannen
@@ -345,7 +352,7 @@ class Friends extends ChangeNotifier {
     });
     // Uitdagingen vangen hun eigen fouten op (en een server zonder de migratie)
     await challenges.load();
-    loading = false;
+    if (gen == _loadGen) loading = false;
     notifyListeners();
   }
 
@@ -402,7 +409,21 @@ class Friends extends ChangeNotifier {
   }
 
   Future<void> respond(Friend f, bool accept) async {
-    await _run(() => account.client!.rpc('friend_respond', params: {'p_other': f.id, 'p_accept': accept}));
+    final ok = await _run(() async {
+      await account.client!.rpc('friend_respond', params: {'p_other': f.id, 'p_accept': accept});
+      return true;
+    });
+    // Meteen tonen: het verzoek verdwijnt en een aanvaarde vriend staat in de lijst, ook voor het herladen klaar is
+    if (ok == true) {
+      list = [
+        for (final x in list)
+          if (x.id != f.id)
+            x
+          else if (accept)
+            Friend(id: x.id, name: x.name, state: FriendState.friend, avatar: x.avatar, level: x.level),
+      ];
+      notifyListeners();
+    }
     await load();
   }
 
