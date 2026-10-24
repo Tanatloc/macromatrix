@@ -91,8 +91,8 @@ class SyncTable {
   final List<String> columns;
 }
 
-/// Zet op true nadat de migratie 20261024000000_meal_of_saved_meal.sql op Supabase staat.
-const syncSavedMealMeal = false;
+/// De migratie 20261024000000_meal_of_saved_meal.sql staat op Supabase (24-10-2026): de kolom gaat mee.
+const syncSavedMealMeal = true;
 
 class UserDb {
   /// Opent de gebruikersdatabase en werkt het schema bij. Openen gebeurt per platform (lib/platform/).
