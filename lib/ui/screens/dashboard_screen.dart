@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../widgets/feature_gate.dart';
 import '../widgets/kit.dart';
 import 'nutrients_screen.dart';
 import 'trends_screen.dart';
@@ -249,7 +250,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 width: wide ? null : double.infinity,
                                 child: OutlinedButton.icon(
                                   icon: const Icon(Icons.insights_rounded, size: 18),
-                                  label: Text(tr('Weekly report', 'Weekrapport')),
+                                  // Met de coach erbij zeggen we dat ook, anders zoek je hem niet in het weekrapport
+                                  label: Text(
+                                    featureOn(context, 'coach')
+                                        ? tr('Weekly report and coach', 'Weekrapport en coach')
+                                        : tr('Weekly report', 'Weekrapport'),
+                                  ),
                                   onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => WeeklyReportScreen(monday: from))),
                                 ),
                               ),

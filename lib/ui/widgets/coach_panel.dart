@@ -144,14 +144,27 @@ class _CoachPanelState extends State<CoachPanel> {
     final cache = CoachCache(s);
     final early = features?.isEarly(coachFeature) ?? false;
 
+    final range = '${DateFormat('d MMM', appLocale).format(widget.report.monday)} – '
+        '${DateFormat('d MMM', appLocale).format(widget.report.monday.add(const Duration(days: 6)))}';
     final title = Row(
       children: [
-        Icon(Icons.chat_bubble_outline_rounded, size: 20, color: p.brand),
-        const SizedBox(width: 8),
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: p.brand, shape: BoxShape.circle),
+          child: Icon(Icons.chat_bubble_outline_rounded, size: 18, color: p.onBrand),
+        ),
+        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            tr('Weekly coach', 'Wekelijkse coach'),
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr('Weekly coach', 'Wekelijkse coach'),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+              ),
+              Text(range, style: TextStyle(fontSize: 12, color: p.ink3)),
+            ],
           ),
         ),
         if (early) const EarlyAccessChip(),
@@ -199,6 +212,7 @@ class _CoachPanelState extends State<CoachPanel> {
       child: Panel(
         key: const ValueKey('coach-panel'),
         shadow: false,
+        color: result == null ? null : p.brandSoft,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -213,23 +227,40 @@ class _CoachPanelState extends State<CoachPanel> {
                 style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2),
               ),
             if (result != null) ...[
+              const SizedBox(height: 6),
+              _CoachStats(report: widget.report),
+              const SizedBox(height: 12),
               Text(
                 result.summary,
                 key: const ValueKey('coach-summary'),
-                style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink),
+                style: TextStyle(fontSize: 14.5, height: 1.5, color: p.ink),
               ),
-              const SizedBox(height: 8),
-              for (final t in result.tips)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
+              const SizedBox(height: 12),
+              Text(
+                tr('For next week', 'Voor volgende week'),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.3, color: p.ink3),
+              ),
+              const SizedBox(height: 6),
+              for (final (i, t) in result.tips.indexed)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+                  decoration: BoxDecoration(
+                    color: p.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: p.line),
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Icon(Icons.restaurant_rounded, size: 15, color: p.brand),
+                      Container(
+                        width: 22,
+                        height: 22,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: p.brandSoft, shape: BoxShape.circle),
+                        child: Text('${i + 1}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.brand)),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(t, style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink)),
                       ),
@@ -297,6 +328,64 @@ class _CoachPanelState extends State<CoachPanel> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Drie cijfers uit je week (niet van de AI): je score, je energie tegenover je doel en je grootste tekort.
+class _CoachStats extends StatelessWidget {
+  const _CoachStats({required this.report});
+  final WeeklyReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final r = report;
+    Widget tile(String label, String value, String? sub, {Color? subColor}) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        decoration: BoxDecoration(color: p.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.line)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: p.ink3)),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, style: numStyle(17, color: p.ink)),
+            ),
+            if (sub != null)
+              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: subColor ?? p.ink3)),
+          ],
+        ),
+      ),
+    );
+    final change = r.change;
+    // Het laagste aandeel onder je doel (niet wat erboven zit, zoals te veel energie)
+    final gaps = [...r.worst.where((w) => w.$2 < 1)]..sort((a, b) => a.$2.compareTo(b.$2));
+    final gap = gaps.isEmpty ? null : gaps.first;
+    return Row(
+      children: [
+        tile(
+          tr('Score', 'Score'),
+          '${r.score}',
+          change == null || change == 0 ? null : '${change > 0 ? '▲' : '▼'} ${change.abs()}',
+          subColor: change == null ? null : (change > 0 ? p.ok : p.high),
+        ),
+        const SizedBox(width: 8),
+        tile(
+          tr('Energy', 'Energie'),
+          r.kcalAvg == null ? '–' : fmtInt(r.kcalAvg!),
+          r.kcalGoal == null ? null : tr('goal ${fmtInt(r.kcalGoal!)} kcal', 'doel ${fmtInt(r.kcalGoal!)} kcal'),
+        ),
+        const SizedBox(width: 8),
+        tile(
+          tr('Biggest gap', 'Grootste tekort'),
+          gap == null ? '–' : fmtPct(gap.$2),
+          gap?.$1.name,
+        ),
+      ],
     );
   }
 }

@@ -321,6 +321,8 @@ class WeeklyReportScreen extends StatelessWidget {
                             ],
                           ),
                         ),
+                        // Wekelijkse coach meteen onder je score, niet onderaan verstopt; verbergt zichzelf als hij er niet is
+                        CoachPanel(report: r),
                         const SizedBox(height: 10),
                         HealthPanel(check: r.health, change: r.healthChange, hasLabs: s.labResults.isNotEmpty),
                         const SizedBox(height: 10),
@@ -406,8 +408,6 @@ class WeeklyReportScreen extends StatelessWidget {
                             ),
                           ),
                         ],
-                        // Wekelijkse coach (vroege toegang); verbergt zichzelf als hij er niet is
-                        CoachPanel(report: r),
                         if (battles.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Panel(
