@@ -17,7 +17,7 @@ class HomeWidgetSync {
     final left = t.left >= 0 ? t.left : -t.left;
     final data = <String, String>{
       'kcal': NumberFormat.decimalPattern(appLocale).format(left),
-      'kcal_label': t.left >= 0 ? tr('kcal left', 'kcal over') : tr('kcal over goal', 'kcal boven doel'),
+      'kcal_label': t.left >= 0 ? tr('kcal left', 'kcal te gaan') : tr('kcal over goal', 'kcal boven doel'),
       'streak': '$streak',
       'streak_label': streak == 1 ? tr('day', 'dag') : tr('days', 'dagen'),
       'log_label': tr('Log', 'Loggen'),

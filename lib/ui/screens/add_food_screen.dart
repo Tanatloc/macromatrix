@@ -241,7 +241,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   /// Een recente regel openen met dezelfde hoeveelheid als toen (P89), in dezelfde portie (2 sneetjes blijft 2 sneetjes).
   void _openEntry(AppState s, DiaryEntry e) {
     final food = s.foodFor(e);
-    final portion = e.portionLabel == null ? null : food.portions.where((p) => p.label == e.portionLabel).firstOrNull;
+    final portion = e.portionLabel == null ? null : food.portions.where((p) => samePortion(p.label, e.portionLabel)).firstOrNull;
     _open(food, initialGrams: e.grams > 0 ? e.grams : null, initialPortion: portion);
   }
 
@@ -392,7 +392,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                         ),
                         child: Text(
                           left >= 0
-                              ? tr('${fmtInt(left)} kcal left', '${fmtInt(left)} kcal over')
+                              ? tr('${fmtInt(left)} kcal left', 'nog ${fmtInt(left)} kcal')
                               : tr('${fmtInt(-left)} kcal over', '${fmtInt(-left)} kcal te veel'),
                           style: numStyle(12, weight: FontWeight.w400, color: left >= 0 ? p.ink2 : p.high),
                         ),
@@ -798,7 +798,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                               Text(
                                 e.portionLabel == null
                                     ? '${fmtInt(e.grams)} g'
-                                    : '${fmtDec(e.quantity, e.quantity == e.quantity.roundToDouble() ? 0 : 1)} × ${e.portionLabel}',
+                                    : '${fmtDec(e.quantity, e.quantity == e.quantity.roundToDouble() ? 0 : 1)} × ${portionInLang(e.portionLabel!)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
@@ -1058,7 +1058,8 @@ class _ResultCard extends StatelessWidget {
                           'Eiwit ${fmtDec(v['protein'] ?? 0)}g · Koolh ${fmtDec(v['carbs'] ?? 0)}g · Vet ${fmtDec(v['fat'] ?? 0)}g'
                               '${v['sugars'] != null ? ' · Suiker ${fmtDec(v['sugars']!)}g' : ''}',
                         ),
-                        maxLines: 1,
+                        // Op een smalle gsm loopt de suiker door op een tweede regel in plaats van weg te vallen
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: numStyle(11.5, weight: FontWeight.w400, color: p.ink2),
                       ),

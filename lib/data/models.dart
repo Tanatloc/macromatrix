@@ -67,6 +67,19 @@ class ExerciseType {
   String get name => isNl ? nameNl : (_exerciseEnglish[nameNl] ?? nameNl);
 }
 
+/// Naam van een bewaarde activiteit in de huidige taal. De naam staat als tekst in het dagboek, in de taal van het
+/// moment ("Cycling (brisk, 19-22 km/h)"); een activiteit uit de lijst tonen we in de taal die nu gekozen is. Een
+/// eigen naam ("Spinning") blijft zoals hij is.
+String exerciseNameInLang(String name) {
+  if (isNl) {
+    for (final e in _exerciseEnglish.entries) {
+      if (e.value == name) return e.key;
+    }
+    return name;
+  }
+  return _exerciseEnglish[name] ?? name;
+}
+
 const _bioEnglish = {
   'weight': 'Weight',
   'body_fat': 'Body fat',

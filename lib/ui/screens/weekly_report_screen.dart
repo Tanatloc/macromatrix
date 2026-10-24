@@ -37,15 +37,15 @@ class WeeklyReportScreen extends StatelessWidget {
   static String? energyLine(WeeklyReport r) {
     final avg = r.kcalAvg, goal = r.kcalGoal, balance = r.energyBalance;
     if (avg == null || goal == null || balance == null) return null;
-    final gap = fmtNum(balance.abs(), 0);
+    final gap = fmtGrouped(balance.abs(), 0);
     final kind = balance.abs() < 50
         ? tr('on target', 'op doel')
         : (balance < 0 ? tr('$gap kcal deficit', '$gap kcal tekort') : tr('$gap kcal surplus', '$gap kcal overschot'));
     final change = r.kcalChange;
     final vs = change == null ? '' : ' · ${change >= 0 ? '+' : ''}$change kcal ${tr('vs last week', 't.o.v. vorige week')}';
     return tr(
-      'Energy: ${fmtNum(avg, 0)} of ${fmtNum(goal, 0)} kcal a day ($kind; ${period(r)})$vs',
-      'Energie: ${fmtNum(avg, 0)} van ${fmtNum(goal, 0)} kcal per dag ($kind; ${period(r)})$vs',
+      'Energy: ${fmtGrouped(avg, 0)} of ${fmtGrouped(goal, 0)} kcal a day ($kind; ${period(r)})$vs',
+      'Energie: ${fmtGrouped(avg, 0)} van ${fmtGrouped(goal, 0)} kcal per dag ($kind; ${period(r)})$vs',
     );
   }
 
@@ -55,20 +55,20 @@ class WeeklyReportScreen extends StatelessWidget {
     final end = r.weightEnd;
     if (end == null) return null;
     final c = r.weightChange;
-    final change = c == null ? '' : ' (${c > 0 ? '+' : (c < 0 ? '−' : '±')}${fmtNum(c.abs())} kg ${tr('this week', 'deze week')})';
+    final change = c == null ? '' : ' (${c > 0 ? '+' : (c < 0 ? '−' : '±')}${fmtGrouped(c.abs())} kg ${tr('this week', 'deze week')})';
     final t = r.weightTrend;
     final stable = t != null && t.stable ? tr(' · stable over ${t.days} days', ' · stabiel over ${t.days} dagen') : '';
-    return tr('Weight: ${fmtNum(end)} kg at your last weigh-in$change$stable', 'Gewicht: ${fmtNum(end)} kg bij je laatste weging$change$stable');
+    return tr('Weight: ${fmtGrouped(end)} kg at your last weigh-in$change$stable', 'Gewicht: ${fmtGrouped(end)} kg bij je laatste weging$change$stable');
   }
 
   /// Beweging, bv. "Exercise: 3 sessions, 140 min logged, 950 kcal", of null zonder activiteiten.
   static String? exerciseLine(WeeklyReport r) {
     final e = r.exercise;
     if (e.sessions == 0) return null;
-    final min = e.minutes > 0 ? ', ${fmtNum(e.minutes, 0)} min ${tr('logged', 'gelogd')}' : '';
+    final min = e.minutes > 0 ? ', ${fmtGrouped(e.minutes, 0)} min ${tr('logged', 'gelogd')}' : '';
     return tr(
-      'Exercise: ${e.sessions} ${e.sessions == 1 ? 'session' : 'sessions'}$min, ${fmtNum(e.kcal, 0)} kcal',
-      'Beweging: ${e.sessions} ${e.sessions == 1 ? 'activiteit' : 'activiteiten'}$min, ${fmtNum(e.kcal, 0)} kcal',
+      'Exercise: ${e.sessions} ${e.sessions == 1 ? 'session' : 'sessions'}$min, ${fmtGrouped(e.kcal, 0)} kcal',
+      'Beweging: ${e.sessions} ${e.sessions == 1 ? 'activiteit' : 'activiteiten'}$min, ${fmtGrouped(e.kcal, 0)} kcal',
     );
   }
 
@@ -86,7 +86,7 @@ class WeeklyReportScreen extends StatelessWidget {
   static String? goalText(WeeklyReport r, Nutrient n) {
     final g = r.goals[n.key];
     if (g == null || g <= 0) return null;
-    final shown = fmtNum(g, g < 10 ? 1 : 0);
+    final shown = fmtGrouped(g, g < 10 ? 1 : 0);
     return tr('goal $shown ${n.unit}', 'doel $shown ${n.unit}');
   }
 
@@ -96,24 +96,24 @@ class WeeklyReportScreen extends StatelessWidget {
     final carbGoal = w.carbsGoal;
     return [
       carbGoal == null
-          ? tr('Carbohydrates: ${fmtNum(w.carbs, 0)} g $perDay', 'Koolhydraten: ${fmtNum(w.carbs, 0)} g $perDay')
+          ? tr('Carbohydrates: ${fmtGrouped(w.carbs, 0)} g $perDay', 'Koolhydraten: ${fmtGrouped(w.carbs, 0)} g $perDay')
           : tr(
-              'Carbohydrates: ${fmtNum(w.carbs, 0)} g $perDay (goal ${fmtNum(carbGoal, 0)} g) · ${w.carbDaysOver} of ${w.days} days above',
-              'Koolhydraten: ${fmtNum(w.carbs, 0)} g $perDay (doel ${fmtNum(carbGoal, 0)} g) · ${w.carbDaysOver} van ${w.days} dagen erboven',
+              'Carbohydrates: ${fmtGrouped(w.carbs, 0)} g $perDay (goal ${fmtGrouped(carbGoal, 0)} g) · ${w.carbDaysOver} of ${w.days} days above',
+              'Koolhydraten: ${fmtGrouped(w.carbs, 0)} g $perDay (doel ${fmtGrouped(carbGoal, 0)} g) · ${w.carbDaysOver} van ${w.days} dagen erboven',
             ),
-      tr('Sugars: ${fmtNum(w.sugars, 0)} g $perDay', 'Suikers: ${fmtNum(w.sugars, 0)} g $perDay'),
+      tr('Sugars: ${fmtGrouped(w.sugars, 0)} g $perDay', 'Suikers: ${fmtGrouped(w.sugars, 0)} g $perDay'),
       if (w.freeSugars case final f?)
         w.freeSugarsMax == null
-            ? tr('Free sugar: ${fmtNum(f, 0)} g $perDay', 'Vrije suiker: ${fmtNum(f, 0)} g $perDay')
+            ? tr('Free sugar: ${fmtGrouped(f, 0)} g $perDay', 'Vrije suiker: ${fmtGrouped(f, 0)} g $perDay')
             : tr(
-                'Free sugar: ${fmtNum(f, 0)} g $perDay (max ${fmtNum(w.freeSugarsMax!, 0)} g) · ${w.freeSugarDaysOver} of ${w.days} days above',
-                'Vrije suiker: ${fmtNum(f, 0)} g $perDay (max ${fmtNum(w.freeSugarsMax!, 0)} g) · ${w.freeSugarDaysOver} van ${w.days} dagen erboven',
+                'Free sugar: ${fmtGrouped(f, 0)} g $perDay (max ${fmtGrouped(w.freeSugarsMax!, 0)} g) · ${w.freeSugarDaysOver} of ${w.days} days above',
+                'Vrije suiker: ${fmtGrouped(f, 0)} g $perDay (max ${fmtGrouped(w.freeSugarsMax!, 0)} g) · ${w.freeSugarDaysOver} van ${w.days} dagen erboven',
               ),
       w.glucose == null
           ? tr('Blood glucose: no readings this week', 'Bloedsuiker: geen metingen deze week')
           : tr(
-              'Blood glucose: ${fmtNum(w.glucose!)} mmol/L on average (${w.glucoseCount} ${w.glucoseCount == 1 ? 'reading' : 'readings'} this week)',
-              'Bloedsuiker: gemiddeld ${fmtNum(w.glucose!)} mmol/L (${w.glucoseCount} ${w.glucoseCount == 1 ? 'meting' : 'metingen'} deze week)',
+              'Blood glucose: ${fmtGrouped(w.glucose!)} mmol/L on average (${w.glucoseCount} ${w.glucoseCount == 1 ? 'reading' : 'readings'} this week)',
+              'Bloedsuiker: gemiddeld ${fmtGrouped(w.glucose!)} mmol/L (${w.glucoseCount} ${w.glucoseCount == 1 ? 'meting' : 'metingen'} deze week)',
             ),
     ];
   }

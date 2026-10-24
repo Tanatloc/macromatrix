@@ -220,7 +220,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Expanded(
                                     child: OutlinedButton.icon(
                                       icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                                      label: Text(tr('Monthly recap', 'Maandoverzicht')),
+                                      label: FittedBox(fit: BoxFit.scaleDown, child: Text(tr('Monthly recap', 'Maandoverzicht'), maxLines: 1)),
                                       onPressed: () =>
                                           Navigator.of(context).push(MaterialPageRoute(builder: (_) => RecapScreen(from: from, year: false))),
                                     ),
@@ -230,7 +230,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 Expanded(
                                   child: OutlinedButton.icon(
                                     icon: const Icon(Icons.celebration_rounded, size: 18),
-                                    label: Text(tr('Year ${from.year}', 'Jaar ${from.year}')),
+                                    label: FittedBox(fit: BoxFit.scaleDown, child: Text(tr('Year ${from.year}', 'Jaar ${from.year}'), maxLines: 1)),
                                     onPressed: () =>
                                         Navigator.of(context)
                                             .push(MaterialPageRoute(builder: (_) => RecapScreen(from: DateTime(from.year), year: true))),

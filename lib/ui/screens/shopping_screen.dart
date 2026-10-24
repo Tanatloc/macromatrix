@@ -230,7 +230,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                     ActionChip(
                       avatar: Icon(onList.contains(f.name.toLowerCase()) ? Icons.check_rounded : Icons.add_rounded, size: 16),
                       label: Text(f.name, style: const TextStyle(fontSize: 12.5)),
-                      onPressed: onList.contains(f.name.toLowerCase()) ? null : () => s.addShopping(f.name, reason: n.name.toLowerCase()),
+                      onPressed: onList.contains(f.name.toLowerCase()) ? null : () => s.addShopping(f.name, reason: inSentence(n.name)),
                     ),
                 ],
               ),

@@ -65,10 +65,15 @@ class DayLabels extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                isToday(d) ? tr('today', 'vandaag') : wd.format(d),
-                textAlign: TextAlign.center,
-                style: isToday(d) ? style.copyWith(color: p.ink, fontWeight: FontWeight.w600) : style,
+              // Nooit midden in een woord breken ("vandaa / g"): in een smalle kolom wordt de tekst kleiner
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  isToday(d) ? tr('today', 'vandaag') : wd.format(d),
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  style: isToday(d) ? style.copyWith(color: p.ink, fontWeight: FontWeight.w600) : style,
+                ),
               ),
             ),
           ),

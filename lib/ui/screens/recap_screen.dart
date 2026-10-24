@@ -255,7 +255,7 @@ class _Calendar extends StatelessWidget {
     final lead = first.weekday - 1; // maandag eerst
     final weeks = ((lead + days) / 7).ceil();
     final best = r.bestDay?.$1;
-    final weekdays = [for (var i = 0; i < 7; i++) DateFormat('EEEEE', appLocale).format(DateTime(2024, 1, 1 + i))];
+    final weekdays = weekdayShort;
 
     Widget cell(int day) {
       final d = DateTime(r.from.year, r.from.month, day);
@@ -303,7 +303,7 @@ class _Calendar extends StatelessWidget {
             children: [
               for (final w in weekdays)
                 Expanded(
-                  child: Center(child: Text(w.toUpperCase(), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: p.ink3))),
+                  child: Center(child: Text(w, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: p.ink3))),
                 ),
             ],
           ),

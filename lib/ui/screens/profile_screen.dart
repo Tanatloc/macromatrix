@@ -981,7 +981,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const PanelTitle("Macro's"),
+          PanelTitle(tr('Macros', "Macro's")),
           const SizedBox(height: 10),
           Wrap(
             spacing: 6,

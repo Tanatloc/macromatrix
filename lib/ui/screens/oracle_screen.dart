@@ -141,8 +141,8 @@ class _OracleScreenState extends State<OracleScreen> {
                                   'Laagste ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
                                 )
                               : tr(
-                                  'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
-                                  'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
+                                  'Top ${results.length}: ${inSentence(n.name)} ${_rank.label}',
+                                  'Top ${results.length}: ${inSentence(n.name)} ${_rank.label}',
                                 ),
                           subtitle: goal == null || goal <= 0
                               ? null

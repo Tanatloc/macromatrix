@@ -272,13 +272,13 @@ EnergyCase energyCase({required double eaten, required double goal, WeightTrend?
   Goal plan = Goal.maintain,
 }) {
   final gapKcal = (eaten - goal).abs();
-  final gap = fmtNum(gapKcal, 0);
+  final gap = fmtGrouped(gapKcal, 0);
   final round = '${fmtNum(gapKcal / 100, 0)}00';
-  final at = fmtNum((eaten / 50).round() * 50, 0);
+  final at = fmtGrouped((eaten / 50).round() * 50, 0);
   final under = eaten < goal;
   final moved = trend == null
       ? ''
-      : ' (${trend.change > 0 ? '+' : '−'}${fmtNum(trend.change.abs())} kg ${tr('in ${trend.days} days', 'in ${trend.days} dagen')})';
+      : ' (${trend.change > 0 ? '+' : '−'}${fmtGrouped(trend.change.abs())} kg ${tr('in ${trend.days} days', 'in ${trend.days} dagen')})';
   final want = switch (plan) {
     Goal.lose => tr('lose weight', 'afvallen'),
     Goal.gain => tr('gain weight', 'aankomen'),
@@ -527,8 +527,8 @@ HealthCheck? healthCheck(
   final fiberTips = [
     if (fiberGoal > 25 && fiber < fiberGoal)
       tr(
-        'Because you eat ${fmtNum(kcalPerDay, 0)} kcal a day on average, 14 g per 1000 kcal = ${fmtNum(fiberGoal, 0)} g is a better goal for you.',
-        'Omdat je gemiddeld ${fmtNum(kcalPerDay, 0)} kcal per dag eet, is 14 g per 1000 kcal = ${fmtNum(fiberGoal, 0)} g een beter doel voor jou.',
+        'Because you eat ${fmtGrouped(kcalPerDay, 0)} kcal a day on average, 14 g per 1000 kcal = ${fmtGrouped(fiberGoal, 0)} g is a better goal for you.',
+        'Omdat je gemiddeld ${fmtGrouped(kcalPerDay, 0)} kcal per dag eet, is 14 g per 1000 kcal = ${fmtGrouped(fiberGoal, 0)} g een beter doel voor jou.',
       ),
   ];
 
@@ -546,7 +546,7 @@ HealthCheck? healthCheck(
   // Eiwit: hogere behoefte vanaf 65 en bij training; bij een BMI boven 30 rekenen met een aangepast gewicht
   final proteinTips = <String>[];
   if (weightKg > 0) {
-    final now = fmtNum(protein);
+    final now = fmtGrouped(protein);
     if (age != null && age >= 65 && protein < 1.0) {
       proteinTips.add(
         tr(
@@ -571,8 +571,8 @@ HealthCheck? healthCheck(
         final adjusted = reference + 0.4 * (weightKg - reference);
         proteinTips.add(
           tr(
-            'With a BMI above 30, protein is better calculated on an adjusted weight (${fmtNum(adjusted, 0)} kg), as fat tissue needs little protein. Then you are at ${fmtNum(avg('protein') / adjusted)} g per kg.',
-            'Bij een BMI boven 30 reken je eiwit beter op een aangepast gewicht (${fmtNum(adjusted, 0)} kg), want vetweefsel heeft weinig eiwit nodig. Dan zit je op ${fmtNum(avg('protein') / adjusted)} g per kg.',
+            'With a BMI above 30, protein is better calculated on an adjusted weight (${fmtGrouped(adjusted, 0)} kg), as fat tissue needs little protein. Then you are at ${fmtGrouped(avg('protein') / adjusted)} g per kg.',
+            'Bij een BMI boven 30 reken je eiwit beter op een aangepast gewicht (${fmtGrouped(adjusted, 0)} kg), want vetweefsel heeft weinig eiwit nodig. Dan zit je op ${fmtGrouped(avg('protein') / adjusted)} g per kg.',
           ),
         );
       }
@@ -586,7 +586,7 @@ HealthCheck? healthCheck(
     final v = r.value, m = v.marker!;
     final text = v.status < 0 ? m.lowText : m.highText;
     if (text == null) return null;
-    final shown = '${v.comparator ?? ''}${fmtNum(v.value, m.decimals)} ${v.unit ?? m.unit}';
+    final shown = '${v.comparator ?? ''}${fmtGrouped(v.value, m.decimals)} ${v.unit ?? m.unit}';
     final word = v.status < 0 ? tr('low', 'laag') : tr('high', 'hoog');
     return '${m.name} $shown ($word). ${tr(text.$1, text.$2)}';
   }
@@ -608,7 +608,7 @@ HealthCheck? healthCheck(
       factor(
         'energy',
         tr('Energy', 'Energie'),
-        '${fmtNum(kcalEaten, 0)} / ${fmtNum(kcalGoal, 0)} kcal $perDay',
+        '${fmtGrouped(kcalEaten, 0)} / ${fmtGrouped(kcalGoal, 0)} kcal $perDay',
         switch (eCase) {
           EnergyCase.onTarget => HealthRating.good,
           EnergyCase.goalOff || EnergyCase.missingLogs => HealthRating.ok,
@@ -624,7 +624,7 @@ HealthCheck? healthCheck(
     factor(
       'sodium',
       tr('Salt', 'Zout'),
-      '${fmtNum(sodium * 2.5 / 1000)} g $perDay',
+      '${fmtGrouped(sodium * 2.5 / 1000)} g $perDay',
       rateDown(sodium, 2000, 2400),
       weight: 2,
       isKnown: known('sodium'),
@@ -644,7 +644,7 @@ HealthCheck? healthCheck(
     factor(
       'sfa',
       tr('Saturated fat', 'Verzadigd vet'),
-      '${fmtNum(sfa, 0)}% $ofEnergy',
+      '${fmtGrouped(sfa, 0)}% $ofEnergy',
       rateDown(sfa, 10, 12),
       weight: 2,
       isKnown: known('sfa'),
@@ -669,8 +669,8 @@ HealthCheck? healthCheck(
     ),
     factor(
       'fiber',
-      tr('Fibre', 'Vezels'),
-      '${fmtNum(fiber, 0)} g $perDay',
+      tr('Fiber', 'Vezels'),
+      '${fmtGrouped(fiber, 0)} g $perDay',
       rateUp(fiber, 25, 18),
       weight: 2,
       isKnown: known('fiber'),
@@ -730,7 +730,7 @@ HealthCheck? healthCheck(
     factor(
       'sugars',
       freeSugars ? tr('Free sugar', 'Vrije suiker') : tr('Sugar', 'Suiker'),
-      '${fmtNum(sugars, 0)}% $ofEnergy',
+      '${fmtGrouped(sugars, 0)}% $ofEnergy',
       freeSugars ? rateDown(sugars, 10, 15) : rateDown(sugars, 15, 20),
       isKnown: known('sugars'),
       aim: aimOf(freeSugars ? '< 10%' : '< 15%'),
@@ -761,7 +761,7 @@ HealthCheck? healthCheck(
     factor(
       'potassium',
       tr('Potassium', 'Kalium'),
-      '${fmtNum(potassium, 0)} mg $perDay',
+      '${fmtGrouped(potassium, 0)} mg $perDay',
       rateUp(potassium, 3500, 2500),
       isKnown: known('potassium'),
       aim: aimOf('≥ 3500 mg'),
@@ -779,7 +779,7 @@ HealthCheck? healthCheck(
     factor(
       'epa_dha',
       tr('Omega-3 from fish', 'Omega-3 uit vis'),
-      '${fmtNum(epaDha, 0)} mg $perDay',
+      '${fmtGrouped(epaDha, 0)} mg $perDay',
       rateUp(epaDha, 250, 100),
       isKnown: known('epa_dha'),
       aim: aimOf('≥ 250 mg'),
@@ -798,11 +798,11 @@ HealthCheck? healthCheck(
       'protein',
       tr('Protein', 'Eiwit'),
       proteinOfGoal == null
-          ? '${fmtNum(protein)} g ${tr('per kg', 'per kg')}'
-          : '${fmtNum(protein)} g ${tr('per kg', 'per kg')} · ${fmtNum(proteinOfGoal * 100, 0)}% ${tr('of your goal', 'van je doel')}',
+          ? '${fmtGrouped(protein)} g ${tr('per kg', 'per kg')}'
+          : '${fmtGrouped(protein)} g ${tr('per kg', 'per kg')} · ${fmtGrouped(proteinOfGoal * 100, 0)}% ${tr('of your goal', 'van je doel')}',
       proteinRating,
       isKnown: weightKg > 0,
-      aim: proteinGoal == null ? aimOf('≥ ${fmtNum(proteinMinPerKg, 2)} g/kg') : aimOf('${fmtNum(proteinGoal, 0)} g $perDay'),
+      aim: proteinGoal == null ? aimOf('≥ ${fmtGrouped(proteinMinPerKg, 2)} g/kg') : aimOf('${fmtGrouped(proteinGoal, 0)} g $perDay'),
       tips: kidneys ? const [] : proteinTips,
       bloodTips: labTips(['egfr']),
       good: proteinOfGoal == null
@@ -828,10 +828,10 @@ HealthCheck? healthCheck(
       tr('Alcohol', 'Alcohol'),
       alcoholKnown
           // In het Engels ook Britse units van 8 g (N48): een glas van 10 g is 1,25 unit
-          ? tr('${fmtNum(glasses)} drinks per week (${fmtNum(glasses * 10 / ukUnitGrams)} UK units)', '${fmtNum(glasses)} glazen per week')
+          ? tr('${fmtGrouped(glasses)} drinks per week (${fmtGrouped(glasses * 10 / ukUnitGrams)} UK units)', '${fmtGrouped(glasses)} glazen per week')
           : tr(
-              '${fmtNum(drinksLogged)} drinks in $n days (${fmtNum(drinksLogged * 10 / ukUnitGrams)} UK units)',
-              '${fmtNum(drinksLogged)} glazen in $n dagen',
+              '${fmtGrouped(drinksLogged)} drinks in $n days (${fmtGrouped(drinksLogged * 10 / ukUnitGrams)} UK units)',
+              '${fmtGrouped(drinksLogged)} glazen in $n dagen',
             ),
       // Zelfde grens als de uitleg en het advies (Hoge Gezondheidsraad: hooguit 10 glazen per week): eronder "oké",
       // erboven "kan beter"
@@ -884,7 +884,7 @@ HealthCheck? healthCheck(
     minutes *= days7;
     exerciseMinutes = minutes;
     // Eén getal dat overeenkomt met wat je logde, en erbij hoe het meetelt (intensief dubbel, lopende week omgerekend)
-    final counted = fmtNum(minutes, 0), raw = fmtNum(logged, 0);
+    final counted = fmtGrouped(minutes, 0), raw = fmtGrouped(logged, 0);
     factors.add(
       factor(
         'exercise',
@@ -957,7 +957,7 @@ HealthCheck? healthCheck(
       factor(
         'steps',
         tr('Steps', 'Stappen'),
-        '${fmtNum(steps, 0)} $perDay',
+        '${fmtGrouped(steps, 0)} $perDay',
         rateUp(steps, older ? 6000 : 8000, older ? 4000 : 5000),
         aim: aimOf('${older ? '6000' : '8000'} $perDay'),
         good: tr(
@@ -1146,8 +1146,8 @@ Map<String, (String, double)> healthImpact({
   out['sodium'] = salt > 5
       ? (
           tr(
-            'Your ${fmtNum(salt - 5)} g of salt a day above 5 g means about ${pct((salt - 5) * 4.6)} more chance of a stroke.',
-            'Je ${fmtNum(salt - 5)} g zout per dag boven 5 g betekent ongeveer ${pct((salt - 5) * 4.6)} meer kans op een beroerte.',
+            'Your ${fmtGrouped(salt - 5)} g of salt a day above 5 g means about ${pct((salt - 5) * 4.6)} more chance of a stroke.',
+            'Je ${fmtGrouped(salt - 5)} g zout per dag boven 5 g betekent ongeveer ${pct((salt - 5) * 4.6)} meer kans op een beroerte.',
           ),
           ((salt - 5) * 4.6).clamp(0, 40).toDouble(),
         )

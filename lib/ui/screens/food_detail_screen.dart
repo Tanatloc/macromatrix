@@ -78,7 +78,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       // Portie bestaat niet meer: terugvallen op gram (een geschatte portie zoals "1 slice (≈35 g)" telt mee)
       _portion = e.portionLabel == null
           ? null
-          : [..._food.portions, ...everydayPortions(_food)].where((p) => p.label == e.portionLabel).firstOrNull;
+          : [..._food.portions, ...everydayPortions(_food)].where((p) => samePortion(p.label, e.portionLabel)).firstOrNull;
       _qty = TextEditingController(text: _fmt(_portion == null ? e.grams : e.quantity));
     } else if (widget.initialGrams != null) {
       _portion = widget.initialPortion;
@@ -266,7 +266,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   Future<void> _repeat() async {
     final s = context.read<AppState>();
     var mask = 0x7f;
-    const days = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
+    final days = weekdayShort;
     final unitGrams = _portion?.grams ?? 1;
     final amount = TextEditingController(text: _fmt(_portion == null ? _grams : _quantity));
     double qty() => double.tryParse(amount.text.replaceAll(',', '.')) ?? 0;
@@ -301,7 +301,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(_portion == null ? _unit : '× ${_portion!.label}  (= ${_fmt(qty() * unitGrams)} $_unit)', overflow: TextOverflow.ellipsis),
+                    child: Text(_portion == null ? _unit : '× ${portionInLang(_portion!.label)}  (= ${_fmt(qty() * unitGrams)} $_unit)', overflow: TextOverflow.ellipsis),
                   ),
                 ],
               ),
@@ -677,7 +677,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final options = <(Portion?, String, String)>[
       (null, _unit == 'ml' ? 'ml' : tr('Grams', 'Gram'), ''),
       // Porties uit de databank, aangevuld met gewone porties (sneetje, glas, kom ...) als geschatting (P19)
-      for (final x in portionOptions(_food)) x is EverydayPortion ? (x, x.short, '≈${_fmt(x.grams)} $_unit') : (x, x.label, '${_fmt(x.grams)} $_unit'),
+      for (final x in portionOptions(_food)) x is EverydayPortion ? (x, x.short, '≈${_fmt(x.grams)} $_unit') : (x, portionInLang(x.label), '${_fmt(x.grams)} $_unit'),
     ];
     // Op label: geschatte porties worden bij elke opbouw opnieuw gemaakt
     bool selected(Portion? x) => x == null ? _portion == null : _portion?.label == x.label;

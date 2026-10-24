@@ -808,7 +808,7 @@ class _EnergyCard extends StatelessWidget {
                       Text(fmtInt(left.abs()), style: numStyle(30, color: over ? p.high : p.ink, height: 1)),
                       const SizedBox(height: 4),
                       Text(
-                        over ? tr('kcal over goal', 'kcal te veel') : (extra ? tr('kcal extra', 'kcal extra') : tr('kcal left', 'kcal over')),
+                        over ? tr('kcal over goal', 'kcal te veel') : (extra ? tr('kcal extra', 'kcal extra') : tr('kcal left', 'kcal te gaan')),
                         style: TextStyle(fontSize: 12, color: p.ink2),
                       ),
                     ],
@@ -846,10 +846,10 @@ class _EnergyCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ledger(tr('Eaten', 'Gegeten'), '−${fmtInt(eaten)}', dot: p.ink),
+                  ledger(tr('Eaten', 'Gegeten'), fmtSigned(-eaten), dot: p.ink),
                   Divider(height: 10, color: p.line),
                   ledger(
-                    over ? tr('Over goal', 'Te veel') : (extra ? tr('Extra, within margin', 'Extra, binnen marge') : tr('Left', 'Over')),
+                    over ? tr('Over goal', 'Te veel') : (extra ? tr('Extra, within margin', 'Extra, binnen marge') : tr('Left', 'Te gaan')),
                     fmtInt(left.abs()),
                     strong: true,
                     color: over ? p.high : null,
@@ -880,14 +880,18 @@ class _EnergyCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
+          // Dezelfde rijen als de Doelen-pagina op een gsm: eiwit, koolhydraten, vet, en met "Let op suiker" de suikergrens
           for (final (key, name) in [
             ('protein', tr('Protein', 'Eiwit')),
-            ('carbs', tr('Carbs', 'Koolhydr.')),
-            // Vezels horen bij de koolhydraten, niet onder vet
-            ('fiber', tr('Fiber', 'Vezels')),
+            ('carbs', tr('Carbs', 'Koolhydraten')),
             ('fat', tr('Fat', 'Vet')),
+            if (s.sugarFocus)
+              if (s.targets['sugars']?.upper != null)
+                ('sugars', tr('Sugars', 'Suikers'))
+              else if (s.targets['free_sugars']?.upper != null)
+                ('free_sugars', tr('Free sugars', 'Vrije suikers')),
           ])
-            _MacroLine(name: name, amount: s.totals[key], target: s.targets[key], color: p.macro(key), remaining: remaining),
+            _MacroLine(name: name, amount: s.totals[key], target: s.targets[key], color: key.contains('sugars') ? p.macro('carbs') : p.macro(key), remaining: remaining),
         ],
       ],
     );
@@ -908,7 +912,7 @@ class _MacroLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final goal = target?.goal ?? 0;
+    final goal = target?.goal ?? target?.upper ?? 0;
     // Boven het doel is alleen een waarschuwing bij een doel-om-ongeveer-te-halen (energie/koolh./vet) of een
     // bovengrens. Eiwit en vezels zijn "minstens": erboven is prima, niet rood "te veel".
     final tooMuch = levelOf(amount, target) == Level.high;
@@ -918,7 +922,7 @@ class _MacroLine extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 92,
+            width: 112,
             child: Row(
               children: [
                 LegendItem.box(color, w: 7, h: 7),
@@ -1861,7 +1865,7 @@ class _EntryRow extends StatelessWidget {
 
   static String _amountLabel(DiaryEntry e) {
     final g = '${_trim(e.grams)} g';
-    final label = e.portionLabel;
+    final label = e.portionLabel == null ? null : portionInLang(e.portionLabel!);
     if (label == null) return g;
     // Een geschatte portie draagt haar grammen al in de naam ("1 slice (≈35 g)"): niet nog eens "(35 g)" erachter
     final hasGrams = RegExp(r'\d\s*(g|ml)\)').hasMatch(label);
@@ -1925,7 +1929,7 @@ Future<void> addExercise(BuildContext context) async {
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setD) {
         void fillFrom(Exercise e) => setD(() {
-          final t = exerciseTypes.where((t) => t.name == e.name).firstOrNull;
+          final t = exerciseTypes.where((t) => t.name == exerciseNameInLang(e.name)).firstOrNull;
           choice = t ?? _otherExercise;
           name.text = t == null ? e.name : '';
           minutes.text = e.minutes == null ? '' : fmtNum(e.minutes!, 0);
@@ -1975,7 +1979,7 @@ Future<void> addExercise(BuildContext context) async {
                           selected: base?.id == e.id,
                           showCheckmark: false,
                           label: Text(
-                            e.minutes == null ? '${e.name} · ${fmtInt(e.kcal)} kcal' : '${e.name} · ${fmtNum(e.minutes!, 0)} min',
+                            e.minutes == null ? '${exerciseNameInLang(e.name)} · ${fmtInt(e.kcal)} kcal' : '${exerciseNameInLang(e.name)} · ${fmtNum(e.minutes!, 0)} min',
                             overflow: TextOverflow.ellipsis,
                           ),
                           onSelected: (_) => fillFrom(e),
@@ -2377,7 +2381,7 @@ class _UsualStrip extends StatelessWidget {
     if (usual.isEmpty) return const SizedBox.shrink();
     String amount(DiaryEntry e) => e.portionLabel == null
         ? '${fmtInt(e.grams)} g'
-        : '${e.quantity == e.quantity.roundToDouble() ? e.quantity.round() : e.quantity} × ${e.portionLabel}';
+        : '${e.quantity == e.quantity.roundToDouble() ? e.quantity.round() : fmtDec(e.quantity, 2)} × ${portionInLang(e.portionLabel!)}';
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Panel(
