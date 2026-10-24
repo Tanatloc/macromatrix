@@ -12,7 +12,7 @@ en cijfers), bevestigd met een code per e-mail; wachtwoord vergeten gaat ook met
   `https://macromatrix.eu`; codes van 6 cijfers, 15 minuten geldig.
 - Mails (Engels, zie `templates/`, met `{{ .Token }}`): *Confirm signup* (bevestigen), *Reset password* (nieuw wachtwoord),
   melding bij een gewijzigd wachtwoord.
-- Mail via Brevo (smtp-relay.brevo.com:587, afzender `noreply@divinenet.online`, naam MacroMatrix), max. 60
+- Mail via Brevo (smtp-relay.brevo.com:587, afzender `noreply@macromatrix.eu`, naam MacroMatrix), max. 60
   mails per uur; Engelse mails met de code in *Magic link* en *Confirm signup*. Getest: komt aan in de inbox.
 - Aanbevolen in de DNS (Namecheap): `_dmarc` TXT `v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com`.
 
@@ -43,7 +43,7 @@ en cijfers), bevestigd met een code per e-mail; wachtwoord vergeten gaat ook met
      `v=spf1 include:spf.efwd.registrar-servers.com include:spf.brevo.com ~all`;
    - *SMTP & API* → *SMTP*: login en sleutel;
    - in Supabase: *Authentication* → *Emails* → *SMTP Settings*: `smtp-relay.brevo.com`, poort 587, afzender
-     `noreply@divinenet.online`, naam `MacroMatrix`. Daarna kan stap 3 (mailtekst).
+     `noreply@macromatrix.eu`, naam `MacroMatrix`. Daarna kan stap 3 (mailtekst).
 6. **Gegevens voor de app**: *Project Settings* → *API*: kopieer de *Project URL* en de *anon public* key naar
    `supabase.json` in de hoofdmap van de app:
 
