@@ -195,6 +195,14 @@ class UserDb {
         PRAGMA user_version = 5;
       ''');
     }
+    if (version < 6) {
+      // Meetmoment bij een meting (bv. bloedsuiker nuchter of na de maaltijd): alleen op dit toestel, niet in
+      // [syncTables], zodat de server niets hoeft te veranderen
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS biometric_moments (id TEXT PRIMARY KEY, moment TEXT NOT NULL);
+        PRAGMA user_version = 6;
+      ''');
+    }
   }
 
   // ── Synchronisatie ──
@@ -264,6 +272,7 @@ class UserDb {
       _db.execute(t.name == 'settings' ? "DELETE FROM settings WHERE key NOT IN ('ui', '_session')" : 'DELETE FROM ${t.name}');
     }
     _db.execute('DELETE FROM labs');
+    _db.execute('DELETE FROM biometric_moments');
   });
 
   /// Gegevens uit een andere app bewaren. Regels die er al zijn (zelfde vaste id) worden overgeslagen; notities
@@ -728,10 +737,27 @@ class UserDb {
     value2: (r['value2'] as num?)?.toDouble(),
   );
 
-  void addBiometric({required String day, required String type, required double value, double? value2, String? time}) => _db.execute(
-    'INSERT INTO biometrics (id, day, time, type, value, value2, updated_at) VALUES (?,?,?,?,?,?,?)',
-    [_uuid.v4(), day, time, type, value, value2, _now()],
-  );
+  /// Geeft de id van de nieuwe meting.
+  String addBiometric({required String day, required String type, required double value, double? value2, String? time}) {
+    final id = _uuid.v4();
+    _db.execute('INSERT INTO biometrics (id, day, time, type, value, value2, updated_at) VALUES (?,?,?,?,?,?,?)', [
+      id,
+      day,
+      time,
+      type,
+      value,
+      value2,
+      _now(),
+    ]);
+    return id;
+  }
+
+  /// Meetmoment van een meting (bv. 'fasting'), alleen op dit toestel; null wist het.
+  void setBiometricMoment(String id, String? moment) => moment == null
+      ? _db.execute('DELETE FROM biometric_moments WHERE id = ?', [id])
+      : _db.execute('INSERT OR REPLACE INTO biometric_moments (id, moment) VALUES (?,?)', [id, moment]);
+
+  String? biometricMoment(String id) => _db.select('SELECT moment FROM biometric_moments WHERE id = ?', [id]).firstOrNull?['moment'] as String?;
 
   /// Meting met een vaste id (bv. uit Health Connect): bijwerken als ze bestaat, maar niet terugzetten als je
   /// ze zelf verwijderde. Geeft true als er iets veranderde.

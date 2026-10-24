@@ -35,11 +35,12 @@ class SupplementAdvicePanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.bloodtype_rounded, size: 18, color: p.high),
+              // Zonder bloedwaarden gaat het alleen over de bovengrenzen: dan niet "je bloed" in de kop (N71)
+              Icon(days.isEmpty ? Icons.health_and_safety_rounded : Icons.bloodtype_rounded, size: 18, color: p.high),
               const SizedBox(width: 8),
               Expanded(
                 child: PanelTitle(
-                  tr('Supplements and your blood', 'Supplementen en je bloed'),
+                  days.isEmpty ? tr('Safe use', 'Veilig gebruik') : tr('Supplements and your blood', 'Supplementen en je bloed'),
                   subtitle: days.isEmpty
                       ? tr('Safe upper limits', 'Veilige bovengrenzen')
                       : tr('Blood test of ${days.last.split('-').reversed.join('/')}', 'Bloedafname van ${days.last.split('-').reversed.join('/')}'),

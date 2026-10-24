@@ -1809,10 +1809,13 @@ class AppState extends ChangeNotifier {
     return h.isEmpty ? _profile.weightKg : h.last.value;
   }
 
-  void addBiometric(String type, double value, {double? value2}) {
-    user.addBiometric(day: day, type: type, value: value, value2: value2);
-    if (type == 'weight' && _syncProfileWeight()) return;
+  /// Met [moment] het meetmoment (bv. bloedsuiker 'fasting'), alleen op dit toestel. Geeft de id van de meting.
+  String addBiometric(String type, double value, {double? value2, String? moment}) {
+    final id = user.addBiometric(day: day, type: type, value: value, value2: value2);
+    if (moment != null) user.setBiometricMoment(id, moment);
+    if (type == 'weight' && _syncProfileWeight()) return id;
     _refresh();
+    return id;
   }
 
   /// Je doelen rekenen altijd met je laatste gewicht: na een nieuwe of gewiste meting neemt het profiel dat over.

@@ -140,7 +140,7 @@ void main() {
     );
     expect(find.text('Supplementen en je bloed'), findsOneWidget);
     expect(find.textContaining('25 µg (1000 IE) per dag'), findsNothing);
-    await tester.tap(find.text('Vitamine D: tekort'));
+    await tester.tap(find.text('Vitamine D: onvoldoende')); // 17 ng/mL = 42 nmol/L: onvoldoende, geen tekort (N22)
     await tester.pump();
     expect(find.textContaining('25 µg (1000 IE) per dag'), findsOneWidget);
     await tester.tap(find.textContaining('toevoegen').first);

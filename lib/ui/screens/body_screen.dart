@@ -14,6 +14,33 @@ import '../../i18n.dart';
 import '../widgets/number_input.dart';
 import '../widgets/undo.dart';
 
+// ── Bloedsuiker: bewaard in mmol/L, getoond en ingevuld in de eenheid van je meter (mmol/L of mg/dL), met een
+// meetmoment (N23) ──
+
+/// mg/dL per mmol/L voor glucose.
+const glucoseMgPerMmol = 18.0;
+
+/// Meetmomenten voor bloedsuiker, zoals bewaard.
+const glucoseMoments = ['fasting', 'before_meal', 'after_meal'];
+
+String glucoseMomentLabel(String m) => switch (m) {
+  'fasting' => tr('Fasting', 'Nuchter'),
+  'before_meal' => tr('Before a meal', 'Voor de maaltijd'),
+  'after_meal' => tr('After a meal', 'Na de maaltijd'),
+  _ => m,
+};
+
+/// Lijkt een bloedsuikerwaarde in de andere eenheid ingevuld (141 als mmol/L is bijna zeker mg/dL)? Geeft de
+/// eenheid die past, of null.
+String? glucoseOtherUnit(double v, {required bool mgdl}) {
+  if (!mgdl && v > 35 && v <= 630) return 'mg/dL';
+  if (mgdl && v > 0 && v < 18) return 'mmol/L';
+  return null;
+}
+
+/// Kies je mg/dL voor bloedsuiker? (Instelling, geldt voor alle metingen.)
+bool glucoseInMgdl(AppState s) => s.user.setting('glucose')?['unit'] == 'mg/dL';
+
 /// Lichaam: metingen (gewicht, vetpercentage, bloeddruk, eigen metingen) met grafieken, en de vastentimer.
 class BodyScreen extends StatefulWidget {
   const BodyScreen({super.key});
@@ -77,7 +104,15 @@ class _BodyScreenState extends State<BodyScreen> {
     var type = existing == null ? types2.first : types2.firstWhere((t) => t.key == existing.type);
     // Tot 3 decimalen (overbodige nullen vallen weg), zodat bewaren zonder te wijzigen niets afrondt
     String text(double? v) => v == null ? '' : fmtNum(v, 3);
-    final v1 = TextEditingController(text: text(existing?.value));
+    // Bloedsuiker: eenheid van je meter en het meetmoment
+    final wasMgdl = glucoseInMgdl(s);
+    var mgdl = wasMgdl;
+    var moment = existing == null ? null : s.user.biometricMoment(existing.id);
+    bool isGlucose() => type.key == 'glucose';
+    String unitOf(BiometricType t) => t.key == 'glucose' && mgdl ? 'mg/dL' : t.unit;
+    final v1 = TextEditingController(
+      text: text(existing != null && existing.type == 'glucose' && mgdl ? existing.value * glucoseMgPerMmol : existing?.value),
+    );
     final v2 = TextEditingController(text: text(existing?.value2));
     double? parse(TextEditingController c) => parseNum(c.text);
     String? error1, error2;
@@ -86,6 +121,8 @@ class _BodyScreenState extends State<BodyScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
+          // Met de keuzes voor bloedsuiker past het venster niet altijd naast het toetsenbord
+          scrollable: true,
           title: Text(existing == null ? tr('Add measurement', 'Meting toevoegen') : tr('Edit measurement', 'Meting aanpassen')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -95,7 +132,7 @@ class _BodyScreenState extends State<BodyScreen> {
                 initialValue: type,
                 isExpanded: true,
                 decoration: InputDecoration(labelText: tr('What', 'Wat')),
-                items: [for (final t in types2) DropdownMenuItem(value: t, child: Text('${t.label} (${t.unit})'))],
+                items: [for (final t in types2) DropdownMenuItem(value: t, child: Text('${t.label} (${unitOf(t)})'))],
                 onChanged: existing != null ? null : (t) => setD(() => type = t!),
               ),
               const SizedBox(height: 12),
@@ -105,12 +142,69 @@ class _BodyScreenState extends State<BodyScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: decimalInput,
                 onTap: selectAllOnTap(v1),
+                onChanged: (_) => setD(() => error1 = null),
                 decoration: InputDecoration(
                   labelText: type.secondLabel == null ? type.label : tr('Systolic', 'Bovendruk'),
-                  suffixText: type.unit,
+                  suffixText: unitOf(type),
                   errorText: error1,
                 ),
               ),
+              if (isGlucose()) ...[
+                // "141 als mmol/L": vragen of het mg/dL is, met de omrekening
+                if (parse(v1) case final v? when glucoseOtherUnit(v, mgdl: mgdl) != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            mgdl
+                                ? tr('Did you mean ${fmtNum(v, 1)} mmol/L?', 'Bedoel je ${fmtNum(v, 1)} mmol/L?')
+                                : tr(
+                                    'Did you mean ${fmtNum(v, 0)} mg/dL = ${fmtNum(v / glucoseMgPerMmol, 1)} mmol/L?',
+                                    'Bedoel je ${fmtNum(v, 0)} mg/dL = ${fmtNum(v / glucoseMgPerMmol, 1)} mmol/L?',
+                                  ),
+                            style: TextStyle(fontSize: 13, color: context.pal.ink),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => setD(() {
+                            mgdl = !mgdl;
+                            error1 = null;
+                          }),
+                          child: Text(tr('Yes, ${mgdl ? 'mmol/L' : 'mg/dL'}', 'Ja, ${mgdl ? 'mmol/L' : 'mg/dL'}')),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                // Eenheid van je meter: een wissel rekent het getal om
+                Segmented<bool>(
+                  height: 30,
+                  items: const [(false, 'mmol/L'), (true, 'mg/dL')],
+                  selected: mgdl,
+                  onChanged: (m) => setD(() {
+                    if (m == mgdl) return;
+                    if (parse(v1) case final v?) v1.text = fmtNum(m ? v * glucoseMgPerMmol : v / glucoseMgPerMmol, m ? 0 : 1);
+                    mgdl = m;
+                    error1 = null;
+                  }),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final m in glucoseMoments)
+                      PillChip(
+                        label: glucoseMomentLabel(m),
+                        height: 30,
+                        selected: moment == m,
+                        onTap: () => setD(() => moment = moment == m ? null : m),
+                      ),
+                  ],
+                ),
+              ],
               if (type.secondLabel != null) ...[
                 const SizedBox(height: 12),
                 TextField(
@@ -142,9 +236,9 @@ class _BodyScreenState extends State<BodyScreen> {
             FilledButton(
               onPressed: () {
                 // Onmogelijke waarden (vergeten komma, 645 kg) houden we hier al tegen
-                final (lo, hi) = _range(type.key);
+                final (lo, hi) = isGlucose() && mgdl ? (18.0, 630.0) : _range(type.key);
                 setD(() {
-                  error1 = rangeError(v1.text, lo, hi, unit: type.unit);
+                  error1 = rangeError(v1.text, lo, hi, unit: unitOf(type));
                   error2 = type.secondLabel == null ? null : rangeError(v2.text, lo, hi, unit: type.unit);
                 });
                 if (error1 == null && error2 == null) Navigator.pop(ctx, true);
@@ -155,7 +249,13 @@ class _BodyScreenState extends State<BodyScreen> {
         ),
       ),
     );
-    final value = parse(v1);
+    // Bloedsuiker altijd in mmol/L bewaren; de gekozen eenheid onthouden voor de volgende keer
+    final glucose = ok == true && type.key == 'glucose';
+    final value = switch (parse(v1)) {
+      final v? when glucose && mgdl => v / glucoseMgPerMmol,
+      final v => v,
+    };
+    if (glucose && mgdl != wasMgdl) s.user.setSetting('glucose', {...?s.user.setting('glucose'), 'unit': mgdl ? 'mg/dL' : 'mmol/L'});
     if (!mounted) return;
     // Vergelijken met je vorige gewicht; bij aanpassen telt de meting zelf niet mee (je verbetert net een tikfout)
     final last = existing == null
@@ -174,9 +274,10 @@ class _BodyScreenState extends State<BodyScreen> {
     if (ok == true && value != null) {
       final value2 = type.secondLabel == null ? null : parse(v2);
       if (existing == null) {
-        s.addBiometric(type.key, value, value2: value2);
+        s.addBiometric(type.key, value, value2: value2, moment: glucose ? moment : null);
       } else {
         s.user.updateBiometric(existing.id, value: value, value2: value2);
+        if (glucose) s.user.setBiometricMoment(existing.id, moment);
         // "Terugzetten" van de (niet verwijderde) meting laat de app alles opnieuw tonen en neemt een
         // aangepast gewicht over in je profiel, net als na toevoegen of verwijderen
         s.restoreBiometric(existing);
@@ -243,6 +344,34 @@ class _BodyScreenState extends State<BodyScreen> {
     final types = s.biometricTypes();
     final byKey = {for (final t in types) t.key: t};
     final chartType = byKey[_chartType] ?? BiometricType.weight;
+    // Bloedsuiker in de eenheid van je meter: (factor, eenheid, decimalen) om te tonen
+    final mgdl = glucoseInMgdl(s);
+    (double, String, int) shownAs(String type) =>
+        type == 'glucose' && mgdl ? (glucoseMgPerMmol, 'mg/dL', 0) : (1.0, byKey[type]?.unit ?? '', byKey[type]?.decimals ?? 1);
+    final (chartF, chartUnit, chartDec) = shownAs(chartType.key);
+
+    Widget measurementRow(Biometric b) {
+      final (f, unit, dec) = shownAs(b.type);
+      final moment = b.type == 'glucose' ? s.user.biometricMoment(b.id) : null;
+      return ListTile(
+        dense: true,
+        title: Text(byKey[b.type]?.label ?? b.type.replaceFirst('custom:', '')),
+        subtitle: moment == null ? null : Text(glucoseMomentLabel(moment)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${fmt(b.value * f, dec)}${b.value2 == null ? '' : '/${fmt(b.value2!, 0)}'} $unit', style: numStyle(13.5)),
+            IconButton(icon: Icon(Icons.close, size: 18), tooltip: tr('Delete', 'Verwijderen'), onPressed: () => _delete(s, b)),
+          ],
+        ),
+        // Tikken: de meting aanpassen (en haar grafiek tonen)
+        onTap: () {
+          setState(() => _chartType = b.type);
+          _addMeasurement(existing: b);
+        },
+      );
+    }
+
     final to = DateTime.now();
     final from = DateTime(to.year, to.month, to.day).subtract(Duration(days: _days));
     final history = s.user.biometricHistory(chartType.key, from: dayKey(from));
@@ -329,26 +458,7 @@ class _BodyScreenState extends State<BodyScreen> {
                       style: TextStyle(fontSize: 13.5, color: pal.ink2),
                     ),
                   ),
-                for (final b in s.biometrics)
-                  ListTile(
-                    dense: true,
-                    title: Text(byKey[b.type]?.label ?? b.type.replaceFirst('custom:', '')),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${fmt(b.value, byKey[b.type]?.decimals ?? 1)}${b.value2 == null ? '' : '/${fmt(b.value2!, 0)}'} ${byKey[b.type]?.unit ?? ''}',
-                          style: numStyle(13.5),
-                        ),
-                        IconButton(icon: Icon(Icons.close, size: 18), tooltip: tr('Delete', 'Verwijderen'), onPressed: () => _delete(s, b)),
-                      ],
-                    ),
-                    // Tikken: de meting aanpassen (en haar grafiek tonen)
-                    onTap: () {
-                      setState(() => _chartType = b.type);
-                      _addMeasurement(existing: b);
-                    },
-                  ),
+                for (final b in s.biometrics) measurementRow(b),
               ]),
               card(
                 chartType.label,
@@ -370,16 +480,16 @@ class _BodyScreenState extends State<BodyScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
                       child: Text(
-                        '${tr('Latest', 'Laatste')}: ${fmt(history.last.value, chartType.decimals)} ${chartType.unit} · '
+                        '${tr('Latest', 'Laatste')}: ${fmt(history.last.value * chartF, chartDec)} $chartUnit · '
                         '${tr('change in this period', 'verschil in deze periode')}: ${history.last.value - history.first.value >= 0 ? '+' : ''}'
-                        '${fmt(history.last.value - history.first.value, chartType.decimals)} ${chartType.unit}',
+                        '${fmt((history.last.value - history.first.value) * chartF, chartDec)} $chartUnit',
                         style: numStyle(12, weight: FontWeight.w400, color: pal.ink3),
                       ),
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 8, 18, 0),
                     child: TimeSeriesChart(
-                      points: [for (final b in history) (parseDay(b.day), b.value)],
+                      points: [for (final b in history) (parseDay(b.day), b.value * chartF)],
                       second: chartType.secondLabel == null
                           ? null
                           : [
@@ -389,7 +499,7 @@ class _BodyScreenState extends State<BodyScreen> {
                       from: from,
                       to: to,
                       color: pal.brand,
-                      decimals: chartType.decimals,
+                      decimals: chartDec,
                     ),
                   ),
                 ],
