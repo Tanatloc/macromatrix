@@ -364,6 +364,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
                               ),
                             ),
+                            if (f.blockAvailable) SafetyMenu(id: x.id, name: x.name, avatar: x.avatar),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -400,6 +401,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   byLevel: _rank == _Rank.level,
                   onTap: r.friend == null ? null : () => showFriendSheet(context, r.friend!),
                   onRemove: r.friend == null ? null : () => _remove(f, r.friend!),
+                  onBlock: r.friend == null || !f.blockAvailable
+                      ? null
+                      : () => confirmBlock(context, r.friend!.id, r.friend!.name, avatar: r.friend!.avatar),
+                  onReport: r.friend == null || !f.blockAvailable ? null : () => showReportDialog(context, r.friend!.id, r.friend!.name),
                 ),
               if (friends.isEmpty)
                 Padding(
@@ -517,6 +522,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ],
           ),
         ),
+        // Geblokkeerden onderaan, met Deblokkeren
+        if (f.blockAvailable && f.blocked.isNotEmpty) ...[const SizedBox(height: 10), const BlockedPanel()],
       ];
     }
 
@@ -594,7 +601,7 @@ class RankRow {
 }
 
 class RankTile extends StatelessWidget {
-  const RankTile({super.key, required this.row, required this.place, required this.byLevel, this.onRemove, this.onTap});
+  const RankTile({super.key, required this.row, required this.place, required this.byLevel, this.onRemove, this.onTap, this.onBlock, this.onReport});
 
   // Beker alleen voor wie iets haalde: niet bij '–' of 0 (S10). Op level heeft iedereen een stand.
   bool get medal => place <= 3 && (byLevel || (row.score ?? 0) > 0);
@@ -603,6 +610,9 @@ class RankTile extends StatelessWidget {
   final int place;
   final bool byLevel;
   final VoidCallback? onRemove;
+
+  /// Blokkeren en melden in het menu (null: niet tonen, bv. als de server het nog niet kent).
+  final VoidCallback? onBlock, onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -691,14 +701,213 @@ class RankTile extends StatelessWidget {
                   icon: Icon(Icons.more_vert_rounded, color: pal.ink3),
                   // Groot genoeg voor een dikke vinger, ook met de compacte dichtheid op een pc (S14)
                   style: IconButton.styleFrom(minimumSize: const Size(48, 48), visualDensity: VisualDensity.standard),
-                  itemBuilder: (_) => [PopupMenuItem(value: 0, child: Text(tr('Remove friend', 'Vriend verwijderen')))],
-                  onSelected: (_) => onRemove!(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 0, child: Text(tr('Remove friend', 'Vriend verwijderen'))),
+                    if (onBlock != null) PopupMenuItem(value: 1, child: Text(tr('Block', 'Blokkeren'))),
+                    if (onReport != null) PopupMenuItem(value: 2, child: Text(tr('Report', 'Melden'))),
+                  ],
+                  onSelected: (v) => switch (v) {
+                    1 => onBlock!(),
+                    2 => onReport!(),
+                    _ => onRemove!(),
+                  },
                 )
               else
                 const SizedBox(width: 12),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+String _who(String name) => name.isEmpty ? tr('this person', 'deze persoon') : name;
+
+/// Vragen of je iemand echt wil blokkeren, en dan blokkeren. Geeft true terug als het lukte.
+Future<bool> confirmBlock(BuildContext context, String id, String name, {String? avatar}) async {
+  final f = context.read<Friends>();
+  final messenger = ScaffoldMessenger.of(context);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text(tr('Block ${_who(name)}?', '${name.isEmpty ? 'Deze persoon' : name} blokkeren?')),
+      content: Text(
+        tr(
+          'You will no longer be friends, open battles and challenge invites between you disappear, and neither of you '
+              'can send the other a friend request. They are not told that you blocked them. You can unblock them later.',
+          'Jullie zijn dan geen vrienden meer, open battles en uitnodigingen voor uitdagingen tussen jullie verdwijnen, en '
+              'niemand van jullie kan de ander nog een verzoek sturen. Die persoon krijgt geen bericht. Je kan later deblokkeren.',
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('Cancel', 'Annuleren'))),
+        FilledButton(key: const Key('block-confirm'), onPressed: () => Navigator.pop(c, true), child: Text(tr('Block', 'Blokkeren'))),
+      ],
+    ),
+  );
+  if (ok != true) return false;
+  final done = await f.block(id, name: name, avatar: avatar);
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        done
+            ? tr('${name.isEmpty ? 'They are' : '$name is'} blocked.', '${_who(name)} is geblokkeerd.')
+            : (f.error ?? tr('That did not work.', 'Dat lukte niet.')),
+      ),
+    ),
+  );
+  return done;
+}
+
+/// Iemand melden: een reden kiezen en eventueel een korte notitie.
+Future<void> showReportDialog(BuildContext context, String id, String name) async {
+  final f = context.read<Friends>();
+  final messenger = ScaffoldMessenger.of(context);
+  final r = await showDialog<(String, String)>(
+    context: context,
+    builder: (_) => _ReportDialog(name: name),
+  );
+  if (r == null) return;
+  final (reason, note) = r;
+  final res = await f.report(id, reason, note: note);
+  messenger.showSnackBar(SnackBar(content: Text(res == null ? (f.error ?? tr('That did not work.', 'Dat lukte niet.')) : reportMessage(res))));
+}
+
+/// Tekst bij een reden uit [reportReasons].
+String reportReasonLabel(String reason) => switch (reason) {
+  'spam' => tr('Spam', 'Spam'),
+  'harassment' => tr('Harassment or bullying', 'Pesten of lastigvallen'),
+  'inappropriate' => tr('Inappropriate name or photo', 'Ongepaste naam of foto'),
+  _ => tr('Something else', 'Iets anders'),
+};
+
+class _ReportDialog extends StatefulWidget {
+  const _ReportDialog({required this.name});
+  final String name;
+
+  @override
+  State<_ReportDialog> createState() => _ReportDialogState();
+}
+
+class _ReportDialogState extends State<_ReportDialog> {
+  String? _reason;
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = context.pal;
+    return AlertDialog(
+      title: Text(tr('Report ${_who(widget.name)}', '${widget.name.isEmpty ? 'Deze persoon' : widget.name} melden')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              tr('What is wrong? We look at every report.', 'Wat is er mis? We bekijken elke melding.'),
+              style: TextStyle(fontSize: 13.5, color: pal.ink2),
+            ),
+            const SizedBox(height: 6),
+            for (final r in reportReasons)
+              ListTile(
+                key: Key('report-$r'),
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  _reason == r ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                  color: _reason == r ? pal.brand : pal.ink3,
+                ),
+                title: Text(reportReasonLabel(r)),
+                onTap: () => setState(() => _reason = r),
+              ),
+            const SizedBox(height: 6),
+            TextField(
+              key: const Key('report-note'),
+              controller: _note,
+              maxLength: 500,
+              maxLines: 3,
+              minLines: 1,
+              decoration: InputDecoration(hintText: tr('Anything else we should know? (optional)', 'Nog iets dat we moeten weten? (optioneel)')),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel', 'Annuleren'))),
+        FilledButton(
+          key: const Key('report-send'),
+          onPressed: _reason == null ? null : () => Navigator.pop(context, (_reason!, _note.text)),
+          child: Text(tr('Report', 'Melden')),
+        ),
+      ],
+    );
+  }
+}
+
+/// Klein menu met Blokkeren en Melden (bv. bij een binnenkomend verzoek).
+class SafetyMenu extends StatelessWidget {
+  const SafetyMenu({super.key, required this.id, required this.name, this.avatar});
+  final String id, name;
+  final String? avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = context.pal;
+    return PopupMenuButton<int>(
+      key: Key('safety-$id'),
+      tooltip: tr('More', 'Meer'),
+      icon: Icon(Icons.more_vert_rounded, color: pal.ink3),
+      style: IconButton.styleFrom(minimumSize: const Size(48, 48), visualDensity: VisualDensity.standard),
+      itemBuilder: (_) => [
+        PopupMenuItem(value: 1, child: Text(tr('Block', 'Blokkeren'))),
+        PopupMenuItem(value: 2, child: Text(tr('Report', 'Melden'))),
+      ],
+      onSelected: (v) => v == 1 ? confirmBlock(context, id, name, avatar: avatar) : showReportDialog(context, id, name),
+    );
+  }
+}
+
+/// Wie je geblokkeerd hebt, met een knop om te deblokkeren.
+class BlockedPanel extends StatelessWidget {
+  const BlockedPanel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = context.watch<Friends>();
+    final pal = context.pal;
+    return Panel(
+      shadow: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(tr('Blocked', 'Geblokkeerd')),
+          Text(
+            tr('You cannot send each other friend requests.', 'Jullie kunnen elkaar geen vriendschapsverzoek sturen.'),
+            style: TextStyle(fontSize: 12.5, color: pal.ink3),
+          ),
+          for (final x in f.blocked)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: AvatarImage(avatar: x.avatar, size: 40),
+              title: Text(x.name.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : x.name),
+              trailing: TextButton(
+                key: Key('unblock-${x.id}'),
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final ok = await f.unblock(x.id);
+                  if (!ok) messenger.showSnackBar(SnackBar(content: Text(f.error ?? tr('That did not work.', 'Dat lukte niet.'))));
+                },
+                child: Text(tr('Unblock', 'Deblokkeren')),
+              ),
+            ),
+        ],
       ),
     );
   }

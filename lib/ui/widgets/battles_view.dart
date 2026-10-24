@@ -5,6 +5,7 @@ import '../../i18n.dart';
 import '../../nutrition/badges.dart';
 import '../../state/app_state.dart';
 import '../../sync/friends.dart';
+import '../screens/friends_screen.dart' show confirmBlock, showReportDialog;
 import '../theme.dart';
 import 'avatar.dart';
 import 'badges_view.dart';
@@ -401,6 +402,34 @@ class _FriendSheet extends StatelessWidget {
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.ink),
               ),
               for (final b in history) _ResultRow(battle: b),
+            ],
+            // Blokkeren en melden (verborgen zolang de server het niet kent)
+            if (f.blockAvailable) ...[
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton.icon(
+                    key: const Key('sheet-report'),
+                    icon: const Icon(Icons.flag_outlined, size: 18),
+                    label: Text(tr('Report', 'Melden')),
+                    style: TextButton.styleFrom(foregroundColor: pal.ink2, minimumSize: const Size(48, 48)),
+                    onPressed: () => showReportDialog(context, x.id, x.name),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    key: const Key('sheet-block'),
+                    icon: const Icon(Icons.block_rounded, size: 18),
+                    label: Text(tr('Block', 'Blokkeren')),
+                    style: TextButton.styleFrom(foregroundColor: pal.high, minimumSize: const Size(48, 48)),
+                    onPressed: () async {
+                      final nav = Navigator.of(context);
+                      // Geblokkeerd: het blad sluiten (die persoon staat niet meer in je lijst)
+                      if (await confirmBlock(context, x.id, x.name, avatar: x.avatar)) nav.pop();
+                    },
+                  ),
+                ],
+              ),
             ],
           ],
         ),
