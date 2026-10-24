@@ -3,7 +3,7 @@
 
 alter table public.pro_status drop constraint if exists pro_status_frame_check;
 alter table public.pro_status add constraint pro_status_frame_check
-  check (frame is null or frame in ('glow', 'orbit', 'sparkle', 'laurel', 'ripple', 'spin', 'sunburst', 'crown'));
+  check (frame is null or frame in ('glow', 'orbit', 'sparkle', 'laurel', 'ripple', 'spin', 'sunburst', 'crown', 'wings', 'blades', 'royal'));
 
 create or replace function public.pro_set_frame(p_frame text) returns boolean
 language plpgsql
@@ -17,7 +17,7 @@ begin
   if me is null then
     raise exception 'niet ingelogd';
   end if;
-  if p_frame is not null and p_frame not in ('glow', 'orbit', 'sparkle', 'laurel', 'ripple', 'spin', 'sunburst', 'crown') then
+  if p_frame is not null and p_frame not in ('glow', 'orbit', 'sparkle', 'laurel', 'ripple', 'spin', 'sunburst', 'crown', 'wings', 'blades', 'royal') then
     raise exception 'onbekende rand';
   end if;
   update public.pro_status s set frame = p_frame, updated_at = now()

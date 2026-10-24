@@ -26,7 +26,7 @@ Duration framePeriod(AvatarFrame f) => switch (f) {
   AvatarFrame.ripple => const Duration(milliseconds: 2800),
   AvatarFrame.spin => const Duration(milliseconds: 9000),
   AvatarFrame.sunburst => const Duration(milliseconds: 3600),
-  AvatarFrame.laurel || AvatarFrame.crown => Duration.zero,
+  AvatarFrame.laurel || AvatarFrame.crown || AvatarFrame.wings || AvatarFrame.blades || AvatarFrame.royal => Duration.zero,
 };
 
 /// Dezelfde kleur met een andere lichtheid (zelfde kleurtoon).
@@ -67,7 +67,155 @@ class AvatarFramePainter extends CustomPainter {
         if (!front) _sunburst(canvas, c);
       case AvatarFrame.crown:
         if (front) _crown(canvas, c);
+      case AvatarFrame.wings:
+        if (!front) _wings(canvas, c);
+      case AvatarFrame.blades:
+        if (!front) _blades(canvas, c);
+      case AvatarFrame.royal:
+        _royal(canvas, c);
     }
+  }
+
+  /// Een vorm als glanzend metaal in de levelkleur: licht bovenaan, donker onderaan, met een donkere omlijning.
+  void _metal(Canvas canvas, Path path, {double outline = 0.8}) {
+    final b = path.getBounds();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [frameTint(color, 0.8), color, frameTint(color, 0.34)],
+          stops: const [0, 0.45, 1],
+        ).createShader(b),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = outline
+        ..color = frameTint(color, 0.24),
+    );
+  }
+
+  // --- Vleugels: drie veren per kant, schuin omhoog, achter de ring
+
+  void _wings(Canvas canvas, Offset c) {
+    final r = ring;
+    final outline = math.max(0.6, r * 0.035);
+    for (final side in [1.0, -1.0]) {
+      canvas.save();
+      canvas.translate(c.dx, c.dy);
+      canvas.scale(side, 1);
+      // Van de onderste (kortste) naar de bovenste (langste) veer, zodat de bovenste vooraan ligt
+      for (var i = 2; i >= 0; i--) {
+        final a = -0.8 + i * 0.32;
+        final len = r * (1.12 - i * 0.2);
+        final w = r * (0.3 - i * 0.04);
+        final base = Offset(r * 0.62, -r * 0.22 + i * r * 0.22);
+        final d = Offset(math.cos(a), math.sin(a));
+        final nrm = Offset(-d.dy, d.dx);
+        final tip = base + d * len;
+        final path = Path()
+          ..moveTo(base.dx - nrm.dx * w * 0.5, base.dy - nrm.dy * w * 0.5)
+          ..quadraticBezierTo(base.dx + d.dx * len * 0.55 - nrm.dx * w, base.dy + d.dy * len * 0.55 - nrm.dy * w, tip.dx, tip.dy)
+          ..quadraticBezierTo(
+            base.dx + d.dx * len * 0.6 + nrm.dx * w * 0.9,
+            base.dy + d.dy * len * 0.6 + nrm.dy * w * 0.9,
+            base.dx + nrm.dx * w * 0.5,
+            base.dy + nrm.dy * w * 0.5,
+          )
+          ..close();
+        _metal(canvas, path, outline: outline);
+      }
+      canvas.restore();
+    }
+  }
+
+  // --- Klingen: twee gebogen klingen die onderaan uit de ring komen en naar buiten en omhoog lopen
+
+  void _blades(Canvas canvas, Offset c) {
+    final r = ring;
+    final outline = math.max(0.6, r * 0.035);
+    Offset polar(double a, double d) => Offset(math.cos(a), math.sin(a)) * d;
+    for (final side in [1.0, -1.0]) {
+      canvas.save();
+      canvas.translate(c.dx, c.dy);
+      canvas.scale(side, 1);
+      // Grote kling: van onderaan de ring, met een bolle buitenkant, tot een punt rechts boven het midden
+      final b1 = polar(1.05, r * 0.98);
+      final b2 = polar(0.2, r * 0.98);
+      final tip = Offset(r * 1.42, -r * 0.42);
+      _metal(
+        canvas,
+        Path()
+          ..moveTo(b1.dx, b1.dy)
+          ..quadraticBezierTo(r * 1.5, r * 0.62, tip.dx, tip.dy)
+          ..quadraticBezierTo(r * 1.1, r * 0.08, b2.dx, b2.dy)
+          ..close(),
+        outline: outline,
+      );
+      // Klein puntje eronder, schuin naar beneden
+      final s1 = polar(1.45, r * 0.98);
+      final s2 = polar(1.15, r * 0.98);
+      _metal(
+        canvas,
+        Path()
+          ..moveTo(s1.dx, s1.dy)
+          ..quadraticBezierTo(r * 0.55, r * 1.3, r * 0.82, r * 1.32)
+          ..quadraticBezierTo(r * 0.62, r * 1.08, s2.dx, s2.dy)
+          ..close(),
+        outline: outline,
+      );
+      canvas.restore();
+    }
+  }
+
+  // --- Koninklijk: een tweede, dunne ring eromheen (achter), met blaadjes opzij en een edelsteentje bovenaan (voor)
+
+  void _royal(Canvas canvas, Offset c) {
+    final r = ring;
+    final gap = math.max(2.2, border * 0.75);
+    final w = math.max(1.6, border * 0.6);
+    final ro = r + gap + w / 2;
+    if (!front) {
+      canvas.drawCircle(
+        c,
+        ro,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w
+          ..shader = SweepGradient(
+            colors: [frameTint(color, 0.8), frameTint(color, 0.36), frameTint(color, 0.8), frameTint(color, 0.36), frameTint(color, 0.8)],
+          ).createShader(Rect.fromCircle(center: c, radius: ro)),
+      );
+      return;
+    }
+    // Blaadjes links en rechts op de buitenste ring, schuin omhoog
+    final leaf = (r * 0.36).clamp(5.0, 13.0);
+    final leafPaint = Paint()..color = color;
+    final leafLight = Paint()..color = frameTint(color, 0.7);
+    for (final side in [1.0, -1.0]) {
+      for (var i = 0; i < 3; i++) {
+        final a = side > 0 ? 0.35 - i * 0.32 : math.pi - 0.35 + i * 0.32;
+        final p = c + Offset(math.cos(a), math.sin(a)) * ro;
+        final out = Offset(math.cos(a), math.sin(a));
+        final tangent = Offset(math.sin(a), -math.cos(a)) * side;
+        _leaf(canvas, p, _dir(tangent, out, 0.7), leaf * (1 - i * 0.12), i.isEven ? leafPaint : leafLight);
+      }
+    }
+    // Edelsteentje bovenaan
+    final g = (r * 0.2).clamp(3.5, 8.0);
+    final top = c + Offset(0, -ro);
+    final gem = Path()
+      ..moveTo(top.dx, top.dy - g)
+      ..lineTo(top.dx + g * 0.75, top.dy)
+      ..lineTo(top.dx, top.dy + g)
+      ..lineTo(top.dx - g * 0.75, top.dy)
+      ..close();
+    _metal(canvas, gem, outline: math.max(0.6, g * 0.15));
+    canvas.drawCircle(top + Offset(-g * 0.2, -g * 0.3), math.max(0.6, g * 0.18), Paint()..color = Colors.white.withValues(alpha: 0.8));
   }
 
   // --- Rimpeling: twee golfjes die van de ring naar buiten lopen en daarbij vervagen

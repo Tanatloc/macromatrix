@@ -89,7 +89,16 @@ enum AvatarFrame {
   sunburst('sunburst'),
 
   /// Een kroontje linksboven op de ring (staat stil).
-  crown('crown');
+  crown('crown'),
+
+  /// Vleugels links en rechts, met een metaalglans (staat stil).
+  wings('wings'),
+
+  /// Twee gebogen klingen die van onderaan naar buiten en omhoog lopen (staat stil).
+  blades('blades'),
+
+  /// Een tweede, dunne ring eromheen met blaadjes opzij en een edelsteentje bovenaan (staat stil).
+  royal('royal');
 
   const AvatarFrame(this.id);
   final String id;
@@ -103,10 +112,16 @@ enum AvatarFrame {
     spin => tr('Spin', 'Draaikrans'),
     sunburst => tr('Sunburst', 'Zonnestralen'),
     crown => tr('Crown', 'Kroon'),
+    wings => tr('Wings', 'Vleugels'),
+    blades => tr('Blades', 'Klingen'),
+    royal => tr('Royal', 'Koninklijk'),
   };
 
-  /// Beweegt deze rand (de lauwerkrans en de kroon niet)?
-  bool get animated => this != laurel && this != crown;
+  /// Beweegt deze rand? De versierde randen (lauwerkrans, kroon, vleugels, klingen, koninklijk) staan stil.
+  bool get animated => switch (this) {
+    glow || orbit || sparkle || ripple || spin || sunburst => true,
+    laurel || crown || wings || blades || royal => false,
+  };
 
   /// Uit een id van de server; onbekend of leeg = geen rand.
   static AvatarFrame? parse(Object? id) => values.where((f) => f.id == id).firstOrNull;
