@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../data/food.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/nutrients.dart';
+import '../../nutrition/processing.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../../i18n.dart';
@@ -28,6 +29,18 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
   late final _brand = TextEditingController(text: widget.existing?.brand ?? '');
   late final _barcode = TextEditingController(text: widget.existing?.barcode ?? widget.barcode ?? '');
   late final _portionGrams = TextEditingController(text: _fmt(widget.existing?.portions.firstOrNull?.grams));
+
+  /// Naam van die portie ("1 pot", "1 reep"); leeg = "1 portie".
+  late final _portionName = TextEditingController(
+    text: switch (widget.existing?.portions.firstOrNull?.label) {
+      final l? when !_defaultPortionNames.contains(l) => l,
+      _ => '',
+    },
+  );
+  static const _defaultPortionNames = {'1 serving', '1 portie'};
+
+  /// Verwerkingsgraad die je zelf kiest; null = weet ik niet (dan raden we niets uit de naam, N72).
+  late Nova? _nova = Nova.of(widget.existing?.nova);
   late final _salt = TextEditingController(
     text: _fmt(widget.existing?.per100g['sodium'] == null ? null : widget.existing!.per100g['sodium']! * 2.5 / 1000),
   );
@@ -51,7 +64,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _brand, _barcode, _portionGrams, _salt, _freeSugars, ..._values.values]) {
+    for (final c in [_name, _brand, _barcode, _portionGrams, _portionName, _salt, _freeSugars, ..._values.values]) {
       c.dispose();
     }
     super.dispose();
@@ -82,12 +95,19 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
   }
 
   void _save() {
-    if (!_form.currentState!.validate()) return;
+    final invalid = _form.currentState!.validateGranularly();
+    if (invalid.isNotEmpty) {
+      // De bovenste fout in beeld brengen, ruim boven de knop Opslaan (stond er half achter, N29)
+      final first = invalid.map((f) => f.context).reduce((a, b) => _top(a) <= _top(b) ? a : b);
+      Scrollable.ensureVisible(first, alignment: 0.3, duration: const Duration(milliseconds: 250));
+      return;
+    }
     final per100g = <String, double>{for (final e in _values.entries) e.key: ?_parse(e.value.text)};
     final salt = _parse(_salt.text);
     if (salt != null) per100g['sodium'] = salt / 2.5 * 1000;
     if (_parse(_freeSugars.text) case final free?) per100g['free_sugars'] = free;
     final portion = _parse(_portionGrams.text);
+    final portionName = _portionName.text.trim();
     final food = Food(
       ref: widget.existing?.ref ?? UserDb.newCustomRef(),
       name: _name.text.trim(),
@@ -95,11 +115,21 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
       barcode: _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
       source: FoodSource.custom,
       per100g: withDerived(per100g),
-      portions: [if (portion != null && portion > 0) Portion(tr('1 serving', '1 portie'), portion)],
+      portions: [if (portion != null && portion > 0) Portion(portionName.isEmpty ? tr('1 serving', '1 portie') : portionName, portion)],
+      nova: _nova?.group,
     );
     context.read<AppState>().saveCustomFood(food);
     Navigator.of(context).pop(food);
   }
+
+  /// Bovenkant van een veld op het scherm, om de bovenste fout te vinden.
+  static double _top(BuildContext c) => switch (c.findRenderObject()) {
+    final RenderBox b when b.attached => b.localToGlobal(Offset.zero).dy,
+    _ => double.infinity,
+  };
+
+  /// Een deel kan niet groter zijn dan het geheel: suikers horen bij de koolhydraten, verzadigd vet bij het vet (N29).
+  static const _partOf = {'sugars': 'carbs', 'sfa': 'fat'};
 
   /// Per 100 g kan een macro nooit boven 100 g, en kcal nooit boven ~900; negatief kan nooit.
   static double _maxFor(String key) => switch (key) {
@@ -120,6 +150,13 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
       if (v == null) return tr('Not a valid number', 'Geen geldig getal');
       if (v < 0) return tr('Cannot be negative', 'Kan niet negatief zijn');
       if (v > _maxFor(n.key)) return tr('At most ${fmtNum(_maxFor(n.key))} per 100 g', 'Hoogstens ${fmtNum(_maxFor(n.key))} per 100 g');
+      if (_partOf[n.key] case final whole?) {
+        final max = _parse(_values[whole]!.text);
+        if (max != null && v > max + 1e-9) {
+          final name = nutrientByKey[whole]!.name.toLowerCase();
+          return tr('At most the $name (${fmtNum(max)} g)', 'Hoogstens de $name (${fmtNum(max)} g)');
+        }
+      }
       return null;
     },
   );
@@ -147,6 +184,14 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
       return null;
     },
   );
+
+  /// Een paar voorbeelden per groep, zodat je zonder NOVA-kennis kunt kiezen.
+  static String _novaExample(Nova n) => switch (n) {
+    Nova.unprocessed => tr('fruit, plain yoghurt, oats', 'fruit, natuuryoghurt, havermout'),
+    Nova.culinary => tr('oil, butter, sugar, honey', 'olie, boter, suiker, honing'),
+    Nova.processed => tr('cheese, bread, canned beans', 'kaas, brood, bonen in blik'),
+    Nova.ultra => tr('soft drinks, sweets, flavoured yoghurt', 'frisdrank, snoep, smaakjesyoghurt'),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -212,15 +257,48 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _portionGrams,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: decimalInput,
-                  onTap: selectAllOnTap(_portionGrams),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _portionGrams,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: decimalInput,
+                        onTap: selectAllOnTap(_portionGrams),
+                        decoration: InputDecoration(
+                          labelText: tr('Weight of one serving (optional)', 'Gewicht van één portie (optioneel)'),
+                          suffixText: 'g',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _portionName,
+                        decoration: InputDecoration(
+                          labelText: tr('Serving name (optional)', 'Naam van de portie (optioneel)'),
+                          hintText: tr('1 pot', '1 potje'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Zelf kiezen hoe bewerkt het is; zonder keuze toont het product geen groep (N72)
+                DropdownButtonFormField<Nova?>(
+                  initialValue: _nova,
+                  isExpanded: true,
                   decoration: InputDecoration(
-                    labelText: tr('Weight of one serving (optional)', 'Gewicht van één portie (optioneel)'),
-                    suffixText: 'g',
+                    labelText: tr('How processed is it? (optional)', 'Hoe bewerkt is het? (optioneel)'),
+                    helperText: tr('Leave it on "Don\'t know" if you are not sure.', 'Laat op "Weet ik niet" als je twijfelt.'),
                   ),
+                  items: [
+                    DropdownMenuItem(value: null, child: Text(tr('Don\'t know', 'Weet ik niet'))),
+                    for (final n in Nova.values)
+                      DropdownMenuItem(value: n, child: Text('${n.label} · ${_novaExample(n)}', overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => setState(() => _nova = v),
                 ),
                 const SizedBox(height: 24),
                 Text(

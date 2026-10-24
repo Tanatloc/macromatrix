@@ -126,7 +126,10 @@ EverydayPortion _p(String en, String nl, double grams, {String unit = 'g'}) {
 
 /// Gewone porties voor dit product die de databank nog niet heeft (hoogstens 3), op basis van naam en label.
 /// Leeg als het product niet herkend wordt of de databank al zo'n portie heeft.
+/// Niet bij eigen producten: daar kies je zelf de portie, en één woord in de naam ("honey" in een yoghurt) gaf
+/// er rare porties bij zoals "op een boterham" (N72).
 List<EverydayPortion> everydayPortions(Food f) {
+  if (f.source == FoodSource.custom) return const [];
   final name = f.name.toLowerCase();
   final l = f.label;
   final group = l?.group;

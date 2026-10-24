@@ -809,16 +809,20 @@ class _MacroTiles extends StatelessWidget {
       return g == null || g <= 0 ? '' : fmtPct((amounts[k] ?? 0) / g);
     }
 
+    // Een leeg veld (eigen product zonder eiwit ingevuld) is onbekend, geen 0 g (N72)
     String sub(String k) {
+      if (!amounts.containsKey(k)) return tr('unknown', 'onbekend');
       final pct = share(k);
       return pct.isEmpty ? tr('no goal', 'geen doel') : tr('$pct of goal', '$pct van doel');
     }
 
+    String grams(String k) => amounts[k] == null ? '–' : '${fmtDec(amounts[k]!)} g';
+
     final tiles = [
-      ('kcal', fmtInt(amounts['energy'] ?? 0), sub('energy'), p.ink),
-      (tr('Protein', 'Eiwit'), '${fmtDec(amounts['protein'] ?? 0)} g', sub('protein'), p.protein),
-      (tr('Carbs', 'Koolh.'), '${fmtDec(amounts['carbs'] ?? 0)} g', sub('carbs'), p.carbs),
-      (tr('Fat', 'Vet'), '${fmtDec(amounts['fat'] ?? 0)} g', sub('fat'), p.fat),
+      ('kcal', amounts['energy'] == null ? '–' : fmtInt(amounts['energy']!), sub('energy'), p.ink),
+      (tr('Protein', 'Eiwit'), grams('protein'), sub('protein'), p.protein),
+      (tr('Carbs', 'Koolh.'), grams('carbs'), sub('carbs'), p.carbs),
+      (tr('Fat', 'Vet'), grams('fat'), sub('fat'), p.fat),
     ];
     return IntrinsicHeight(
       child: Row(
@@ -879,6 +883,10 @@ class _ImpactPanel extends StatelessWidget {
     final rows = <(Nutrient, double, double, bool)>[];
     // Sporenelementen die bijna niemand bewust opvolgt: alleen tonen als dit product er echt veel van levert
     const obscure = {'fluoride', 'molybdenum', 'chloride', 'chromium', 'manganese', 'copper'};
+    // Minder bekende stoffen komen na de gewone vitaminen en mineralen (N70: molybdeen, ALA of fluoride bovenaan)
+    const minor = {...obscure, 'ala', 'la', 'phosphorus', 'b5', 'b7', 'choline'};
+    // Boven de veilige bovengrens (UL): sleutel -> die grens (N70: groen bij 935% molybdeen)
+    final overMax = <String, double>{};
     // Suiker telt als vrije suikers (zoals in de dagscore): de suiker van heel fruit of gewone melk kleurt niets
     // rood (N63). Met "Let op suiker" staat die regel altijd bovenaan, ook als het product geen vrije suiker heeft (N28).
     final freeTarget = s.targets['free_sugars']?.upper;
@@ -897,7 +905,10 @@ class _ImpactPanel extends StatelessWidget {
       final add = added[n.key] ?? 0;
       if (t == null || add <= 0) continue;
       if (t.goal != null) {
-        if (obscure.contains(n.key) && add / t.goal! < 0.5) continue;
+        final over = t.upper != null && before(n.key) + add > t.upper!;
+        // Een obscure stof die al boven de grens zat, alleen tonen als dit product er merkbaar bij doet
+        if (obscure.contains(n.key) && add / t.goal! < 0.5 && !(over && add / t.upper! >= 0.05)) continue;
+        if (over) overMax[n.key] = t.upper!;
         rows.add((n, before(n.key) / t.goal!, (before(n.key) + add) / t.goal!, false));
       } else if (t.upper != null) {
         final after = (before(n.key) + add) / t.upper!;
@@ -907,13 +918,21 @@ class _ImpactPanel extends StatelessWidget {
     }
     // Eerst wat je dichter bij je doel brengt (tot 100%); wat al ruim gehaald is, komt pas daarna
     double gain((Nutrient, double, double, bool) r) => math.min(1.0, r.$3) - math.min(1.0, r.$2);
-    final goals = rows.where((r) => !r.$4).toList()
-      ..sort((a, b) {
-        final g = gain(b).compareTo(gain(a));
-        return g != 0 && (gain(a) > 0.02 || gain(b) > 0.02) ? g : (b.$3 - b.$2).compareTo(a.$3 - a.$2);
-      });
+    int byGain((Nutrient, double, double, bool) a, (Nutrient, double, double, bool) b) {
+      final g = gain(b).compareTo(gain(a));
+      return g != 0 && (gain(a) > 0.02 || gain(b) > 0.02) ? g : (b.$3 - b.$2).compareTo(a.$3 - a.$2);
+    }
+
+    // Eerst de gewone stoffen, dan de minder bekende; wat boven de veilige bovengrens gaat, staat er altijd bij
+    bool open((Nutrient, double, double, bool) r) => !r.$4 && !overMax.containsKey(r.$1.key);
+    final goals = [
+      ...rows.where((r) => open(r) && !minor.contains(r.$1.key)).toList()..sort(byGain),
+      ...rows.where((r) => open(r) && minor.contains(r.$1.key)).toList()..sort(byGain),
+    ];
+    final over = (rows.where((r) => overMax.containsKey(r.$1.key)).toList()..sort((a, b) => b.$3.compareTo(a.$3))).take(2).toList();
     final limits = rows.where((r) => r.$4).toList()..sort((a, b) => b.$3.compareTo(a.$3));
-    final shown = [?sugarRow, ...goals.take(limits.isEmpty ? 5 : 4), ...limits.take(sugarRow == null ? 1 : 0)];
+    final room = math.max(3, (limits.isEmpty ? 5 : 4) - over.length);
+    final shown = [?sugarRow, ...goals.take(room), ...over, ...limits.take(sugarRow == null ? 1 : 0)];
     // Suiker zonder vrije suikers: zeggen waarom de balk niet groeit
     final natural = useFree && (added['free_sugars'] ?? 0) < 0.05 && (added['sugars'] ?? 0) >= 1;
     if (shown.isEmpty) return const SizedBox.shrink();
@@ -950,6 +969,14 @@ class _ImpactPanel extends StatelessWidget {
                           limit ? tr('${n.name} (max)', '${n.name} (max)') : n.name,
                           style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: p.ink),
                         ),
+                        if (overMax[n.key] case final max?)
+                          Text(
+                            tr(
+                              'Above the safe upper limit of ${formatAmount(max, n)} ${n.unit}',
+                              'Boven de veilige bovengrens van ${formatAmount(max, n)} ${n.unit}',
+                            ),
+                            style: TextStyle(fontSize: 11, color: p.high),
+                          ),
                         if (natural && n.key == 'free_sugars')
                           Text(
                             tr(
@@ -959,7 +986,11 @@ class _ImpactPanel extends StatelessWidget {
                             style: TextStyle(fontSize: 11, color: p.ink3),
                           ),
                         const SizedBox(height: 6),
-                        _BeforeAfterBar(before: b, after: a, addColor: limit && a > 1 ? p.highFill : p.brand),
+                        _BeforeAfterBar(
+                          before: b,
+                          after: a,
+                          addColor: (limit && a > 1) || overMax.containsKey(n.key) ? p.highFill : p.brand,
+                        ),
                       ],
                     ),
                   ),
@@ -971,7 +1002,7 @@ class _ImpactPanel extends StatelessWidget {
                       children: [
                         Text(
                           a > 9.99 ? '>999%' : (a < 1 && (a * 100).round() >= 100 ? '99%' : fmtPct(a)),
-                          style: numStyle(13, color: limit ? (a > 1 ? p.high : p.ink) : (a >= 1 ? p.ok : p.low)),
+                          style: numStyle(13, color: limit || overMax.containsKey(n.key) ? (a > 1 ? p.high : p.ink) : (a >= 1 ? p.ok : p.low)),
                         ),
                         Text(
                           tr('was ${fmtPct(b)}', 'was ${fmtPct(b)}'),
