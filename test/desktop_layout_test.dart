@@ -63,6 +63,34 @@ void main() {
     expect(find.text('Nieuwe dag begint om'), findsNothing);
   });
 
+  testWidgets('venster smaller en weer breder maken: een open scherm in een tabblad blijft staan', (tester) async {
+    await pumpShell(tester, const Size(1440, 900));
+    await tester.tap(find.text('Instellingen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nieuwe dag begint om'), findsOneWidget);
+
+    // Gsm-breedte: het scherm staat er nog, over de balk onderaan heen
+    tester.view.physicalSize = const Size(412, 915);
+    await tester.pumpAndSettle();
+    expect(find.text('Nieuwe dag begint om'), findsOneWidget);
+    expect(find.text('SNEL NAAR'), findsNothing);
+    expect(find.byTooltip('Toevoegen').hitTestable(), findsNothing);
+
+    // Terug naar een pc: nog altijd open, naast de zijbalk
+    tester.view.physicalSize = const Size(1440, 900);
+    await tester.pumpAndSettle();
+    expect(find.text('Nieuwe dag begint om'), findsOneWidget);
+    expect(find.text('SNEL NAAR'), findsOneWidget);
+
+    // Op een gsm sluit de terugknop van het toestel eerst dat scherm, en toont dan weer de balk onderaan
+    tester.view.physicalSize = const Size(412, 915);
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Nieuwe dag begint om'), findsNothing);
+    expect(find.byTooltip('Toevoegen').hitTestable(), findsOneWidget);
+  });
+
   testWidgets('smal venster: het toevoegmenu is niet uitgerekt en de derde rij is bereikbaar', (tester) async {
     await pumpShell(tester, const Size(780, 700));
     await tester.tap(find.byTooltip('Toevoegen'));

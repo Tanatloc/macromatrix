@@ -107,7 +107,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final s = context.watch<AppState>();
     final pal = context.pal;
 
+    // Op een pc in twee kolommen ([right] naast [left]), op een gsm onder elkaar
     final List<Widget> body;
+    var right = const <Widget>[];
     if (!Account.configured || !a.signedIn) {
       body = [
         Panel(
@@ -306,7 +308,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
           ),
         ],
-        const SizedBox(height: 10),
+      ];
+      right = [
         // Ranglijst
         Panel(
           shadow: false,
@@ -430,6 +433,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ];
     }
 
+    // Op een pc even breed als Vandaag en Profiel, zodat de kop niet verspringt tussen de tabbladen
+    final maxWidth = isDesktop(context) ? wideMaxWidth : 760.0;
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -439,12 +444,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
             padding: const EdgeInsets.only(bottom: 32),
             children: [
               Narrow(
+                maxWidth: maxWidth,
                 child: PageHeader(eyebrow: tr('Together', 'Samen'), title: tr('Friends', 'Vrienden')),
               ),
               Narrow(
+                maxWidth: maxWidth,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
+                  child: SplitColumns(left: body, right: right),
                 ),
               ),
             ],
