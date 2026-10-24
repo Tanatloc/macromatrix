@@ -53,6 +53,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   void _start() {
+    // Niet tijdens het opbouwen laden: load() meldt meteen "bezig", en een melding midden in een bouwbeurt ging
+    // verloren, waarna het scherm na eigen acties niet meer bijwerkte (S01)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startNow();
+    });
+  }
+
+  void _startNow() {
     _poll?.cancel();
     _poll = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted && !_f.loading) _f.load();
