@@ -470,7 +470,8 @@ class RangeBar extends StatelessWidget {
                   width: overflowTailWidth(amount / scale, w),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: level == Level.high || (t.goal != null && amount >= t.goal! * 3) ? p.high : p.ink2,
+                      // Rood alleen bij "te veel" (isTooMuch), dezelfde regel als de score; zonder maximum neutraal
+                      color: isTooMuch(amount, t) ? p.high : p.ink2,
                       borderRadius: BorderRadius.horizontal(right: r),
                     ),
                   ),

@@ -129,7 +129,8 @@ final _prepared = RegExp(
   caseSensitive: false,
 );
 
-/// Beter = niet gewogen met afval, de gewone vorm (geen diepvries-ei of kipgehakt), Europees, meer gemeten (niet
+/// Beter = niet gewogen met afval, de gewone vorm (geen diepvries-ei of kipgehakt), de voorkeursbron
+/// ([FoodSource.priority]: CIQUAL/Frida/Matvaretabellen/Livsmedelsverket, dan CoFID, dan USDA), meer gemeten (niet
 /// geschatte) waarden; anders de zoekvolgorde.
 int _better(Food a, Food b) {
   int score(Food f) =>
@@ -137,8 +138,9 @@ int _better(Food a, Food b) {
       (_variant.allMatches(_prepared.hasMatch(f.name) ? f.name.replaceAll(RegExp(r'\b(frozen|dried)\b', caseSensitive: false), '') : f.name).length *
               -300)
           .clamp(-900, 0) +
-      (f.source.european ? 500 : 0) +
-      (f.per100g.length - f.estimated.length).clamp(0, 499);
+      // Bronvoorkeur (zie FoodSource.priority) weegt zwaarder dan het aantal gemeten waarden (hooguit ~80)
+      (3 - f.source.priority).clamp(0, 3) * 250 +
+      (f.per100g.length - f.estimated.length).clamp(0, 249);
   return score(b).compareTo(score(a));
 }
 
@@ -291,6 +293,8 @@ double foodQueryScore(Food f, String rawQuery) {
       !RegExp(r'liver|kidney|heart|gizzard|tongue|lever').hasMatch(query)) {
     s -= 25;
   }
+  // Verrijkt (extra vitaminen of ijzer) is niet de gewone vorm: "havermout" is gewone havervlokken
+  if (RegExp(r'\b(enriched|fortified)\b').hasMatch(n) && !RegExp(r'enrich|fortif|verrijk').hasMatch(query)) s -= 6;
   if (RegExp(r'\b(gluten free|low fat|reduced|diet|light|sugar free|unsalted|low sodium)\b').hasMatch(dish) &&
       !RegExp(r'gluten|low|reduced|diet|light|free|unsalted').hasMatch(query)) {
     s -= 10;

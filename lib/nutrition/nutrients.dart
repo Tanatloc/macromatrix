@@ -99,7 +99,9 @@ const nutrients = <Nutrient>[
   Nutrient('valine', 'Valine', 'g', NutrientGroup.protein, indent: 1, decimals: 2),
 
   // Vitaminen
-  Nutrient('vit_a', 'Vitamine A (RAE)', 'µg', NutrientGroup.vitamins),
+  // Vitamine A in RE (retinol + bètacaroteen / 6), zoals de EFSA-doelen; B3 in niacine-equivalenten (niacine +
+  // tryptofaan / 60), zoals het EFSA-doel van 1,6 mg NE/MJ. Zie VIT_A_BC en niacin_ne in tool/build_foods.py.
+  Nutrient('vit_a', 'Vitamine A (RE)', 'µg', NutrientGroup.vitamins),
   Nutrient('vit_c', 'Vitamine C', 'mg', NutrientGroup.vitamins),
   Nutrient('vit_d', 'Vitamine D', 'µg', NutrientGroup.vitamins, decimals: 1),
   Nutrient('vit_e', 'Vitamine E', 'mg', NutrientGroup.vitamins),
@@ -107,7 +109,7 @@ const nutrients = <Nutrient>[
   Nutrient('vit_k2', 'Vitamine K2 (MK-4)', 'µg', NutrientGroup.vitamins, decimals: 1),
   Nutrient('b1', 'B1 (thiamine)', 'mg', NutrientGroup.vitamins, decimals: 2),
   Nutrient('b2', 'B2 (riboflavine)', 'mg', NutrientGroup.vitamins, decimals: 2),
-  Nutrient('b3', 'B3 (niacine)', 'mg', NutrientGroup.vitamins),
+  Nutrient('b3', 'B3 (niacine-equivalenten)', 'mg', NutrientGroup.vitamins),
   Nutrient('b5', 'B5 (pantotheenzuur)', 'mg', NutrientGroup.vitamins, decimals: 2),
   Nutrient('b6', 'B6 (pyridoxine)', 'mg', NutrientGroup.vitamins, decimals: 2),
   Nutrient('b7', 'B7 (biotine)', 'µg', NutrientGroup.vitamins, decimals: 1),
@@ -183,7 +185,7 @@ const _englishNames = {
   'threonine': 'Threonine',
   'tryptophan': 'Tryptophan',
   'valine': 'Valine',
-  'vit_a': 'Vitamin A (RAE)',
+  'vit_a': 'Vitamin A (RE)',
   'vit_c': 'Vitamin C',
   'vit_d': 'Vitamin D',
   'vit_e': 'Vitamin E',
@@ -191,7 +193,7 @@ const _englishNames = {
   'vit_k2': 'Vitamin K2 (MK-4)',
   'b1': 'B1 (thiamine)',
   'b2': 'B2 (riboflavin)',
-  'b3': 'B3 (niacin)',
+  'b3': 'B3 (niacin equivalents)',
   'b5': 'B5 (pantothenic acid)',
   'b6': 'B6 (pyridoxine)',
   'b7': 'B7 (biotin)',

@@ -54,7 +54,6 @@ class NutrientRow extends StatelessWidget {
     final shownLevel = single && level == Level.low ? Level.none : level;
     final pct = (value != null && ref != null && ref > 0) ? value / ref : null;
     final sub = nutrient.indent > 0;
-    final veryHigh = value != null && t?.goal != null && t!.goal! > 0 && value >= t.goal! * 3;
 
     final amountText = value == null ? '–' : '${estimate == null ? '' : '≈ '}${formatAmount(value, nutrient)}';
     final refText = ref == null ? '' : ' / ${t!.isLimit ? 'max ' : ''}${formatAmount(ref, nutrient)}';
@@ -130,8 +129,9 @@ class NutrientRow extends StatelessWidget {
                     maxLines: 1,
                     style: numStyle(
                       12.5,
-                      // Drie keer het doel of meer is opvallend, ook zonder bovengrens: dan in waarschuwingskleur
-                      color: veryHigh ? p.high : (shownLevel == Level.ok || shownLevel == Level.none ? p.ink : p.textOf(shownLevel)),
+                      // Rood alleen bij "te veel" (isTooMuch via levelOf): zonder maximum blijft 300% of meer neutraal,
+                      // net als de score (NF-6)
+                      color: shownLevel == Level.ok || shownLevel == Level.none ? p.ink : p.textOf(shownLevel),
                     ),
                   ),
                 ),

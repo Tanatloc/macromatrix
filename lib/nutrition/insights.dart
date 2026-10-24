@@ -22,6 +22,28 @@ Level levelOf(double amount, Target? t) {
   return amount >= t.goal! ? Level.ok : Level.low;
 }
 
+/// "Te veel" (rood, driehoekje): één regel voor balken, percentages, de score en de lijsten (NF-6, NW-15). Alleen
+/// boven een echte bovengrens of limiet, of meer dan 10% boven een doel-om-ongeveer-te-halen ([levelOf]). Zonder
+/// maximum (EPA+DHA, aminozuren, mangaan, B12, …) is veel nooit rood, ook niet bij 300% of meer: dat is "ruim", neutraal.
+bool isTooMuch(double amount, Target? t) => levelOf(amount, t) == Level.high;
+
+/// Vanaf hoeveel keer de referentie een hoeveelheid onwaarschijnlijk veel is (zie [absurdShare]).
+const absurdShareFactor = 10.0;
+
+/// Een onwaarschijnlijk groot deel van je dag in [amount] (bij de bronnenlijsten: per 100 g, zoals ze gerangschikt
+/// zijn): meer dan 10× de bovengrens, of zonder bovengrens meer dan 10× het doel bij een product dat geen gewoon
+/// basisvoedingsmiddel is ([wholeFood] = false). Zoiets is bijna altijd een fout in de bron (eiwitshake met 125 mg
+/// mangaan per 100 g = 42× het doel, SP-1) en wordt niet als bron aangeraden. Lever (B12, vitamine A) of mosselen
+/// halen zonder bovengrens makkelijk 20× het doel: als gewoon voedingsmiddel ([wholeFood]) blijven die staan. Met een
+/// bovengrens blijven paranoten (selenium 7,5×) en levertraan (vitamine D 2,5×) staan, kombu (jodium 700×) niet.
+/// Bij een limiet (zout, suiker) gaat het niet om aanraden.
+bool absurdShare(double amount, Target? t, {bool wholeFood = false}) {
+  if (t == null || t.isLimit) return false;
+  if (t.upper case final u? when u > 0) return amount > u * absurdShareFactor;
+  if (wholeFood || t.goal == null || t.goal! <= 0) return false;
+  return amount > t.goal! * absurdShareFactor;
+}
+
 /// Marge rond je energiedoel: binnen ±10% telt een dag als op doel, op elk scherm dezelfde regel.
 const energyMargin = 0.1;
 

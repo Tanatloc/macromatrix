@@ -1,0 +1,46 @@
+{
+  "_uitleg": "Metingen die outlier_pass in tool/build_foods.py als onwaarschijnlijk aanduidt, maar die na controle kloppen. Per product (bron:id) en voedingsstof de reden. Wat hier niet staat en verdacht is, wordt weggelaten (zie tool/outlier_report.md).",
+  "keep": {
+    "ciqual:11086": {
+      "beta_carotene": "spirulina is een van de rijkste bronnen van bètacaroteen (in de literatuur 80-200 mg per 100 g droog)",
+      "vit_a": "volgt uit het bètacaroteen van spirulina"
+    },
+    "ciqual:20985": {
+      "magnesium": "zeesla (Ulva) gedroogd: 2-3 g magnesium per 100 g is gewoon voor dit zeewier"
+    },
+    "ciqual:20995": {
+      "magnesium": "darmwier (Ulva) gedroogd: zelfde soort als zeesla, hoog magnesium"
+    },
+    "ciqual:20993": {
+      "iodine": "gedroogd zeewier: jodium varieert sterk per soort en oogst; zeer hoog is hier geen eenheidsfout"
+    },
+    "cofid:13-340": {
+      "b12": "nori bevat B12 (in de literatuur 30-70 µg per 100 g gedroogd)"
+    },
+    "cofid:19-603": {
+      "copper": "gerecht met lever: lever is de rijkste bron van koper",
+      "vit_a": "gerecht met lever: lever is de rijkste bron van vitamine A"
+    },
+    "cofid:19-604": {
+      "vit_a": "gerecht met lever: lever is de rijkste bron van vitamine A"
+    },
+    "frida:1454": {
+      "vit_d": "visleverolie: 100-500 µg vitamine D per 100 g is normaal"
+    },
+    "mvt:12.023": {
+      "potassium": "mineraalzout met kaliumchloride: ongeveer een vijfde kalium"
+    },
+    "slv:4131": {
+      "beta_carotene": "(rode) palmolie bevat 30-70 mg bètacaroteen per 100 g"
+    },
+    "usda_sr:169373": {
+      "vit_c": "gevriesdroogde rode paprika: het vitamine C van verse paprika, zonder water (~10× geconcentreerd)"
+    },
+    "usda_sr:170569": {
+      "selenium": "paranoten zijn de rijkste bron van selenium; de USDA-waarde is een bekend gemiddelde"
+    },
+    "usda_sr:173237": {
+      "vit_c": "verrijkt poeder voor een sinaasappeldrank: per 100 g poeder, aangelengd een gewone hoeveelheid"
+    }
+  }
+}

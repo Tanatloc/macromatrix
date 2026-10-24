@@ -1341,7 +1341,8 @@ class AppState extends ChangeNotifier {
     'toast': 'bread toasted',
     'mince': 'minced beef',
     'jacket potato': 'potato baked',
-    'oats': 'porridge oats',
+    // Havervlokken zelf, niet de Britse "porridge oats" (CoFID, andere koolhydraatanalyse: 64 g tegenover ~58 g)
+    'oats': 'oats rolled',
     'cola zero': 'cola sweetener',
     'coke zero': 'cola sweetener',
     'coca cola zero': 'cola sweetener',

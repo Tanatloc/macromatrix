@@ -16,8 +16,12 @@ Gebruik:
 
 Elke bron blijft een apart product (geen gemiddelden): definities en producten verschillen per land.
 Wel worden de waarden gelijkgetrokken naar één definitie per voedingsstof:
-  - koolhydraten = beschikbare koolhydraten (Europese definitie, zonder vezels)
-  - vitamine A = µg RAE (retinol + bètacaroteen / 12)
+  - koolhydraten = beschikbare koolhydraten in gewicht (Europese definitie, zonder vezels); CoFID geeft ze als
+    monosacharide-equivalenten en wordt omgerekend (zie cofid_carbs_to_weight)
+  - vitamine A = µg RE, retinolequivalenten (retinol + bètacaroteen / 6), zoals de EFSA-richtwaarden (zie VIT_A_BC)
+  - B3 = mg NE, niacine-equivalenten (voorgevormde niacine + tryptofaan / 60), zoals de EFSA-richtwaarde (zie niacin_ne)
+Daarna worden onwaarschijnlijke gemeten waarden opgespoord en weggelaten (zie outlier_pass, verslag in
+tool/outlier_report.md).
 De sleutels (energy, protein, vit_c, ...) komen overeen met lib/nutrition/nutrients.dart; waarden per 100 g.
 """
 import csv
@@ -45,6 +49,17 @@ SOURCES = {
 }
 
 
+# Vitamine A in RE (retinolequivalenten): 1 µg RE = 1 µg retinol = 6 µg bètacaroteen = 12 µg andere provitamine-A-
+# carotenoïden (alfacaroteen, bètacryptoxanthine). Waarom RE en niet RAE (bètacaroteen / 12, VS): de doelen in de app
+# zijn de EFSA-PRI's (2015: 750 µg man, 650 µg vrouw), en die staan in RE. Een RAE-waarde tegenover een RE-doel
+# telt plantaardige vitamine A half zo zwaar (bevinding NF-17). Bronnen in RAE (USDA, Matvaretabellen) rekenen we om:
+# RE = RAE + bètacaroteen / 12 + (alfacaroteen + bètacryptoxanthine) / 24.
+VIT_A_BC = 6
+
+# Niacine-equivalenten: 1 mg NE = 1 mg niacine = 60 mg tryptofaan (EFSA 2014: PRI 1,6 mg NE/MJ)
+TRP_PER_NE = 60
+
+
 def sig(x):
     """Afronden op 4 beduidende cijfers, zodat de database klein blijft."""
     return float(f'{x:.4g}')
@@ -59,10 +74,10 @@ def finish(n):
     """Gemeenschappelijke nabewerking voor alle bronnen: hulpwaarden omzetten en weglaten."""
     # Negatieve waarden (afrondingsfouten in "koolhydraten by difference") bestaan niet
     n = {k: max(0.0, v) if isinstance(v, float) else v for k, v in n.items() if v is not None}
-    # Vitamine A als RAE uit retinol en bètacaroteen, als de bron het niet zelf als RAE gaf. Zonder retinol niet:
-    # bij boter of kaas zou alleen bètacaroteen/12 veel te weinig zijn (dat wordt later aangevuld)
+    # Vitamine A als RE uit retinol en bètacaroteen, als de bron het niet zelf gaf. Zonder retinol niet:
+    # bij boter of kaas zou alleen bètacaroteen/6 veel te weinig zijn (dat wordt later aangevuld)
     if 'vit_a' not in n and '_retinol' in n:
-        n['vit_a'] = n.get('_retinol', 0) + n.get('beta_carotene', 0) / 12
+        n['vit_a'] = n.get('_retinol', 0) + n.get('beta_carotene', 0) / VIT_A_BC
     # Natrium uit zout als natrium ontbreekt (zout = natrium x 2,5)
     if 'sodium' not in n and '_salt' in n:
         n['sodium'] = n['_salt'] / 2.5 * 1000
@@ -107,6 +122,8 @@ USDA = {
     'caffeine': ('mg', [1057]),
     'vit_a': ('µg', [1106]),
     'beta_carotene': ('µg', [1107]),
+    '_alpha_carotene': ('µg', [1108]),
+    '_cryptoxanthin': ('µg', [1120]),
     'vit_c': ('mg', [1162]),
     'vit_d': ('µg', [1114]),
     'vit_e': ('mg', [1109]),
@@ -206,7 +223,18 @@ def usda_nutrients(raw):
         out['carbs'] = summ
     elif diff is not None:
         out['carbs'] = diff
+    # USDA geeft vitamine A als RAE; omrekenen naar RE (zie VIT_A_BC)
+    if 'vit_a' in out:
+        out['vit_a'] = rae_to_re(out['vit_a'], out.get('beta_carotene'),
+                                 out.get('_alpha_carotene', 0) + out.get('_cryptoxanthin', 0))
     return finish({k: max(0.0, v) for k, v in out.items()})
+
+
+def rae_to_re(rae, beta_carotene, other_carotenoids=0.0):
+    """RAE (bètacaroteen / 12, andere / 24) naar RE (bètacaroteen / 6, andere / 12): het verschil erbij."""
+    if beta_carotene or other_carotenoids:
+        CHANGES['vit_a_re_from_rae'] += 1
+    return rae + (beta_carotene or 0) / 12 + (other_carotenoids or 0) / 24
 
 
 def usda_rows(root):
@@ -316,7 +344,8 @@ def ciqual_rows(root):
 
 COFID = {
     'WATER': 'water', 'PROT': 'protein', 'FAT': 'fat', 'CHO': 'carbs', 'KCALS': 'energy', 'STAR': 'starch',
-    'TOTSUG': 'sugars', 'ALCO': 'alcohol', 'AOACFIB': 'fiber', 'ENGFIB': '_fiber_nsp', 'SATFOD': 'sfa',
+    'TOTSUG': 'sugars', 'ALCO': 'alcohol', 'SUCR': '_sucrose', 'MALT': '_maltose', 'LACT': '_lactose',
+    'OLIGO': '_oligo', 'TRYP60': '_tryp60', 'NIACEQU': '_ne', 'AOACFIB': 'fiber', 'ENGFIB': '_fiber_nsp', 'SATFOD': 'sfa',
     'MONOFOD': 'mufa', 'POLYFOD': 'pufa', 'FODTRANS': 'trans', 'CHOL': 'cholesterol',
     'NA': 'sodium', 'K': 'potassium', 'CA': 'calcium', 'MG': 'magnesium', 'P': 'phosphorus', 'FE': 'iron',
     'CU': 'copper', 'ZN': 'zinc', 'CL': 'chloride', 'MN': 'manganese', 'SE': 'selenium', 'I': 'iodine',
@@ -371,9 +400,65 @@ def cofid_rows(root):
     for code, f in foods.items():
         n = f['n']
         nsp = n.pop('_fiber_nsp', None)
+        # Vezels: CoFID geeft AOAC-vezels (zoals de andere bronnen en EU-etiketten) en Englyst-NSP. NSP mist
+        # lignine en resistent zetmeel en ligt lager (havermout 7,2 tegenover 7,8 g AOAC, bij sommige producten veel
+        # meer). Er bestaat geen betrouwbare vaste omrekenfactor (het verschil hangt af van het product), dus NSP
+        # alleen als AOAC ontbreekt, ongewijzigd (telling: CHANGES['cofid_fiber_nsp']).
         if 'fiber' not in n and nsp is not None:
-            n['fiber'] = nsp  # Englyst-vezels (NSP) als AOAC ontbreekt: iets lager, maar beter dan niets
+            n['fiber'] = nsp
+            CHANGES['cofid_fiber_nsp'] += 1
+        cofid_carbs_to_weight(n)
+        # Tryptofaan/60 (mg) is tryptofaan zelf: g tryptofaan = mg × 60 / 1000. Een gemeten tryptofaanwaarde voor de
+        # aminozuren, en voor niacine-equivalenten bij producten zonder NE.
+        t60 = n.pop('_tryp60', None)
+        if t60 is not None and 'tryptophan' not in n:
+            n['tryptophan'] = t60 * TRP_PER_NE / 1000
         yield 'cofid', code, f['name'], '', COFID_GROUPS.get(f['group'][:1], ''), n, []
+
+
+# CoFID (McCance and Widdowson) geeft koolhydraten, zetmeel en suikers als monosacharide-equivalenten: wat je na
+# volledige afbraak tot enkelvoudige suikers zou wegen. Andere tabellen en etiketten geven het gewicht zelf. Bij de
+# afbraak komt water bij: zetmeel (C6H10O5)n → glucose ×180/162 = 1,11, een disacharide (sacharose, maltose,
+# lactose) → 2 monosachariden ×360/342 = 1,05. McCance and Widdowson gebruikt zelf 1,10 en 1,05. Omrekening:
+#   zetmeel ÷ 1,10; disachariden (sacharose + maltose + lactose) ÷ 1,05; monosachariden (glucose, fructose,
+#   galactose) ÷ 1; oligosachariden ongewijzigd (zelden meer dan 1 g, factor tussen 1,05 en 1,10);
+#   koolhydraten = oud totaal − wat zetmeel en disachariden verliezen.
+# De energie verandert niet: CoFID rekende die met 3,75 kcal per g monosacharide-equivalent, en dat klopt.
+# Ontbreekt het zetmeel, dan is het koolhydraten − suikers − oligosachariden. Ontbreken de losse suikers, dan
+# blijven de suikers ongewijzigd (onbekend hoeveel disacharide erin zit). De losse suikers staan in CoFID ook als
+# monosacharide-equivalenten (melk: lactose 4,7 = totale suikers 4,7).
+COFID_STARCH_FACTOR = 1.10
+COFID_DISACCHARIDE_FACTOR = 1.05
+# Tellingen per regel voor het verslag (tool/FOODS_CHANGES.md)
+CHANGES = {k: 0 for k in ('cofid_carbs', 'cofid_starch', 'cofid_sugars', 'cofid_fiber_nsp', 'vit_a_re_from_rae',
+                          'vit_a_re_computed', 'niacin_ne_source', 'niacin_ne_trp', 'niacin_ne_trp_estimated',
+                          'niacin_preformed_only', 'outliers_dropped', 'outliers_kept')}
+
+
+def cofid_carbs_to_weight(n):
+    starch, sugars, carbs = n.get('starch'), n.get('sugars'), n.get('carbs')
+    di = [n.pop(k) for k in ('_sucrose', '_maltose', '_lactose') if k in n]
+    oligo = n.pop('_oligo', None) or 0.0
+    if carbs is None:
+        return
+    loss = 0.0
+    if starch is not None:
+        n['starch'] = starch / COFID_STARCH_FACTOR
+        loss += starch - n['starch']
+        if starch > 0:
+            CHANGES['cofid_starch'] += 1
+    elif sugars is not None:
+        loss += max(0.0, carbs - sugars - oligo) * (1 - 1 / COFID_STARCH_FACTOR)
+    if di and sugars is not None:
+        d = sum(di)
+        lost = d - d / COFID_DISACCHARIDE_FACTOR
+        n['sugars'] = max(0.0, sugars - lost)
+        loss += lost
+        if lost > 0:
+            CHANGES['cofid_sugars'] += 1
+    if loss > 0:
+        n['carbs'] = max(0.0, carbs - loss)
+        CHANGES['cofid_carbs'] += 1
 
 
 # ─────────────────────────── Frida (Denemarken) ───────────────────────────
@@ -388,7 +473,7 @@ FRIDA = {
     261: 'trans', 71: 'la', 74: 'ala', 86: 'aa', 87: 'epa', 98: 'dpa', 99: 'dha', 115: 'cholesterol',
     159: 'histidine', 161: 'isoleucine', 180: 'leucine', 183: 'lysine', 189: 'methionine', 124: 'cystine',
     211: 'phenylalanine', 264: 'tyrosine', 258: 'threonine', 262: 'tryptophan', 266: 'valine',
-    116: 'choline', 121: 'caffeine',
+    116: 'choline', 121: 'caffeine', 203: '_ne',
 }
 # Frida geeft aminozuren in mg en fluoride in µg; wij in g en mg
 FRIDA_FACTOR = {k: 0.001 for k in ('histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'cystine',
@@ -440,7 +525,7 @@ SLV = {
     ('CA', 'mg'): 'calcium', ('FE', 'mg'): 'iron', ('MG', 'mg'): 'magnesium', ('P', 'mg'): 'phosphorus',
     ('K', 'mg'): 'potassium', ('NA', 'mg'): 'sodium', ('ZN', 'mg'): 'zinc', ('SE', 'µg'): 'selenium',
     ('ID', 'µg'): 'iodine', ('CU', 'mg'): 'copper', ('MN', 'mg'): 'manganese', ('NACL', 'g'): '_salt',
-    ('STARCH', 'g'): 'starch',
+    ('STARCH', 'g'): 'starch', ('NIAEQ', 'NE/mg'): '_ne',
 }
 
 
@@ -506,6 +591,9 @@ def mvt_rows(root):
             key = MVT.get(c.get('nutrientId'))
             if key and c.get('quantity') is not None:
                 n[key] = float(c['quantity'])
+        # Matvaretabellen geeft vitamine A als RAE (retinol + bètacaroteen / 12): naar RE (zie VIT_A_BC)
+        if 'vit_a' in n:
+            n['vit_a'] = rae_to_re(n['vit_a'], n.get('beta_carotene'))
         portions = [
             (f"1 {p['portionName']}", sig(float(p['quantity'])))
             for p in f.get('portions', [])
@@ -1344,6 +1432,130 @@ def sanity_pass(rows):
     return dier, plant, est_outlier
 
 
+# ─────────────────────────── Onwaarschijnlijke metingen ───────────────────────────
+#
+# Een gemeten waarde die ver boven alles uitsteekt wat vergelijkbare producten hebben, is bijna altijd een eenheids-
+# of tikfout in de bron (eiwitshake met 125 mg mangaan per 100 g, bevinding SP-1). Per voedingsstof:
+#   - groep = de voedingsgroep uit het label (zuivel, vis, drank, …); referentie = het 99e percentiel van de gemeten
+#     waarden in die groep (met minstens 30 waarden, anders het 99,9e percentiel van alle producten);
+#   - verdacht als de waarde > 15× de groepsreferentie is én minstens een kwart van het 99,9e percentiel van alle
+#     producten (anders gaat het om kleine absolute hoeveelheden), of als ze > 3× het 99,9e percentiel van alle
+#     producten is;
+#   - niet verdacht als hetzelfde voedingsmiddel (zelfde label) in een ander product minstens een kwart van die
+#     waarde heeft: dan steunen andere metingen het (thee en mangaan, kombu en jodium, paranoten en selenium).
+# Wat dan overblijft, is één voor één nagekeken. Echte uitschieters (levertraan, spirulina, gevriesdroogde paprika,
+# verrijkt poeder) staan met de reden in tool/outlier_keep.json en blijven; de rest wordt weggelaten en daarna
+# opnieuw geschat zoals elke ontbrekende waarde. Supplementen in pilvorm tellen niet mee (daar is alles extreem).
+# Het verslag staat in tool/outlier_report.md, telkens opnieuw geschreven bij het bouwen.
+OUTLIER_KEEP = Path(__file__).with_name('outlier_keep.json')
+OUTLIER_REPORT = Path(__file__).with_name('outlier_report.md')
+OUTLIER_GROUP_RATIO = 15
+OUTLIER_GROUP_MIN_GLOBAL = 0.25
+OUTLIER_GLOBAL_RATIO = 3
+OUTLIER_SUPPORT = 4
+PILL_LIKE = re.compile(r'vitamin|multi|capsule|tablet|floradix|sanasol|vitaplex|antacid', re.I)
+
+
+def _pct(sorted_vals, p):
+    return sorted_vals[min(len(sorted_vals) - 1, int(p * len(sorted_vals)))]
+
+
+def outlier_pass(rows, labels, report=None):
+    keep = json.loads(OUTLIER_KEEP.read_text())['keep'] if OUTLIER_KEEP.exists() else {}
+    refs = [f"{r['source']}:{r['sid']}" for r in rows]
+    lab = [labels.get(ref) or {} for ref in refs]
+    skip = [r['category'] in SKIP_GROUP_CATEGORIES or bool(PILL_LIKE.search(r['name'])) for r in rows]
+
+    def measured(i):
+        r = rows[i]
+        return {k: v for k, v in r['nut'].items() if k in SANITY_MICROS and k not in r.get('bio0', ()) and k not in r['est']}
+
+    values = [measured(i) for i in range(len(rows))]
+    by_group, by_all, by_food = {}, {}, {}
+    for i, vals in enumerate(values):
+        if skip[i]:
+            continue
+        g, f = lab[i].get('g', ''), lab[i].get('f') or rows[i]['name'].lower()
+        for k, v in vals.items():
+            by_group.setdefault((g, k), []).append(v)
+            by_all.setdefault(k, []).append(v)
+            by_food.setdefault((f, k), []).append((v, i))
+    for d in (by_group, by_all):
+        for vals in d.values():
+            vals.sort()
+    dropped, kept, lines = 0, 0, []
+    for i, vals in enumerate(values):
+        if skip[i]:
+            continue
+        g, f = lab[i].get('g', ''), lab[i].get('f') or rows[i]['name'].lower()
+        for k, v in vals.items():
+            floor = SANITY_FLOOR[k]
+            glob = max(_pct(by_all[k], 0.999), floor)
+            grp = by_group.get((g, k), ())
+            ref = max(_pct(grp, 0.99), floor) if len(grp) >= 30 else glob
+            rg, rgl = v / ref, v / glob
+            if not ((rg > OUTLIER_GROUP_RATIO and rgl > OUTLIER_GROUP_MIN_GLOBAL) or rgl > OUTLIER_GLOBAL_RATIO):
+                continue
+            if any(j != i and x >= v / OUTLIER_SUPPORT for x, j in by_food.get((f, k), ())):
+                continue
+            reason = keep.get(refs[i], {}).get(k)
+            if reason:
+                kept += 1
+                action = f'behouden: {reason}'
+            else:
+                rows[i]['nut'].pop(k, None)
+                rows[i]['loq'].pop(k, None)
+                # Vitamine A die wij uit retinol + bètacaroteen berekenden, steunt op dezelfde foute waarde
+                if k == 'beta_carotene' and rows[i]['retinol'] is not None:
+                    rows[i]['nut'].pop('vit_a', None)
+                dropped += 1
+                action = 'weggelaten'
+            lines.append(f"| {refs[i]} | {rows[i]['name']} | {g or '–'} | {k} | {sig(v)} | {sig(ref)} | {sig(glob)} | {action} |")
+    CHANGES['outliers_dropped'] += dropped
+    CHANGES['outliers_kept'] += kept
+    if report is not None:
+        report.write_text(
+            '# Onwaarschijnlijke metingen\n\n'
+            'Geschreven door `tool/build_foods.py` (zie `outlier_pass`). Per 100 g; groepsref. = 99e percentiel van de '
+            'voedingsgroep, alle = 99,9e percentiel van alle producten. Weggelaten waarden worden daarna geschat zoals '
+            'elke ontbrekende waarde. Behouden staat met de reden in `tool/outlier_keep.json`.\n\n'
+            '| product | naam | groep | stof | waarde | groepsref. | alle | wat |\n|---|---|---|---|---|---|---|---|\n'
+            + '\n'.join(sorted(lines)) + '\n')
+    return dropped, kept
+
+
+# ─────────────────────────── Niacine-equivalenten ───────────────────────────
+#
+# Het EFSA-doel voor B3 staat in niacine-equivalenten (1,6 mg NE per MJ): het lichaam maakt niacine uit tryptofaan,
+# 60 mg tryptofaan = 1 mg niacine. De bronnen geven meestal alleen voorgevormde niacine; tegenover het NE-doel
+# lijkt melk, ei of peulvruchten dan een B3-tekort te geven dat er niet is (bevinding NF-2). Dus na het aanvullen:
+#   - gaf de bron zelf niacine-equivalenten (CoFID, Frida, Livsmedelsverket), dan die;
+#   - anders voorgevormde niacine + tryptofaan (g) × 1000 / 60, met de gemeten of geschatte tryptofaan. Telt de
+#     geschatte tryptofaan voor meer dan de helft, dan geldt B3 ook als geschat (met dezelfde herkomst);
+#   - zonder tryptofaan blijft het voorgevormde niacine (een ondergrens).
+# Niet tijdens het aanvullen: dan zou NE van het ene product als voorgevormde niacine bij een ander terechtkomen.
+def niacin_ne(rows):
+    for r in rows:
+        n, est = r['nut'], r['est']
+        if r.get('ne') is not None:
+            n['b3'] = r['ne']
+            est.pop('b3', None)
+            CHANGES['niacin_ne_source'] += 1
+            continue
+        if 'b3' not in n:
+            continue
+        trp = n.get('tryptophan')
+        if trp is None:
+            CHANGES['niacin_preformed_only'] += 1
+            continue
+        part = trp * 1000 / TRP_PER_NE
+        if 'tryptophan' in est and 'b3' not in est and part > n['b3']:
+            est['b3'] = est['tryptophan']
+            CHANGES['niacin_ne_trp_estimated'] += 1
+        n['b3'] += part
+        CHANGES['niacin_ne_trp'] += 1
+
+
 # ─────────────────────────── Nauwkeurigheidstest ───────────────────────────
 
 HOLDOUT_KEYS = ['choline', 'b5', 'vit_k', 'iodine', 'selenium', 'vit_d', 'b12', 'manganese', 'copper', 'vit_e', 'b9',
@@ -1425,7 +1637,7 @@ def main(root, target):
     rows = []
     for gen in (ciqual_rows, slv_rows, mvt_rows, frida_rows, cofid_rows, usda_rows):
         for source, sid, name, local, category, raw, portions in gen(root):
-            loq, retinol = {}, None
+            loq, retinol, ne = {}, None, None
             if source.startswith('usda'):
                 if category in USDA_SKIP_CATEGORIES:
                     continue
@@ -1434,16 +1646,23 @@ def main(root, target):
                 loq = raw.pop('_loq', {})
                 # Vitamine A die we zelf uit retinol + bètacaroteen berekenen: na het aanvullen van bètacaroteen opnieuw
                 retinol = (raw.get('_retinol', 'unknown')) if 'vit_a' not in raw else None
+                # Niacine-equivalenten zoals de bron ze gaf (CoFID, Frida, Livsmedelsverket), zie niacin_ne
+                ne = raw.get('_ne')
+                if 'vit_a' not in raw and '_retinol' in raw and raw.get('beta_carotene'):
+                    CHANGES['vit_a_re_computed'] += 1
                 nut = finish(raw)
             if 'energy' not in nut or not name:
                 continue
             rows.append({'source': source, 'sid': sid, 'name': name, 'local': local, 'category': category,
-                         'nut': nut, 'est': {}, 'portions': portions, 'loq': loq, 'retinol': retinol})
+                         'nut': nut, 'est': {}, 'portions': portions, 'loq': loq, 'retinol': retinol, 'ne': ne})
 
     print(f'correcties uit {FIXES_FILE.name}: {apply_fixes(rows)} waarden')
     for r in rows:
         validate_measured(r)
     labels = {} if os.environ.get('NOLABELS') else load_labels()
+    # Vóór het aanvullen: een foute meting mag niet doorgegeven worden aan andere producten
+    dropped, kept = outlier_pass(rows, labels, report=None if os.environ.get('HOLDOUT') else OUTLIER_REPORT)
+    print(f'onwaarschijnlijke metingen: {dropped} weggelaten, {kept} nagekeken en behouden (zie {OUTLIER_REPORT.name})')
     # Nauwkeurigheidstest: HOLDOUT=<aantal> verbergt zoveel gemeten waarden, laat ze schatten en vergelijkt
     hidden = holdout(rows, int(os.environ['HOLDOUT'])) if os.environ.get('HOLDOUT') else []
     labelled = sum(1 for r in rows if f"{r['source']}:{r['sid']}" in labels)
@@ -1481,16 +1700,18 @@ def main(root, target):
     for r in rows:
         bc = r['nut'].get('beta_carotene')
         if r['retinol'] == 'unknown' and bc is not None and kind(r['name'], r['category']) == 'plant':
-            # Planten bevatten geen retinol: vitamine A = bètacaroteen / 12
-            r['nut']['vit_a'] = bc / 12
+            # Planten bevatten geen retinol: vitamine A = bètacaroteen / 6 (RE, zie VIT_A_BC)
+            r['nut']['vit_a'] = bc / VIT_A_BC
             r['est'].pop('vit_a', None)
             if 'beta_carotene' in r['est']:
                 r['est']['vit_a'] = r['est']['beta_carotene']
         elif isinstance(r['retinol'], float) and 'beta_carotene' in r['est'] and bc:
-            r['nut']['vit_a'] = r['retinol'] + bc / 12
+            r['nut']['vit_a'] = r['retinol'] + bc / VIT_A_BC
             r['est']['vit_a'] = r['est']['beta_carotene']
     d, p, eo = sanity_pass(rows)
     print(f'opgeschoond: dierlijk vezels/zetmeel {d}, plantaardig onmogelijk {p}, geschatte uitschieters {eo}')
+    niacin_ne(rows)
+    print('tellingen per regel: ' + ', '.join(f'{k} {v}' for k, v in CHANGES.items()))
 
     # Het label gaat mee naar de app (voor advies en voedingsgroepen), met n = in hoeveel bronnen dit voedingsmiddel
     # voorkomt: hoe meer landen het in hun tabel hebben, hoe gewoner het is
