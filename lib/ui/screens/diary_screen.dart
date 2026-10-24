@@ -38,9 +38,12 @@ import '../widgets/undo.dart';
 /// Vandaag: energie en macro's, de 25 vitaminen en mineralen, wat aandacht vraagt, een suggestie,
 /// de afgelopen week en de maaltijden.
 class DiaryScreen extends StatelessWidget {
-  const DiaryScreen({super.key, this.onOpenNutrients, this.onOpenProfile});
+  const DiaryScreen({super.key, this.onOpenNutrients, this.onOpenProfile, this.onOpenWeek});
   final VoidCallback? onOpenNutrients;
   final VoidCallback? onOpenProfile;
+
+  /// "Laatste 7 dagen": het dashboard op Week (in de shell het tabblad Dashboard).
+  final VoidCallback? onOpenWeek;
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(valueListenable: _selection, builder: (context, _, _) => _build(context));
@@ -55,7 +58,9 @@ class DiaryScreen extends StatelessWidget {
             this.onOpenProfile!();
             showProfileGoals();
           };
-    if (isDesktop(context)) return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile);
+    if (isDesktop(context)) {
+      return _DesktopDiary(empty: empty, onOpenNutrients: onOpenNutrients, onOpenProfile: onOpenProfile, onOpenWeek: onOpenWeek);
+    }
     final selected = _selectedIn(s);
     final size = MediaQuery.sizeOf(context);
     // De kop met de dag blijft altijd staan. De samenvatting blijft alleen staan op een hoog scherm (tablet);
@@ -92,7 +97,7 @@ class DiaryScreen extends StatelessWidget {
             const _ForTodayCard(),
             if (s.isToday && s.suggestion != null) ...[gap, _SuggestionCard(suggestion: s.suggestion!)],
             gap,
-            const _WeekCard(),
+            _WeekCard(onOpen: onOpenWeek),
           ],
         ],
       ),
@@ -315,10 +320,11 @@ Future<void> copyFromYesterday(BuildContext context, {Meal? meal}) async {
 /// Vandaag op een pc: links wat je logt (maaltijden, supplementen, beweging), rechts hoe je dag ervoor staat
 /// (energie, tips, wat je nog tekortkomt en je week). Toevoegen staat bovenaan in plaats van als zwevende knop.
 class _DesktopDiary extends StatelessWidget {
-  const _DesktopDiary({required this.empty, this.onOpenNutrients, this.onOpenProfile});
+  const _DesktopDiary({required this.empty, this.onOpenNutrients, this.onOpenProfile, this.onOpenWeek});
   final bool empty;
   final VoidCallback? onOpenNutrients;
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenWeek;
 
   @override
   Widget build(BuildContext context) {
@@ -346,20 +352,16 @@ class _DesktopDiary extends StatelessWidget {
             const _ExerciseCard(),
             if (!empty && s.isToday && s.suggestion != null) ...[const SizedBox(height: 16), _SuggestionCard(suggestion: s.suggestion!)],
           ];
+          // Rechts: eerst hoe je dag ervoor staat, dan de inzichten
+          final summary = <Widget>[
+            if (empty) ...[const _BudgetCard(), gap, const _StartCard()] else const _EnergyCard(),
+          ];
+          final insights = <Widget>[
+            if (!empty) ...[const _ForTodayCard(), gap, _ShortfallCard(onOpenNutrients: onOpenNutrients), gap, _WeekCard(onOpen: onOpenWeek)],
+          ];
           final status = <Widget>[
-            if (empty) ...[
-              const _BudgetCard(),
-              gap,
-              const _StartCard(),
-            ] else ...[
-              const _EnergyCard(),
-              gap,
-              const _ForTodayCard(),
-              gap,
-              _ShortfallCard(onOpenNutrients: onOpenNutrients),
-              gap,
-              const _WeekCard(),
-            ],
+            ...summary,
+            if (insights.isNotEmpty) ...[gap, ...insights],
           ];
           return ListView(
             padding: const EdgeInsets.only(bottom: 40),
@@ -393,7 +395,17 @@ class _DesktopDiary extends StatelessWidget {
                                 ),
                               ],
                             )
-                          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...status, gap, ...log]),
+                          // Eén kolom (bv. 1024 px met de zijbalk): zoals op een gsm eerst de samenvatting, dan de
+                          // maaltijden en pas daarna de inzichten, niet de maaltijden helemaal onderaan (N31)
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ...summary,
+                                gap,
+                                ...log,
+                                if (insights.isNotEmpty) ...[const SizedBox(height: 20), ...insights],
+                              ],
+                            ),
                     ),
                   ],
                 ),
@@ -936,7 +948,10 @@ class _SuggestionCard extends StatelessWidget {
 // ── Afgelopen 7 dagen ──
 
 class _WeekCard extends StatelessWidget {
-  const _WeekCard();
+  const _WeekCard({this.onOpen});
+
+  /// Het dashboard op Week openen; zonder (los dagboek) komt het als eigen scherm met een terugpijl.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -969,7 +984,7 @@ class _WeekCard extends StatelessWidget {
     ], (g) => '${fmtInt(g)} g');
 
     return Panel(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
+      onTap: onOpen ?? () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen(startOnWeek: true))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1161,9 +1176,10 @@ Meal savedMealTarget(SavedMeal m, Meal fallback) {
 }
 
 /// Maaltijd die in de naam van een opgeslagen maaltijd staat ('Ontbijt', 'Lunch met eieren', 'Snacks'), of null.
+/// Ook in een oude, aan elkaar geplakte naam ('DinnerChicken stir fry', N20).
 @visibleForTesting
 Meal? mealInName(String name) {
-  final words = name.toLowerCase().split(RegExp(r'[^a-zà-ÿ]+'));
+  final words = _unglue(name).toLowerCase().split(RegExp(r'[^a-zà-ÿ]+'));
   for (final w in words) {
     switch (w) {
       case 'breakfast' || 'ontbijt':
@@ -1177,6 +1193,26 @@ Meal? mealInName(String name) {
     }
   }
   return null;
+}
+
+/// Een kleine letter vlak voor een hoofdletter ('DinnerChicken') krijgt een spatie ertussen.
+String _unglue(String name) => name.replaceAllMapped(RegExp(r'([a-zà-ÿ])([A-ZÀ-Ý])'), (m) => '${m[1]} ${m[2]}');
+
+/// Naam van een opgeslagen maaltijd zonder de maaltijd die er vroeger vooraan aan plakte: 'BreakfastWeekday
+/// porridge' wordt 'Weekday porridge' (P142, N20). Een gewone naam ('Lunch met eieren') blijft zoals hij is.
+@visibleForTesting
+String savedMealName(String name) {
+  final m = RegExp(r'^(Breakfast|Lunch|Dinner|Snacks?|Ontbijt|Middagmaal|Avondeten|Avondmaal|Diner|Tussendoortje)(?=[A-ZÀ-Ý])')
+      .firstMatch(name.trim());
+  return m == null ? name.trim() : name.trim().substring(m.end);
+}
+
+/// Titel van een opgeslagen maaltijd op zijn kaart: de maaltijd waar hij heen gaat en de naam, gescheiden
+/// ('Dinner · Chicken stir fry'). Heet hij gewoon zoals de maaltijd, dan alleen die.
+@visibleForTesting
+String savedMealTitle(SavedMeal m, Meal target) {
+  final name = savedMealName(m.name);
+  return name.toLowerCase() == target.label.toLowerCase() || mealInName(name) == target ? name : '${target.label} · $name';
 }
 
 class _StartCard extends StatelessWidget {
@@ -1280,17 +1316,18 @@ class _StartCard extends StatelessWidget {
           for (final m in saved.take(2))
             action(
               icon: Icons.restaurant_menu_rounded,
-              title: m.name,
+              title: savedMealTitle(m, savedMealTarget(m, meal)),
               sub: m.items.map((i) => i.name).join(' · '),
               meta: '${fmtInt(m.kcal)} kcal',
               onTap: () {
-                // Een opgeslagen 'Ontbijt' hoort bij het ontbijt, ook als je het om 12 uur logt (P60)
+                // Een opgeslagen 'Ontbijt' hoort bij het ontbijt, ook als je het om 12 uur logt (P60, N20)
                 final target = savedMealTarget(m, meal);
-                s.addSavedMeal(m, target);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(tr('${m.name} added to ${target.label.toLowerCase()}', '${m.name} toegevoegd aan ${target.label.toLowerCase()}')),
-                  ),
+                final name = savedMealName(m.name);
+                final added = s.addSavedMeal(m, target);
+                showUndo(
+                  context,
+                  tr('$name added to ${target.label.toLowerCase()}', '$name toegevoegd aan ${target.label.toLowerCase()}'),
+                  () => s.undoAdds(added),
                 );
               },
             ),
@@ -1391,9 +1428,24 @@ class _MealCardState extends State<_MealCard> {
     final p = context.pal;
     final entries = s.entriesFor(meal);
 
+    // + en … zijn elk een eigen knop van 44 × 44 met ruimte ertussen. Zonder vaste maat liep de onzichtbare tikzone
+    // van … over de + heen, en won … de tik op het midden van de + (N27).
+    final buttonStyle = IconButton.styleFrom(
+      minimumSize: const Size.square(kMinTapTarget),
+      maximumSize: const Size.square(kMinTapTarget),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: EdgeInsets.zero,
+    );
+    final add = IconButton(
+      tooltip: tr('Add to ${meal.label.toLowerCase()}', 'Toevoegen aan ${meal.label.toLowerCase()}'),
+      style: buttonStyle,
+      icon: Icon(Icons.add_rounded, size: 20, color: entries.isEmpty ? p.ink2 : p.brand),
+      onPressed: () => openAddFood(context, meal),
+    );
     final menu = PopupMenuButton<String>(
       tooltip: tr('More', 'Meer'),
       icon: Icon(Icons.more_horiz_rounded, size: 20, color: p.ink3),
+      style: buttonStyle,
       padding: EdgeInsets.zero,
       onSelected: _menu,
       itemBuilder: (_) => [
@@ -1418,8 +1470,9 @@ class _MealCardState extends State<_MealCard> {
               ),
             ),
             Text(tr('Nothing logged yet', 'Nog niets gelogd'), style: TextStyle(fontSize: 13, color: p.ink2)),
-            const SizedBox(width: 6),
-            Icon(Icons.add_rounded, size: 18, color: p.ink2),
+            const SizedBox(width: 2),
+            add,
+            const SizedBox(width: 8),
             menu,
           ],
         ),
@@ -1464,12 +1517,9 @@ class _MealCardState extends State<_MealCard> {
                         fmtInt(kcal),
                         style: numStyle(13.5, weight: FontWeight.w500, color: p.ink),
                       ),
-                      IconButton(
-                        tooltip: tr('Add to ${meal.label.toLowerCase()}', 'Toevoegen aan ${meal.label.toLowerCase()}'),
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.add_rounded, size: 20, color: p.brand),
-                        onPressed: () => openAddFood(context, meal),
-                      ),
+                      const SizedBox(width: 2),
+                      add,
+                      const SizedBox(width: 8),
                       menu,
                     ],
                   ),

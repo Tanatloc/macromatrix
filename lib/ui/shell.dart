@@ -87,6 +87,7 @@ class _ShellState extends State<Shell> {
     _widgetTimer?.cancel();
     _tab.dispose();
     _dashboardToDay.dispose();
+    _dashboardToWeek.dispose();
     super.dispose();
   }
 
@@ -192,6 +193,16 @@ class _ShellState extends State<Shell> {
     _go(1);
   }
 
+  /// Gaat af als Vandaag "Laatste 7 dagen" opent: het dashboard toont dan de week van de gekozen dag.
+  final _dashboardToWeek = ValueNotifier(0);
+
+  /// Dashboard openen op Week, als gewoon tabblad: zo blijft de menubalk staan en kom je met Vandaag terug (N16).
+  void _openWeek() {
+    _navigators[1].currentState?.popUntil((r) => r.isFirst);
+    _dashboardToWeek.value++;
+    _go(1);
+  }
+
   void _go(int i) {
     // Een tabblad brengt je altijd naar het begin ervan (op een pc heeft elk tabblad zijn eigen navigator, en een
     // scherm dat daar nog openstond, verraste je als je via de zijbalk terugkwam). De staat van dat beginscherm
@@ -226,8 +237,8 @@ class _ShellState extends State<Shell> {
 
   /// De beginschermen van de vijf tabbladen, met [tab] het actieve tabblad.
   List<Widget> _pagesFor(int tab) => [
-    DiaryScreen(onOpenNutrients: _openDayNutrients, onOpenProfile: () => _go(4)),
-    DashboardScreen(showDay: _dashboardToDay),
+    DiaryScreen(onOpenNutrients: _openDayNutrients, onOpenProfile: () => _go(4), onOpenWeek: _openWeek),
+    DashboardScreen(showDay: _dashboardToDay, showWeek: _dashboardToWeek),
     const ProductScanScreen(),
     FriendsScreen(active: tab == 3),
     const ProfileScreen(),
