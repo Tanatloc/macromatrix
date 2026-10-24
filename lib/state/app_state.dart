@@ -242,12 +242,51 @@ class AppState extends ChangeNotifier {
     return s == null ? _profile : _profile.copyWith(proteinPct: s.$1, carbsPct: s.$2, fatPct: s.$3);
   }
 
-  /// Richtwaarden voor een dag: profiel, weekschema, beweging en eigen doelen.
+  /// Richtwaarden voor een dag: profiel, weekschema, beweging en eigen doelen. Dé berekening voor elk scherm.
   Map<String, Target> targetsForDate(DateTime d, {double burned = 0}) {
     final settings = _frozenFor(d)?.$2 ?? _settings;
     final p = profileFor(d);
-    final t = targetsFor(p, year: d.year, extraKcal: _extraKcal(burned, p, d.year, settings), tdee: adaptiveTdee);
-    return {...t, ...settings.overrides}..removeWhere((k, _) => hiddenNutrients.contains(k));
+    // Een eigen eiwitdoel telt ook in de verdeling: koolhydraten en vet delen wat daarna overblijft
+    final t = targetsFor(
+      p,
+      year: d.year,
+      extraKcal: _extraKcal(burned, p, d.year, settings),
+      tdee: adaptiveTdee,
+      proteinGoal: settings.overrides['protein']?.goal,
+    );
+    final out = {...t, ...settings.overrides}..removeWhere((k, _) => hiddenNutrients.contains(k));
+    // Vrije suikers zijn een deel van alle suikers: hun grens ligt nooit hoger dan een eigen grens voor alle suikers
+    final all = out['sugars']?.upper, free = out['free_sugars'];
+    if (all != null && free?.upper != null && free!.upper! > all) out['free_sugars'] = Target(goal: free.goal, upper: all);
+    return out;
+  }
+
+  DateTime get _today => _dateOnly(logicalNow());
+
+  double _burnedOn(DateTime d) => d == _date ? burnedKcal : user.exerciseFor(dayKey(d)).fold(0.0, (a, e) => a + e.kcal);
+
+  /// Doelen van vandaag, los van de dag die op Vandaag of het Dashboard openstaat: het Profiel toont altijd deze.
+  Map<String, Target> get todayTargets => _date == _today ? _targets : targetsForDate(_today, burned: _burnedOn(_today));
+
+  /// Hoeveel kcal beweging vandaag bij je doel komt (zoals [exerciseKcalInGoal], maar altijd voor vandaag).
+  double get todayExerciseKcalInGoal => _extraKcal(_burnedOn(_today), profileFor(_today), _today.year);
+
+  /// Onderhoudsenergie waarop het eiwitdoel van vandaag rust (zie maintenanceKcal).
+  double get todayMaintenanceKcal => maintenanceKcal(profileFor(_today), _today.year, extraKcal: todayExerciseKcalInGoal, tdee: adaptiveTdee);
+
+  /// Doelen per dag voor een overzicht (week, maand, laatste 7 dagen), met de beweging van die dag: een vroegere
+  /// dag houdt het doel dat toen gold.
+  Map<String, Map<String, Target>> targetsBetween(DateTime from, DateTime to) {
+    final burned = user.exerciseKcalBetween(dayKey(from), dayKey(to));
+    // In UTC rekenen: een dag met zomeruur heeft 23 uur
+    final days = DateTime.utc(to.year, to.month, to.day).difference(DateTime.utc(from.year, from.month, from.day)).inDays;
+    return {
+      for (var i = 0; i <= days; i++)
+        dayKey(DateTime(from.year, from.month, from.day + i)): targetsForDate(
+          DateTime(from.year, from.month, from.day + i),
+          burned: burned[dayKey(DateTime(from.year, from.month, from.day + i))] ?? 0,
+        ),
+    };
   }
 
   // ── Doelen van vroegere dagen bevriezen ──
@@ -1244,15 +1283,29 @@ class AppState extends ChangeNotifier {
     _refresh();
   }
 
-  /// Eigen richtwaarde instellen (null = terug naar de standaard).
+  /// Eigen richtwaarde instellen (null = terug naar de standaard). Een eigen doel dat je zo wist, onthoudt de app
+  /// (zie [lastOverride]), zodat "Eigen doel" het terugzet.
   void setOverride(String key, Target? t) {
     final o = Map.of(_settings.overrides);
     if (t == null) {
-      o.remove(key);
+      if (o.remove(key) case final old?) {
+        user.setSetting('lastOverrides', {
+          ...?user.setting('lastOverrides'),
+          key: {'goal': old.goal, 'upper': old.upper},
+        });
+      }
     } else {
       o[key] = t;
     }
     saveSettings(_settings.copyWith(overrides: o));
+  }
+
+  /// Het laatste eigen doel voor [key] dat je weer op de standaard zette (null = geen).
+  Target? lastOverride(String key) {
+    final raw = user.setting('lastOverrides')?[key];
+    if (raw is! Map) return null;
+    final t = Target(goal: (raw['goal'] as num?)?.toDouble(), upper: (raw['upper'] as num?)?.toDouble());
+    return t.goal == null && t.upper == null ? null : t;
   }
 
   // ── Dagboek ──

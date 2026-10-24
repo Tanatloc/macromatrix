@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -497,7 +499,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _energyCard(AppState s, Palette pal, Profile p) {
     final year = DateTime.now().year;
-    final kcal = energyTarget(p, year, tdee: s.adaptiveTdee);
+    // Hetzelfde dagdoel als op Vandaag (ook als daar een andere dag openstaat), met de beweging van vandaag erbij
+    final kcal = s.todayTargets['energy']?.goal ?? energyTarget(p, year, tdee: s.adaptiveTdee);
+    final exercise = s.todayExerciseKcalInGoal;
 
     Widget chip(String text) => Container(
       height: 26,
@@ -619,13 +623,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: pal.ink),
                     ),
                     Text(
-                      p.energyOverride != null
-                          ? tr('custom goal', 'eigen doel')
-                          : (s.adaptiveTdee != null
-                                ? tr('your usual activity is already included', 'je gewone beweging zit al in je verbruik')
-                                : (s.settings.addExercise
-                                      ? tr('exercise is added automatically', 'beweging komt er automatisch bij')
-                                      : tr('without exercise', 'zonder beweging'))),
+                      [
+                        p.energyOverride != null
+                            ? tr('custom goal', 'eigen doel')
+                            : (s.adaptiveTdee != null
+                                  ? tr('your usual activity is already included', 'je gewone beweging zit al in je verbruik')
+                                  : (s.settings.addExercise
+                                        ? tr('exercise is added automatically', 'beweging komt er automatisch bij')
+                                        : tr('without exercise', 'zonder beweging'))),
+                        if (exercise >= 1) tr('today +${fmtInt(exercise)} kcal exercise', 'vandaag +${fmtInt(exercise)} kcal beweging'),
+                      ].join(' · '),
                       style: TextStyle(fontSize: 11.5, color: pal.ink3),
                     ),
                   ],
@@ -662,10 +669,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Grammen van een macro zoals vandaag geldt: een eigen doel (ook "hoogstens") gaat voor op je verdeling.
+  static double? _gramsOf(Target? t) => t?.goal ?? t?.upper;
+
+  /// Een macro op [grams] zetten voor vandaag. Met een eigen doel voor die macro pas je dat eigen doel aan (één
+  /// eiwitdoel overal); anders rekent de app het om naar je verdeling.
+  void _setGrams(String key, double grams) {
+    final s = context.read<AppState>();
+    final kcal = s.todayTargets['energy']?.goal ?? 2000;
+    if (grams <= 0 || kcal <= 0) return;
+    final own = s.settings.overrides[key];
+    if (own != null) {
+      s.setOverride(
+        key,
+        own.goal == null && own.upper != null
+            ? Target(upper: grams)
+            : Target(goal: grams, upper: own.upper == null ? null : math.max(own.upper!, grams)),
+      );
+      return;
+    }
+    // Eiwit rust op je onderhoudsenergie, koolhydraten en vet op wat daarna overblijft (zie macroGrams)
+    final pct = macroPctForGrams(
+      key,
+      grams,
+      _p,
+      kcal,
+      s.todayMaintenanceKcal,
+      proteinGoal: s.settings.overrides['protein']?.goal,
+    ).clamp(0, 85).toDouble();
+    _setMacro(key, pct);
+  }
+
   /// Een macro in grammen instellen (bv. 180 g eiwit); de app rekent dat om naar een percentage van je energie.
   Future<void> _editMacroGrams(String key, String label, AppState s) async {
-    final kcal = s.targets['energy']?.goal ?? 2000;
-    final c = TextEditingController(text: fmtInt(s.targets[key]!.goal!));
+    final today = s.todayTargets;
+    final kcal = today['energy']?.goal ?? 2000;
+    final own = s.settings.overrides[key];
+    final c = TextEditingController(text: fmtInt(_gramsOf(today[key]) ?? 0));
     final grams = await showDialog<double>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -678,7 +718,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTap: selectAllOnTap(c),
           decoration: InputDecoration(
             suffixText: 'g',
-            helperText: tr('For today, at ${fmtInt(kcal)} kcal', 'Voor vandaag, bij ${fmtInt(kcal)} kcal'),
+            helperMaxLines: 3,
+            helperText: own == null
+                ? tr('For today, at ${fmtInt(kcal)} kcal', 'Voor vandaag, bij ${fmtInt(kcal)} kcal')
+                : (own.goal == null
+                      ? tr('This changes your custom maximum.', 'Dit past je eigen maximum aan.')
+                      : tr('This changes your custom goal.', 'Dit past je eigen doel aan.')),
           ),
           onSubmitted: (_) => Navigator.pop(ctx, parseNum(c.text)),
         ),
@@ -688,28 +733,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
-    if (grams == null || grams <= 0 || kcal <= 0) return;
-    // Eiwit rust op je onderhoudsenergie, koolhydraten en vet op wat daarna overblijft (zie macroGrams)
-    final maintenance = maintenanceKcal(_p, s.date.year, extraKcal: s.exerciseKcalInGoal, tdee: s.adaptiveTdee);
-    final pct = macroPctForGrams(key, grams, _p, kcal, maintenance).clamp(0, 85).toDouble();
-    _setMacro(key, pct);
+    if (grams == null || !mounted) return;
+    _setGrams(key, grams);
   }
 
   Widget _macroCard(AppState s, Palette pal, Profile p) {
     final preset = _presetOf(p.proteinPct, p.carbsPct, p.fatPct);
+    // Altijd de doelen van vandaag, ook als op Vandaag een andere dag openstaat; procenten uit de echte grammen
+    final today = s.todayTargets;
+    final kcal = today['energy']?.goal ?? 2000;
+    double grams(String k) => _gramsOf(today[k]) ?? 0;
+    double share(String k) => macroShare(k, grams(k), kcal) * 100;
+    final own = s.settings.overrides;
+    bool maxOnly(String k) => own[k] != null && own[k]!.goal == null && own[k]!.upper != null;
+    String? ownNote(String k) => own[k] == null ? null : (maxOnly(k) ? tr('custom maximum', 'eigen maximum') : tr('custom goal', 'eigen doel'));
+    String withNote(String rule, String k) => ownNote(k) == null ? rule : '$rule · ${ownNote(k)}';
     final rows = [
       (
         'protein',
         tr('Protein', 'Eiwit'),
-        p.proteinPct,
-        tr(
-          '${fmtDec(s.targets['protein']!.goal! / s.currentWeight)} g per kg body weight',
-          '${fmtDec(s.targets['protein']!.goal! / s.currentWeight)} g per kg lichaamsgewicht',
+        withNote(
+          tr(
+            '${fmtDec(grams('protein') / s.currentWeight)} g per kg body weight',
+            '${fmtDec(grams('protein') / s.currentWeight)} g per kg lichaamsgewicht',
+          ),
+          'protein',
         ),
       ),
-      ('carbs', tr('Carbohydrates', 'Koolhydraten'), p.carbsPct, tr('what remains', 'wat overblijft')),
-      ('fat', tr('Fat', 'Vet'), p.fatPct, '${fmtDec(s.targets['fat']!.goal! / s.currentWeight)} g per kg'),
+      ('carbs', tr('Carbohydrates', 'Koolhydraten'), ownNote('carbs') ?? tr('what remains', 'wat overblijft')),
+      ('fat', tr('Fat', 'Vet'), withNote('${fmtDec(grams('fat') / s.currentWeight)} g per kg', 'fat')),
     ];
+    final total = share('protein') + share('carbs') + share('fat');
     return Panel(
       shadow: false,
       child: Column(
@@ -735,9 +789,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          MacroSplitBar((p.proteinPct / 100, p.carbsPct / 100, p.fatPct / 100, 0), height: 10),
+          MacroSplitBar(
+            total <= 0 ? (0, 0, 0, 0) : (share('protein') / total, share('carbs') / total, share('fat') / total, 0),
+            height: 10,
+          ),
           const SizedBox(height: 4),
-          for (final (i, (key, label, pct, rule)) in rows.indexed)
+          for (final (i, (key, label, rule)) in rows.indexed)
             Container(
               padding: const EdgeInsets.only(top: 10),
               decoration: BoxDecoration(
@@ -766,11 +823,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       Text(
-                        '${pct.round()}%',
+                        '${share(key).round()}%',
                         style: numStyle(12, weight: FontWeight.w400, color: pal.ink3),
                       ),
                       const SizedBox(width: 10),
                       InkWell(
+                        key: ValueKey('macro-grams-$key'),
                         onTap: () => _editMacroGrams(key, label, s),
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
@@ -779,14 +837,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           alignment: Alignment.centerRight,
                           decoration: BoxDecoration(
-                            color: pal.surface2,
+                            color: own[key] != null ? pal.brandSoft : pal.surface2,
                             border: Border.all(color: pal.line),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('${fmtInt(s.targets[key]!.goal!)} g', style: numStyle(14)),
+                              Text('${maxOnly(key) ? '≤ ' : ''}${fmtInt(grams(key))} g', style: numStyle(14)),
                               const SizedBox(width: 4),
                               Icon(Icons.edit_rounded, size: 12, color: pal.ink3),
                             ],
@@ -795,22 +853,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
                   ),
+                  // De schuif volgt het echte aandeel in je energie en zet grammen, net als typen
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(activeTrackColor: pal.macro(key), thumbColor: pal.macro(key), trackHeight: 3),
                     child: Slider(
-                      value: pct.clamp(0, 85).toDouble(),
+                      value: share(key).clamp(0, 85).toDouble(),
                       min: 0,
                       max: 85,
                       divisions: 85,
-                      label: '${pct.round()}%',
-                      onChanged: (v) => _setMacro(key, v.roundToDouble()),
+                      label: '${share(key).round()}%',
+                      onChanged: (v) => _setGrams(key, v.roundToDouble() / 100 * kcal / (key == 'fat' ? 9 : 4)),
                     ),
                   ),
                 ],
               ),
             ),
           // Het weekschema gaat voor: anders lijkt een stijl kiezen hier niets te veranderen aan de grammen van vandaag
-          if (s.settings.schedule[s.date.weekday] != null)
+          if (s.settings.schedule[logicalNow().weekday] != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(
@@ -824,11 +883,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             tr(
               'Grams for today. Protein is calculated on the energy you need to maintain your weight, so it does not drop when you '
-                  'lose weight; carbs and fat absorb the deficit. Never below 0.83 g per kg (EFSA); people who train a lot often take '
-                  '1.6 to 2.2 g per kg. Fiber: at least ${fmtInt(s.targets['fiber']?.goal ?? 25)} g.',
+                  'lose weight or set a lower energy goal; carbs and fat absorb the difference. Never below 0.83 g per kg (EFSA); '
+                  'people who train a lot often take 1.6 to 2.2 g per kg. Fiber: at least ${fmtInt(today['fiber']?.goal ?? 25)} g.',
               'Grammen voor vandaag. Eiwit rekent de app op de energie die je nodig hebt om je gewicht te behouden, dus het daalt '
-                  'niet als je afvalt; koolhydraten en vet vangen het tekort op. Nooit onder 0,83 g per kg (EFSA); wie veel traint, '
-                  'neemt vaak 1,6 à 2,2 g per kg. Vezels: minstens ${fmtInt(s.targets['fiber']?.goal ?? 25)} g.',
+                  'niet als je afvalt of een lager energiedoel kiest; koolhydraten en vet vangen het verschil op. Nooit onder 0,83 g '
+                  'per kg (EFSA); wie veel traint, neemt vaak 1,6 à 2,2 g per kg. Vezels: minstens ${fmtInt(today['fiber']?.goal ?? 25)} g.',
             ),
             style: TextStyle(fontSize: 11.5, height: 1.45, color: pal.ink3),
           ),

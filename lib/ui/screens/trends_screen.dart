@@ -38,9 +38,8 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final days = DateTime.utc(to.year, to.month, to.day).difference(DateTime.utc(from.year, from.month, from.day)).inDays + 1;
     final keys = [for (var i = 0; i < days; i++) dayKey(DateTime(from.year, from.month, from.day + i))];
     final daily = s.dailyTotals(from, to);
-    // Doelen per dag met de beweging van die dag erbij, zoals op Vandaag
-    final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
-    final targets = {for (final k in keys) k: s.targetsForDate(parseDay(k), burned: burned[k] ?? 0)};
+    // Doelen per dag met de beweging van die dag erbij, zoals op Vandaag: een vroegere dag houdt het doel van toen
+    final targets = s.targetsBetween(from, to);
 
     final processing = ProcessingCard(share: s.processingBetween(from, to), period: true);
     // Suiker per dag alleen in de weekweergave; met "Let op suiker" bovenaan
@@ -79,26 +78,26 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 _minis(p, keys, daily, targets),
                 const SizedBox(height: 12),
                 if (sugarFirst) ...[pair(sugar, processing), const SizedBox(height: 12)],
-                pair(_energy(s, p, keys, daily, targets, from), _macros(s, p, keys, daily, from)),
+                pair(_energy(s, p, keys, daily, targets, from), _macros(s, p, keys, daily, targets)),
                 const SizedBox(height: 12),
                 pair(_heatmap(p, keys, daily, targets), _weight(s, p, keys, from)),
                 if (!sugarFirst) ...[const SizedBox(height: 12), pair(processing, sugar ?? const SizedBox())],
                 const SizedBox(height: 18),
-                _averages(s, p, daily, columns: 2),
+                _averages(s, p, daily, targets, columns: 2),
               ] else ...[
                 _minis(p, keys, daily, targets),
                 const SizedBox(height: 10),
                 if (sugarFirst) ...[sugar, const SizedBox(height: 10)],
                 _energy(s, p, keys, daily, targets, from),
                 const SizedBox(height: 10),
-                _macros(s, p, keys, daily, from),
+                _macros(s, p, keys, daily, targets),
                 const SizedBox(height: 10),
                 _heatmap(p, keys, daily, targets),
                 if (sugar != null && !sugarFirst) ...[const SizedBox(height: 10), sugar],
                 const SizedBox(height: 10),
                 processing,
                 const SizedBox(height: 18),
-                _averages(s, p, daily),
+                _averages(s, p, daily, targets),
               ],
               if (daily.isEmpty || !wide) ...[const SizedBox(height: 10), _weight(s, p, keys, from)],
             ],
@@ -127,6 +126,14 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     ];
     final avg = done.isEmpty ? null : done.map((d) => d.$1).reduce((a, b) => a + b) / done.length;
     final inBand = done.where((d) => (d.$1 - d.$2).abs() <= d.$2 * 0.1).length;
+    // Veranderde je doel in deze periode, dan het gemiddelde doel van de gelogde dagen (zonder beweging), zodat het
+    // naast het gemiddelde past
+    final baseGoals = [
+      for (final k in keys)
+        if (daily[k] != null || k == keys.last) s.targetsForDate(parseDay(k))['energy']?.goal ?? goal,
+    ];
+    final changed = baseGoals.any((g) => (g - goal).abs() >= 1);
+    final shownGoal = changed ? baseGoals.reduce((a, b) => a + b) / baseGoals.length : goal;
 
     return Panel(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
@@ -141,7 +148,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 child: StatTile(boxed: false, label: tr('Average', 'Gemiddeld'), value: avg == null ? '–' : fmtInt(avg)),
               ),
               Expanded(
-                child: StatTile(boxed: false, label: tr('Goal', 'Doel'), value: fmtInt(goal)),
+                child: StatTile(boxed: false, label: changed ? tr('Goal, avg.', 'Doel, gem.') : tr('Goal', 'Doel'), value: fmtInt(shownGoal)),
               ),
               Expanded(
                 child: StatTile(boxed: false, label: tr('Within ±10%', 'Binnen ±10%'), value: '$inBand / ${done.length}'),
@@ -160,7 +167,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     );
   }
 
-  Widget _macros(AppState s, Palette p, List<String> keys, Map<String, NutrientTotals> daily, DateTime from) {
+  Widget _macros(AppState s, Palette p, List<String> keys, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets) {
     final splits = [
       for (final k in keys)
         switch (daily[k] == null ? null : macroSplit(daily[k]!.values)) {
@@ -170,11 +177,21 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     ];
     final known = splits.whereType<(double, double, double)>().toList();
     double avg(double Function((double, double, double)) pick) => known.isEmpty ? 0 : known.map(pick).reduce((a, b) => a + b) / known.length;
-    final prof = s.profileFor(DateTime.now());
+    // Doelverdeling uit de echte grammen van elke dag (het doel van toen), gemiddeld over de gelogde dagen
+    final goalDays = [
+      for (final k in keys)
+        if (daily[k] != null) targets[k]!,
+    ];
+    double goalShare(String key) {
+      final days = goalDays.isEmpty ? [targets[keys.last]!] : goalDays;
+      double one(Map<String, Target> t) => macroShare(key, t[key]?.goal ?? t[key]?.upper ?? 0, t['energy']?.goal ?? 0);
+      return days.map(one).reduce((a, b) => a + b) / days.length * 100;
+    }
+
     final legend = [
-      (tr('Protein', 'Eiwit'), p.protein, avg((x) => x.$1), prof.proteinPct),
-      (tr('Carbs', 'Koolhydr.'), p.carbs, avg((x) => x.$2), prof.carbsPct),
-      (tr('Fat', 'Vet'), p.fat, avg((x) => x.$3), prof.fatPct),
+      (tr('Protein', 'Eiwit'), p.protein, avg((x) => x.$1), goalShare('protein')),
+      (tr('Carbs', 'Koolhydr.'), p.carbs, avg((x) => x.$2), goalShare('carbs')),
+      (tr('Fat', 'Vet'), p.fat, avg((x) => x.$3), goalShare('fat')),
     ];
     return Panel(
       shadow: false,
@@ -187,7 +204,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             trailing: Text(tr('% of your energy', '% van je energie'), style: TextStyle(fontSize: 11.5, color: p.ink3)),
           ),
           const SizedBox(height: 12),
-          SplitBarsChart(splits: splits, target: (prof.proteinPct / 100, prof.carbsPct / 100)),
+          SplitBarsChart(splits: splits, target: (legend[0].$4 / 100, legend[1].$4 / 100)),
           DayLabels(days: [for (final k in keys) parseDay(k)]),
           const SizedBox(height: 12),
           Row(
@@ -437,26 +454,37 @@ class _PeriodTrendsState extends State<PeriodTrends> {
   /// Suiker per dag (P184): vrije suikers tegenover je maximum, met alle suikers en koolhydraten erbij, en de
   /// bloedsuikermetingen van die dag ernaast. Een tik opent het verloop van de vrije suikers.
   Widget _sugar(AppState s, Palette p, List<String> keys, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets) {
-    final free = nutrientByKey['free_sugars']!;
     final glucose = <String, List<double>>{};
     for (final b in s.user.biometricHistory('glucose', from: keys.first)) {
       if (b.day.compareTo(keys.last) <= 0) glucose.putIfAbsent(b.day, () => []).add(b.value);
     }
-    double? max(String d) => targets[d]?['free_sugars']?.upper;
+    // Met een eigen grens voor alle suikers (bv. bij diabetes) volgt de kaart die grens: één grens, op alle suikers.
+    // Anders de WHO-grens op de vrije suikers.
+    final own = targets[keys.last]?['sugars']?.upper != null;
+    final measured = own ? 'sugars' : 'free_sugars';
+    double? max(String d) => targets[d]?[measured]?.upper;
+    double value(NutrientTotals t) => own ? math.max(t['sugars'], t['free_sugars']) : t['free_sugars'];
     // Vandaag is nog bezig: telt niet mee in het gemiddelde
     final today = dayKey(logicalNow());
     final done = [
       for (final k in keys)
         if (k != today && daily[k] != null) k,
     ];
-    final avg = done.isEmpty ? null : done.map((k) => daily[k]!['free_sugars']).reduce((a, b) => a + b) / done.length;
-    final over = done.where((k) => max(k) != null && daily[k]!['free_sugars'] > max(k)!).length;
+    final avg = done.isEmpty ? null : done.map((k) => value(daily[k]!)).reduce((a, b) => a + b) / done.length;
+    final over = done.where((k) => max(k) != null && value(daily[k]!) > max(k)!).length;
     final scaleMax = [
       for (final k in keys) ...[daily[k]?['sugars'] ?? 0, max(k) ?? 0],
     ].fold<double>(1, math.max);
+    // Kop: één maximum, of het bereik als het doel in deze week veranderde ("38–50 g")
+    final limits = [
+      for (final k in keys)
+        if (daily[k] != null || k == keys.last) ?max(k),
+    ];
+    final lo = limits.isEmpty ? null : limits.reduce(math.min), hi = limits.isEmpty ? null : limits.reduce(math.max);
+    final maxText = lo == null ? '–' : (fmtInt(lo) == fmtInt(hi!) ? '${fmtInt(hi)} g' : '${fmtInt(lo)}–${fmtInt(hi)} g');
     void open() => Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => NutrientDetailScreen(nutrient: free, from: widget.from, to: widget.to),
+        builder: (_) => NutrientDetailScreen(nutrient: nutrientByKey[measured]!, from: widget.from, to: widget.to),
       ),
     );
 
@@ -464,7 +492,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
       final t = daily[d];
       if (t == null) return Container(height: 10, decoration: BoxDecoration(border: Border.all(color: p.line), borderRadius: BorderRadius.circular(4)));
       final f = t['free_sugars'], all = math.max(t['sugars'], f), limit = max(d);
-      final tooMuch = limit != null && f > limit;
+      final tooMuch = limit != null && value(t) > limit;
       return LayoutBuilder(
         builder: (context, c) => SizedBox(
           height: 10,
@@ -474,11 +502,14 @@ class _PeriodTrendsState extends State<PeriodTrends> {
               // Alle suikers licht, de vrije suikers donker eroverheen
               Container(
                 width: c.maxWidth * all / scaleMax,
-                decoration: BoxDecoration(color: p.carbs.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(
+                  color: own && tooMuch ? p.highFill : p.carbs.withValues(alpha: own ? 0.55 : 0.3),
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
               Container(
                 width: c.maxWidth * f / scaleMax,
-                decoration: BoxDecoration(color: tooMuch ? p.highFill : p.carbs, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: !own && tooMuch ? p.highFill : p.carbs, borderRadius: BorderRadius.circular(4)),
               ),
               if (limit != null) Positioned(left: (c.maxWidth * limit / scaleMax - 1).clamp(0, c.maxWidth - 2), top: 0, bottom: 0, child: Container(width: 2, color: p.ink)),
             ],
@@ -510,10 +541,14 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           Row(
             children: [
               Expanded(
-                child: StatTile(boxed: false, label: tr('Free sugars, avg.', 'Vrije suikers, gem.'), value: avg == null ? '–' : '${fmtInt(avg)} g'),
+                child: StatTile(
+                  boxed: false,
+                  label: own ? tr('Sugars, avg.', 'Suikers, gem.') : tr('Free sugars, avg.', 'Vrije suikers, gem.'),
+                  value: avg == null ? '–' : '${fmtInt(avg)} g',
+                ),
               ),
               Expanded(
-                child: StatTile(boxed: false, label: tr('Maximum', 'Maximum'), value: max(keys.last) == null ? '–' : '${fmtInt(max(keys.last)!)} g'),
+                child: StatTile(boxed: false, label: own ? tr('Your maximum', 'Jouw maximum') : tr('Maximum', 'Maximum'), value: maxText),
               ),
               Expanded(
                 child: StatTile(boxed: false, label: tr('Days over', 'Dagen erboven'), value: '$over / ${done.length}'),
@@ -554,7 +589,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                             textAlign: TextAlign.right,
                             style: numStyle(
                               12,
-                              color: max(d) != null && (daily[d]?['free_sugars'] ?? 0) > max(d)! ? p.high : p.ink,
+                              color: max(d) != null && daily[d] != null && value(daily[d]!) > max(d)! ? p.high : p.ink,
                             ),
                           ),
                         ),
@@ -574,7 +609,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             items: [
               (LegendItem.box(p.carbs, w: 10, h: 10, radius: 3), tr('free sugars', 'vrije suikers')),
               (LegendItem.box(p.carbs.withValues(alpha: 0.3), w: 10, h: 10, radius: 3), tr('from fruit and milk', 'uit fruit en melk')),
-              (LegendItem.box(p.ink, w: 2, h: 10), 'max'),
+              (LegendItem.box(p.ink, w: 2, h: 10), own ? tr('your max (all sugars)', 'jouw max (alle suikers)') : tr('max (free sugars)', 'max (vrije suikers)')),
             ],
           ),
         ],
@@ -774,7 +809,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
   }
 
   /// Daggemiddelde van alle voedingsstoffen over de gelogde dagen.
-  Widget _averages(AppState s, Palette p, Map<String, NutrientTotals> daily, {int columns = 1}) {
+  Widget _averages(AppState s, Palette p, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets, {int columns = 1}) {
     final logged = daily.length;
     final averages = <String, double>{};
     final incomplete = <String>{};
@@ -803,7 +838,11 @@ class _PeriodTrendsState extends State<PeriodTrends> {
         ),
         NutrientPanel(
           values: averages,
-          targets: s.targetsForDate(logicalNow()),
+          // Elke dag met het doel dat toen gold: het gemiddelde doel van de gelogde dagen
+          targets: averageTargets([
+            for (final k in daily.keys)
+              if (targets[k] != null) targets[k]!,
+          ]),
           incomplete: incomplete,
           hidden: s.hiddenNutrients,
           columns: columns,
