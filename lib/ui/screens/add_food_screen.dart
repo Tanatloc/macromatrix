@@ -69,6 +69,9 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   String? _error;
   _Scope _scope = _Scope.all;
 
+  /// De maaltijd waar je aan toevoegt; via de kop te wijzigen (de grote + kiest er zelf een, N47).
+  late Meal _meal = widget.meal;
+
   /// Volgorde van "Recent gebruikt" zolang dit scherm open is: niets verspringt onder je vinger na een tik op +.
   List<String>? _recentOrder;
 
@@ -222,7 +225,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       MaterialPageRoute(
         builder: (_) => FoodDetailScreen(
           food: food,
-          meal: widget.meal,
+          meal: _meal,
           pickOnly: widget.pickOnly,
           forPlan: widget.forPlan,
           initialGrams: initialGrams,
@@ -248,7 +251,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   }
 
   void _addMeal(SavedMeal m) {
-    context.read<AppState>().addSavedMeal(m, widget.meal);
+    context.read<AppState>().addSavedMeal(m, _meal);
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(tr('${m.name} added (${m.items.length} items)', '${m.name} toegevoegd (${m.items.length} items)'))));
     Navigator.of(context).pop();
@@ -257,10 +260,10 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   /// Opnieuw toevoegen met dezelfde hoeveelheid als de vorige keer.
   void _addAgain(DiaryEntry e) {
     final s = context.read<AppState>();
-    final added = s.addAgain(e, widget.meal);
+    final added = s.addAgain(e, _meal);
     showUndo(
       context,
-      tr('${e.name} added to ${widget.meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${widget.meal.label.toLowerCase()}'),
+      tr('${e.name} added to ${_meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${_meal.label.toLowerCase()}'),
       () => s.undoAdds([added]),
       top: true,
     );
@@ -342,28 +345,41 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                     IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: Icon(Icons.arrow_back_rounded), tooltip: tr('Back', 'Terug')),
                     const SizedBox(width: 4),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Eyebrow(
-                            widget.forPlan
-                                ? tr('Plan', 'Plannen')
-                                : widget.pickOnly
-                                ? tr('Recipe', 'Recept')
-                                : tr('Add to', 'Toevoegen aan'),
-                          ),
-                          Text(
-                            widget.pickOnly && !widget.forPlan
-                                ? tr('Choose ingredient', 'Ingrediënt kiezen')
-                                // Een andere dag dan vandaag: zeg welke (P59a)
-                                : !widget.pickOnly && !s.isToday
-                                ? '${widget.meal.label} · ${DateFormat('EEE d MMM', appLocale).format(s.date)}'
-                                : widget.meal.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.25, color: p.ink),
-                          ),
-                        ],
+                      // Gewoon toevoegen: tik op de kop om een andere maaltijd te kiezen (N47)
+                      child: _MealPicker(
+                        enabled: !widget.pickOnly,
+                        meal: _meal,
+                        onSelected: (m) => setState(() => _meal = m),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Eyebrow(
+                              widget.forPlan
+                                  ? tr('Plan', 'Plannen')
+                                  : widget.pickOnly
+                                  ? tr('Recipe', 'Recept')
+                                  : tr('Add to', 'Toevoegen aan'),
+                            ),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    widget.pickOnly && !widget.forPlan
+                                        ? tr('Choose ingredient', 'Ingrediënt kiezen')
+                                        // Een andere dag dan vandaag: zeg welke (P59a)
+                                        : !widget.pickOnly && !s.isToday
+                                        ? '${_meal.label} · ${DateFormat('EEE d MMM', appLocale).format(s.date)}'
+                                        : _meal.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.25, color: p.ink),
+                                  ),
+                                ),
+                                if (!widget.pickOnly) Icon(Icons.arrow_drop_down_rounded, color: p.ink2),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     if (!widget.pickOnly)
@@ -385,7 +401,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                       IconButton(
                         tooltip: tr('Quick log (speak or type)', 'Snel loggen (inspreken of typen)'),
                         icon: Icon(speechSupported ? Icons.mic_none_rounded : Icons.bolt_rounded, color: p.ink),
-                        onPressed: () => showQuickLog(context, meal: widget.meal),
+                        onPressed: () => showQuickLog(context, meal: _meal),
                       ),
                     PopupMenuButton<String>(
                       tooltip: tr('New product or recipe', 'Nieuw product of recept'),
@@ -642,7 +658,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   );
 
   /// Opgeslagen maaltijden; die van deze maaltijd eerst (P186).
-  List<SavedMeal> _sortedMeals(AppState s) => sortSavedMeals(s.savedMeals(), widget.meal);
+  List<SavedMeal> _sortedMeals(AppState s) => sortSavedMeals(s.savedMeals(), _meal);
 
   /// Zonder zoekterm: opgeslagen maaltijden en recent gebruikte producten.
   List<Widget> _idle(AppState s, Palette p) {
@@ -660,11 +676,19 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       final c = (counts[b.$2.foodRef] ?? 0).compareTo(counts[a.$2.foodRef] ?? 0);
       return c != 0 ? c : a.$1.compareTo(b.$1);
     });
+    // Wat je het laatst toevoegde (ook via Snel loggen, een nieuw recept of eigen product) staat bovenaan, nieuwste
+    // eerst; daarna de rest, vaakst eerst. Anders stond een net gegeten banaan op plaats 12 (N54).
+    final newest = s.user.recent(limit: 5);
+    final newestRefs = {for (final e in newest) e.foodRef};
     // Met de hoeveelheid van je laatste toevoeging, niet het totaal van een samengevoegde regel (N02)
-    var recent = [for (final (_, e) in pool.take(60)) s.asLastAdded(e)];
+    var recent = [
+      for (final e in newest) s.asLastAdded(e),
+      for (final (_, e) in pool.where((x) => !newestRefs.contains(x.$2.foodRef)).take(55)) s.asLastAdded(e),
+    ];
     _recentOrder ??= [for (final e in recent) e.foodRef];
     final order = {for (final (i, r) in _recentOrder!.indexed) r: i};
-    recent = [...recent]..sort((a, b) => (order[a.foodRef] ?? 999).compareTo(order[b.foodRef] ?? 999));
+    // Iets nieuws terwijl dit scherm open is (bv. via Snel loggen): bovenaan, niet onderaan
+    recent = [...recent]..sort((a, b) => (order[a.foodRef] ?? -1).compareTo(order[b.foodRef] ?? -1));
     final favorites = s.favorites();
     final meals = widget.pickOnly ? const <SavedMeal>[] : _sortedMeals(s);
     return [
@@ -820,6 +844,27 @@ String shortName(Nutrient n) {
 }
 
 /// Eén zoekresultaat met eronder, open te klappen, hetzelfde voedingsmiddel uit andere bronnen.
+/// Kop "Toevoegen aan ..." die bij een tik de vier maaltijden toont; uitgeschakeld geeft hij gewoon [child].
+class _MealPicker extends StatelessWidget {
+  const _MealPicker({required this.enabled, required this.meal, required this.onSelected, required this.child});
+  final bool enabled;
+  final Meal meal;
+  final ValueChanged<Meal> onSelected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    return PopupMenuButton<Meal>(
+      tooltip: tr('Choose meal', 'Maaltijd kiezen'),
+      initialValue: meal,
+      onSelected: onSelected,
+      itemBuilder: (_) => [for (final m in Meal.values) PopupMenuItem(value: m, child: Text(m.label))],
+      child: child,
+    );
+  }
+}
+
 class _GroupCard extends StatefulWidget {
   const _GroupCard({required this.group, required this.lows, required this.onOpen});
   final FoodGroup group;

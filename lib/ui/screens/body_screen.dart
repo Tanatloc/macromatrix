@@ -44,7 +44,10 @@ bool glucoseInMgdl(AppState s) => s.user.setting('glucose')?['unit'] == 'mg/dL';
 
 /// Lichaam: metingen (gewicht, vetpercentage, bloeddruk, eigen metingen) met grafieken, en de vastentimer.
 class BodyScreen extends StatefulWidget {
-  const BodyScreen({super.key});
+  const BodyScreen({super.key, this.addWeight = false});
+
+  /// Geopend via "+ › Gewicht": meteen het invulvenster voor je gewicht (N38).
+  final bool addWeight;
 
   @override
   State<BodyScreen> createState() => _BodyScreenState();
@@ -61,6 +64,12 @@ class _BodyScreenState extends State<BodyScreen> {
   // tik op × wiste vroeger ook de meting die eronder schoof, en Ongedaan maken zette er maar één terug (N04).
   final _deleted = <Biometric>[];
   Timer? _deleteLock, _deleteBatch;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.addWeight) WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? _addMeasurement() : null);
+  }
 
   @override
   void dispose() {
@@ -121,6 +130,10 @@ class _BodyScreenState extends State<BodyScreen> {
     final v2 = TextEditingController(text: text(existing?.value2));
     double? parse(TextEditingController c) => parseNum(c.text);
     String? error1, error2;
+    // Vergelijken met je vorige gewicht; bij aanpassen telt de meting zelf niet mee (je verbetert net een tikfout)
+    final last = existing == null
+        ? s.currentWeight
+        : s.user.biometricHistory('weight').where((b) => b.id != existing.id).lastOrNull?.value ?? s.currentWeight;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -239,14 +252,33 @@ class _BodyScreenState extends State<BodyScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 // Onmogelijke waarden (vergeten komma, 645 kg) houden we hier al tegen
                 final (lo, hi) = isGlucose() && mgdl ? (18.0, 630.0) : _range(type.key);
                 setD(() {
                   error1 = rangeError(v1.text, lo, hi, unit: unitOf(type));
                   error2 = type.secondLabel == null ? null : rangeError(v2.text, lo, hi, unit: type.unit);
                 });
-                if (error1 == null && error2 == null) Navigator.pop(ctx, true);
+                if (error1 != null || error2 != null) return;
+                // Ongewoon gewicht: vragen terwijl het venster open blijft. "Aanpassen" brengt je terug naar het
+                // veld met het getal geselecteerd, in plaats van alles te sluiten (N41, zoals bij eten).
+                final value = parse(v1);
+                if (value != null && type.key == 'weight' && (value - last).abs() > 5) {
+                  final sure = await confirmUnusual(
+                    ctx,
+                    tr(
+                      '${fmt(value, 1)} kg is ${fmt((value - last).abs(), 1)} kg ${value > last ? 'more' : 'less'} than your last weight (${fmt(last, 1)} kg). Your goals are calculated from it.',
+                      '${fmt(value, 1)} kg is ${fmt((value - last).abs(), 1)} kg ${value > last ? 'meer' : 'minder'} dan je vorige gewicht (${fmt(last, 1)} kg). Je doelen worden ermee berekend.',
+                    ),
+                  );
+                  if (!ctx.mounted) return;
+                  // De focus keert vanzelf terug naar het veld; het getal selecteren zodat je meteen overtypt
+                  if (!sure) {
+                    selectAllOnTap(v1)();
+                    return;
+                  }
+                }
+                Navigator.pop(ctx, true);
               },
               child: Text(tr('Save', 'Opslaan')),
             ),
@@ -262,20 +294,6 @@ class _BodyScreenState extends State<BodyScreen> {
     };
     if (glucose && mgdl != wasMgdl) s.user.setSetting('glucose', {...?s.user.setting('glucose'), 'unit': mgdl ? 'mg/dL' : 'mmol/L'});
     if (!mounted) return;
-    // Vergelijken met je vorige gewicht; bij aanpassen telt de meting zelf niet mee (je verbetert net een tikfout)
-    final last = existing == null
-        ? s.currentWeight
-        : s.user.biometricHistory('weight').where((b) => b.id != existing.id).lastOrNull?.value ?? s.currentWeight;
-    if (ok == true && value != null && type.key == 'weight' && (value - last).abs() > 5) {
-      final ok2 = await confirmUnusual(
-        context,
-        tr(
-          '${fmt(value, 1)} kg is ${fmt((value - last).abs(), 1)} kg ${value > last ? 'more' : 'less'} than your last weight (${fmt(last, 1)} kg). Your goals are calculated from it.',
-          '${fmt(value, 1)} kg is ${fmt((value - last).abs(), 1)} kg ${value > last ? 'meer' : 'minder'} dan je vorige gewicht (${fmt(last, 1)} kg). Je doelen worden ermee berekend.',
-        ),
-      );
-      if (!ok2) return;
-    }
     // Al een gewicht op deze dag: vragen of het nieuwe het vervangt of erbij komt, met het uur van het vorige (N78)
     if (ok == true && value != null && existing == null && type.key == 'weight') {
       final same = s.biometrics.where((b) => b.type == 'weight').lastOrNull;
@@ -437,6 +455,7 @@ class _BodyScreenState extends State<BodyScreen> {
     }
     // Bloedsuiker: groene streefzone van 4–7 mmol/L (72–126 mg/dL), een gangbaar doel voor de maaltijd (N79)
     final band = chartType.key == 'glucose' ? (4 * chartF, 7 * chartF) : null;
+    final fasts = s.currentFast != null || s.user.recentFasts(limit: 1).isNotEmpty;
 
     Widget card(String title, List<Widget> children, {Widget? trailing}) => Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -510,7 +529,8 @@ class _BodyScreenState extends State<BodyScreen> {
                   ),
                 header,
               ],
-              const _FastingCard(),
+              // Vasten alleen bovenaan voor wie vast; anders staat de kaart onderaan, uit de weg (N38)
+              if (fasts) const _FastingCard(),
               card(tr('Measurements on this day', 'Metingen op deze dag'), [
                 if (s.biometrics.isEmpty)
                   Padding(
@@ -611,6 +631,7 @@ class _BodyScreenState extends State<BodyScreen> {
                   ),
                 ),
               ),
+              if (!fasts) const _FastingCard(),
             ],
           ),
         ),

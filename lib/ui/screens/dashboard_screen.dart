@@ -18,10 +18,13 @@ enum _Period { day, week, month }
 /// die volgt de dag die in het dagboek gekozen is. Telkens [showWeek] afgaat (de kaart "Laatste 7 dagen"), springt
 /// het naar de week van die dag. Met [startOnWeek] opent het meteen op Week.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, this.showDay, this.showWeek, this.startOnWeek = false});
+  const DashboardScreen({super.key, this.showDay, this.showWeek, this.startOnWeek = false, this.active = true});
   final Listenable? showDay;
   final Listenable? showWeek;
   final bool startOnWeek;
+
+  /// Is dit tabblad zichtbaar? Kom je terug naar het dashboard, dan begint het weer bovenaan (N83).
+  final bool active;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -30,6 +33,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   late _Period _period = widget.startOnWeek ? _Period.week : _Period.day;
   late DateTime _anchor = widget.startOnWeek ? context.read<AppState>().date : _today();
+  final _scroll = ScrollController();
 
   @override
   void initState() {
@@ -49,10 +53,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       old.showWeek?.removeListener(_toWeek);
       widget.showWeek?.addListener(_toWeek);
     }
+    // Terug naar dit tabblad: bovenaan beginnen, anders tik je op wat toevallig onder de vinger staat
+    if (widget.active && !old.active && _scroll.hasClients) _scroll.jumpTo(0);
   }
 
   @override
   void dispose() {
+    _scroll.dispose();
     widget.showDay?.removeListener(_toDay);
     widget.showWeek?.removeListener(_toWeek);
     super.dispose();
@@ -160,6 +167,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final wide = c.maxWidth >= twoColumnWidth;
             final mw = wide ? wideMaxWidth : 760.0;
             return ListView(
+              controller: _scroll,
               padding: const EdgeInsets.only(bottom: 32),
               children: [
                 if (canPop)

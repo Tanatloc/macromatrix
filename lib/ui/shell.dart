@@ -238,7 +238,7 @@ class _ShellState extends State<Shell> {
   /// De beginschermen van de vijf tabbladen, met [tab] het actieve tabblad.
   List<Widget> _pagesFor(int tab) => [
     DiaryScreen(onOpenNutrients: _openDayNutrients, onOpenProfile: () => _go(4), onOpenWeek: _openWeek),
-    DashboardScreen(showDay: _dashboardToDay, showWeek: _dashboardToWeek),
+    DashboardScreen(showDay: _dashboardToDay, showWeek: _dashboardToWeek, active: tab == 1),
     const ProductScanScreen(),
     FriendsScreen(active: tab == 3),
     const ProfileScreen(),

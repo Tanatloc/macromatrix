@@ -52,9 +52,14 @@ class DiaryScreen extends StatelessWidget {
     final s = context.watch<AppState>();
     final empty = !s.entries.any((e) => !e.foodRef.startsWith('supp:'));
     // 'Profiel invullen' en 'Doelen' horen bij de doelen, niet bovenaan het Profiel bij je level (P03)
+    // Op een gsm een apart Doelen-scherm met terugpijl, in plaats van halverwege het Profiel te landen (N83)
     final onOpenProfile = this.onOpenProfile == null
         ? null
         : () {
+            if (!isDesktop(context)) {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen(goalsOnly: true)));
+              return;
+            }
             this.onOpenProfile!();
             showProfileGoals();
           };
@@ -1930,7 +1935,7 @@ Future<void> addExercise(BuildContext context) async {
           activityError = minutesError = kcalError = null;
         });
 
-        void submit() {
+        Future<void> submit() async {
           final m = parse(minutes);
           final burned = parse(kcal) ?? estimate();
           activityError = choice == null && parse(kcal) == null ? tr('Choose an activity', 'Kies een activiteit') : null;
@@ -1941,7 +1946,13 @@ Future<void> addExercise(BuildContext context) async {
               ? tr('Enter how long or how many kcal you burned', 'Vul in hoe lang of hoeveel kcal je verbrandde')
               : exerciseKcalError(burned, m, otherKcal: other.kcal);
           if (activityError != null || minutesError != null || kcalError != null) return setD(() {});
-          Navigator.pop(ctx, true);
+          // Ongewone duur of verbranding: vragen terwijl het venster open blijft; "Aanpassen" laat je het getal
+          // verbeteren in plaats van alles te sluiten (N41)
+          if (!await confirmExercise(ctx, m, burned)) {
+            if (ctx.mounted) selectAllOnTap((m ?? 0) > 300 ? minutes : kcal)();
+            return;
+          }
+          if (ctx.mounted) Navigator.pop(ctx, true);
         }
 
         return AlertDialog(
@@ -2071,7 +2082,7 @@ Future<void> addExercise(BuildContext context) async {
   final m = parse(minutes);
   final burned = parse(kcal) ?? estimate();
   final label = type()?.name ?? (name.text.trim().isEmpty ? tr('Exercise', 'Beweging') : name.text.trim());
-  if (!context.mounted || !await confirmExercise(context, m, burned)) return;
+  if (!context.mounted) return;
   final before = {for (final x in s.exercise) x.id};
   s.addExercise(label, burned, minutes: m);
   // De beweging staat onderaan Vandaag, vaak buiten beeld: zeg dat ze erbij staat, met Ongedaan maken
