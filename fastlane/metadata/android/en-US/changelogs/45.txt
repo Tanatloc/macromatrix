@@ -1,0 +1,1 @@
+Avatar frames now share one clean style: no outlines on Wings, Blades, Crown and Royal.

@@ -76,26 +76,19 @@ class AvatarFramePainter extends CustomPainter {
     }
   }
 
-  /// Een vorm als glanzend metaal in de levelkleur: licht bovenaan, donker onderaan, met een donkere omlijning.
-  void _metal(Canvas canvas, Path path, {double outline = 0.8}) {
-    final b = path.getBounds();
+  /// Een versiering in dezelfde vlakke stijl als de ring en de lauwerkrans: geen omlijning of schaduw, alleen de
+  /// levelkleur met bovenaan dezelfde lichte tint als de glans op de ring. [top] is de lichtheid bovenaan, [bottom]
+  /// onderaan (null = de levelkleur zelf).
+  void _ornament(Canvas canvas, Path path, {double top = 0.68, double? bottom}) {
+    final low = bottom == null ? color : frameTint(color, bottom);
     canvas.drawPath(
       path,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [frameTint(color, 0.8), color, frameTint(color, 0.34)],
-          stops: const [0, 0.45, 1],
-        ).createShader(b),
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round
-        ..strokeWidth = outline
-        ..color = frameTint(color, 0.24),
+          colors: [frameTint(color, top), low],
+        ).createShader(path.getBounds()),
     );
   }
 
@@ -103,7 +96,6 @@ class AvatarFramePainter extends CustomPainter {
 
   void _wings(Canvas canvas, Offset c) {
     final r = ring;
-    final outline = math.max(0.6, r * 0.035);
     for (final side in [1.0, -1.0]) {
       canvas.save();
       canvas.translate(c.dx, c.dy);
@@ -127,7 +119,8 @@ class AvatarFramePainter extends CustomPainter {
             base.dy + nrm.dy * w * 0.5,
           )
           ..close();
-        _metal(canvas, path, outline: outline);
+        // Zonder omlijning houden lichtere en donkerdere veren ze uit elkaar (bovenste het lichtst)
+        _ornament(canvas, path, top: 0.74 - i * 0.08, bottom: 0.5 - i * 0.07);
       }
       canvas.restore();
     }
@@ -137,7 +130,6 @@ class AvatarFramePainter extends CustomPainter {
 
   void _blades(Canvas canvas, Offset c) {
     final r = ring;
-    final outline = math.max(0.6, r * 0.035);
     Offset polar(double a, double d) => Offset(math.cos(a), math.sin(a)) * d;
     for (final side in [1.0, -1.0]) {
       canvas.save();
@@ -147,26 +139,25 @@ class AvatarFramePainter extends CustomPainter {
       final b1 = polar(1.05, r * 0.98);
       final b2 = polar(0.2, r * 0.98);
       final tip = Offset(r * 1.42, -r * 0.42);
-      _metal(
+      _ornament(
         canvas,
         Path()
           ..moveTo(b1.dx, b1.dy)
           ..quadraticBezierTo(r * 1.5, r * 0.62, tip.dx, tip.dy)
           ..quadraticBezierTo(r * 1.1, r * 0.08, b2.dx, b2.dy)
           ..close(),
-        outline: outline,
       );
       // Klein puntje eronder, schuin naar beneden
       final s1 = polar(1.45, r * 0.98);
       final s2 = polar(1.15, r * 0.98);
-      _metal(
-        canvas,
+      // Donkerder, zoals de binnenste blaadjes van de lauwerkrans
+      canvas.drawPath(
         Path()
           ..moveTo(s1.dx, s1.dy)
           ..quadraticBezierTo(r * 0.55, r * 1.3, r * 0.82, r * 1.32)
           ..quadraticBezierTo(r * 0.62, r * 1.08, s2.dx, s2.dy)
           ..close(),
-        outline: outline,
+        Paint()..color = frameTint(color, 0.36),
       );
       canvas.restore();
     }
@@ -214,8 +205,7 @@ class AvatarFramePainter extends CustomPainter {
       ..lineTo(top.dx, top.dy + g)
       ..lineTo(top.dx - g * 0.75, top.dy)
       ..close();
-    _metal(canvas, gem, outline: math.max(0.6, g * 0.15));
-    canvas.drawCircle(top + Offset(-g * 0.2, -g * 0.3), math.max(0.6, g * 0.18), Paint()..color = Colors.white.withValues(alpha: 0.8));
+    _ornament(canvas, gem, top: 0.82);
   }
 
   // --- Rimpeling: twee golfjes die van de ring naar buiten lopen en daarbij vervagen
@@ -299,16 +289,7 @@ class AvatarFramePainter extends CustomPainter {
       ..lineTo(w / 2, -h * 0.55)
       ..lineTo(w / 2, 0)
       ..close();
-    canvas.drawPath(path.shift(const Offset(0, 0.8)), Paint()..color = Colors.black.withValues(alpha: 0.18));
-    canvas.drawPath(path, Paint()..color = frameTint(color, 0.62));
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round
-        ..strokeWidth = math.max(0.8, w * 0.06)
-        ..color = frameTint(color, 0.3),
-    );
+    _ornament(canvas, path);
     final dot = Paint()..color = frameTint(color, 0.9);
     final r = math.max(0.9, w * 0.07);
     for (final q in [Offset(-w / 2, -h * 0.55), Offset(0, -h), Offset(w / 2, -h * 0.55)]) {
