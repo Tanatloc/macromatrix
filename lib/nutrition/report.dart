@@ -111,7 +111,16 @@ class WeeklyReport {
     this.weightTrend,
     this.plan = Goal.maintain,
     this.sugar,
+    this.upperShare = const {},
+    this.topFoods = const [],
   });
+
+  /// Gemiddelde inname tegenover de gemiddelde veilige bovengrens, per stof met een bovengrens (1,3 = 30% erboven).
+  final Map<String, double> upperShare;
+
+  /// De producten met de meeste energie deze week, als gewone namen (zonder merk; eigen producten en recepten zonder
+  /// hun naam). Voor de wekelijkse coach.
+  final List<String> topFoods;
 
   /// Gemiddeld dagdoel per stof (in de eenheid van de stof), om bij elke stof het doel te tonen.
   final Map<String, double> goals;

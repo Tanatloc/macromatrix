@@ -1,4 +1,4 @@
-// Gedeelde stukken voor de AI-functies (/api/label, /api/recipe, /api/off-contribute): inloggen nakijken, de rem per
+// Gedeelde stukken voor de AI-functies (/api/label, /api/recipe, /api/off-contribute, /api/coach): inloggen nakijken, de rem per
 // uur, foto's nakijken en de dagteller ai_quota_use (migratie 20261027000000_ai_quota). Dit bestand heeft geen
 // onRequest-functies en wordt dus geen eigen adres op de site.
 
@@ -57,11 +57,11 @@ export function dataUrl(bytes, mime) {
   return `data:${mime};base64,${btoa(b64)}`;
 }
 
-// De dagteller voor een soort (label of recipe) verhogen met het token van de gebruiker zelf (auth.uid()).
-// Geeft {allowed, used, limit, pro} terug, of null als de teller niet beschikbaar is: de functie bestaat nog niet
-// (PGRST202, migratie niet uitgevoerd) of Supabase antwoordt niet. Wat null betekent, beslist de functie zelf:
-// /api/label werkt dan verder (alleen de rem per uur), /api/recipe weigert (Pro kan niet nagekeken worden).
-export async function useAiQuota(auth, kind, fetcher = fetch) {
+// De dagteller voor een soort (label, recipe of coach) verhogen met het token van de gebruiker zelf (auth.uid()).
+// Geeft {quota: {allowed, used, limit, pro}} terug, {missing: true} als de functie nog niet bestaat (PGRST202,
+// migratie niet uitgevoerd), of {down: true} als Supabase niet (goed) antwoordt. Voor wie dat onderscheid nodig
+// heeft (/api/coach: zonder teller geen vroege toegang, dus dan niet).
+export async function aiQuotaStatus(auth, kind, fetcher = fetch) {
   try {
     const r = await fetcher(`${SUPABASE_URL}/rest/v1/rpc/ai_quota_use`, {
       method: 'POST',
@@ -73,16 +73,51 @@ export async function useAiQuota(auth, kind, fetcher = fetch) {
       try {
         code = (await r.json())?.code ?? '';
       } catch (_) {}
-      if (code !== 'PGRST202') console.log(`ai_quota_use(${kind}): ${r.status} ${code}`);
-      return null;
+      if (code === 'PGRST202') return { missing: true };
+      console.log(`ai_quota_use(${kind}): ${r.status} ${code}`);
+      // Een database met de oude migratie kent de soort niet ("onbekende soort"): ook dan ontbreekt de migratie
+      return code === 'P0001' ? { missing: true } : { down: true };
     }
     const q = await r.json();
-    if (typeof q?.allowed !== 'boolean') return null;
-    return { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true };
+    if (typeof q?.allowed !== 'boolean') return { down: true };
+    return { quota: { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true } };
   } catch (e) {
     console.log(`ai_quota_use(${kind}): ${e}`);
-    return null;
+    return { down: true };
   }
+}
+
+// Zoals aiQuotaStatus, maar alleen de stand of null als de teller niet beschikbaar is (ontbreekt of storing). Wat
+// null betekent, beslist de functie zelf: /api/label werkt dan verder (alleen de rem per uur), /api/recipe weigert
+// (Pro kan niet nagekeken worden).
+export async function useAiQuota(auth, kind, fetcher = fetch) {
+  return (await aiQuotaStatus(auth, kind, fetcher)).quota ?? null;
+}
+
+export class TimeoutError extends Error {}
+
+// Een belofte met een tijdslimiet: na [ms] een TimeoutError (het model zelf loopt dan nog door, maar het antwoord
+// telt niet meer).
+export function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new TimeoutError(`na ${ms} ms`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+// Markdown uit een zin van een model halen: **vet**, _schuin_, `code`, koppen, opsommingstekens en [links](...).
+export function stripMarkdown(raw) {
+  return String(raw ?? '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*(?:[-*•+]|\d+[.)])\s+/gm, '')
+    .replace(/(\*\*|__|\*|`+|~~)/g, '')
+    .replace(/(^|\s)_([^_\s][^_]*)_(?=\s|[.,!?;:]|$)/g, '$1$2')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // Het eerste JSON-object uit het antwoord van een model halen (soms met ```json eromheen of een inleiding).

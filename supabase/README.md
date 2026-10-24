@@ -96,6 +96,13 @@ app gewoon: vlaggen volgen hun standaard in de app en het scherm "What's next" z
    on conflict (id) do update set early_from = excluded.early_from, public_from = excluded.public_from;
    ```
 
+**Eerste functie in vroege toegang: de wekelijkse coach** (`coach`). Migratie
+`migrations/20261103000000_coach.sql` (na `20261031000000_early_access.sql`) zet de vlag (supporters nu, iedereen
+over 3 weken), voegt de soort `coach` toe aan de AI-teller (3 per dag met Pro; zonder Pro 1 per dag, maar pas vanaf
+`public_from` van die vlag, zodat ook de server de vroege toegang afdwingt) en zet het roadmap-item op `done`.
+`/api/coach` (`functions/api/coach.js`) krijgt alleen cijfers van de week en bewaart niets. Zonder de migratie
+verbergt de app de coach en antwoordt `/api/coach` met `not_configured`.
+
 **Roadmap**: de items staan in `public.roadmap_items` (de migratie zet er zes ideeën in). Alleen supporters
 stemmen, hoogstens 3 stemmen tegelijk op wat nog niet klaar is; stemmen van wie geen Pro meer heeft, blijven staan
 maar tellen niet mee. Beheer in de SQL-editor:

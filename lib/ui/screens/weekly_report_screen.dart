@@ -11,6 +11,7 @@ import '../../sync/friends.dart';
 import '../theme.dart';
 import 'profile_screen.dart';
 import '../widgets/avatar.dart';
+import '../widgets/coach_panel.dart';
 import '../widgets/health_view.dart';
 import '../widgets/kit.dart';
 import '../widgets/share_actions.dart';
@@ -405,6 +406,8 @@ class WeeklyReportScreen extends StatelessWidget {
                             ),
                           ),
                         ],
+                        // Wekelijkse coach (vroege toegang); verbergt zichzelf als hij er niet is
+                        CoachPanel(report: r),
                         if (battles.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Panel(

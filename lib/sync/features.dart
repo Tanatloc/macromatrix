@@ -31,8 +31,14 @@ import 'account.dart';
 import 'challenges.dart' show isMissingTable;
 import 'pro.dart';
 
-/// De functies die in de app achter een vlag staan, met hun standaard. Nog leeg: er staat nu niets achter een vlag.
-const knownFeatures = <String, bool>{};
+/// De functies die in de app achter een vlag staan, met hun standaard.
+const knownFeatures = <String, bool>{
+  // Wekelijkse coach in het weekrapport (ui/widgets/coach_panel.dart, /api/coach, migratie 20261103000000_coach.sql)
+  coachFeature: false,
+};
+
+/// Id van de wekelijkse coach, hier en in public.features.
+const coachFeature = 'coach';
 
 /// De vlaggen bestaan (nog) niet op de server.
 class FeaturesMissing implements Exception {
