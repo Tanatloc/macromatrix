@@ -9,13 +9,17 @@ import '../data/search_terms.dart';
 import 'gap_plan.dart';
 
 class FoodGroup {
-  const FoodGroup(this.main, this.others);
+  const FoodGroup(this.main, this.others, {this.disagreeing = const {}});
 
   /// Wat je ziet: een Europese bron met zo veel mogelijk gemeten waarden.
   final Food main;
 
   /// Hetzelfde voedingsmiddel uit andere bronnen.
   final List<Food> others;
+
+  /// Refs van bronnen die duidelijk afwijken van de andere (zie [disagreeingSources]); nooit [main] als er een
+  /// bron is die wel overeenkomt.
+  final Set<String> disagreeing;
 }
 
 /// Gewogen mét afval (schil, pitten, graat, been): de waarden gelden per 100 g zoals gekocht, niet per 100 g die je
@@ -26,6 +30,10 @@ bool weighedWithWaste(Food f) => _weighedWith.hasMatch(f.name) || (f.label?.flag
 
 /// Kenmerken die niets aan de voedingswaarden veranderen en dus niet apart hoeven.
 const _sameFlags = {'organic', 'brand'};
+
+/// Sleutel voor "hetzelfde product": voedingsmiddel, groep, deel, bereiding, gerecht en kenmerken (zonder label: de
+/// ref zelf, dus nooit samen met iets anders).
+String sameProductKey(Food f) => _key(f);
 
 String _key(Food f) {
   final l = f.label;
@@ -46,11 +54,65 @@ List<FoodGroup> groupFoods(List<Food> foods) {
   return [
     for (final members in groups.values)
       () {
-        // Bij gelijke stand de zoekvolgorde (sort is niet stabiel)
-        final best = [...members]..sort((a, b) => _better(a, b) != 0 ? _better(a, b) : members.indexOf(a) - members.indexOf(b));
-        return FoodGroup(best.first, [...best.skip(1)]);
+        // Een bron die afwijkt van de andere komt niet vooraan (eend zonder vel met 46,7 g eiwit tegenover 23–27 g)
+        final off = _disagreeing(members);
+        int order(Food a, Food b) {
+          final agree = (off.contains(a.ref) ? 1 : 0) - (off.contains(b.ref) ? 1 : 0);
+          if (agree != 0) return agree;
+          final c = _better(a, b);
+          // Bij gelijke stand de zoekvolgorde (sort is niet stabiel)
+          return c != 0 ? c : members.indexOf(a) - members.indexOf(b);
+        }
+
+        final best = [...members]..sort(order);
+        return FoodGroup(best.first, [...best.skip(1)], disagreeing: off);
       }(),
   ];
+}
+
+/// Hoofdwaarden die voor hetzelfde product in elke databank ongeveer gelijk moeten zijn, met de toegelaten factor
+/// (zoals bij het Orakel): eiwit en koolhydraten 1,4×, energie, vet en water 1,6× (mager tegenover doorregen). Met
+/// het kleinste verschil dat telt, zodat 0,2 tegenover 0,5 g koolhydraten in vlees geen "afwijking" is.
+const _agreeKeys = {'protein': (1.4, 3.0), 'carbs': (1.4, 3.0), 'energy': (1.6, 40.0), 'fat': (1.6, 3.0), 'water': (1.6, 8.0)};
+
+/// Bronnen in [foods] die duidelijk afwijken van de andere bronnen van hetzelfde product ([sameProductKey]): een
+/// hoofdwaarde meer dan 1,4× of 1,6× boven of onder de mediaan van minstens twee andere bronnen. Meestal een
+/// uitgedroogd of verkeerd gemeten product (Matvaretabellens gebraden eend en gans).
+Set<String> disagreeingSources(Iterable<Food> foods) {
+  final groups = <String, List<Food>>{};
+  for (final f in foods) {
+    groups.putIfAbsent(_key(f), () => []).add(f);
+  }
+  return {for (final members in groups.values) ..._disagreeing(members)};
+}
+
+Set<String> _disagreeing(List<Food> members) {
+  if (members.length < 3) return const {};
+  double? value(Food f, String k) => f.estimated.containsKey(k) ? null : f.per100g[k];
+  double median(List<double> xs) {
+    final s = [...xs]..sort();
+    final m = s.length ~/ 2;
+    return s.length.isOdd ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  return {
+    for (final f in members)
+      if (_agreeKeys.entries.any((e) {
+        final own = value(f, e.key);
+        if (own == null) return false;
+        final others = [
+          for (final o in members)
+            if (o.ref != f.ref) ?value(o, e.key),
+        ];
+        if (others.length < 2) return false;
+        final (factor, minDiff) = e.value;
+        bool off(double med) => (own - med).abs() >= minDiff && (own > factor * med || own * factor < med);
+        // Ook tegenover de mediaan van de hele groep: bij drie bronnen trekt de uitschieter de mediaan van de andere
+        // twee mee, en zou anders een gewone bron (23 g tegenover 25 en 46,7) zelf als afwijkend gelden
+        return off(median(others)) && off(median([own, ...others]));
+      }))
+        f.ref,
+  };
 }
 
 /// Een bijzondere vorm van het gewone product: diepvries, gehakt, poeder, lactosevrij, "light" (P156).
@@ -160,7 +222,8 @@ double foodQueryScore(Food f, String rawQuery) {
     s -= 30;
   }
   // "White" alleen bij eieren (eiwit): wit brood en witte rijst zijn gewoon de gewone
-  if ((RegExp(r'\b(yolk|powder|dried|flour|substitute|frozen)\b').hasMatch(n) || (RegExp(r'\begg').hasMatch(n) && RegExp(r'\bwhite\b').hasMatch(n))) &&
+  if ((RegExp(r'\b(yolk|powder|dried|flour|substitute|frozen)\b').hasMatch(n) ||
+          (RegExp(r'\begg').hasMatch(n) && RegExp(r'\bwhite\b').hasMatch(n))) &&
       !query.contains(RegExp(r'yolk|white|powder|dried|flour|frozen|whey|protein'))) {
     s -= 15;
   }
@@ -181,8 +244,12 @@ double foodQueryScore(Food f, String rawQuery) {
   if (RegExp(r'\b(fast food|restaurant|takeaway|take-away|drive-in)\b').hasMatch(n) && !RegExp(r'fast|restaurant|take').hasMatch(query)) s -= 15;
   // Brood is een gewoon brood (wit, bruin, volkoren), geen pita, bagel of panini tenzij je die noemt
   if (RegExp(r'\bbread\b').hasMatch(n) &&
-      RegExp(r'\b(pitt?a|bagel|panini|naan|ciabatta|focaccia|brioche|rolls?|buns?|wraps?|tortilla|crumbs?|pudding|garlic|fried|croissant|chapati|matzo|soda|malt|fruit)\b').hasMatch(n) &&
-      !RegExp(r'pitt?a|bagel|panini|naan|ciabatta|focaccia|brioche|roll|bun|wrap|tortilla|crumb|pudding|garlic|fried|croissant|chapati|matzo|soda|malt|fruit|broodje').hasMatch(query)) {
+      RegExp(
+        r'\b(pitt?a|bagel|panini|naan|ciabatta|focaccia|brioche|rolls?|buns?|wraps?|tortilla|crumbs?|pudding|garlic|fried|croissant|chapati|matzo|soda|malt|fruit)\b',
+      ).hasMatch(n) &&
+      !RegExp(
+        r'pitt?a|bagel|panini|naan|ciabatta|focaccia|brioche|roll|bun|wrap|tortilla|crumb|pudding|garlic|fried|croissant|chapati|matzo|soda|malt|fruit|broodje',
+      ).hasMatch(query)) {
     s -= 10;
   }
   // Alleen "melk" of "kaas": de gewoonste soort (halfvolle melk; gouda, cheddar, edam, emmentaler)
@@ -209,7 +276,6 @@ double foodQueryScore(Food f, String rawQuery) {
   }
   return s - n.length / 15;
 }
-
 
 /// Een energiedrank terwijl je die niet vraagt ("cola zero" is geen NOS Zero van The Coca-Cola Company, P151).
 /// Zoekvak en Snel loggen laten die weg.

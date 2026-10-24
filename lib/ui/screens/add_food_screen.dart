@@ -864,6 +864,14 @@ class _GroupCardState extends State<_GroupCard> {
                         style: TextStyle(fontSize: 13, color: p.ink),
                       ),
                     ),
+                    // Wijkt duidelijk af van de andere bronnen (bv. uitgedroogd of verkeerd gemeten)
+                    if (g.disagreeing.contains(f.ref)) ...[
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: tr('Clearly differs from the other sources', 'Wijkt duidelijk af van de andere bronnen'),
+                        child: Text(tr('≠ others', '≠ andere'), style: TextStyle(fontSize: 11.5, color: p.ink3)),
+                      ),
+                    ],
                     const SizedBox(width: 8),
                     Text('${fmtInt(f.kcalPer100g)} kcal', style: numStyle(12.5, color: p.ink2)),
                   ],

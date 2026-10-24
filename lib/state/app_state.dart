@@ -903,6 +903,9 @@ class AppState extends ChangeNotifier {
     }
 
     final hits = [for (final (i, f) in all.indexed) (rank(i, f), f)]..sort((a, b) => b.$1.compareTo(a.$1));
+    // Bronnen die afwijken van de andere bronnen van hetzelfde product (gebraden eend met 46,7 g eiwit tegenover
+    // 23–27 g elders) komen nooit als eerste, en tellen niet mee voor de mediane energie hieronder
+    final off = disagreeingSources(hits.take(80).map((h) => h.$2));
     // P157: staan er bovenaan meerdere bronnen van hetzelfde product (banaan 51-97 kcal, rijst 113-171),
     // dan is er geen "juiste" — kies de mediane energie i.p.v. toevallig een extreme. Een eerder gekozen of
     // eerder gegeten product (+200/+25 in rank) staat buiten deze band en blijft dus vooraan.
@@ -919,7 +922,7 @@ class AppState extends ChangeNotifier {
       final best = hits.first.$1;
       final cluster = [
         for (final h in hits)
-          if (best - h.$1 <= 3 && topHead.isNotEmpty && headOf(h.$2) == topHead && (h.$2.per100g['energy'] ?? 0) > 0) h,
+          if (best - h.$1 <= 3 && topHead.isNotEmpty && headOf(h.$2) == topHead && (h.$2.per100g['energy'] ?? 0) > 0 && !off.contains(h.$2.ref)) h,
       ];
       if (cluster.length >= 3) {
         final energies = [for (final h in cluster) h.$2.per100g['energy']!]..sort();
@@ -933,6 +936,14 @@ class AppState extends ChangeNotifier {
               : b.$1.compareTo(a.$1),
         );
       }
+    }
+    // Staat er toch een afwijkende bron vooraan, dan een bron van hetzelfde product die wel overeenkomt — behalve
+    // als je die zelf koos of eerder at
+    final top = hits.isEmpty ? null : hits.first.$2;
+    if (top != null && off.contains(top.ref) && top.ref != picked && !mine.contains(top.ref)) {
+      final key = sameProductKey(top);
+      final alt = hits.indexWhere((h) => !off.contains(h.$2.ref) && sameProductKey(h.$2) == key);
+      if (alt > 0) hits.insert(0, hits.removeAt(alt));
     }
     (Food, double, Portion?) amount(Food f) {
       if (q.grams != null) return (f, q.grams!, null);
