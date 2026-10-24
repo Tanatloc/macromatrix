@@ -242,6 +242,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       context,
       tr('${e.name} added to ${widget.meal.label.toLowerCase()}', '${e.name} toegevoegd aan ${widget.meal.label.toLowerCase()}'),
       () => s.undoAdds([added]),
+      top: true,
     );
   }
 
@@ -639,7 +640,8 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       final c = (counts[b.$2.foodRef] ?? 0).compareTo(counts[a.$2.foodRef] ?? 0);
       return c != 0 ? c : a.$1.compareTo(b.$1);
     });
-    var recent = [for (final (_, e) in pool.take(60)) e];
+    // Met de hoeveelheid van je laatste toevoeging, niet het totaal van een samengevoegde regel (N02)
+    var recent = [for (final (_, e) in pool.take(60)) s.asLastAdded(e)];
     _recentOrder ??= [for (final e in recent) e.foodRef];
     final order = {for (final (i, r) in _recentOrder!.indexed) r: i};
     recent = [...recent]..sort((a, b) => (order[a.foodRef] ?? 999).compareTo(order[b.foodRef] ?? 999));

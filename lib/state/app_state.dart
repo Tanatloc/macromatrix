@@ -110,6 +110,8 @@ class AppState extends ChangeNotifier {
     final ts = user.setting('targets');
     _settings = ts == null ? const TargetSettings() : TargetSettings.fromJson(ts);
     dayStartHour = ((user.setting('ui')?['dayStart'] as num?)?.toInt() ?? 3).clamp(0, 5);
+    // De gekozen taal blijft na een herstart (werd wel bewaard maar nooit teruggelezen)
+    if (AppLang.values.asNameMap()[user.setting('ui')?['lang']] case final lang? when lang != appLang.value) setAppLang(lang);
     _preferences = {for (final n in ((user.setting('preferences')?['list'] as List?) ?? const [])) ?DietPref.values.asNameMap()[n]};
   }
 
@@ -1269,8 +1271,42 @@ class AppState extends ChangeNotifier {
     } else {
       added = AddedEntry(user.addEntry(day: day, meal: meal, food: food, grams: grams, quantity: quantity, portionLabel: portionLabel, time: time));
     }
+    _rememberAmount(food.ref, grams, quantity, portionLabel);
     _refresh();
     return added;
+  }
+
+  // Wat je de laatste keer per product toevoegde (alleen op dit toestel). Een samengevoegde regel bevat het totaal
+  // (150 g + 150 g = 300 g); "dezelfde hoeveelheid" opnieuw is de laatste toevoeging, niet dat totaal (N02).
+  Map<String, Object?> get _lastAmounts => ((user.setting('_lastAmounts') ?? const {}) as Map).cast<String, Object?>();
+
+  void _rememberAmount(String ref, double grams, double quantity, String? portion) {
+    final m = {..._lastAmounts}..remove(ref);
+    m[ref] = [grams, quantity, portion];
+    // Hooguit 400 producten; de oudste vallen weg
+    while (m.length > 400) {
+      m.remove(m.keys.first);
+    }
+    user.setSetting('_lastAmounts', m);
+  }
+
+  /// [e] met de hoeveelheid van de laatste keer dat je dit product toevoegde (als die gekend is).
+  DiaryEntry asLastAdded(DiaryEntry e) {
+    final a = _lastAmounts[e.foodRef];
+    if (a is! List || a.length < 3) return e;
+    return DiaryEntry(
+      id: e.id,
+      day: e.day,
+      meal: e.meal,
+      foodRef: e.foodRef,
+      name: e.name,
+      grams: (a[0] as num).toDouble(),
+      quantity: (a[1] as num).toDouble(),
+      per100g: e.per100g,
+      brand: e.brand,
+      portionLabel: a[2] as String?,
+      time: e.time,
+    );
   }
 
   /// Toevoegingen ongedaan maken: nieuwe regels weg, samengevoegde regels terug naar hun vorige hoeveelheid.
@@ -1336,11 +1372,14 @@ class AppState extends ChangeNotifier {
     final already = {for (final e in entriesFor(meal)) e.foodRef};
     final ranked = days.entries.where((e) => e.value.length >= 3 && !already.contains(e.key)).toList()
       ..sort((a, b) => b.value.length.compareTo(a.value.length));
-    return [for (final e in ranked.take(limit)) last[e.key]!];
+    return [for (final e in ranked.take(limit)) asLastAdded(last[e.key]!)];
   }
 
   /// Een eerder gelogde regel opnieuw toevoegen (zelfde hoeveelheid) aan [meal] op de gekozen dag.
-  AddedEntry addAgain(DiaryEntry e, Meal meal) => addFood(foodFor(e), meal: meal, grams: e.grams, quantity: e.quantity, portionLabel: e.portionLabel);
+  AddedEntry addAgain(DiaryEntry e, Meal meal) {
+    final last = asLastAdded(e);
+    return addFood(foodFor(e), meal: meal, grams: last.grams, quantity: last.quantity, portionLabel: last.portionLabel);
+  }
 
   int copyMealFromYesterday(Meal meal) {
     final n = user.copyMeal(fromDay: dayKey(_date.subtract(const Duration(days: 1))), meal: meal, toDay: day);

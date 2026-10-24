@@ -75,4 +75,16 @@ void main() {
     s.addFood(oats, meal: Meal.breakfast, grams: 60, quantity: 60);
     expect(s.entries, hasLength(1));
   });
+
+  test('opnieuw toevoegen gebruikt de laatste toevoeging, niet het samengevoegde totaal (N02)', () {
+    final f = foods.search('banana', limit: 1).first;
+    s.addFood(f, meal: Meal.breakfast, grams: 150, quantity: 150);
+    final row = s.entriesFor(Meal.breakfast).single;
+    s.addAgain(row, Meal.breakfast);
+    expect(s.entriesFor(Meal.breakfast).single.grams, 300);
+    // De regel staat nu op 300 g, maar opnieuw toevoegen voegt weer 150 g toe, geen 300
+    s.addAgain(s.entriesFor(Meal.breakfast).single, Meal.breakfast);
+    expect(s.entriesFor(Meal.breakfast).single.grams, 450);
+    expect(s.asLastAdded(s.entriesFor(Meal.breakfast).single).grams, 150);
+  });
 }

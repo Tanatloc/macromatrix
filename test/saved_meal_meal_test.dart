@@ -115,6 +115,8 @@ void main() {
     expect(s.entriesFor(meal), hasLength(1));
     await tester.pump(const Duration(seconds: 1)); // melding schuift in beeld
     expect(find.text('Undo'), findsOneWidget);
+    // Een tik in de eerste halve seconde telt niet als ongedaan maken (dubbeltik-bescherming)
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
     await tester.tap(find.text('Undo'));
     await tester.pump();
     expect(s.entriesFor(meal), isEmpty);
