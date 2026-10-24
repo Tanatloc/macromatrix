@@ -28,6 +28,7 @@ import 'widgets/add_menu.dart';
 import 'widgets/tap_guard.dart';
 import 'widgets/avatar.dart';
 import 'widgets/badges_view.dart';
+import 'widgets/celebrate.dart';
 import 'widgets/share_actions.dart';
 import 'widgets/kit.dart';
 import 'widgets/logo.dart';
@@ -113,17 +114,10 @@ class _ShellState extends State<Shell> {
     _state.user.setSetting('_streak_seen', {'n': hit});
     if (seen == 0 && n > 30 || !mounted) return;
     _celebrate(
-      SnackBar(
-        duration: const Duration(seconds: 4),
-        content: Row(
-          children: [
-            const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF8A00), size: 28),
-            const SizedBox(width: 12),
-            Expanded(child: Text(tr('$hit days in a row! Keep that fire burning.', '$hit dagen op rij! Houd dat vuur brandend.'))),
-          ],
-        ),
-        action: SnackBarAction(label: tr('Share', 'Delen'), onPressed: () => shareStreak(context, days: hit)),
-      ),
+      leading: const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF8A00), size: 28),
+      text: tr('$hit days in a row! Keep that fire burning.', '$hit dagen op rij! Houd dat vuur brandend.'),
+      actionLabel: tr('Share', 'Delen'),
+      onAction: () => shareStreak(context, days: hit),
     );
   }
 
@@ -157,29 +151,20 @@ class _ShellState extends State<Shell> {
     if (up.isEmpty) return;
     final c = up.first;
     final tier = tiers[c.id]!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 6),
-        content: Row(
-          children: [
-            BadgeIcon(category: c.id, tier: tier, size: 34),
-            const SizedBox(width: 12),
-            Expanded(child: Text(tr('New badge: ${c.name} (${tierName(tier)})', 'Nieuwe badge: ${c.name} (${tierName(tier)})'))),
-          ],
-        ),
-        action: SnackBarAction(
-          label: tr('Share', 'Delen'),
-          onPressed: () => shareBadge(context, category: c.id, tier: tier, value: values[c.id] ?? 0),
-        ),
-      ),
+    _celebrate(
+      leading: BadgeIcon(category: c.id, tier: tier, size: 34),
+      text: tr('New badge: ${c.name} (${tierName(tier)})', 'Nieuwe badge: ${c.name} (${tierName(tier)})'),
+      actionLabel: tr('Share', 'Delen'),
+      onAction: () => shareBadge(context, category: c.id, tier: tier, value: values[c.id] ?? 0),
     );
   }
 
   /// Feestelijke melding pas na dit beeld: de actie die het level of de reeks opleverde, toont meteen daarna
   /// haar eigen melding (met Ongedaan maken). Die komt dan eerst, deze schuift erachter in de rij (N42).
-  void _celebrate(SnackBar bar) => WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(bar);
-  });
+  void _celebrate({required Widget leading, required String text, String? actionLabel, VoidCallback? onAction}) =>
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showCelebration(context, leading: leading, text: text, actionLabel: actionLabel, onAction: onAction);
+      });
 
   void _checkLevel() {
     final level = _state.level.level;
@@ -189,22 +174,10 @@ class _ShellState extends State<Shell> {
     if (seen == null || level < seen || !mounted) return;
     final stars = starsFor(level) > starsFor(seen);
     _celebrate(
-      SnackBar(
-        duration: const Duration(seconds: 4),
-        content: Row(
-          children: [
-            LevelAvatar(avatar: _state.avatar, level: level, size: 36),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                stars
-                    ? tr('Level $level! You earned a new star.', 'Level $level! Je verdiende een nieuwe ster.')
-                    : tr('Level up: you are now level $level!', 'Level omhoog: je bent nu level $level!'),
-              ),
-            ),
-          ],
-        ),
-      ),
+      leading: LevelAvatar(avatar: _state.avatar, level: level, size: 36),
+      text: stars
+          ? tr('Level $level! You earned a new star.', 'Level $level! Je verdiende een nieuwe ster.')
+          : tr('Level up: you are now level $level!', 'Level omhoog: je bent nu level $level!'),
     );
   }
 
