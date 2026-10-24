@@ -10,7 +10,7 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/kit.dart';
 
-/// Maand- of jaaroverzicht in de stijl van een "wrapped": grote cijfers op kleurige kaarten.
+/// Maand- of jaaroverzicht, in dezelfde rustige stijl als het weekrapport.
 class RecapScreen extends StatelessWidget {
   const RecapScreen({super.key, required this.from, required this.year});
   final DateTime from;
@@ -37,31 +37,29 @@ class RecapScreen extends StatelessWidget {
     final p = context.pal;
     final r = s.recap(from, to, year: year);
 
-    Widget card(List<Color> colors, Widget child) => Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: colors),
-      ),
-      child: DefaultTextStyle(
-        style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.35),
-        child: child,
+    // Zelfde opbouw als het weekrapport: rustige panelen, cijfers in inkt, één zachte merkkleur bovenaan
+    Widget section(String title, Widget child, {String? subtitle}) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [PanelTitle(title, subtitle: subtitle), const SizedBox(height: 10), child],
+        ),
       ),
     );
-    Widget big(String v) => FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: Text(v, style: numStyle(52, color: Colors.white, height: 1.05)),
+    Widget big(String v, {String? unit}) => Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(v, style: numStyle(40, color: p.ink)),
+        if (unit != null) ...[const SizedBox(width: 6), Text(unit, style: TextStyle(fontSize: 14, color: p.ink2))],
+      ],
     );
-    Widget label(String v) => Text(
-      v,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70, letterSpacing: 0.4),
-    );
+    Widget note(String v) => Text(v, style: TextStyle(fontSize: 13, color: p.ink3, height: 1.35));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        title: Text(year ? tr('Year in review', 'Jaaroverzicht') : tr('Monthly recap', 'Maandoverzicht')),
         actions: [
           if (r != null)
             IconButton(
@@ -89,83 +87,80 @@ class RecapScreen extends StatelessWidget {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      card(
-                        const [Color(0xFF0F766E), Color(0xFF14B8A6)],
-                        Row(
-                          children: [
-                            LevelAvatar(avatar: s.avatar, level: s.level.level, size: 64),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                      // Opening: wie, welke periode, en de drie kerncijfers
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Panel(
+                          shadow: false,
+                          color: p.brandSoft,
+                          borderColor: p.brandSoft,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
                                 children: [
-                                  Text(
-                                    title,
-                                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    // 'van de 412 dagen' sinds de installatie klinkt als een verwijt; enkel bij een maand of korter
-                                    r.daysInPeriod <= 31
-                                        ? tr(
-                                            'You logged ${r.daysLogged} of ${r.daysInPeriod} days.',
-                                            'Je logde ${r.daysLogged} van de ${r.daysInPeriod} dagen.',
-                                          )
-                                        : tr(
-                                            '${r.daysLogged} ${r.daysLogged == 1 ? 'day' : 'days'} logged.',
-                                            '${r.daysLogged} ${r.daysLogged == 1 ? 'dag' : 'dagen'} gelogd.',
-                                          ),
+                                  LevelAvatar(avatar: s.avatar, level: s.level.level, size: 56),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          title,
+                                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.3, color: p.ink),
+                                        ),
+                                        Text(
+                                          // 'van de 412 dagen' klinkt als een verwijt; enkel bij een maand of korter
+                                          r.daysInPeriod <= 31
+                                              ? tr(
+                                                  'You logged ${r.daysLogged} of ${r.daysInPeriod} days.',
+                                                  'Je logde ${r.daysLogged} van de ${r.daysInPeriod} dagen.',
+                                                )
+                                              : tr(
+                                                  '${r.daysLogged} ${r.daysLogged == 1 ? 'day' : 'days'} logged.',
+                                                  '${r.daysLogged} ${r.daysLogged == 1 ? 'dag' : 'dagen'} gelogd.',
+                                                ),
+                                          style: TextStyle(fontSize: 13.5, color: p.ink2),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      card(
-                        const [Color(0xFF7C3AED), Color(0xFFC084FC)],
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            label(tr('DIFFERENT FOODS', 'VERSCHILLENDE PRODUCTEN')),
-                            big(fmtInt(r.distinctFoods)),
-                            Text(tr('out of ${fmtInt(r.entries)} things you logged', 'op ${fmtInt(r.entries)} dingen die je logde')),
-                            const SizedBox(height: 14),
-                            label(tr('YOUR TOP 5', 'JOUW TOP 5')),
-                            const SizedBox(height: 4),
-                            for (final (i, (name, n)) in r.topFoods.indexed)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 24,
-                                      child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: StatTile(
+                                      label: tr('Best streak', 'Beste reeks'),
+                                      value: tr('${r.longestStreak} ${r.longestStreak == 1 ? 'day' : 'days'}', '${r.longestStreak} ${r.longestStreak == 1 ? 'dag' : 'dagen'}'),
                                     ),
-                                    Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                                    Text('${n}x', style: const TextStyle(color: Colors.white70)),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: StatTile(label: tr('Foods', 'Producten'), value: fmtInt(r.distinctFoods))),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: StatTile(label: tr('XP earned', 'XP verdiend'), value: fmtInt(r.xp))),
+                                ],
                               ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                      card(
-                        const [Color(0xFF2563EB), Color(0xFF60A5FA)],
+                      section(
+                        tr('Nutrient score', 'Voedingsscore'),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            label(tr('AVERAGE NUTRIENT SCORE', 'GEMIDDELDE NUTRIENT SCORE')),
-                            big('${r.avgScore}'),
+                            big('${r.avgScore}', unit: tr('on average', 'gemiddeld')),
                             if (r.bestDay != null)
-                              Text(
+                              note(
                                 tr(
                                   'Best day: ${DateFormat('EEEE d MMMM', appLocale).format(r.bestDay!.$1)} with ${r.bestDay!.$2}.',
                                   'Beste dag: ${DateFormat('EEEE d MMMM', appLocale).format(r.bestDay!.$1)} met ${r.bestDay!.$2}.',
                                 ),
                               ),
                             if (r.bestMonth != null)
-                              Text(
+                              note(
                                 tr(
                                   'Best month: ${DateFormat('MMMM', appLocale).format(r.bestMonth!.$1)} (${r.bestMonth!.$2}).',
                                   'Beste maand: ${DateFormat('MMMM', appLocale).format(r.bestMonth!.$1)} (${r.bestMonth!.$2}).',
@@ -174,62 +169,72 @@ class RecapScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      card(
-                        const [Color(0xFFEA580C), Color(0xFFFBBF24)],
-                        Row(
+                      section(
+                        tr('What you ate most', 'Wat je het meest at'),
+                        subtitle: tr(
+                          '${fmtInt(r.distinctFoods)} different foods in ${fmtInt(r.entries)} entries',
+                          '${fmtInt(r.distinctFoods)} verschillende producten in ${fmtInt(r.entries)} regels',
+                        ),
+                        Column(
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  label(tr('LONGEST STREAK', 'LANGSTE REEKS')),
-                                  big('${r.longestStreak}'),
-                                  Text(tr('days in a row', 'dagen op rij')),
-                                ],
+                            for (final (i, (name, n)) in r.topFoods.indexed)
+                              Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  border: i == 0 ? null : Border(top: BorderSide(color: p.line)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 24,
+                                      child: Text('${i + 1}', style: numStyle(13, color: p.ink3)),
+                                    ),
+                                    Expanded(
+                                      child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: p.ink)),
+                                    ),
+                                    Text('$n×', style: numStyle(13, color: p.ink2)),
+                                  ],
+                                ),
                               ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [label('XP'), big(fmtInt(r.xp)), Text(tr('earned', 'verdiend'))],
-                              ),
-                            ),
                           ],
                         ),
                       ),
-                      if (r.topNutrient != null)
-                        card(
-                          const [Color(0xFF059669), Color(0xFF84CC16)],
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      // Alleen als het echt goed ging: 28% van je doel is geen sterkste punt
+                      if (r.topNutrient != null && r.topNutrient!.$2 >= 0.75)
+                        section(
+                          tr('Your strongest nutrient', 'Je sterkste voedingsstof'),
+                          Row(
                             children: [
-                              label(tr('YOUR SUPERPOWER', 'JOUW SUPERKRACHT')),
-                              const SizedBox(height: 4),
-                              Text(
-                                r.topNutrient!.$1.name,
-                                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: Colors.white),
-                              ),
-                              Text(
-                                tr(
-                                  'On average ${r.topNutrient!.$2 >= 1.5 ? '150%+' : fmtPct(r.topNutrient!.$2)} of your daily goal.',
-                                  'Gemiddeld ${r.topNutrient!.$2 >= 1.5 ? '150%+' : fmtPct(r.topNutrient!.$2)} van je dagdoel.',
+                              Icon(Icons.check_circle_rounded, color: p.ok, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(r.topNutrient!.$1.name, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.ink)),
+                                    note(
+                                      tr(
+                                        'On average ${r.topNutrient!.$2 >= 1.5 ? '150%+' : fmtPct(r.topNutrient!.$2)} of your daily goal.',
+                                        'Gemiddeld ${r.topNutrient!.$2 >= 1.5 ? '150%+' : fmtPct(r.topNutrient!.$2)} van je dagdoel.',
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      card(
-                        const [Color(0xFFDB2777), Color(0xFFF472B6)],
+                      section(
+                        tr('Energy', 'Energie'),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            label(tr('ENERGY', 'ENERGIE')),
-                            big(fmtInt(r.avgKcal)),
-                            Text(tr('kcal on an average logged day', 'kcal op een gemiddelde gelogde dag')),
+                            big(fmtInt(r.avgKcal), unit: tr('kcal per logged day', 'kcal per gelogde dag')),
                             if (r.favouriteBreakfast != null) ...[
-                              const SizedBox(height: 14),
-                              label(tr('FAVOURITE BREAKFAST', 'FAVORIET ONTBIJT')),
-                              Text(r.favouriteBreakfast!, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 10),
+                              Eyebrow(tr('Favourite breakfast', 'Favoriet ontbijt')),
+                              const SizedBox(height: 2),
+                              Text(r.favouriteBreakfast!, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: p.ink)),
                             ],
                           ],
                         ),
@@ -275,8 +280,8 @@ class RecapCard extends StatelessWidget {
       shadow: false,
       radius: 16,
       padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-      color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
-      borderColor: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+      color: p.brandSoft,
+      borderColor: p.brandSoft,
       onTap: () {
         s.markRecapSeen(key);
         Navigator.of(context).push(
@@ -287,7 +292,7 @@ class RecapCard extends StatelessWidget {
       },
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7C3AED)),
+          Icon(Icons.auto_awesome_rounded, color: p.brand),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
