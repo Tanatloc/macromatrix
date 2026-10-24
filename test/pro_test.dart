@@ -70,7 +70,7 @@ Pro newPro(AppState s, FakeProRemote server, {PurchaseProvider purchases = const
 );
 
 Future<void> pump(WidgetTester tester, AppState s, Pro? pro, Widget home, {Friends? friends, Account? account}) async {
-  tester.view.physicalSize = const Size(412, 2400);
+  tester.view.physicalSize = const Size(412, 3400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
