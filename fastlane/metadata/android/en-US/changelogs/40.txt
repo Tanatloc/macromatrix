@@ -1,0 +1,1 @@
+Social fixes: accepting, declining and removing friends now update the screen at once, battle invitations appear without reloading, sent battles can be cancelled, carbs in custom challenges, bigger buttons and clearer messages.
