@@ -1,0 +1,302 @@
+/// "Weekly coach" in het weekrapport: een korte samenvatting van je week met 2 à 3 tips, geschreven door een
+/// tekstmodel (/api/coach). De eerste functie in vroege toegang: supporters nu, iedereen een paar weken later.
+///
+/// De app stuurt alleen cijfers (zie lib/nutrition/coach.dart). Wat terugkomt, bewaart de app per week op dit toestel,
+/// zodat het rapport opnieuw openen niets kost; "Write again" mag binnen de dagteller.
+library;
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../i18n.dart';
+import '../../nutrition/coach.dart';
+import '../../nutrition/report.dart';
+import '../../platform/ai_request.dart';
+import '../../platform/coach_request.dart';
+import '../../state/app_state.dart';
+import '../../sync/account.dart';
+import '../../sync/features.dart';
+import '../../sync/pro.dart' show PhotoQuota, utcDayKey;
+import '../theme.dart';
+import 'ai_quota_note.dart' show aiErrorText;
+import 'feature_gate.dart';
+import 'kit.dart';
+import 'pro_widgets.dart';
+
+/// De verbinding met /api/coach. Te vervangen in tests.
+@visibleForTesting
+CoachRequest coachRequest = CoachRequest();
+
+/// Het token van je account, of null als je niet ingelogd bent. Te vervangen in tests.
+String? Function(BuildContext context) coachToken = (context) => context.read<Account?>()?.client?.auth.currentSession?.accessToken;
+
+/// Op true zodra de server zegt dat de coach er (nog) niet is (migratie niet uitgevoerd of geen model): dan verbergt
+/// het weekrapport hem tot de app opnieuw start.
+@visibleForTesting
+bool coachUnavailable = false;
+
+/// Hoeveel weken de app bewaart.
+const _keepWeeks = 8;
+
+/// Wat de coach per week schreef en de laatste stand van de teller, alleen op dit toestel (instelling '_coach').
+class CoachCache {
+  CoachCache(this.s);
+  final AppState s;
+
+  Map<String, Object?> get _raw => s.user.setting('_coach') ?? const {};
+
+  CoachResult? result(DateTime monday) => CoachResult.fromJson((_raw['weeks'] as Map?)?[dayKey(monday)]);
+
+  /// De stand van de teller, of null als die van een vorige dag is (vandaag begin je opnieuw).
+  PhotoQuota? quota(DateTime now) {
+    final q = _raw['quota'];
+    if (q is! Map || q['day'] is! String || q['limit'] is! num) return null;
+    final p = PhotoQuota(used: (q['used'] as num?)?.toInt() ?? 0, limit: (q['limit'] as num).toInt(), pro: q['pro'] == true, day: q['day'] as String);
+    return p.day == utcDayKey(now) ? p : null;
+  }
+
+  void save({DateTime? monday, CoachResult? result, PhotoQuota? quota}) {
+    final weeks = {...?(_raw['weeks'] as Map?)?.cast<String, Object?>()};
+    if (monday != null && result != null) weeks[dayKey(monday)] = result.toJson();
+    final keep = (weeks.keys.toList()..sort()).reversed.take(_keepWeeks).toSet();
+    weeks.removeWhere((k, _) => !keep.contains(k));
+    final q = quota ?? _raw['quota'];
+    s.user.setSetting('_coach', {
+      'weeks': weeks,
+      if (quota != null) 'quota': {'used': quota.used, 'limit': quota.limit, 'pro': quota.pro, 'day': quota.day} else 'quota': ?q,
+    });
+  }
+}
+
+/// Wat het paneel toont.
+enum CoachAccess {
+  /// Niet tonen: te weinig dagen, de server kent de coach niet, of de functie staat nog uit.
+  hidden,
+
+  /// Nog in vroege toegang en je bent geen supporter.
+  locked,
+
+  /// Je kan een samenvatting laten schrijven.
+  open,
+}
+
+/// Mag je de coach nu gebruiken, volgens de vlaggen en de week? [features] null (bv. in tests zonder account): de
+/// standaard, en die staat uit.
+CoachAccess coachAccess(WeeklyReport r, Features? features) {
+  if (r.days < coachMinDays || coachUnavailable || features == null || !features.available) return CoachAccess.hidden;
+  if (features.has(coachFeature)) return CoachAccess.open;
+  return features.inEarlyAccess.any((f) => f.id == coachFeature) ? CoachAccess.locked : CoachAccess.hidden;
+}
+
+class CoachPanel extends StatefulWidget {
+  const CoachPanel({super.key, required this.report});
+  final WeeklyReport report;
+
+  @override
+  State<CoachPanel> createState() => _CoachPanelState();
+}
+
+class _CoachPanelState extends State<CoachPanel> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _write(AppState s, CoachCache cache) async {
+    final token = coachToken(context);
+    if (token == null) {
+      setState(() => _error = aiErrorText('login'));
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final week = coachWeek(widget.report, diet: s.preferences, allergies: s.allergies);
+    try {
+      final r = await coachRequest.write(week, token: token);
+      cache.save(monday: widget.report.monday, result: r, quota: coachRequest.lastQuota);
+    } on AiException catch (e) {
+      if (coachRequest.lastQuota case final q?) cache.save(quota: q);
+      if (e.code == 'not_configured') coachUnavailable = true;
+      _error = _errorText(e.code);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  static String _errorText(String code) => switch (code) {
+    'quota' => tr("That was today's last one. You can write it again tomorrow.", 'Dat was de laatste voor vandaag. Morgen kan het weer.'),
+    'too_many' => tr('You asked a few times this hour. Try again later.', 'Je vroeg het dit uur al een paar keer. Probeer later opnieuw.'),
+    'network' || 'timeout' => tr(
+      "Couldn't reach the coach. Check your connection and try again.",
+      'De coach was niet bereikbaar. Kijk je verbinding na en probeer opnieuw.',
+    ),
+    'login' => aiErrorText('login'),
+    _ => tr("Couldn't write a summary this time. Try again in a moment.", 'Er kwam deze keer geen samenvatting. Probeer zo meteen opnieuw.'),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final features = featuresOf(context);
+    final access = coachAccess(widget.report, features);
+    if (access == CoachAccess.hidden) return const SizedBox.shrink();
+    final s = context.watch<AppState>();
+    final p = context.pal;
+    final cache = CoachCache(s);
+    final early = features?.isEarly(coachFeature) ?? false;
+
+    final title = Row(
+      children: [
+        Icon(Icons.chat_bubble_outline_rounded, size: 20, color: p.brand),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            tr('Weekly coach', 'Wekelijkse coach'),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+          ),
+        ),
+        if (early) const EarlyAccessChip(),
+      ],
+    );
+
+    if (access == CoachAccess.locked) {
+      final from = features!.inEarlyAccess.firstWhere((f) => f.id == coachFeature).publicFrom;
+      final date = from == null ? null : DateFormat('d MMMM', appLocale).format(from.toLocal());
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Panel(
+          key: const ValueKey('coach-locked'),
+          shadow: false,
+          onTap: () => openProScreen(context),
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              title,
+              const SizedBox(height: 4),
+              Text(
+                date == null
+                    ? tr(
+                        'A short summary of your week with a few tips. Supporters get this first.',
+                        'Een korte samenvatting van je week met een paar tips. Supporters krijgen dit eerst.',
+                      )
+                    : tr(
+                        'A short summary of your week with a few tips. Supporters get this first; for everyone from $date.',
+                        'Een korte samenvatting van je week met een paar tips. Supporters krijgen dit eerst; voor iedereen vanaf $date.',
+                      ),
+                style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final result = cache.result(widget.report.monday);
+    final quota = cache.quota(DateTime.now());
+    final spent = quota != null && !quota.allowed;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Panel(
+        key: const ValueKey('coach-panel'),
+        shadow: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            title,
+            const SizedBox(height: 6),
+            if (result == null && !_busy)
+              Text(
+                tr(
+                  'A short look back at this week from your numbers, with two or three things to try next week.',
+                  'Een korte terugblik op deze week vanuit je cijfers, met twee of drie dingen om volgende week te proberen.',
+                ),
+                style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2),
+              ),
+            if (result != null) ...[
+              Text(
+                result.summary,
+                key: const ValueKey('coach-summary'),
+                style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink),
+              ),
+              const SizedBox(height: 8),
+              for (final t in result.tips)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(Icons.restaurant_rounded, size: 15, color: p.brand),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(t, style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink)),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            if (_busy)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 10),
+                    Text(tr('Writing…', 'Even schrijven…'), style: TextStyle(fontSize: 13, color: p.ink2)),
+                  ],
+                ),
+              ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  _error!,
+                  key: const ValueKey('coach-error'),
+                  style: TextStyle(fontSize: 12.5, color: p.ink2),
+                ),
+              ),
+            if (!_busy) ...[
+              const SizedBox(height: 6),
+              if (spent && _error == null)
+                Text(
+                  key: const ValueKey('coach-spent'),
+                  tr(
+                    "You've used today's summaries. You can write it again tomorrow.",
+                    'Je samenvattingen van vandaag zijn op. Morgen kan het weer.',
+                  ),
+                  style: TextStyle(fontSize: 12.5, color: p.ink3),
+                ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: result == null
+                    ? FilledButton.tonalIcon(
+                        key: const ValueKey('coach-write'),
+                        onPressed: spent ? null : () => _write(s, cache),
+                        icon: const Icon(Icons.edit_note_rounded, size: 18),
+                        label: Text(tr('Write my summary', 'Schrijf mijn samenvatting')),
+                      )
+                    : TextButton.icon(
+                        key: const ValueKey('coach-again'),
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                        onPressed: spent ? null : () => _write(s, cache),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: Text(tr('Write again', 'Opnieuw schrijven')),
+                      ),
+              ),
+            ],
+            const SizedBox(height: 4),
+            Text(
+              tr(
+                "Written by AI from your week's numbers. It can be wrong; it isn't medical advice.",
+                'Geschreven door AI op basis van de cijfers van je week. Het kan fout zijn; het is geen medisch advies.',
+              ),
+              style: TextStyle(fontSize: 11.5, color: p.ink3),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -1055,8 +1055,10 @@ class AppState extends ChangeNotifier {
       Map<String, double> avg,
       Map<String, double> goals,
       Set<String> overUpper,
+      Map<String, double> upperShare,
       Set<String> rarelyReached,
       List<(NutrientTotals, Map<String, Target>)> full,
+      List<String> fullDays,
       double kcal,
       double kcalGoal,
       HealthCheck? health,
@@ -1068,6 +1070,7 @@ class AppState extends ChangeNotifier {
       final sums = <String, double>{}, goalSums = <String, double>{}, valueSums = <String, double>{}, upperSums = <String, double>{};
       final reached = <String, int>{};
       final withTargets = <(NutrientTotals, Map<String, Target>)>[];
+      final fullDays = <String>[];
       var kcal = 0.0, kcalGoal = 0.0, partial = 0;
       for (final e in daily.entries) {
         final t = targetsForDate(DateTime.parse(e.key));
@@ -1076,10 +1079,12 @@ class AppState extends ChangeNotifier {
           continue;
         }
         withTargets.add((e.value, t));
+        fullDays.add(e.key);
         scores.add(completenessScore(e.value.values, t));
         kcal += e.value['energy'];
         kcalGoal += t['energy']?.goal ?? 0;
-        for (final k in [...stripKeys, 'energy', 'protein']) {
+        // Ook koolhydraten, vet en vezels: voor de wekelijkse coach (macro's tegenover je doel)
+        for (final k in [...stripKeys, 'energy', 'protein', 'carbs', 'fat', 'fiber']) {
           final g = t[k]?.goal;
           if (g != null && g > 0) {
             sums[k] = (sums[k] ?? 0) + (e.value.values[k] ?? 0) / g;
@@ -1105,12 +1110,17 @@ class AppState extends ChangeNotifier {
           for (final e in valueSums.entries)
             if (e.value > upperSums[e.key]!) e.key,
         },
+        upperShare: {
+          for (final e in valueSums.entries)
+            if (upperSums[e.key]! > 0) e.key: e.value / upperSums[e.key]!,
+        },
         // Hoog gemiddelde door één uitschieter, maar op minder dan de helft van de dagen op doel: ook niet "sterkste"
         rarelyReached: {
           for (final k in sums.keys)
             if ((reached[k] ?? 0) * 2 < n) k,
         },
         full: withTargets,
+        fullDays: fullDays,
         kcal: kcal / n,
         kcalGoal: kcalGoal / n,
         health: healthCheck(
@@ -1238,7 +1248,35 @@ class AppState extends ChangeNotifier {
       weightTrend: trend,
       plan: _profile.goal,
       sugar: sugar,
+      upperShare: now.upperShare,
+      topFoods: _topFoodsByEnergy(now.fullDays),
     );
+  }
+
+  /// De producten met de meeste energie over [days] (jjjj-mm-dd), hoogstens [take], als gewone namen: zonder merk, en
+  /// een eigen product of recept zonder zijn naam (die kan iets persoonlijks zeggen). Supplementen tellen niet mee.
+  List<String> _topFoodsByEnergy(List<String> days, {int take = 5}) {
+    if (days.isEmpty) return const [];
+    final set = days.toSet();
+    final sorted = [...days]..sort();
+    final kcal = <String, double>{}, names = <String, String>{};
+    for (final e in user.entriesBetween(sorted.first, sorted.last)) {
+      if (!set.contains(e.day) || e.foodRef.startsWith('supp:')) continue;
+      final String name;
+      if (e.foodRef.startsWith('recipe:')) {
+        name = tr('home-made recipe', 'eigen recept');
+      } else if (e.foodRef.startsWith('custom:')) {
+        name = tr('own product', 'eigen product');
+      } else {
+        name = e.name.trim();
+      }
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      names.putIfAbsent(key, () => name);
+      kcal[key] = (kcal[key] ?? 0) + (entryValues(e)['energy'] ?? 0);
+    }
+    final top = kcal.entries.where((e) => e.value > 0).toList()..sort((a, b) => b.value.compareTo(a.value));
+    return [for (final e in top.take(take)) names[e.key]!];
   }
 
   /// Snel loggen: een stuk van een zin omzetten naar een product en een hoeveelheid.
