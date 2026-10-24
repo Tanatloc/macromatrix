@@ -13,6 +13,7 @@ import 'package:web/web.dart' as web;
 
 import '../data/food_db.dart';
 import '../data/user_db.dart';
+import '../i18n.dart';
 
 const isWeb = true;
 
@@ -92,4 +93,18 @@ Future<String?> saveTextFile(String name, String content, {String subject = '', 
   a.remove();
   web.URL.revokeObjectURL(url);
   return null;
+}
+
+/// Afbeelding (PNG) downloaden via de browser.
+Future<String?> saveImageFile(String name, Uint8List bytes, {String text = ''}) async {
+  final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: 'image/png'));
+  final url = web.URL.createObjectURL(blob);
+  final a = web.HTMLAnchorElement()
+    ..href = url
+    ..download = name;
+  web.document.body?.append(a);
+  a.click();
+  a.remove();
+  web.URL.revokeObjectURL(url);
+  return tr('Image downloaded', 'Afbeelding gedownload');
 }

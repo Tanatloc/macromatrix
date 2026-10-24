@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../nutrition/badges.dart';
 import '../nutrition/levels.dart';
 import '../platform/health_sync.dart';
 import '../platform/home_widget_sync.dart';
@@ -26,6 +27,8 @@ import 'theme.dart';
 import 'widgets/add_menu.dart';
 import 'widgets/tap_guard.dart';
 import 'widgets/avatar.dart';
+import 'widgets/badges_view.dart';
+import 'widgets/share_actions.dart';
 import 'widgets/kit.dart';
 import 'widgets/logo.dart';
 import '../i18n.dart';
@@ -49,6 +52,7 @@ class _ShellState extends State<Shell> {
     super.initState();
     _state.addListener(_checkLevel);
     _state.addListener(_checkStreak);
+    _state.addListener(_scheduleBadgeCheck);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLevel();
       HealthSync(_state).sync();
@@ -81,6 +85,8 @@ class _ShellState extends State<Shell> {
   void dispose() {
     _state.removeListener(_checkLevel);
     _state.removeListener(_checkStreak);
+    _state.removeListener(_scheduleBadgeCheck);
+    _badgeTimer?.cancel();
     _lifecycle?.dispose();
     _state.removeListener(_updateWidget);
     _widgetClicks?.cancel();
@@ -115,6 +121,55 @@ class _ShellState extends State<Shell> {
             const SizedBox(width: 12),
             Expanded(child: Text(tr('$hit days in a row! Keep that fire burning.', '$hit dagen op rij! Houd dat vuur brandend.'))),
           ],
+        ),
+        action: SnackBarAction(label: tr('Share', 'Delen'), onPressed: () => shareStreak(context, days: hit)),
+      ),
+    );
+  }
+
+  Timer? _badgeTimer;
+
+  /// Badges opnieuw nakijken, hoogstens om de seconde (het rekenen gaat over al je dagen).
+  void _scheduleBadgeCheck() {
+    _badgeTimer?.cancel();
+    _badgeTimer = Timer(const Duration(seconds: 1), _checkBadges);
+  }
+
+  /// Nieuw badgeniveau verdiend? Dan een melding met "Delen". Reeks en level hebben hun eigen melding. Het laatst
+  /// geziene niveau per badge staat lokaal; de eerste keer wordt alleen onthouden, zonder melding.
+  void _checkBadges() {
+    if (!mounted) return;
+    final Map<String, int> values;
+    try {
+      values = context.read<Friends>().badgeValuesNow;
+    } catch (_) {
+      return;
+    }
+    final tiers = badgeTiers(values);
+    final saved = _state.user.setting('_badges_seen');
+    if (saved != null && tiers.entries.every((e) => (saved[e.key] as num?)?.toInt() == e.value)) return;
+    _state.user.setSetting('_badges_seen', tiers);
+    if (saved == null) return;
+    final up = [
+      for (final c in badgeCategories)
+        if (c.id != 'streak' && c.id != 'level' && (tiers[c.id] ?? 0) > ((saved[c.id] as num?)?.toInt() ?? 0)) c,
+    ];
+    if (up.isEmpty) return;
+    final c = up.first;
+    final tier = tiers[c.id]!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Row(
+          children: [
+            BadgeIcon(category: c.id, tier: tier, size: 34),
+            const SizedBox(width: 12),
+            Expanded(child: Text(tr('New badge: ${c.name} (${tierName(tier)})', 'Nieuwe badge: ${c.name} (${tierName(tier)})'))),
+          ],
+        ),
+        action: SnackBarAction(
+          label: tr('Share', 'Delen'),
+          onPressed: () => shareBadge(context, category: c.id, tier: tier, value: values[c.id] ?? 0),
         ),
       ),
     );

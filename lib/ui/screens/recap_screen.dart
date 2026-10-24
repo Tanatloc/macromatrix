@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +8,7 @@ import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/kit.dart';
+import '../widgets/share_actions.dart';
 
 /// Maand- of jaaroverzicht, in dezelfde rustige stijl als het weekrapport.
 class RecapScreen extends StatelessWidget {
@@ -43,16 +43,9 @@ class RecapScreen extends StatelessWidget {
         actions: [
           if (r != null)
             IconButton(
-              tooltip: tr('Copy summary', 'Samenvatting kopiëren'),
+              tooltip: tr('Share', 'Delen'),
               icon: const Icon(Icons.ios_share_rounded),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: shareText(r)));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(tr('Summary copied: paste it anywhere to share', 'Samenvatting gekopieerd: plak ze waar je wilt om te delen')),
-                  ),
-                );
-              },
+              onPressed: () => shareRecap(context, r, copyText: shareText(r)),
             ),
         ],
       ),
@@ -95,6 +88,15 @@ class RecapScreen extends StatelessWidget {
                       if (r.topFoods.isNotEmpty) ...[const SizedBox(height: 12), _TopFoods(r: r)],
                       const SizedBox(height: 12),
                       _Highlights(r: r),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: FilledButton.tonalIcon(
+                          key: const Key('recap-share'),
+                          onPressed: () => shareRecap(context, r, copyText: shareText(r)),
+                          icon: const Icon(Icons.ios_share_rounded, size: 18),
+                          label: Text(tr('Share as image', 'Delen als afbeelding')),
+                        ),
+                      ),
                     ],
                   ),
           ),

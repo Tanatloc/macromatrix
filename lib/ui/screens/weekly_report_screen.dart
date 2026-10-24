@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +13,7 @@ import 'profile_screen.dart';
 import '../widgets/avatar.dart';
 import '../widgets/health_view.dart';
 import '../widgets/kit.dart';
+import '../widgets/share_actions.dart';
 
 /// Weekrapport: je gemiddelde Voedingsscore tegenover vorige week, een gezondheidsoordeel, beste en zwakste stoffen,
 /// battles en een tip.
@@ -219,16 +219,9 @@ class WeeklyReportScreen extends StatelessWidget {
         actions: [
           if (r != null)
             IconButton(
-              tooltip: tr('Copy summary', 'Samenvatting kopiëren'),
+              tooltip: tr('Share', 'Delen'),
               icon: const Icon(Icons.ios_share_rounded),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: shareText(r, s.streak.current)));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(tr('Summary copied: paste it anywhere to share', 'Samenvatting gekopieerd: plak ze waar je wilt om te delen')),
-                  ),
-                );
-              },
+              onPressed: () => shareWeek(context, r, copyText: shareText(r, s.streak.current)),
             ),
         ],
       ),
@@ -442,6 +435,15 @@ class WeeklyReportScreen extends StatelessWidget {
                             ),
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        Center(
+                          child: FilledButton.tonalIcon(
+                            key: const Key('week-share'),
+                            onPressed: () => shareWeek(context, r, copyText: shareText(r, s.streak.current)),
+                            icon: const Icon(Icons.ios_share_rounded, size: 18),
+                            label: Text(tr('Share as image', 'Delen als afbeelding')),
+                          ),
+                        ),
                       ],
                     ),
             ),

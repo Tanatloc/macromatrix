@@ -14,6 +14,7 @@ import '../widgets/bio_tips_view.dart';
 import '../widgets/info_tip.dart';
 import '../widgets/kit.dart';
 import '../widgets/nutrient_row.dart';
+import '../widgets/share_actions.dart';
 import 'nutrient_detail_screen.dart';
 import '../../i18n.dart';
 
@@ -282,9 +283,23 @@ class KeyNutrients extends StatelessWidget {
           if (low.isEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Text(
-                tr('You reach all your vitamins and minerals today.', 'Je haalt vandaag al je vitaminen en mineralen.'),
-                style: TextStyle(fontSize: 13.5, color: p.ink2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      tr('You reach all your vitamins and minerals today.', 'Je haalt vandaag al je vitaminen en mineralen.'),
+                      style: TextStyle(fontSize: 13.5, color: p.ink2),
+                    ),
+                  ),
+                  // Doel gehaald: als deelkaart (alleen vandaag, en als er echt iets gelogd is)
+                  if (isToday && (values['energy'] ?? 0) > 0 && Provider.of<AppState?>(context, listen: false) != null)
+                    TextButton.icon(
+                      key: const Key('micros-share'),
+                      onPressed: () => shareAllMicros(context, values: values, targets: targets),
+                      icon: const Icon(Icons.ios_share_rounded, size: 18),
+                      label: Text(tr('Share', 'Delen')),
+                    ),
+                ],
               ),
             )
           else
