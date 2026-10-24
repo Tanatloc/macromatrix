@@ -29,6 +29,7 @@ import '../../nutrition/allergens.dart';
 import '../widgets/allergen_picker.dart';
 import '../widgets/bio_tips_view.dart';
 import '../widgets/exercise_view.dart';
+import '../widgets/challenges_view.dart';
 import '../widgets/gap_plan_view.dart';
 import '../widgets/nutrient_row.dart';
 import '../../i18n.dart';
@@ -92,6 +93,7 @@ class DiaryScreen extends StatelessWidget {
           if (empty && s.isToday) ...[const _StartCard(), gap],
           if (s.note.trim().isNotEmpty) ...[const _NoteCard(), gap],
           if (s.planFor(s.day).isNotEmpty) ...[const _PlanCard(), gap],
+          if (s.isToday) const ChallengeTodayStrip(),
           if (s.isToday) const _UsualStrip(),
           for (final meal in Meal.values) ...[_MealCard(key: ValueKey('${s.day}-${meal.name}'), meal: meal), const SizedBox(height: 8)],
           const SizedBox(height: 4),
@@ -542,7 +544,7 @@ class _DesktopDiary extends StatelessWidget {
             if (s.note.trim().isNotEmpty) ...[const _NoteCard(), gap],
             if (s.planFor(s.day).isNotEmpty) ...[const _PlanCard(), gap],
             SectionHeader(tr('Meals', 'Maaltijden'), trailing: empty ? null : '${fmtInt(s.totals['energy'])} kcal'),
-            if (s.isToday) ...[const _UsualStrip(), const SizedBox(height: 8)],
+            if (s.isToday) ...[const ChallengeTodayStrip(), const _UsualStrip(), const SizedBox(height: 8)],
             for (final meal in Meal.values) ...[_MealCard(key: ValueKey('${s.day}-${meal.name}'), meal: meal), const SizedBox(height: 8)],
             const SizedBox(height: 8),
             const _SupplementCard(),

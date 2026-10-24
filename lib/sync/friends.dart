@@ -12,6 +12,7 @@ import 'package:supabase/supabase.dart';
 import '../nutrition/badges.dart';
 import '../state/app_state.dart';
 import 'account.dart';
+import 'challenges.dart';
 import '../i18n.dart';
 import '../platform/battle_notify.dart';
 
@@ -129,6 +130,9 @@ class Friends extends ChangeNotifier {
 
   final AppState state;
   final Account account;
+
+  /// Uitdagingen (alleen of met vrienden); ververst samen met de vriendenlijst.
+  late final Challenges challenges = Challenges(state, account);
 
   /// Ingeschakeld zodra je de vriendenfunctie een keer geopend hebt (bewaard bij je account).
   bool get enabled => state.user.setting('friends')?['enabled'] == true;
@@ -339,6 +343,8 @@ class Friends extends ChangeNotifier {
       // Badges kunnen veranderd zijn door afgelopen battles
       await _pushExtra();
     });
+    // Uitdagingen vangen hun eigen fouten op (en een server zonder de migratie)
+    await challenges.load();
     loading = false;
     notifyListeners();
   }
@@ -409,6 +415,7 @@ class Friends extends ChangeNotifier {
   void dispose() {
     _debounce?.cancel();
     _background?.cancel();
+    challenges.dispose();
     state.removeListener(_changed);
     account.removeListener(_changed);
     super.dispose();
