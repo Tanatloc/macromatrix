@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../i18n.dart';
+import '../theme.dart';
 
 /// Grafiek over een periode: één waarde per dag (staafjes) of losse metingen (lijn), met optioneel een doel
 /// en een bovengrens als horizontale lijn.
@@ -18,6 +19,8 @@ class TimeSeriesChart extends StatelessWidget {
     this.decimals = 0,
     this.height = 200,
     this.second,
+    this.band,
+    this.trend,
   });
 
   final List<(DateTime, double)> points;
@@ -33,6 +36,12 @@ class TimeSeriesChart extends StatelessWidget {
   final int decimals;
   final double height;
 
+  /// Streefzone (van, tot) als groene band, bv. 4–7 mmol/L bij bloedsuiker (N79).
+  final (double, double)? band;
+
+  /// Afgevlakte trend (bv. trendgewicht): een lijn zonder punten; de metingen zelf staan er dan als losse punten bij (N44).
+  final List<(DateTime, double)>? trend;
+
   double _x(DateTime d) => d.difference(from).inHours / 24;
 
   @override
@@ -40,7 +49,15 @@ class TimeSeriesChart extends StatelessWidget {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final days = to.difference(from).inDays.clamp(1, 10000);
-    final values = [for (final p in points) p.$2, ...?second?.map((p) => p.$2), ?goal, ?upper];
+    final values = [
+      for (final p in points) p.$2,
+      ...?second?.map((p) => p.$2),
+      ...?trend?.map((p) => p.$2),
+      ?goal,
+      ?upper,
+      ?band?.$1,
+      ?band?.$2,
+    ];
     if (points.isEmpty) {
       return SizedBox(
         height: height,
@@ -165,14 +182,33 @@ class TimeSeriesChart extends StatelessWidget {
               titlesData: titles,
               borderData: FlBorderData(show: false),
               extraLinesData: lines,
+              rangeAnnotations: band == null
+                  ? const RangeAnnotations()
+                  : RangeAnnotations(
+                      horizontalRangeAnnotations: [HorizontalRangeAnnotation(y1: band!.$1, y2: band!.$2, color: context.pal.okSoft)],
+                    ),
               lineBarsData: [
+                if (trend != null)
+                  LineChartBarData(
+                    spots: [for (final (d, v) in trend!) FlSpot(_x(d), v)],
+                    color: color,
+                    barWidth: 2.5,
+                    isCurved: false,
+                    dotData: const FlDotData(show: false),
+                  ),
                 for (final (series, c) in [(points, color), if (second != null) (second!, color.withValues(alpha: 0.55))])
                   LineChartBarData(
                     spots: [for (final (d, v) in series) FlSpot(_x(d), v)],
-                    color: c,
+                    // Met een trendlijn: de metingen als losse, lichte punten zonder lijn ertussen
+                    color: trend != null ? Colors.transparent : c,
                     barWidth: 2.5,
                     isCurved: false,
-                    dotData: FlDotData(show: series.length < 40),
+                    dotData: trend != null
+                        ? FlDotData(
+                            getDotPainter: (_, _, _, _) =>
+                                FlDotCirclePainter(radius: 3, color: color.withValues(alpha: 0.45), strokeWidth: 0),
+                          )
+                        : FlDotData(show: series.length < 40),
                   ),
               ],
             ),

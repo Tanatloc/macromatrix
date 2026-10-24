@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/models.dart';
+import '../../nutrition/insights.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/charts.dart';
@@ -51,7 +52,8 @@ class BodyScreen extends StatefulWidget {
 
 class _BodyScreenState extends State<BodyScreen> {
   String _chartType = 'weight';
-  int _days = 90;
+  // Standaard 30 dagen: bij 90 stonden alle punten van een nieuwe gebruiker in de laatste week (N44)
+  int _days = 30;
 
   static String fmt(double v, int decimals) => v.toStringAsFixed(decimals).dec;
 
@@ -101,7 +103,10 @@ class _BodyScreenState extends State<BodyScreen> {
     final types2 = existing == null || types.any((t) => t.key == existing.type)
         ? types
         : [...types, BiometricType.custom(existing.type.replaceFirst('custom:', ''), '')];
-    var type = existing == null ? types2.first : types2.firstWhere((t) => t.key == existing.type);
+    // Een nieuwe meting staat op de soort van de open grafiek: vanuit Bloedsuiker typte je anders 145 als kg (N78)
+    var type = existing == null
+        ? types2.firstWhere((t) => t.key == _chartType, orElse: () => types2.first)
+        : types2.firstWhere((t) => t.key == existing.type);
     // Tot 3 decimalen (overbodige nullen vallen weg), zodat bewaren zonder te wijzigen niets afrondt
     String text(double? v) => v == null ? '' : fmtNum(v, 3);
     // Bloedsuiker: eenheid van je meter en het meetmoment
@@ -271,6 +276,37 @@ class _BodyScreenState extends State<BodyScreen> {
       );
       if (!ok2) return;
     }
+    // Al een gewicht op deze dag: vragen of het nieuwe het vervangt of erbij komt, met het uur van het vorige (N78)
+    if (ok == true && value != null && existing == null && type.key == 'weight') {
+      final same = s.biometrics.where((b) => b.type == 'weight').lastOrNull;
+      if (same != null && mounted) {
+        final at = same.time == null ? '' : tr(' at ${same.time}', ' om ${same.time}');
+        final replace = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(tr('Replace or add?', 'Vervangen of erbij?')),
+            content: Text(
+              tr(
+                'You already weighed ${fmt(same.value, 1)} kg on this day$at. Your trend uses the last weight of the day.',
+                'Je woog op deze dag al ${fmt(same.value, 1)} kg$at. Je trend rekent met het laatste gewicht van de dag.',
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Keep both', 'Allebei houden'))),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Replace', 'Vervangen'))),
+            ],
+          ),
+        );
+        if (replace == null || !mounted) return;
+        if (replace) {
+          s.user.updateBiometric(same.id, value: value);
+          s.restoreBiometric(same);
+          setState(() => _chartType = type.key);
+          return;
+        }
+      }
+    }
     if (ok == true && value != null) {
       final value2 = type.secondLabel == null ? null : parse(v2);
       if (existing == null) {
@@ -353,10 +389,12 @@ class _BodyScreenState extends State<BodyScreen> {
     Widget measurementRow(Biometric b) {
       final (f, unit, dec) = shownAs(b.type);
       final moment = b.type == 'glucose' ? s.user.biometricMoment(b.id) : null;
+      // Meetmoment en uur, zodat twee metingen van dezelfde soort op één dag uit elkaar te houden zijn (N78)
+      final sub = [?(moment == null ? null : glucoseMomentLabel(moment)), ?b.time].join(' · ');
       return ListTile(
         dense: true,
         title: Text(byKey[b.type]?.label ?? b.type.replaceFirst('custom:', '')),
-        subtitle: moment == null ? null : Text(glucoseMomentLabel(moment)),
+        subtitle: sub.isEmpty ? null : Text(sub),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -373,8 +411,32 @@ class _BodyScreenState extends State<BodyScreen> {
     }
 
     final to = DateTime.now();
-    final from = DateTime(to.year, to.month, to.day).subtract(Duration(days: _days));
-    final history = s.user.biometricHistory(chartType.key, from: dayKey(from));
+    final today = DateTime(to.year, to.month, to.day);
+    final periodFrom = today.subtract(Duration(days: _days));
+    final history = s.user.biometricHistory(chartType.key, from: dayKey(periodFrom));
+    // Metingen pas sinds kort: de as begint een dag voor de eerste (en toont minstens een week), zodat de punten
+    // niet tegen de rechterrand gedrukt staan (N79, N44)
+    final first = history.isEmpty ? null : parseDay(history.first.day);
+    var from = periodFrom;
+    if (first != null && first.difference(periodFrom).inDays > 2) from = first.subtract(const Duration(days: 1));
+    if (from.isAfter(today.subtract(const Duration(days: 7)))) from = today.subtract(const Duration(days: 7));
+    final zoomed = first != null && from != periodFrom;
+    // Gewicht: dezelfde trendlijn als op Dashboard, ingelopen vanaf een maand eerder, tot je laatste weging (N44)
+    List<(DateTime, double)>? trend;
+    if (chartType.key == 'weight' && history.length >= 2) {
+      final warm = from.subtract(const Duration(days: 30));
+      final byDay = {for (final b in s.user.biometricHistory('weight', from: dayKey(warm))) b.day: b.value};
+      final days = [
+        for (var d = warm; d.compareTo(parseDay(history.last.day)) <= 0; d = DateTime(d.year, d.month, d.day + 1)) dayKey(d),
+      ];
+      final t = weightTrend(byDay, days);
+      trend = [
+        for (final (i, d) in days.indexed)
+          if (t[i] != null && !parseDay(d).isBefore(from)) (parseDay(d), t[i]!),
+      ];
+    }
+    // Bloedsuiker: groene streefzone van 4–7 mmol/L (72–126 mg/dL), een gangbaar doel voor de maaltijd (N79)
+    final band = chartType.key == 'glucose' ? (4 * chartF, 7 * chartF) : null;
 
     Widget card(String title, List<Widget> children, {Widget? trailing}) => Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -500,14 +562,49 @@ class _BodyScreenState extends State<BodyScreen> {
                       to: to,
                       color: pal.brand,
                       decimals: chartDec,
+                      band: band,
+                      trend: trend,
                     ),
                   ),
+                  if (trend != null || band != null || zoomed)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
+                      child: Wrap(
+                        spacing: 14,
+                        runSpacing: 6,
+                        children: [
+                          if (trend != null) ...[
+                            LegendItem(
+                              swatch: LegendItem.box(pal.brand.withValues(alpha: 0.45), w: 7, h: 7, radius: 4),
+                              label: tr('weigh-ins', 'wegingen'),
+                            ),
+                            LegendItem(swatch: LegendItem.box(pal.brand, w: 14, h: 2), label: tr('trend weight', 'trendgewicht')),
+                          ],
+                          if (band != null)
+                            LegendItem(
+                              swatch: LegendItem.box(pal.okSoft, w: 14, h: 8, border: pal.okFill),
+                              label: mgdl
+                                  ? tr('target 72–126 mg/dL before meals', 'streefzone 72–126 mg/dL voor de maaltijd')
+                                  : tr('target 4–7 mmol/L before meals', 'streefzone 4–7 mmol/L voor de maaltijd'),
+                            ),
+                          if (zoomed)
+                            Text(
+                              tr(
+                                'Measurements since ${DateFormat('d MMM', appLocale).format(first)}',
+                                'Metingen sinds ${DateFormat('d MMM', appLocale).format(first)}',
+                              ),
+                              style: TextStyle(fontSize: 11.5, color: pal.ink3),
+                            ),
+                        ],
+                      ),
+                    ),
                 ],
+                // Grote periodeknoppen (minstens 44 px hoog) met duidelijke letters (N94)
                 trailing: SizedBox(
-                  width: 170,
+                  width: 196,
                   child: Segmented<int>(
-                    height: 24,
-                    fontSize: 11.5,
+                    height: 40,
+                    fontSize: 13.5,
                     items: [(30, '30 d'), (90, '90 d'), (365, tr('1 year', '1 jaar'))],
                     selected: _days,
                     onChanged: (d) => setState(() => _days = d),

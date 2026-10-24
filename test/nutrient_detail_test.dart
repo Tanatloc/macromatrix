@@ -98,10 +98,13 @@ void main() {
     expect(find.text('Laatste 30 dagen'), findsOneWidget);
     expect(find.text('Gemiddeld ${formatAmount(mean, n)} ${n.unit}'), findsOneWidget);
 
-    // Gisteren is de voorlaatste van 30 staven; rechts staat een kolom met waarden
+    // Gisteren is de voorlaatste staaf; rechts staat een kolom met waarden. Met pas twee dagen gegevens begint de as
+    // een week terug in plaats van 30 dagen (N95)
     final chart = tester.getRect(find.byType(DayBarsChart));
-    final step = (chart.width - DayBarsChart.axisGutter) / 30;
-    await tester.tapAt(Offset(chart.left + step * 28.5, chart.bottom - 4));
+    final bars = tester.widget<DayBarsChart>(find.byType(DayBarsChart)).values.length;
+    expect(bars, 7);
+    final step = (chart.width - DayBarsChart.axisGutter) / bars;
+    await tester.tapAt(Offset(chart.left + step * (bars - 1.5), chart.bottom - 4));
     await tester.pump();
     expect(find.text(DateFormat('E d MMM', appLocale).format(yesterday)), findsOneWidget);
     expect(find.text('${formatAmount(dayValue, n)} ${n.unit}'), findsWidgets);
