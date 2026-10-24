@@ -34,6 +34,9 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
   late final Map<String, TextEditingController> _values = {
     for (final n in nutrients.where((n) => !n.derived)) n.key: TextEditingController(text: _fmt(widget.existing?.per100g[n.key])),
   };
+
+  /// Vrije of toegevoegde suikers, als je het weet (staat soms op het etiket). Leeg = schatten uit de naam.
+  late final _freeSugars = TextEditingController(text: _fmt(widget.existing?.per100g['free_sugars']));
   bool _showAll = false;
 
   static String _fmt(double? v) => v == null ? '' : (v == v.roundToDouble() ? '${v.round()}' : double.parse(v.toStringAsFixed(3)).toString().dec);
@@ -48,7 +51,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _brand, _barcode, _portionGrams, _salt, ..._values.values]) {
+    for (final c in [_name, _brand, _barcode, _portionGrams, _salt, _freeSugars, ..._values.values]) {
       c.dispose();
     }
     super.dispose();
@@ -83,6 +86,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
     final per100g = <String, double>{for (final e in _values.entries) e.key: ?_parse(e.value.text)};
     final salt = _parse(_salt.text);
     if (salt != null) per100g['sodium'] = salt / 2.5 * 1000;
+    if (_parse(_freeSugars.text) case final free?) per100g['free_sugars'] = free;
     final portion = _parse(_portionGrams.text);
     final food = Food(
       ref: widget.existing?.ref ?? UserDb.newCustomRef(),
@@ -116,6 +120,30 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
       if (v == null) return tr('Not a valid number', 'Geen geldig getal');
       if (v < 0) return tr('Cannot be negative', 'Kan niet negatief zijn');
       if (v > _maxFor(n.key)) return tr('At most ${fmtNum(_maxFor(n.key))} per 100 g', 'Hoogstens ${fmtNum(_maxFor(n.key))} per 100 g');
+      return null;
+    },
+  );
+
+  /// Onder de suikers: het deel dat vrij of toegevoegd is. Ingevuld gaat het voor op de schatting uit de naam.
+  Widget _freeSugarsField() => TextFormField(
+    controller: _freeSugars,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    inputFormatters: decimalInput,
+    onTap: selectAllOnTap(_freeSugars),
+    decoration: InputDecoration(
+      labelText: tr('of which free/added sugars (optional)', 'waarvan vrije/toegevoegde suikers (optioneel)'),
+      helperText: tr('Leave empty and we estimate it from the name.', 'Laat leeg en we schatten het uit de naam.'),
+      suffixText: 'g',
+      isDense: true,
+    ),
+    validator: (t) {
+      if (t == null || t.trim().isEmpty) return null;
+      final v = _parse(t);
+      if (v == null) return tr('Not a valid number', 'Geen geldig getal');
+      if (v < 0) return tr('Cannot be negative', 'Kan niet negatief zijn');
+      final sugars = _parse(_values['sugars']!.text);
+      if (sugars != null && v > sugars + 1e-9) return tr('At most the sugars (${fmtNum(sugars)} g)', 'Hoogstens de suikers (${fmtNum(sugars)} g)');
+      if (v > 100) return tr('At most 100 per 100 g', 'Hoogstens 100 per 100 g');
       return null;
     },
   );
@@ -201,7 +229,10 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                 ),
                 Text(tr('As on the label.', 'Zoals op het etiket.'), style: theme.textTheme.bodySmall),
                 const SizedBox(height: 12),
-                for (final k in _labelKeys) Padding(padding: const EdgeInsets.only(bottom: 10), child: _field(nutrientByKey[k]!)),
+                for (final k in _labelKeys) ...[
+                  Padding(padding: const EdgeInsets.only(bottom: 10), child: _field(nutrientByKey[k]!)),
+                  if (k == 'sugars') Padding(padding: const EdgeInsets.only(bottom: 10), child: _freeSugarsField()),
+                ],
                 TextFormField(
                   controller: _salt,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),

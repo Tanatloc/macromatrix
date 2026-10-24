@@ -3,11 +3,14 @@
 library;
 
 import '../i18n.dart';
+import '../nutrition/free_sugars.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/values.dart';
 import 'user_db.dart';
 
-String diaryCsv(UserDb db, {String from = '0000-01-01', String to = '9999-12-31'}) {
+/// [values] geeft de waarden van één regel zoals ze in de totalen tellen (in de app `AppState.entryValues`, met de
+/// vrije suikers uit het label of de ingrediënten). Zonder [values] schatten we de vrije suikers alleen uit de naam.
+String diaryCsv(UserDb db, {String from = '0000-01-01', String to = '9999-12-31', NutrientMap Function(DiaryEntry e)? values}) {
   final sep = isNl ? ';' : ',';
   String cell(Object? v) {
     if (v == null) return '';
@@ -25,7 +28,7 @@ String diaryCsv(UserDb db, {String from = '0000-01-01', String to = '9999-12-31'
   ];
   final lines = [header.map(cell).join(sep)];
   for (final e in db.entriesBetween(from, to)) {
-    final a = withDerived(e.amounts);
+    final a = values?.call(e) ?? withDerived(scale(withFreeSugars(e.per100g, name: e.name), e.grams));
     lines.add([e.day, e.time, e.meal.label, e.name, e.brand, e.grams, for (final n in nutrients) a[n.key]].map(cell).join(sep));
   }
   return '${lines.join('\n')}\n';

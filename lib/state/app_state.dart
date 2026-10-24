@@ -1996,8 +1996,46 @@ class AppState extends ChangeNotifier {
     return proxy != null && FoodDb.isDbRef(proxy) ? foods.byRef(proxy)?.label : null;
   });
 
+  /// Per 100 g met de vrije suikers erbij. Bij een recept komen ze uit de ingrediënten (een appel in een cake telt
+  /// niet mee, de suiker en de honing wel); anders uit het label, of uit de naam. Een zelf ingevulde waarde bij een
+  /// eigen product gaat altijd voor.
+  NutrientMap _freeSugars(NutrientMap per100g, String ref, String name, [int depth = 0]) {
+    if (!per100g.containsKey('free_sugars') && ref.startsWith('recipe:')) {
+      final sugars = per100g['sugars'];
+      if (sugars != null && sugars <= 0) return {...per100g, 'free_sugars': 0};
+      final share = sugars == null ? null : _recipeShare(ref, per100g, depth);
+      if (share != null) return {...per100g, 'free_sugars': sugars! * share};
+    }
+    return withFreeSugars(per100g, label: _labelFor(ref), name: name);
+  }
+
+  /// Welk deel (0–1) van de suikers in een recept vrij is, uit de ingrediënten met elk hun eigen label. Een deel en
+  /// geen gram per 100 g: zo klopt het ook met een gewicht na bereiding en bij een oudere momentopname in het dagboek.
+  /// Bewaard per recept en suikergehalte; een gewijzigd recept geeft (bijna altijd) andere waarden en dus een nieuwe sleutel.
+  final _recipeShareCache = <String, double?>{};
+
+  double? _recipeShare(String ref, NutrientMap per100g, int depth) {
+    if (depth > 3) return null; // recept in recept in recept: genoeg
+    return _recipeShareCache.putIfAbsent('$ref|${per100g['sugars']}|${per100g['energy']}', () {
+      final recipe = user.recipe(ref);
+      if (recipe == null) return null;
+      var sugars = 0.0, free = 0.0;
+      for (final i in recipe.ingredients) {
+        final s = (i.per100g['sugars'] ?? 0) * i.grams / 100;
+        if (s <= 0) continue;
+        sugars += s;
+        // Zonder schatting (kan niet bij suikers > 0) telt het ingrediënt volledig mee
+        free += (_freeSugars(i.per100g, i.foodRef, i.name, depth + 1)['free_sugars'] ?? i.per100g['sugars']!) * i.grams / 100;
+      }
+      return sugars <= 0 ? null : (free / sugars).clamp(0.0, 1.0);
+    });
+  }
+
   NutrientMap _withSugars(NutrientMap per100g, String ref, String name, double grams) =>
-      withDerived(scale(withFreeSugars(per100g, label: _labelFor(ref), name: name), grams));
+      withDerived(scale(_freeSugars(per100g, ref, name), grams));
+
+  /// Voedingswaarden per 100 g van een product zoals ze in de totalen tellen: met afgeleide waarden en vrije suikers.
+  NutrientMap per100gWithSugars(Food f) => withDerived(_freeSugars(f.per100g, f.ref, f.name));
 
   /// Voedingswaarden van een dagboekregel zoals ze in de totalen tellen: met afgeleide waarden en vrije suikers.
   NutrientMap entryValues(DiaryEntry e) => _withSugars(e.per100g, e.foodRef, e.name, e.grams);
