@@ -330,9 +330,10 @@ class LabsScreen extends StatelessWidget {
 }
 
 class _LabRow extends StatelessWidget {
-  const _LabRow(this.r, {this.onTap, this.showDate = true});
+  const _LabRow(this.r, {this.onTap, this.onDelete, this.showDate = true});
   final LabResult r;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
   final bool showDate;
 
   @override
@@ -366,6 +367,13 @@ class _LabRow extends StatelessWidget {
             const SizedBox(width: 8),
             Text(_shown(v), style: numStyle(13.5, color: v.status == 0 ? p.ink : p.textOf(level))),
             if (onTap != null) Icon(Icons.chevron_right_rounded, size: 18, color: p.ink3),
+            if (onDelete != null)
+              IconButton(
+                onPressed: onDelete,
+                tooltip: tr('Delete', 'Verwijderen'),
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.delete_outline_rounded, size: 20, color: p.ink3),
+              ),
           ],
         ),
       ),
@@ -388,6 +396,14 @@ class _MarkerSheet extends StatelessWidget {
     ];
     final last = history.firstOrNull?.value;
     final text = last == null || last.status == 0 ? null : (last.status < 0 ? m.lowText : m.highText);
+    final platform = Theme.of(context).platform;
+    final touch = platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+    void delete(LabResult r) {
+      final s = context.read<AppState>();
+      s.deleteLab(r.id);
+      showUndo(context, tr('Result removed', 'Uitslag verwijderd'), () => s.restoreLab(r.id));
+    }
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -426,18 +442,17 @@ class _MarkerSheet extends StatelessWidget {
                   color: p.highSoft,
                   child: Icon(Icons.delete_outline_rounded, color: p.high),
                 ),
-                onDismissed: (_) {
-                  final s = context.read<AppState>();
-                  s.deleteLab(r.id);
-                  showUndo(context, tr('Result removed', 'Uitslag verwijderd'), () => s.restoreLab(r.id));
-                },
-                child: _LabRow(r),
+                onDismissed: (_) => delete(r),
+                // Zonder aanraakscherm (laptop) een gewone verwijderknop in plaats van vegen
+                child: _LabRow(r, onDelete: touch ? null : () => delete(r)),
               ),
-            const SizedBox(height: 4),
-            Text(
-              tr('Swipe a value to the left to delete it.', 'Veeg een waarde naar links om ze te verwijderen.'),
-              style: TextStyle(fontSize: 11.5, color: p.ink3),
-            ),
+            if (touch) ...[
+              const SizedBox(height: 4),
+              Text(
+                tr('Swipe a value to the left to delete it.', 'Veeg een waarde naar links om ze te verwijderen.'),
+                style: TextStyle(fontSize: 11.5, color: p.ink3),
+              ),
+            ],
           ],
         ),
       ),

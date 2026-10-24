@@ -53,12 +53,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _export() async {
     final s = context.read<AppState>();
+    final entries = s.user.entriesBetween('0000-01-01', '9999-12-31');
+    final days = {for (final e in entries) e.day}.length;
     final message = await saveTextFile(
       'macromatrix-diary-${dayKey(DateTime.now())}.csv',
       diaryCsv(s.user, values: s.entryValues),
       subject: tr('Food diary', 'Voedingsdagboek'),
     );
-    if (message != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    // Altijd een bevestiging, ook als de browser het bestand stil downloadt
+    final done = days == 1 ? tr('1 day exported', '1 dag geëxporteerd') : tr('$days days exported', '$days dagen geëxporteerd');
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message == null ? done : '$done. $message')));
   }
 
   void _snack(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));

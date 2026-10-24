@@ -37,6 +37,10 @@ import '../widgets/undo.dart';
 
 /// Vandaag: energie en macro's, de 25 vitaminen en mineralen, wat aandacht vraagt, een suggestie,
 /// de afgelopen week en de maaltijden.
+/// Eén scrollpositie voor Vandaag op elke breedte: wordt het venster smaller of breder, dan zette de andere
+/// indeling zich anders terug op een positie van lang geleden, halverwege Lunch of Supplementen (N81).
+const _diaryListKey = PageStorageKey('diary-list');
+
 class DiaryScreen extends StatelessWidget {
   const DiaryScreen({super.key, this.onOpenNutrients, this.onOpenProfile, this.onOpenWeek});
   final VoidCallback? onOpenNutrients;
@@ -71,8 +75,9 @@ class DiaryScreen extends StatelessWidget {
     // De kop met de dag blijft altijd staan. De samenvatting blijft alleen staan op een hoog scherm (tablet);
     // op een gsm nam ze zo'n 40% van het scherm in en ving ze tikken op, dus daar scrolt ze mee.
     final sticky = size.height >= 900;
-    // Op een gsm zit de +-knop in de navigatie onderaan; op een tablet is er geen, dus daar een zwevende knop.
-    final fab = size.width >= 800 && selected.isEmpty;
+    // Op een gsm zit de +-knop in de navigatie onderaan. Vanaf de rail (800) staan Toevoegen en de kalender in de
+    // kop: een zwevende knop lag daar over de kcal-kolom, want naast de lijst is er amper rand (N81).
+    final wide = size.width >= 800;
     const gap = SizedBox(height: 12);
     final summary = Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -108,14 +113,6 @@ class DiaryScreen extends StatelessWidget {
       ),
     );
     return Scaffold(
-      floatingActionButton: !fab
-          ? null
-          : FloatingActionButton.extended(
-              heroTag: 'add',
-              onPressed: () => openAddFood(context, context.read<AppState>().suggestedMeal),
-              icon: const Icon(Icons.add_rounded),
-              label: Text(tr('Add', 'Toevoegen')),
-            ),
       bottomNavigationBar: selected.isEmpty ? null : _SelectionBar(entries: selected),
       body: SafeArea(
         bottom: false,
@@ -123,13 +120,14 @@ class DiaryScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _DayBar(),
+              _DayBar(wide: wide),
               if (sticky) summary,
               Expanded(
                 child: ListView(
                   // Scrollpositie bewaren over een herbouw (na bewerken, verplaatsen of een notitie opslaan)
-                  key: const PageStorageKey('diary-list'),
-                  padding: EdgeInsets.only(top: sticky ? 2 : 0, bottom: fab ? 96 : 24),
+                  // Dezelfde sleutel als op een pc: bij een andere indeling geen oude positie van vroeger (N81)
+                  key: _diaryListKey,
+                  padding: EdgeInsets.only(top: sticky ? 2 : 0, bottom: 24),
                   children: [if (!sticky) summary, list],
                 ),
               ),
@@ -144,7 +142,10 @@ class DiaryScreen extends StatelessWidget {
 /// Kop van het dagboek op een gsm: ‹ dag › in het midden. Tik op de dag voor de kalender;
 /// links je reeks, rechts de notitie.
 class _DayBar extends StatelessWidget {
-  const _DayBar();
+  const _DayBar({this.wide = false});
+
+  /// Breed venster (rail): ook een kalenderknop en Toevoegen rechts.
+  final bool wide;
 
   @override
   Widget build(BuildContext context) {
@@ -160,16 +161,24 @@ class _DayBar extends StatelessWidget {
       _ => toBeginningOfSentenceCase(DateFormat(s.date.year == today.year ? 'EEE d MMM' : 'd MMM yyyy', appLocale).format(s.date)),
     };
     final hasNote = s.note.trim().isNotEmpty;
+    // Beide kanten even breed, zodat de dag in het midden blijft. Op een smal scherm (320) smallere kanten en
+    // pijlen, anders kromp de dag tot ±13 px (N50).
+    final small = !wide && MediaQuery.sizeOf(context).width < 400;
+    final side = wide ? 250.0 : (small ? 72.0 : 88.0);
+    final arrows = small ? VisualDensity.compact : null;
     return SizedBox(
       height: 58,
       child: Row(
         children: [
           SizedBox(
-            width: 88,
+            width: side,
             child: diff == 0
-                ? const Padding(
-                    padding: EdgeInsets.only(left: 16),
-                    child: Align(alignment: Alignment.centerLeft, child: StreakFlame()),
+                ? Padding(
+                    padding: EdgeInsets.only(left: small ? 12 : 16),
+                    child: const Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(fit: BoxFit.scaleDown, child: StreakFlame()),
+                    ),
                   )
                 : null,
           ),
@@ -178,6 +187,7 @@ class _DayBar extends StatelessWidget {
             child: Row(
               children: [
                 IconButton(
+                  visualDensity: arrows,
                   tooltip: tr('Previous day', 'Vorige dag'),
                   icon: Icon(Icons.chevron_left_rounded, color: p.ink),
                   onPressed: () => s.shiftDay(-1),
@@ -202,6 +212,7 @@ class _DayBar extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  visualDensity: arrows,
                   tooltip: tr('Next day', 'Volgende dag'),
                   icon: Icon(Icons.chevron_right_rounded, color: p.ink),
                   onPressed: () => s.shiftDay(1),
@@ -210,27 +221,46 @@ class _DayBar extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 88,
+            width: side,
             child: Align(
               alignment: Alignment.centerRight,
               child: Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: tr('Note for this day', 'Notitie bij deze dag'),
-                      icon: Icon(hasNote ? Icons.sticky_note_2_rounded : Icons.sticky_note_2_outlined, color: hasNote ? p.brand : p.ink2),
-                      onPressed: () => editNote(context),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: tr('Day menu', 'Menu van de dag'),
-                      icon: Icon(Icons.more_horiz_rounded, color: p.ink2),
-                      onPressed: () => openDayMenu(context),
-                    ),
-                  ],
+                padding: EdgeInsets.only(right: wide ? 16 : 8),
+                // Met een groter lettertype liever wat kleiner dan over de rand
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (wide)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: tr('Pick a day', 'Kies een dag'),
+                          icon: Icon(Icons.calendar_today_outlined, size: 20, color: p.ink2),
+                          onPressed: () => pickDay(context),
+                        ),
+                      IconButton(
+                        visualDensity: wide ? VisualDensity.compact : null,
+                        tooltip: tr('Note for this day', 'Notitie bij deze dag'),
+                        icon: Icon(hasNote ? Icons.sticky_note_2_rounded : Icons.sticky_note_2_outlined, color: hasNote ? p.brand : p.ink2),
+                        onPressed: () => editNote(context),
+                      ),
+                      IconButton(
+                        visualDensity: wide ? VisualDensity.compact : null,
+                        tooltip: tr('Day menu', 'Menu van de dag'),
+                        icon: Icon(Icons.more_horiz_rounded, color: p.ink2),
+                        onPressed: () => openDayMenu(context),
+                      ),
+                      if (wide) ...[
+                        const SizedBox(width: 6),
+                        FilledButton.icon(
+                          onPressed: () => openAddFood(context, context.read<AppState>().suggestedMeal),
+                          icon: const Icon(Icons.add_rounded),
+                          label: Text(tr('Add', 'Toevoegen')),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -532,6 +562,7 @@ class _DesktopDiary extends StatelessWidget {
             if (insights.isNotEmpty) ...[gap, ...insights],
           ];
           return ListView(
+            key: _diaryListKey,
             padding: const EdgeInsets.only(bottom: 40),
             children: [
               Narrow(
@@ -1676,7 +1707,15 @@ class _MealCardState extends State<_MealCard> {
                 style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: p.ink),
               ),
             ),
-            Text(tr('Nothing logged yet', 'Nog niets gelogd'), style: TextStyle(fontSize: 13, color: p.ink2)),
+            // Op een smal scherm met grote tekst korten we dit in, niet de knoppen
+            Flexible(
+              child: Text(
+                tr('Nothing logged yet', 'Nog niets gelogd'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: p.ink2),
+              ),
+            ),
             const SizedBox(width: 2),
             add,
             const SizedBox(width: 8),
@@ -2643,40 +2682,47 @@ class _SummaryPager extends StatelessWidget {
                 child: SingleChildScrollView(key: ValueKey(page), physics: const NeverScrollableScrollPhysics(), child: body),
               ),
             ),
-            // ‹ ● ● ● ● ›, met de naam van de pagina erbij
+            // Tabs met de naam van elke pagina in plaats van kleine bolletjes: groot genoeg om te raken (N50)
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconButton(
-                  tooltip: tr('Previous', 'Vorige'),
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.chevron_left_rounded, size: 20, color: p.ink3),
-                  onPressed: () => go(page - 1),
-                ),
                 for (var i = 0; i < pages; i++)
-                  Semantics(
-                    button: true,
-                    label: _labels[i],
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => go(i),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: i == page ? 18 : 7,
-                          height: 7,
-                          decoration: BoxDecoration(color: i == page ? p.ink : p.lineStrong, borderRadius: BorderRadius.circular(4)),
+                  Expanded(
+                    child: Semantics(
+                      button: true,
+                      selected: i == page,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => go(i),
+                        child: SizedBox(
+                          height: 44,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  _labels[i],
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: i == page ? FontWeight.w700 : FontWeight.w500,
+                                    color: i == page ? p.ink : p.ink3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: i == page ? 22 : 0,
+                                height: 3,
+                                decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(2)),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                IconButton(
-                  tooltip: tr('Next', 'Volgende'),
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.chevron_right_rounded, size: 20, color: p.ink3),
-                  onPressed: () => go(page + 1),
-                ),
               ],
             ),
           ],

@@ -64,6 +64,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   final _clearFocus = FocusNode(canRequestFocus: false, skipTraversal: true);
   Timer? _debounce;
   List<Food> _local = const [];
+  Set<String> _personal = const {};
   List<Food>? _online;
   bool _loadingOnline = false;
   String? _error;
@@ -76,6 +77,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   List<String>? _recentOrder;
 
   static bool get _canScan => canScanBarcodes;
+  static bool _touch(BuildContext context) => const {TargetPlatform.android, TargetPlatform.iOS}.contains(Theme.of(context).platform);
 
   @override
   void initState() {
@@ -120,7 +122,9 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     _debounce = Timer(const Duration(milliseconds: 180), () {
       if (!mounted) return;
       setState(() {
-        _local = q.trim().isEmpty ? const [] : context.read<AppState>().searchLocal(q.trim());
+        // De gewone volgorde: wat je at, staat apart bovenaan, zodat dezelfde plek hetzelfde product blijft (N82)
+        _local = q.trim().isEmpty ? const [] : context.read<AppState>().searchLocal(q.trim(), personal: false);
+        _personal = q.trim().isEmpty ? const {} : context.read<AppState>().personalRefs();
         _online = null;
         _error = null;
       });
@@ -332,6 +336,16 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     // Hetzelfde voedingsmiddel uit verschillende landen: één resultaat, de rest onder "Andere bronnen"
     final grouped = _scope == _Scope.all || _scope == _Scope.basic;
     final groups = grouped ? groupFoods(results) : const <FoodGroup>[];
+    // Favorieten en wat je al at: apart bovenaan met een kop, en ook gewoon op hun plaats in alle resultaten
+    final mine = [
+      for (final g in groups)
+        if (_personal.contains(g.main.ref) || g.others.any((f) => _personal.contains(f.ref))) g,
+    ].take(3).toList();
+    final split = mine.isNotEmpty && groups.length > mine.length;
+    Widget group(FoodGroup g, String part) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _GroupCard(key: ValueKey('$part-${g.main.ref}'), group: g, lows: lows, onOpen: _open),
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -423,7 +437,8 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                       child: TextField(
                         controller: _query,
                         focusNode: _focus,
-                        autofocus: !_canScan,
+                        // Op een toestel zonder aanraakscherm meteen typen; op gsm geen toetsenbord over de scanknop
+                        autofocus: !_canScan || !_touch(context),
                         textInputAction: TextInputAction.search,
                         onChanged: _onChanged,
                         onSubmitted: _submit,
@@ -546,12 +561,14 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                         _mealsPanel(mealHits, p),
                         const SizedBox(height: 12),
                       ],
-                      if (grouped)
-                        for (final g in groups)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: _GroupCard(group: g, lows: lows, onOpen: _open),
-                          )
+                      if (grouped && split) ...[
+                        SectionHeader(tr('Recent and favourites', 'Recent en favorieten')),
+                        for (final g in mine) group(g, 'mine'),
+                        const SizedBox(height: 4),
+                        SectionHeader(tr('All results', 'Alle resultaten')),
+                        for (final g in groups) group(g, 'all'),
+                      ] else if (grouped)
+                        for (final g in groups) group(g, 'all')
                       else
                         for (final f in results) card(f),
                       if (results.isEmpty && !_loadingOnline)
@@ -866,7 +883,7 @@ class _MealPicker extends StatelessWidget {
 }
 
 class _GroupCard extends StatefulWidget {
-  const _GroupCard({required this.group, required this.lows, required this.onOpen});
+  const _GroupCard({super.key, required this.group, required this.lows, required this.onOpen});
   final FoodGroup group;
   final List<Nutrient> lows;
   final void Function(Food) onOpen;
