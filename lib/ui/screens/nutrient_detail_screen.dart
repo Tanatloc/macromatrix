@@ -36,6 +36,9 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   bool _perKcal = false;
   late int _days = _isPeriod && _periodDays <= 7 ? 7 : 30;
 
+  /// Aangetikte (of met de muis aangewezen) dag in het verloop van 30 of 90 dagen.
+  int? _picked;
+
   Nutrient get n => widget.nutrient;
 
   /// Geopend voor een week of maand in plaats van één dag.
@@ -437,6 +440,13 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     final values = [for (final k in keys) daily[k]?[n.key]];
     final t = s.targetsForDate(to)[n.key];
     final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
+    // Bij 30 en 90 dagen passen er geen getallen onder de staven: dan het gemiddelde, een paar waarden rechts en
+    // een regel boven de grafiek voor de dag die je aantikt
+    final long = _days > 7;
+    final logged = values.whereType<double>().toList();
+    final mean = logged.isEmpty ? null : logged.reduce((a, b) => a + b) / logged.length;
+    final goal = t?.goal ?? t?.upper;
+    final picked = _picked != null && _picked! < values.length ? _picked : null;
 
     return Panel(
       shadow: false,
@@ -453,7 +463,10 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                 fontSize: 11.5,
                 items: const [(7, '7d'), (30, '30d'), (90, '90d')],
                 selected: _days,
-                onChanged: (d) => setState(() => _days = d),
+                onChanged: (d) => setState(() {
+                  _days = d;
+                  _picked = null;
+                }),
               ),
             ),
           ),
@@ -468,10 +481,18 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               ),
             )
           else ...[
+            if (long) ...[
+              _historyLine(p, picked == null ? null : from.add(Duration(days: picked)), picked == null ? null : values[picked], mean, goal, t),
+              const SizedBox(height: 8),
+            ],
             DayBarsChart(
               values: values,
-              goal: t?.goal ?? t?.upper,
+              goal: goal,
               highlightLast: _isTodayDate(to),
+              mean: long ? mean : null,
+              axisLabel: long ? (v) => formatAmount(v, n) : null,
+              selected: long ? picked : null,
+              onSelect: long ? (i) => setState(() => _picked = i) : null,
               colorOf: (v, i) => switch (levelOf(v, _targetOn(s, keys[i], burned))) {
                 Level.ok => p.okFill,
                 Level.high => p.highFill,
@@ -498,17 +519,49 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                   ],
                 ),
               ),
-            if (_days <= 7) DayLabels(days: [for (var i = 0; i < _days; i++) from.add(Duration(days: i))]) else DayAxis(from: from, days: _days),
+            if (_days <= 7)
+              DayLabels(days: [for (var i = 0; i < _days; i++) from.add(Duration(days: i))])
+            else
+              Padding(
+                padding: const EdgeInsets.only(right: DayBarsChart.axisGutter),
+                child: DayAxis(from: from, days: _days),
+              ),
             ChartLegend(
               items: [
                 if (t?.goal != null) (LegendItem.box(p.okFill), tr('on target', 'op doel')),
                 if (t?.goal != null) (LegendItem.box(p.lowFill.withValues(alpha: 0.55)), tr('below target', 'onder doel')),
                 if (t?.upper != null) (LegendItem.box(p.highFill), tr('above max', 'boven max')),
                 (LegendItem.box(p.brand, w: 14, h: 2), tr('7-day average', '7-daags gemiddelde')),
+                if (long && mean != null) (LegendItem.box(p.ink2, w: 14, h: 1), tr('$_days-day average', '$_days-daags gemiddelde')),
                 if (t != null) (LegendItem.box(p.ink, w: 14, h: 1), t.isLimit ? 'maximum' : tr('goal', 'doel')),
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Regel boven een lange grafiek: de aangetikte dag met zijn waarde, anders het gemiddelde en het doel.
+  /// Altijd even hoog, zodat de grafiek niet verspringt bij het aantikken.
+  Widget _historyLine(Palette p, DateTime? day, double? value, double? mean, double? goal, Target? t) {
+    final small = numStyle(12, weight: FontWeight.w400, color: p.ink3);
+    final strong = numStyle(13.5, weight: FontWeight.w600, color: p.ink);
+    final goalText = goal == null ? null : '${t!.isLimit ? 'max' : tr('goal', 'doel')} ${_amount(goal)}';
+    return SizedBox(
+      height: 20,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          if (day != null) ...[
+            Text(DateFormat('E d MMM', appLocale).format(day), style: small),
+            const SizedBox(width: 10),
+            Text(value == null ? tr('nothing logged', 'niets gelogd') : _amount(value), style: value == null ? small : strong),
+          ] else
+            Text(mean == null ? '–' : tr('Average ${_amount(mean)}', 'Gemiddeld ${_amount(mean)}'), style: strong),
+          const Spacer(),
+          if (goalText != null) Text(goalText, style: small),
         ],
       ),
     );

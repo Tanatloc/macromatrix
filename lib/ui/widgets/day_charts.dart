@@ -90,6 +90,11 @@ List<double?> movingAverage(List<double?> values, {int window = 7}) => [
 
 /// Staaf per dag met een gestippelde doellijn, optioneel een doelband en een lijn voor het 7-daags gemiddelde.
 /// De laatste dag (vandaag, nog bezig) is inkt.
+///
+/// Voor lange periodes kan er meer bij, telkens alleen als je het vraagt (zonder blijft de grafiek zoals ze was):
+/// - [axisLabel]: een smalle kolom rechts met het doel, het gemiddelde ([mean]) en een paar ronde waarden;
+/// - [mean]: het gemiddelde van de periode als dunne doorlopende lijn;
+/// - [onSelect] en [selected]: tikken (of met de muis erover gaan) kiest een dag, die een lichte kolom krijgt.
 class DayBarsChart extends StatelessWidget {
   const DayBarsChart({
     super.key,
@@ -101,7 +106,14 @@ class DayBarsChart extends StatelessWidget {
     this.averageColor,
     this.height = 120,
     this.highlightLast = true,
+    this.mean,
+    this.axisLabel,
+    this.selected,
+    this.onSelect,
   });
+
+  /// Breedte van de kolom met waarden rechts, als er [axisLabel] is. Laat onder de grafiek hetzelfde stuk vrij.
+  static const axisGutter = 40.0;
 
   final List<double?> values;
   final Color Function(double value, int index) colorOf;
@@ -114,26 +126,65 @@ class DayBarsChart extends StatelessWidget {
   final double height;
   final bool highlightLast;
 
+  /// Gemiddelde van de periode, als dunne lijn over de hele breedte.
+  final double? mean;
+
+  /// Getal zonder eenheid voor de waarden rechts; zonder blijft die kolom weg.
+  final String Function(double value)? axisLabel;
+
+  /// Gekozen dag (index in [values]).
+  final int? selected;
+
+  /// Tik of muis op een dag; `null` als de muis de grafiek verlaat.
+  final ValueChanged<int?>? onSelect;
+
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
+    final gutter = axisLabel == null ? 0.0 : axisGutter;
+    final paint = CustomPaint(
+      painter: _BarsPainter(
+        values: values,
+        colorOf: colorOf,
+        goal: goal,
+        band: band,
+        avg: average ? movingAverage(values) : null,
+        avgColor: averageColor ?? p.brand,
+        p: p,
+        highlightLast: highlightLast,
+        mean: mean,
+        axisLabel: axisLabel,
+        gutter: gutter,
+        selected: selected,
+        // Een painter erft het lettertype van de app niet vanzelf
+        font: DefaultTextStyle.of(context).style,
+      ),
+    );
+    final select = onSelect;
+    if (select == null || values.isEmpty) return SizedBox(height: height, width: double.infinity, child: paint);
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: CustomPaint(
-        painter: _BarsPainter(
-          values: values,
-          colorOf: colorOf,
-          goal: goal,
-          band: band,
-          avg: average ? movingAverage(values) : null,
-          avgColor: averageColor ?? p.brand,
-          p: p,
-          highlightLast: highlightLast,
-        ),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          int at(Offset o) => (o.dx / math.max(1.0, box.maxWidth - gutter) * values.length).floor().clamp(0, values.length - 1);
+          return MouseRegion(
+            onHover: (e) => select(at(e.localPosition)),
+            onExit: (_) => select(null),
+            child: GestureDetector(behavior: HitTestBehavior.opaque, onTapDown: (d) => select(at(d.localPosition)), child: paint),
+          );
+        },
       ),
     );
   }
+}
+
+/// Ronde stap voor een paar hulplijnen: 1, 2, 2,5 of 5 maal een macht van tien.
+double _niceStep(double raw) {
+  if (raw <= 0) return 1;
+  final mag = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+  final f = raw / mag;
+  return mag * (f <= 1 ? 1 : (f <= 2 ? 2 : (f <= 2.5 ? 2.5 : (f <= 5 ? 5 : 10))));
 }
 
 class _BarsPainter extends CustomPainter {
@@ -146,6 +197,11 @@ class _BarsPainter extends CustomPainter {
     required this.avgColor,
     required this.p,
     required this.highlightLast,
+    required this.mean,
+    required this.axisLabel,
+    required this.gutter,
+    required this.selected,
+    required this.font,
   });
   final List<double?> values;
   final Color Function(double, int) colorOf;
@@ -155,6 +211,11 @@ class _BarsPainter extends CustomPainter {
   final Color avgColor;
   final Palette p;
   final bool highlightLast;
+  final double? mean;
+  final String Function(double)? axisLabel;
+  final double gutter;
+  final int? selected;
+  final TextStyle font;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -164,11 +225,44 @@ class _BarsPainter extends CustomPainter {
     final maxV = math.max(known.isEmpty ? 1.0 : known.reduce(math.max), math.max(goal ?? 0, band?.$2 ?? 0)) * 1.12;
     final base = size.height - 1;
     double y(double v) => base - v / maxV * (base - 2);
-    final step = size.width / n;
+    // Staven en lijnen blijven links van de kolom met waarden
+    final w = size.width - gutter;
+    final step = w / n;
     final bw = math.min(10.0, math.max(2.0, step * 0.62));
 
     if (band != null) {
-      canvas.drawRect(Rect.fromLTRB(0, y(band!.$2), size.width, y(band!.$1)), Paint()..color = p.okSoft);
+      canvas.drawRect(Rect.fromLTRB(0, y(band!.$2), w, y(band!.$1)), Paint()..color = p.okSoft);
+    }
+    // Waarden rechts: eerst doel en gemiddelde, dan ronde hulplijnen waar nog plaats is
+    if (axisLabel != null) {
+      final taken = <double>[];
+      void label(double v, Color c, FontWeight weight) {
+        final tp = TextPainter(
+          text: TextSpan(
+            text: axisLabel!(v),
+            style: font.merge(numStyle(9.5, weight: weight, color: c)),
+          ),
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+          ellipsis: '…',
+        )..layout(maxWidth: gutter - 4);
+        tp.paint(canvas, Offset(size.width - tp.width, (y(v) - tp.height / 2).clamp(0, size.height - tp.height)));
+        taken.add(y(v));
+      }
+
+      if (goal != null) label(goal!, p.ink, FontWeight.w600);
+      if (mean != null && (goal == null || (y(mean!) - y(goal!)).abs() >= 11)) label(mean!, p.ink2, FontWeight.w600);
+      final tick = _niceStep(maxV / 3.5);
+      for (var t = tick; t < maxV; t += tick) {
+        final ty = y(t);
+        if (ty < 5 || taken.any((l) => (l - ty).abs() < 11)) continue;
+        canvas.drawLine(Offset(0, ty), Offset(w, ty), Paint()..color = p.line);
+        label(t, p.ink3, FontWeight.w400);
+      }
+    }
+    if (selected != null && selected! >= 0 && selected! < n) {
+      final x = selected! * step;
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTRB(x, 0, x + step, base), const Radius.circular(3)), Paint()..color = p.track);
     }
     for (final (i, v) in values.indexed) {
       if (v == null || v <= 0) continue;
@@ -180,15 +274,24 @@ class _BarsPainter extends CustomPainter {
         Paint()..color = c,
       );
     }
-    canvas.drawLine(Offset(0, base), Offset(size.width, base), Paint()..color = p.lineStrong);
+    canvas.drawLine(Offset(0, base), Offset(w, base), Paint()..color = p.lineStrong);
     if (goal != null) {
       final gy = y(goal!);
       final dash = Paint()
         ..color = band != null ? p.okFill : p.ink
         ..strokeWidth = 1;
-      for (var x = 0.0; x < size.width; x += 6) {
-        canvas.drawLine(Offset(x, gy), Offset(math.min(x + 3, size.width), gy), dash);
+      for (var x = 0.0; x < w; x += 6) {
+        canvas.drawLine(Offset(x, gy), Offset(math.min(x + 3, w), gy), dash);
       }
+    }
+    if (mean != null) {
+      canvas.drawLine(
+        Offset(0, y(mean!)),
+        Offset(w, y(mean!)),
+        Paint()
+          ..color = p.ink2
+          ..strokeWidth = 1,
+      );
     }
     if (avg != null) {
       final path = Path();
