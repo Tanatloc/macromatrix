@@ -147,7 +147,8 @@ export function firstJsonObject(raw) {
 
 // Workers AI geeft soms al een object terug in plaats van tekst
 export function modelObject(r) {
-  const resp = r?.response;
+  // Sommige modellen (bv. gpt-oss) antwoorden in het chatformaat: de tekst staat dan in choices[0].message.content
+  const resp = r?.response ?? r?.choices?.[0]?.message?.content;
   if (resp && typeof resp === 'object') return resp;
   return firstJsonObject(resp);
 }

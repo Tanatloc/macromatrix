@@ -75,6 +75,11 @@ String authMessage(Object e) {
       ),
       'email_address_invalid' => tr('This email address is not accepted.', 'Dit e-mailadres wordt niet aanvaard.'),
       'signup_disabled' => tr('Signing up is temporarily unavailable.', 'Registreren is tijdelijk niet mogelijk.'),
+      // Onze hook: te veel nieuwe accounts vanaf hetzelfde netwerk (zie de migratie signup_ip_limit)
+      _ when e.message.contains('new accounts from this network') => tr(
+        'Too many new accounts were made from this network. Try again in an hour.',
+        'Er werden te veel nieuwe accounts aangemaakt vanaf dit netwerk. Probeer het over een uur opnieuw.',
+      ),
       _ =>
         e.statusCode == '429'
             ? tr('Too many attempts. Wait a minute and try again.', 'Even te veel pogingen. Wacht een minuut en probeer opnieuw.')

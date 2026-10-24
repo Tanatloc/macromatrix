@@ -429,15 +429,19 @@ class _BodyScreenState extends State<BodyScreen> {
     }
 
     final to = DateTime.now();
-    final today = DateTime(to.year, to.month, to.day);
-    final periodFrom = today.subtract(Duration(days: _days));
+    // De dag van de app (begint pas na het nachtelijke omslaguur), in kalenderdagen: niet DateTime.now() en
+    // niet 24-uursblokken, anders schuift de as na middernacht of bij een klokwissel een dag op
+    final ln = logicalNow();
+    final today = DateTime(ln.year, ln.month, ln.day);
+    final periodFrom = DateTime(today.year, today.month, today.day - _days);
     final history = s.user.biometricHistory(chartType.key, from: dayKey(periodFrom));
     // Metingen pas sinds kort: de as begint een dag voor de eerste (en toont minstens een week), zodat de punten
     // niet tegen de rechterrand gedrukt staan (N79, N44)
     final first = history.isEmpty ? null : parseDay(history.first.day);
     var from = periodFrom;
     if (first != null && first.difference(periodFrom).inDays > 2) from = first.subtract(const Duration(days: 1));
-    if (from.isAfter(today.subtract(const Duration(days: 7)))) from = today.subtract(const Duration(days: 7));
+    final weekAgo = DateTime(today.year, today.month, today.day - 7);
+    if (from.isAfter(weekAgo)) from = weekAgo;
     final zoomed = first != null && from != periodFrom;
     // Gewicht: dezelfde trendlijn als op Dashboard, ingelopen vanaf een maand eerder, tot je laatste weging (N44)
     List<(DateTime, double)>? trend;

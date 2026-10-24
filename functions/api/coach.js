@@ -1,7 +1,9 @@
 // Cloudflare Pages Function: de wekelijkse coach. De app stuurt een kleine samenvatting van je week in cijfers
 // (dagen gelogd, Voedingsscore, energie en macro's tegenover je doel, de stoffen die het verst onder je doel zitten of
 // boven een bovengrens, je gewichtstrend, je doel, de 5 producten met de meeste energie als gewone namen, en je
-// voorkeuren en allergieën als codes). Geen dagboek, geen namen, geen notities. Een tekstmodel van Workers AI schrijft
+// voorkeuren en allergieën als codes, een paar gewone voedingsmiddelen met een portie die je tekorten aanvullen (uit het
+// Orakel van de app) en de tips van vorige week met hoe die stoffen sindsdien veranderden). Geen dagboek, geen namen,
+// geen notities. Een tekstmodel van Workers AI schrijft
 // daarmee een korte samenvatting en 2 à 3 tips voor volgende week, in het Engels of het Nederlands.
 // Alleen voor ingelogde gebruikers. Er wordt niets bewaard: niet wat de app stuurt, niet wat het model schrijft.
 // Dagteller ai_quota_use('coach'): 3 met Pro, 1 zonder Pro maar pas als de functie voor iedereen open staat
@@ -11,10 +13,11 @@
 import { aiQuotaStatus, checkLogin, hourly, json, modelObject, stripMarkdown, TimeoutError, withTimeout } from '../_lib/ai.js';
 
 // Groot en goed in het Nederlands, en snel genoeg voor een paar honderd woorden
-export const TEXT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+// Gekozen na een vergelijking op echte weekcijfers: concretere tips dan Llama 3.3 70B, en goedkoper per antwoord
+export const TEXT_MODEL = '@cf/openai/gpt-oss-120b';
 
-// Wat de app stuurt is een paar honderd bytes; alles boven deze grens is geen weekoverzicht
-export const MAX_INPUT_BYTES = 4000;
+// Wat de app stuurt is 1 à 3 kB (met voorstellen en de tips van vorige week); alles boven deze grens is geen weekoverzicht
+export const MAX_INPUT_BYTES = 6000;
 const PER_HOUR = 6;
 // Langer wachten heeft geen zin: de app geeft het na 60 s op. Te wijzigen met COACH_TIMEOUT_MS (in tests).
 const TIMEOUT_MS = 25_000;
@@ -38,6 +41,18 @@ function label(v, max = 40) {
     .replace(/\s+/g, ' ')
     .trim();
   if (!t || /https?|www\./i.test(t)) return null;
+  return t.slice(0, max);
+}
+
+// Een zin van de coach van vorige week (die de app bewaarde): gewone tekst zonder links of opmaak
+function sentence(v, max = 200) {
+  if (typeof v !== 'string') return null;
+  const t = v
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{N} ,.;:'"()%/&+?!-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (t.length < 5 || /https?|www\./i.test(t)) return null;
   return t.slice(0, max);
 }
 
@@ -67,12 +82,45 @@ export function cleanWeek(raw) {
           trend: ['down', 'stable', 'up'].includes(raw.weight.trend) ? raw.weight.trend : null,
         }
       : null;
+  // Voorstellen per tekort: {stof: [{food, portion, pct}]}, hoogstens 5 stoffen met elk 4 voedingsmiddelen
+  const options = {};
+  if (raw.options && typeof raw.options === 'object' && !Array.isArray(raw.options)) {
+    for (const [k, v] of Object.entries(raw.options).slice(0, 5)) {
+      const name = label(k);
+      const foods = list(v, 4, (x) => {
+        const food = label(x?.food, 50);
+        const portion = label(x?.portion, 30);
+        const pct = num(x?.pct, 0, 2000);
+        return food && portion && pct != null ? { food, portion, pct } : null;
+      });
+      if (name && foods.length) options[name] = foods;
+    }
+  }
+  // Vorige week: de tips van toen en hoe die stoffen veranderden (in % van het doel)
+  let lastWeek = null;
+  if (raw.last_week && typeof raw.last_week === 'object' && !Array.isArray(raw.last_week)) {
+    const tips = list(raw.last_week.tips, 3, (x) => sentence(x));
+    const changes = list(raw.last_week.changes, 5, (x) => {
+      const nutrient = label(x?.nutrient);
+      const before = num(x?.before_pct, 0, 1000);
+      const now = num(x?.now_pct, 0, 1000);
+      return nutrient && before != null && now != null ? { nutrient, before_pct: before, now_pct: now } : null;
+    });
+    if (tips.length || changes.length) lastWeek = { tips, changes };
+  }
+  const energy = pair(raw.energy, 10000);
+  const goal = GOALS.has(raw.goal) ? raw.goal : 'maintain';
+  // Al uitgerekend, zodat het model niet zelf moet rekenen: duidelijk boven het doel (afvallen of behouden) of ver eronder
+  const ratio = energy?.goal ? energy.avg / energy.goal : null;
+  const energyNote =
+    ratio == null ? null : ratio > 1.1 && goal !== 'gain' ? 'clearly_above_goal' : ratio < 0.75 ? 'far_below_goal' : null;
   const week = {
     lang,
     days_logged: days,
     nutrient_score: num(raw.score, 0, 100),
-    goal: GOALS.has(raw.goal) ? raw.goal : 'maintain',
-    energy_kcal: pair(raw.energy, 10000),
+    goal,
+    energy_kcal: energy,
+    energy_note: energyNote,
     macros,
     below_target: list(raw.low, 5, (x) => {
       const name = label(x?.name);
@@ -88,39 +136,75 @@ export function cleanWeek(raw) {
     top_foods_by_energy: list(raw.foods, 5, (x) => label(x, 50)),
     diet: list(raw.diet, 12, code),
     allergies: list(raw.allergies, 15, code),
+    options,
+    last_week: lastWeek,
   };
   return { week };
 }
 
 const LANG = {
-  en: 'Write in plain, everyday English and talk to the reader as "you".',
-  nl: 'Schrijf in eenvoudig, alledaags Nederlands (zoals in Vlaanderen en Nederland gesproken wordt). Spreek de lezer aan met "je" en schrijf actief ("je at", niet "er werd gegeten"). Alle tekst in het Nederlands.',
+  en: 'Write in plain, everyday English and talk to the reader as "you". All text in English, also the food names.',
+  nl: 'Schrijf in eenvoudig, alledaags Nederlands (zoals in Vlaanderen en Nederland gesproken wordt). Spreek de lezer aan met "je" en schrijf actief ("je at", niet "er werd gegeten"). Gebruik gewone woorden ("groenten", "peulvruchten", "een handvol") en geen Engelse woorden zoals "target", "boost" of "focussen" (zeg "doel", "extra", "let op"). Alle tekst in het Nederlands, ook de namen van voedingsmiddelen.',
 };
+
+// Eén voorbeeld in de gevraagde taal (nooit beide: dan antwoordt het model soms in de verkeerde taal). Rustig, concreet,
+// korte zinnen, geen cijfers die al boven de tekst staan.
+export const EXAMPLES = {
+  en: '{"summary": "Last week you planned more fibre, and it went from 67% to 80% of your target. Your muesli breakfasts gave the week a steady base. Next week, vitamin K and potassium are worth some attention.", "tips": ["Stir 80 g of cooked spinach into your pasta with meat sauce two or three times this week.", "Sprinkle a handful of sunflower seeds over your muesli in the morning.", "Have a smaller portion of sweet potato fries with a side salad, and drink water with dinner."]}',
+  nl: '{"summary": "Vorige week wilde je meer vezels eten, en dat lukte: van 67% naar 80% van je doel. Je ontbijt met muesli gaf de week een goede basis. Volgende week loont het om op vitamine K en kalium te letten.", "tips": ["Roer deze week twee of drie keer 80 g gekookte spinazie door je pasta met gehaktsaus.", "Strooi \'s ochtends een handvol zonnebloempitten over je muesli.", "Neem een kleinere portie zoete-aardappelfrietjes met een slaatje erbij, en drink water bij het avondeten."]}',
+};
+
+export const LANG_NAME = { en: 'English', nl: 'Dutch' };
 
 // De systeemprompt: kort, vriendelijk, concreet, veilig
 export function systemPrompt(lang) {
+  const l = LANG[lang] ? lang : 'en';
   return [
     'You write the weekly check-in inside a food diary app. You get one week of numbers as JSON and answer with strict JSON only:',
     '{"summary": "...", "tips": ["...", "..."]}',
     '',
-    'summary: 2 or 3 sentences, at most 70 words. The app already shows the nutrient score, the average energy against',
-    'the goal and the biggest gap right above your text, so do not repeat those numbers. Instead say what went well and',
-    'what is worth focusing on next week, in plain words. No greeting, no sign-off, no headings, no lists, no emoji, no markdown.',
+    'summary: 2 or 3 short sentences, at most 60 words in total. Hard limit: never more than 3 sentences, and keep each',
+    'sentence under 20 words. The app already shows the nutrient score, the average energy against the goal and the',
+    'biggest gap right above your text, so do not repeat those numbers, and do not list which macros were above or below',
+    'their goal. Do not mention energy, kcal, carbs or fat in the summary at all: energy gets one tip of its own when',
+    'energy_note asks for it. Say each thing only once. Say what went well and which one or two nutrients are worth',
+    'focusing on next week, in plain words. No percentages in the summary, except the one before/now pair from last_week.',
+    'No greeting, no sign-off, no headings, no lists, no emoji, no markdown.',
     'Write "kcal", never "calories". Write foods as ordinary lowercase words ("muesli", "pasta with meat sauce"), not as',
     'database names.',
-    'tips: 2 or 3 tips for next week. Each tip is one or two short sentences about a concrete food or meal change',
-    '(for example "add a handful of lentils to your soup or salad a few times this week"), aimed at the biggest gaps.',
+    'tips: 2 or 3 tips for next week. Each tip is one or two short sentences about a concrete food or meal change,',
+    'with a normal amount, aimed at the biggest gaps.',
     '',
     'About the data: energy_kcal.goal already includes the plan in "goal" (for "lose" it is already a gentle deficit),',
     'so eating close to it is right; never push below it. nutrient_score (0-100) is how close the vitamins and minerals',
     'came to their targets. below_target lists the nutrients furthest under target (in % of target); above_upper_limit',
     'lists what went over a safe upper limit (in % of that limit). Macros are grams per day against the target.',
     'Base the tips on the biggest gaps first: below_target, protein and fibre under target, and anything in above_upper_limit',
-    '(for sodium: less salty processed food, not "less food"). Name specific, ordinary foods for each tip.',
+    '(for sodium: less salty processed food, not "less food").',
     'Do not call foods "high calorie" or "bad". Never suggest salt, seaweed or iodised salt when sodium is over its limit.',
     '',
+    'options: for each gap nutrient, a few everyday foods that already fit this person\'s diet and allergies, each with a',
+    'normal portion and how much of that nutrient\'s daily target that portion gives (pct). When options is not empty,',
+    'every tip must use one or more foods from options, with their portion, and may combine them with a food from',
+    'top_foods_by_energy (for example "stir 80 g of cooked spinach into your pasta with meat sauce"). Do not suggest any',
+    'other food to fill a gap. Never write the pct number itself; at most say it in plain words ("about half of your',
+    'daily vitamin E", "all the vitamin K you need for the day").',
+    'When options is empty, choose ordinary, specific foods yourself.',
+    '',
+    'energy_note: if it is "clearly_above_goal", one of the tips is about energy: a mild, concrete swap based on',
+    'top_foods_by_energy or options, such as a smaller portion of fries with a side salad, water instead of a sweet drink,',
+    'or half the usual pasta with extra vegetables. Never suggest eating below the goal, skipping meals or fasting, and',
+    'do not give a kcal number. If it is "far_below_goal", gently encourage eating enough (for example an extra snack',
+    'or a fuller lunch) instead.',
+    '',
+    'last_week: if present, these are the tips from last week and, per nutrient, the average before and now (in % of',
+    'target). Then the summary starts with one short sentence on how last week\'s plan went, using one before/now pair',
+    '(preferably the one that improved most), honest and kind. If nothing improved, say so gently ("fibre stayed about',
+    'the same") and move on. Never shame.',
+    'Without last_week, do not talk about last week.',
+    '',
     'Rules:',
-    '- Sound like a calm, kind person, not a marketing text. No hype, no exclamation marks, no "great job!", no "journey".',
+    '- Sound like a calm, kind person, not a marketing text. No hype, no exclamation marks, no "great job", no "journey".',
     '- Never shame or blame. Missing a target is normal; talk about what to try next.',
     '- No medical advice, no diagnosis, no talk of diseases or deficiencies as a condition.',
     '- Supplements: at most say "consider" one, never a dose or amount.',
@@ -132,7 +216,12 @@ export function systemPrompt(lang) {
     '  For example: vegetarian means no meat or fish, vegan also no dairy, eggs or honey, gluten_free no wheat, rye or barley.',
     '- Use the foods in "top_foods_by_energy" only to make tips fit what this person already eats.',
     '- Do not invent numbers that are not in the data.',
-    LANG[lang] ?? LANG.en,
+    '',
+    'Example of the tone and length (this person had last_week, fibre as a past gap and energy clearly above the goal;',
+    'use your own data, not these foods or numbers):',
+    EXAMPLES[l],
+    '',
+    LANG[l],
   ].join('\n');
 }
 
@@ -146,10 +235,47 @@ function cleanText(v, max) {
   return t ? t.slice(0, max) : null;
 }
 
+// Hoogstens zoveel woorden in de samenvatting; de prompt vraagt er 60, maar het model schrijft soms veel meer
+export const MAX_SUMMARY_WORDS = 90;
+
+const words = (t) => t.split(/\s+/).filter(Boolean).length;
+
+// Een te lange samenvatting inkorten op het einde van een zin. Is de eerste zin al te lang, dan die op een woord.
+export function trimSummary(t, max = MAX_SUMMARY_WORDS) {
+  if (words(t) <= max) return t;
+  const sentences = t.match(/[^.!?]+(?:[.!?]+["')]*|$)\s*/g) ?? [t];
+  let out = '';
+  for (const z of sentences) {
+    if (words(out + z) > max) break;
+    out += z;
+  }
+  if (out.trim()) return out.trim();
+  return `${t.split(/\s+/).slice(0, max).join(' ').replace(/[,;:]$/, '')}…`;
+}
+
+// Gewone woordjes per taal, om te zien of het model in de gevraagde taal schreef
+const STOP = {
+  nl: new Set(['de', 'het', 'een', 'je', 'en', 'van', 'met', 'voor', 'niet', 'wat']),
+  en: new Set(['the', 'a', 'and', 'you', 'your', 'with', 'for', 'of', 'to']),
+};
+
+// Duidelijk in de andere taal geschreven: minstens 4 woordjes van die taal en meer dan dubbel zoveel als van de eigen
+export function wrongLanguage(text, lang) {
+  const want = lang === 'nl' ? 'nl' : 'en';
+  const other = want === 'nl' ? 'en' : 'nl';
+  const n = { nl: 0, en: 0 };
+  for (const w of String(text ?? '').toLowerCase().split(/[^\p{L}']+/u)) {
+    if (STOP.nl.has(w)) n.nl++;
+    if (STOP.en.has(w)) n.en++;
+  }
+  return n[other] >= 4 && n[other] > 2 * n[want];
+}
+
 // Het antwoord van het model nakijken: {summary, tips} met 1 tot 3 tips. Geeft {summary, tips} of {error}.
 export function cleanCoach(raw) {
   if (!raw || typeof raw !== 'object') return { error: 'bad_output' };
-  const summary = cleanText(raw.summary, 1000);
+  const text = cleanText(raw.summary, 1000);
+  const summary = text && trimSummary(text);
   if (!summary || summary.length < 20) return { error: 'bad_output' };
   const tips = (Array.isArray(raw.tips) ? raw.tips : [])
     .map((t) => cleanText(typeof t === 'object' && t ? (t.tip ?? t.text) : t, 320))
@@ -165,17 +291,39 @@ const SCHEMA = {
   required: ['summary', 'tips'],
 };
 
-// De vraag aan het model (ook bruikbaar om de prompt los te proberen)
-export function coachInput(week) {
+// De vraag aan het model (ook bruikbaar om de prompt los te proberen). [retry]: tweede poging na een antwoord in de
+// verkeerde taal, met die taal nog eens apart gevraagd.
+export function coachInput(week, { retry = false } = {}) {
+  const system = systemPrompt(week.lang) + (retry ? `\nAnswer only in ${LANG_NAME[week.lang] ?? 'English'}.` : '');
   return {
     messages: [
-      { role: 'system', content: systemPrompt(week.lang) },
+      { role: 'system', content: system },
       { role: 'user', content: JSON.stringify(week) },
     ],
     response_format: { type: 'json_schema', json_schema: SCHEMA },
-    max_tokens: 600,
+    // Dit model denkt eerst na. Met weinig nadenken is het antwoord er in 3 à 6 s in plaats van 10 à 20 s, met even
+    // goede tips (gemeten met wrangler); 'reasoning: {effort}' maakte het eerder trager.
+    reasoning_effort: 'low',
+    // Het nadenken telt mee; met 600 viel het antwoord soms weg
+    max_tokens: 1200,
     temperature: 0.4,
   };
+}
+
+// Model vragen en nakijken, met één nieuwe poging als het in de verkeerde taal antwoordde. Gooit TimeoutError als
+// [ms] samen op is.
+export async function askCoach(ai, week, ms) {
+  const deadline = Date.now() + ms;
+  let out;
+  for (const retry of [false, true]) {
+    const left = deadline - Date.now();
+    if (left <= 0) throw new TimeoutError(`na ${ms} ms`);
+    const r = await withTimeout(ai.run(TEXT_MODEL, coachInput(week, { retry })), left);
+    out = cleanCoach(modelObject(r));
+    if (out.error) return out;
+    if (!wrongLanguage(`${out.summary} ${out.tips.join(' ')}`, week.lang)) return out;
+  }
+  return { error: 'bad_output' };
 }
 
 async function readWeek(request) {
@@ -219,8 +367,7 @@ export async function onRequestPost({ request, env }) {
   await rate.count();
 
   try {
-    const r = await withTimeout(env.AI.run(TEXT_MODEL, coachInput(input.week)), Number(env.COACH_TIMEOUT_MS) || TIMEOUT_MS);
-    const out = cleanCoach(modelObject(r));
+    const out = await askCoach(env.AI, input.week, Number(env.COACH_TIMEOUT_MS) || TIMEOUT_MS);
     if (out.error) return json({ error: out.error, quota }, 502);
     return json({ ...out, lang: input.week.lang, quota });
   } catch (e) {

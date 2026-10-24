@@ -5,12 +5,14 @@
 /// zodat het rapport opnieuw openen niets kost; "Write again" mag binnen de dagteller.
 library;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../i18n.dart';
 import '../../nutrition/coach.dart';
+import '../../nutrition/nutrients.dart' show nutrientByKey;
 import '../../nutrition/report.dart';
 import '../../platform/ai_request.dart';
 import '../../platform/coach_request.dart';
@@ -69,6 +71,20 @@ class CoachCache {
   }
 }
 
+/// Wat het paneel naar /api/coach stuurt: de week, met voorstellen uit het Orakel voor je grootste tekorten en, als
+/// de coach vorige week schreef, die tips met hoe die stoffen veranderden.
+@visibleForTesting
+Future<Map<String, Object?>> coachWeekFor(AppState s, CoachCache cache, WeeklyReport r) async {
+  // Eerst een beeld tekenen (het draaiende wieltje), dan pas het Orakel: dat rekent op deze draad
+  await Future<void>.delayed(Duration.zero);
+  final sw = Stopwatch()..start();
+  final options = s.coachOptions(coachGapKeys(r.avg), goals: r.goals);
+  if (kDebugMode) debugPrint('coach: voorstellen voor ${options.length} stoffen in ${sw.elapsedMilliseconds} ms');
+  final m = r.monday;
+  final previous = cache.result(DateTime(m.year, m.month, m.day - 7));
+  return coachWeek(r, diet: s.preferences, allergies: s.allergies, options: options, lastWeek: coachLastWeek(r, previous));
+}
+
 /// Wat het paneel toont.
 enum CoachAccess {
   /// Niet tonen: te weinig dagen, de server kent de coach niet, of de functie staat nog uit.
@@ -111,10 +127,15 @@ class _CoachPanelState extends State<CoachPanel> {
       _busy = true;
       _error = null;
     });
-    final week = coachWeek(widget.report, diet: s.preferences, allergies: s.allergies);
+    final week = await coachWeekFor(s, cache, widget.report);
     try {
       final r = await coachRequest.write(week, token: token);
-      cache.save(monday: widget.report.monday, result: r, quota: coachRequest.lastQuota);
+      // Waar de voorstellen over gingen, voor de terugblik van volgende week
+      final focus = [
+        for (final k in coachGapKeys(widget.report.avg))
+          if (week['options'] case final Map o when o.containsKey(nutrientByKey[k]?.name)) k,
+      ];
+      cache.save(monday: widget.report.monday, result: r.withFocus(focus), quota: coachRequest.lastQuota);
     } on AiException catch (e) {
       if (coachRequest.lastQuota case final q?) cache.save(quota: q);
       if (e.code == 'not_configured') coachUnavailable = true;

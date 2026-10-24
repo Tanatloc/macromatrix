@@ -3,7 +3,18 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MAX_INPUT_BYTES, TEXT_MODEL, cleanCoach, cleanWeek, onRequestPost, systemPrompt } from '../../functions/api/coach.js';
+import {
+  EXAMPLES,
+  MAX_INPUT_BYTES,
+  TEXT_MODEL,
+  cleanCoach,
+  cleanWeek,
+  coachInput,
+  onRequestPost,
+  systemPrompt,
+  trimSummary,
+  wrongLanguage,
+} from '../../functions/api/coach.js';
 import { stripMarkdown, withTimeout } from '../../functions/_lib/ai.js';
 
 const week = (extra = {}) => ({
@@ -62,6 +73,118 @@ test('systeemprompt: de taal en de regels', () => {
   assert.doesNotMatch(systemPrompt('en'), /Nederlands/);
   assert.match(systemPrompt('en'), /never a dose/);
   assert.match(systemPrompt('en'), /Never shame/);
+  assert.match(systemPrompt('en'), /at most 60 words/);
+  assert.match(systemPrompt('en'), /every tip must use one or more foods from options/);
+  assert.match(systemPrompt('en'), /clearly_above_goal/);
+  assert.match(systemPrompt('en'), /last_week/);
+});
+
+test('systeemprompt: alleen het voorbeeld in de gevraagde taal', () => {
+  const en = systemPrompt('en');
+  const nl = systemPrompt('nl');
+  assert.ok(en.includes(EXAMPLES.en));
+  assert.ok(!en.includes(EXAMPLES.nl));
+  assert.ok(nl.includes(EXAMPLES.nl));
+  assert.ok(!nl.includes(EXAMPLES.en));
+  // Beide voorbeelden zijn geldige JSON in de vorm van het antwoord, kort en zonder uitroeptekens
+  for (const [lang, ex] of Object.entries(EXAMPLES)) {
+    const j = JSON.parse(ex);
+    assert.ok(j.summary.split(/\s+/).length <= 60, lang);
+    assert.ok(j.tips.length >= 2 && j.tips.length <= 3, lang);
+    assert.doesNotMatch(ex, /!/);
+    assert.equal(wrongLanguage(`${j.summary} ${j.tips.join(' ')}`, lang), false, lang);
+    assert.equal(cleanCoach(j).summary, j.summary);
+  }
+  // Een onbekende taal krijgt het Engels
+  assert.ok(systemPrompt('fr').includes(EXAMPLES.en));
+  assert.match(coachInput({ lang: 'nl' }, { retry: true }).messages[0].content, /Answer only in Dutch\.$/);
+  assert.equal(coachInput({ lang: 'en' }).reasoning_effort, 'low');
+});
+
+test('cleanWeek: voorstellen per tekort, beperkt en nagekeken', () => {
+  const food = (i) => ({ food: `food ${i}`, portion: '80 g', pct: 50 + i });
+  const options = {
+    'Vitamin K1': [{ food: 'spinach, cooked', portion: '80 g', pct: 350 }, food(1), food(2), food(3), food(4), food(5)],
+    'Vitamin E': [{ food: 'sunflower seeds', portion: '30 g', pct: 99999 }, { food: 'x'.repeat(80), portion: '1 portion (150 g)', pct: 20 }],
+    Potassium: [{ food: 'see https://evil.example', portion: '80 g', pct: 10 }, { food: 'banana', pct: 12 }, { food: 'beans', portion: '120 g', pct: -5 }],
+    Empty: [],
+    'N 4': [food(1)],
+    'N 5': [food(1)],
+    'N 6': [food(1)],
+  };
+  const { week: w } = cleanWeek(week({ options }));
+  assert.deepEqual(Object.keys(w.options), ['Vitamin K1', 'Vitamin E', 'Potassium', 'N 4']);
+  assert.equal(w.options['Vitamin K1'].length, 4);
+  assert.deepEqual(w.options['Vitamin K1'][0], { food: 'spinach, cooked', portion: '80 g', pct: 350 });
+  assert.equal(w.options['Vitamin E'][0].pct, 2000);
+  assert.equal(w.options['Vitamin E'][1].food.length, 50);
+  // Een link valt weg, een voedingsmiddel zonder portie ook, een negatief deel wordt 0
+  assert.deepEqual(w.options.Potassium, [{ food: 'beans', portion: '120 g', pct: 0 }]);
+  // Geen of een ongeldig veld: leeg
+  assert.deepEqual(cleanWeek(week()).week.options, {});
+  assert.deepEqual(cleanWeek(week({ options: [1, 2] })).week.options, {});
+  assert.deepEqual(cleanWeek(week({ options: 'spinach' })).week.options, {});
+});
+
+test('cleanWeek: vorige week, beperkt en nagekeken', () => {
+  const { week: w } = cleanWeek(
+    week({
+      last_week: {
+        tips: ['Add a handful of lentils to your soup.', 'Visit https://evil.example for more', 'y'.repeat(400), 'Eat a pear.', 'Fifth tip here.'],
+        changes: [
+          { nutrient: 'Fibre', before_pct: 67, now_pct: 80 },
+          { nutrient: 'Vitamin D', before_pct: '22', now_pct: 30 },
+          { nutrient: 'Iron', before_pct: 5000, now_pct: 90, secret: 'x' },
+        ],
+        notes: 'secret',
+      },
+    }),
+  );
+  assert.deepEqual(w.last_week.tips, ['Add a handful of lentils to your soup.', 'y'.repeat(200)]);
+  assert.deepEqual(w.last_week.changes, [
+    { nutrient: 'Fibre', before_pct: 67, now_pct: 80 },
+    { nutrient: 'Iron', before_pct: 1000, now_pct: 90 },
+  ]);
+  assert.equal(w.last_week.notes, undefined);
+  assert.equal(cleanWeek(week()).week.last_week, null);
+  assert.equal(cleanWeek(week({ last_week: { tips: [], changes: [] } })).week.last_week, null);
+});
+
+test('cleanWeek: energie duidelijk boven of ver onder het doel', () => {
+  const note = (avg, goal, plan = 'lose') => cleanWeek(week({ energy: { avg, goal }, goal: plan })).week.energy_note;
+  assert.equal(note(2152, 1710), 'clearly_above_goal');
+  assert.equal(note(2152, 1710, 'maintain'), 'clearly_above_goal');
+  assert.equal(note(2152, 1710, 'gain'), null);
+  assert.equal(note(1800, 1710), null);
+  assert.equal(note(1200, 2000), 'far_below_goal');
+  assert.equal(cleanWeek(week({ energy: undefined })).week.energy_note, null);
+});
+
+test('samenvatting te lang: ingekort op het einde van een zin', () => {
+  const s10 = 'This is a sentence with exactly ten words in it.';
+  const long = Array(10).fill(s10).join(' ');
+  const t = trimSummary(long);
+  assert.equal(t, Array(9).fill(s10).join(' '));
+  assert.ok(t.split(/\s+/).length <= 90);
+  assert.equal(trimSummary(s10), s10);
+  // Eén zin van 120 woorden: op een woord
+  const one = Array(120).fill('word').join(' ');
+  assert.equal(trimSummary(one).split(/\s+/).length, 90);
+  assert.match(trimSummary(one), /…$/);
+  // In cleanCoach
+  assert.equal(cleanCoach({ summary: long, tips: ['Add beans to one dinner.'] }).summary, t);
+});
+
+test('taalcontrole: Engels in een Nederlands antwoord en omgekeerd', () => {
+  const en = 'You had a steady week and your breakfast with muesli and fruit was a good base for the rest of the day.';
+  const nl = 'Je had een rustige week en je ontbijt met muesli en fruit was een goede basis voor de rest van de dag.';
+  assert.equal(wrongLanguage(en, 'nl'), true);
+  assert.equal(wrongLanguage(nl, 'en'), true);
+  assert.equal(wrongLanguage(en, 'en'), false);
+  assert.equal(wrongLanguage(nl, 'nl'), false);
+  // Een Engelse productnaam in een Nederlandse zin is geen andere taal
+  assert.equal(wrongLanguage('Roer 80 g spinach door je pasta with meat sauce, en eet een handvol noten.', 'nl'), false);
+  assert.equal(wrongLanguage('', 'nl'), false);
 });
 
 test('cleanCoach: markdown weg, hoogstens 3 tips, geen dosis', () => {
@@ -148,6 +271,7 @@ test('binnen de teller: samenvatting, tips en de teller', async () => {
 });
 
 test('Nederlands: de prompt vraagt Nederlands en het antwoord zegt nl', async () => {
+  reply = { response: { summary: 'Je logde 5 dagen en je bleef dicht bij je doel.', tips: ['Eet een handvol noten bij je ontbijt.'] } };
   const res = await onRequestPost({ request: req(week({ lang: 'nl' })), env });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).lang, 'nl');
@@ -187,6 +311,62 @@ test('ongeldige JSON van het model: een nette fout met de teller', async () => {
   const ok = await onRequestPost({ request: req(week()), env });
   assert.equal(ok.status, 200);
   assert.equal((await ok.json()).summary, 'Steady week with 5 days logged and fibre a bit low.');
+});
+
+test('antwoord in het chatformaat (gpt-oss): de tekst uit choices wordt gelezen', async () => {
+  reply = {
+    object: 'chat.completion',
+    choices: [{ message: { role: 'assistant', content: '{"summary": "A steady week with good protein at lunch.", "tips": ["Add lentils to your pasta sauce."]}' } }],
+  };
+  const res = await onRequestPost({ request: req(week()), env });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.summary, 'A steady week with good protein at lunch.');
+  assert.deepEqual(body.tips, ['Add lentils to your pasta sauce.']);
+});
+
+test('antwoord in de verkeerde taal: één nieuwe poging, en daarna bad_output', async () => {
+  const english = { response: { summary: 'You had a steady week and the protein at lunch was a good base for the day.', tips: ['Add a handful of nuts to your breakfast for the rest of the week.'] } };
+  const dutch = { response: { summary: 'Je had een rustige week en je ontbijt met muesli was een goede basis.', tips: ['Eet een handvol noten bij je ontbijt.'] } };
+  const replies = [english, dutch];
+  const inputs = [];
+  const seq = { AI: { run: async (model, input) => (inputs.push(input), replies.shift()) } };
+  const res = await onRequestPost({ request: req(week({ lang: 'nl' })), env: seq });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).summary, dutch.response.summary);
+  assert.equal(inputs.length, 2);
+  assert.doesNotMatch(inputs[0].messages[0].content, /Answer only in/);
+  assert.match(inputs[1].messages[0].content, /Answer only in Dutch\./);
+  // Twee keer de verkeerde taal: bad_output, niet nog eens
+  replies.push(english, english, english);
+  inputs.length = 0;
+  const bad = await onRequestPost({ request: req(week({ lang: 'nl' })), env: seq });
+  assert.equal(bad.status, 502);
+  assert.equal((await bad.json()).error, 'bad_output');
+  assert.equal(inputs.length, 2);
+  // Engels gevraagd en Nederlands gekregen: ook een nieuwe poging
+  replies.length = 0;
+  replies.push(dutch, english);
+  inputs.length = 0;
+  const ok = await onRequestPost({ request: req(week()), env: seq });
+  assert.equal(ok.status, 200);
+  assert.match(inputs[1].messages[0].content, /Answer only in English\./);
+  // In de juiste taal: maar één vraag
+  replies.length = 0;
+  replies.push(english);
+  inputs.length = 0;
+  assert.equal((await onRequestPost({ request: req(week()), env: seq })).status, 200);
+  assert.equal(inputs.length, 1);
+});
+
+test('voorstellen en vorige week gaan mee naar het model', async () => {
+  const options = { 'Vitamin K1': [{ food: 'spinach, cooked', portion: '80 g', pct: 350 }] };
+  const last_week = { tips: ['Add lentils to your soup.'], changes: [{ nutrient: 'Fibre', before_pct: 67, now_pct: 80 }] };
+  assert.equal((await onRequestPost({ request: req(week({ options, last_week })), env })).status, 200);
+  const sent = JSON.parse(lastInput.input.messages[1].content);
+  assert.deepEqual(sent.options, options);
+  assert.deepEqual(sent.last_week, last_week);
+  assert.equal(sent.energy_note, null);
 });
 
 test('model faalt: failed', async () => {

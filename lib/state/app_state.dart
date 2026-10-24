@@ -11,6 +11,7 @@ import '../day_clock.dart';
 export '../day_clock.dart';
 import '../data/food.dart';
 import '../i18n.dart';
+import '../nutrition/coach.dart' show CoachOption, coachFoodName, coachPortion, isFallbackServing;
 import '../data/food_db.dart';
 import '../data/models.dart';
 import '../data/plan.dart';
@@ -726,6 +727,35 @@ class AppState extends ChangeNotifier {
     return Portion(tr('${(grams ?? 100).round()} g serving', 'portie van ${(grams ?? 100).round()} g'), grams ?? 100);
   }
 
+  /// Voor de wekelijkse coach: per stof in [keys] hoogstens [perKey] gewone voedingsmiddelen uit het Orakel (per
+  /// portie, alleen gewone voedingsmiddelen, met je voorkeuren en allergieën), met een gewone naam en portie in de taal
+  /// van de app en het deel van het dagdoel ([goals], anders je doel van vandaag) dat die portie geeft. Eén kleine
+  /// vraag aan het Orakel per stof (±0,1 à 0,2 s op een computer, zie test/coach_test.dart).
+  Map<String, List<CoachOption>> coachOptions(List<String> keys, {Map<String, double> goals = const {}, int perKey = 4}) {
+    final out = <String, List<CoachOption>>{};
+    for (final k in keys) {
+      final goal = goals[k] ?? _targets[k]?.goal;
+      if (goal == null || goal <= 0) continue;
+      final seen = <String>{};
+      final list = <CoachOption>[];
+      for (final (f, v) in oracle(k, rank: OracleRank.perPortion, limit: 12, everyday: true)) {
+        final name = coachFoodName(f, nl: isNl);
+        // Eén keer spinazie, ook als er rauwe en gekookte is
+        if (name == null || !seen.add(name.split(',').first)) continue;
+        final serving = oracleServing(f);
+        if (isFallbackServing(serving)) continue;
+        final portion = coachPortion(f, serving, nl: isNl);
+        final pct = (v * portion.grams / serving.grams / goal * 100).round();
+        if (pct < 5) continue;
+        list.add(CoachOption(food: name, portion: portion.label, pct: math.min(pct, 2000)));
+      }
+      // Wat het meest aanvult eerst (een handvol gedroogd fruit zakt na het inkorten van de portie)
+      list.sort((a, b) => b.pct.compareTo(a.pct));
+      if (list.isNotEmpty) out[k] = list.take(perKey).toList();
+    }
+    return out;
+  }
+
   /// Producten van één bevolkingsgroep in de Amerikaanse tabel (gedroogde walrus, Navajo-pijnboompitten): hier niet te koop.
   static final _regional = RegExp(r'Alaska Native|Navajo|Shoshone|Hopi|Apache|Northern Plains|Oogruk', caseSensitive: false);
 
@@ -1259,7 +1289,7 @@ class AppState extends ChangeNotifier {
     if (days.isEmpty) return const [];
     final set = days.toSet();
     final sorted = [...days]..sort();
-    final kcal = <String, double>{}, names = <String, String>{};
+    final kcal = <String, double>{}, names = <String, String>{}, refs = <String, String>{};
     for (final e in user.entriesBetween(sorted.first, sorted.last)) {
       if (!set.contains(e.day) || e.foodRef.startsWith('supp:')) continue;
       final String name;
@@ -1273,10 +1303,20 @@ class AppState extends ChangeNotifier {
       if (name.isEmpty) continue;
       final key = name.toLowerCase();
       names.putIfAbsent(key, () => name);
+      refs.putIfAbsent(key, () => e.foodRef);
       kcal[key] = (kcal[key] ?? 0) + (entryValues(e)['energy'] ?? 0);
     }
     final top = kcal.entries.where((e) => e.value > 0).toList()..sort((a, b) => b.value.compareTo(a.value));
-    return [for (final e in top.take(take)) names[e.key]!];
+    // In het Nederlands een Nederlandse naam voor wat uit de ingebouwde databank komt (die namen zijn Engels), zodat de
+    // coach geen Engelse woorden in een Nederlandse vraag krijgt. Zonder vertaling blijft de naam uit je dagboek.
+    String shown(String key) {
+      final ref = refs[key]!;
+      if (!isNl || ref.startsWith('recipe:') || ref.startsWith('custom:') || ref.startsWith('off:')) return names[key]!;
+      final f = foods.byRef(ref);
+      return (f == null ? null : coachFoodName(f, nl: true, anything: true)) ?? names[key]!;
+    }
+
+    return {for (final e in top.take(take)) shown(e.key)}.toList();
   }
 
   /// Snel loggen: een stuk van een zin omzetten naar een product en een hoeveelheid.
