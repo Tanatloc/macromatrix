@@ -959,5 +959,89 @@ class UserDb {
 
   void deleteSetting(String key) => _db.execute('DELETE FROM settings WHERE key = ?', [key]);
 
+  // ── Back-up (zie data/backup.dart) ──
+
+  /// Alle tabellen met gegevens van de gebruiker: wat gesynchroniseerd wordt, plus wat alleen op dit toestel staat.
+  /// Een nieuwe tabel hoort hier ook bij (test/backup_test.dart controleert dat).
+  static final backupTables = [for (final t in syncTables) t.name, 'labs', 'biometric_moments'];
+
+  /// Kolommen van een tabel zoals ze hier echt bestaan (zonder `synced`): naam, type en of ze verplicht zijn.
+  List<({String name, String type, bool required})> backupColumns(String table) => [
+    for (final r in _db.select('PRAGMA table_info($table)'))
+      if (r['name'] != 'synced')
+        (name: r['name'] as String, type: (r['type'] as String).toUpperCase(), required: r['notnull'] == 1 && r['dflt_value'] == null),
+  ];
+
+  /// Sleutelkolom van een back-uptabel.
+  static String backupKey(String table) => syncTables.where((t) => t.name == table).firstOrNull?.key ?? 'id';
+
+  /// Alle rijen van een tabel die niet verwijderd zijn, met alle kolommen. Bij de instellingen niets van de sessie
+  /// of de synchronisatie (sleutels met "_"); de weergave ('ui') gaat wel mee.
+  List<Map<String, Object?>> backupRows(String table) {
+    final cols = backupColumns(table);
+    final where = [if (cols.any((c) => c.name == 'deleted')) 'deleted = 0', if (table == 'settings') "key NOT LIKE '\\_%' ESCAPE '\\'"];
+    return [
+      for (final r in _db.select('SELECT * FROM $table${where.isEmpty ? '' : ' WHERE ${where.join(' AND ')}'} ORDER BY rowid'))
+        {for (final c in cols) c.name: r[c.name]},
+    ];
+  }
+
+  /// Rijen uit een (al gecontroleerde) back-up terugzetten, als één geheel. Geeft (teruggezet, overgeslagen).
+  ///
+  /// - [replace]: wat hier staat verdwijnt eerst. Rijen die gesynchroniseerd worden, worden gemarkeerd als
+  ///   verwijderd (en notities leeggemaakt), zodat de server en andere toestellen dat ook overnemen. Instellingen
+  ///   uit de back-up overschrijven die van hier; instellingen die er niet in staan blijven.
+  /// - Samenvoegen: alleen wat hier ontbreekt (of verwijderd is) komt erbij; niets van hier wordt overschreven.
+  ///
+  /// Teruggezette rijen krijgen het tijdstip van nu en `synced = 0`: met een account gaan ze bij de volgende
+  /// synchronisatie gewoon naar de server, en "laatste wijziging wint" kiest dan voor de back-up.
+  (int, int) restoreRows(Map<String, List<Map<String, Object?>>> tables, {required bool replace}) {
+    var restored = 0, skipped = 0;
+    final now = _now();
+    transaction(() {
+      for (final table in backupTables) {
+        final cols = backupColumns(table);
+        final names = {for (final c in cols) c.name};
+        final synced = syncTables.any((t) => t.name == table);
+        final key = backupKey(table);
+        if (replace) {
+          if (table == 'settings') {
+            // Instellingen worden hieronder overschreven
+          } else if (!synced) {
+            _db.execute('DELETE FROM $table');
+          } else if (names.contains('deleted')) {
+            _db.execute('UPDATE $table SET deleted = 1, updated_at = ?, synced = 0 WHERE deleted = 0', [now]);
+          } else if (table == 'notes') {
+            _db.execute("UPDATE notes SET text = '', updated_at = ?, synced = 0 WHERE text != ''", [now]);
+          }
+        }
+        for (final row in tables[table] ?? const <Map<String, Object?>>[]) {
+          if (!replace) {
+            final local = _db.select('SELECT * FROM $table WHERE "$key" = ?', [row[key]]).firstOrNull;
+            final gone =
+                local == null || (names.contains('deleted') && local['deleted'] == 1) || (table == 'notes' && (local['text'] as String).isEmpty);
+            if (!gone) {
+              skipped++;
+              continue;
+            }
+          }
+          final values = {
+            for (final c in cols)
+              if (row.containsKey(c.name)) c.name: _localValue(row[c.name]),
+            if (names.contains('updated_at')) 'updated_at': now,
+            if (names.contains('deleted')) 'deleted': 0,
+            if (synced) 'synced': 0,
+          };
+          _db.execute(
+            'INSERT OR REPLACE INTO $table (${values.keys.map((c) => '"$c"').join(', ')}) VALUES (${List.filled(values.length, '?').join(', ')})',
+            values.values.toList(),
+          );
+          restored++;
+        }
+      }
+    });
+    return (restored, skipped);
+  }
+
   void close() => _db.close();
 }
