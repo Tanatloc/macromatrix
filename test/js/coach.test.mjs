@@ -14,6 +14,9 @@ import {
   systemPrompt,
   trimSummary,
   wrongLanguage,
+  contradictions,
+  askCoach,
+  smallEnergyTips,
 } from '../../functions/api/coach.js';
 import { stripMarkdown, withTimeout } from '../../functions/_lib/ai.js';
 
@@ -318,7 +321,7 @@ test('antwoord in het chatformaat (gpt-oss): de tekst uit choices wordt gelezen'
     object: 'chat.completion',
     choices: [{ message: { role: 'assistant', content: '{"summary": "A steady week with good protein at lunch.", "tips": ["Add lentils to your pasta sauce."]}' } }],
   };
-  const res = await onRequestPost({ request: req(week()), env });
+  const res = await onRequestPost({ request: req(week({ macros: { protein: { avg: 95, goal: 100 } } })), env });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.summary, 'A steady week with good protein at lunch.');
@@ -326,7 +329,7 @@ test('antwoord in het chatformaat (gpt-oss): de tekst uit choices wordt gelezen'
 });
 
 test('antwoord in de verkeerde taal: één nieuwe poging, en daarna bad_output', async () => {
-  const english = { response: { summary: 'You had a steady week and the protein at lunch was a good base for the day.', tips: ['Add a handful of nuts to your breakfast for the rest of the week.'] } };
+  const english = { response: { summary: 'You had a steady week and the muesli at breakfast was a good base for the day.', tips: ['Add a handful of nuts to your breakfast for the rest of the week.'] } };
   const dutch = { response: { summary: 'Je had een rustige week en je ontbijt met muesli was een goede basis.', tips: ['Eet een handvol noten bij je ontbijt.'] } };
   const replies = [english, dutch];
   const inputs = [];
@@ -410,4 +413,100 @@ test('zonder token: login; zonder model: not_configured', async () => {
   const noAuth = new Request('https://app.test/api/coach', { method: 'POST', body: '{}' });
   assert.equal((await onRequestPost({ request: noAuth, env })).status, 401);
   assert.equal((await onRequestPost({ request: req(week()), env: {} })).status, 503);
+});
+
+// --- SU-2: de coach mag het rapport niet tegenspreken
+
+// De week uit ronde 11: eiwit op 47 %, 823 kcal per dag tekort, doel behouden
+const r11 = () =>
+  cleanWeek(
+    week({
+      goal: 'maintain',
+      score: 47,
+      days: 3,
+      energy: { avg: 1034, goal: 1857 },
+      macros: { protein: { avg: 44, goal: 93 }, carbs: { avg: 140, goal: 220 }, fat: { avg: 40, goal: 65 }, fiber: { avg: 24, goal: 28 } },
+      low: [
+        { key: 'vit_d', name: 'Vitamin D', pct: 4 },
+        { key: 'iodine', name: 'Iodine', pct: 30 },
+      ],
+      high: [],
+    }),
+  ).week;
+
+test('coachinvoer: eiwit als uitdrukkelijk tekort met %, het energietekort en wat niet geprezen mag worden', () => {
+  const w = r11();
+  assert.deepEqual(w.macros_below_target[0], { nutrient: 'protein', pct_of_target: 47 });
+  assert.equal(w.macros.protein.pct_of_target, 47);
+  // Vezels op 86 %: wel een tekort, maar niet onder 80 % (mag dus ook niet in never_praise)
+  assert.ok(w.macros_below_target.some((m) => m.nutrient === 'fiber' && m.pct_of_target === 86));
+  assert.equal(w.energy_gap_kcal_per_day, 823);
+  assert.equal(w.energy_note, 'far_below_goal');
+  assert.deepEqual(w.never_praise, ['energy', 'protein', 'fat', 'carbs', 'Vitamin D', 'Iodine']);
+  const sent = coachInput(w);
+  const user = JSON.parse(sent.messages[1].content);
+  assert.deepEqual(user.macros_below_target[0], { nutrient: 'protein', pct_of_target: 47 });
+  assert.match(sent.messages[0].content, /never_praise lists everything under 80%/);
+  assert.match(sent.messages[0].content, /energy_gap_kcal_per_day/);
+  // Dicht bij het doel: geen tekort, niets verboden
+  const ok = cleanWeek(week({ energy: { avg: 1950, goal: 2000 }, macros: { protein: { avg: 95, goal: 100 } }, low: [] })).week;
+  assert.equal(ok.energy_gap_kcal_per_day, null);
+  assert.deepEqual(ok.macros_below_target, []);
+  assert.deepEqual(ok.never_praise, []);
+});
+
+test('tegenspraak: lof voor eiwit onder 80 % en "a bit more energy" bij een groot tekort', () => {
+  const w = r11();
+  const bad =
+    'Your meals provided a steady base of protein and fiber. Vitamin D and iodine were far below target. Adding a bit more energy and those nutrients will help next week.';
+  assert.deepEqual(contradictions(bad, w), [
+    'Your meals provided a steady base of protein and fiber.',
+    'Adding a bit more energy and those nutrients will help next week.',
+  ]);
+  // Eerlijk benoemd: geen tegenspraak
+  assert.deepEqual(contradictions('Protein was well below target this week. Vitamin D and iodine were far below target too.', w), []);
+  assert.deepEqual(contradictions('Je eiwit bleef ver onder je doel. Je eet duidelijk te weinig energie.', w), []);
+  assert.deepEqual(contradictions('Je eiwit was een goede basis.', w), ['Je eiwit was een goede basis.']);
+  assert.deepEqual(contradictions('Your iodine intake was good.', w), ['Your iodine intake was good.']);
+  // Eiwit op doel: mag geprezen worden
+  const fine = cleanWeek(week({ macros: { protein: { avg: 95, goal: 100 } } })).week;
+  assert.deepEqual(contradictions('Your meals provided a steady base of protein.', fine), []);
+});
+
+test('tegenspraak: één nieuwe poging met de correctie, daarna valt de zin weg', async () => {
+  const bad = { response: { summary: 'Your meals provided a steady base of protein. Vitamin D was far below target.', tips: ['Add 120 g of salmon to dinner twice this week.'] } };
+  const good = { response: { summary: 'Protein and energy were well below target. Vitamin D was far below target too.', tips: ['Add a fuller lunch and a yoghurt with nuts, about 800 kcal more a day.'] } };
+  const inputs = [];
+  const seq = (replies) => ({ run: async (_m, input) => (inputs.push(input), replies.shift()) });
+  const w = r11();
+  const fixed = await askCoach(seq([bad, good]), w, 5000);
+  assert.equal(fixed.summary, good.response.summary);
+  assert.equal(fixed.tips[0], good.response.tips[0], 'een aanvulling in kcal is geen caloriedoel');
+  assert.equal(inputs.length, 2);
+  assert.match(inputs[1].messages[0].content, /contradicted the data: "Your meals provided a steady base of protein\."/);
+  assert.match(inputs[1].messages[0].content, /protein is 47% of target/);
+  // Twee keer fout: de zin valt weg, de rest blijft
+  inputs.length = 0;
+  const dropped = await askCoach(seq([bad, bad]), w, 5000);
+  assert.equal(dropped.summary, 'Vitamin D was far below target.');
+  assert.equal(inputs.length, 2);
+  // Alleen tegenspraak: bad_output
+  const only = { response: { summary: 'Your meals provided a steady base of protein.', tips: ['Add 120 g of salmon to dinner.'] } };
+  assert.deepEqual(await askCoach(seq([only, only]), w, 5000), { error: 'bad_output' });
+});
+
+test('energietip te klein voor een groot tekort: nieuwe poging, daarna valt die tip weg', async () => {
+  const w = r11();
+  const small = 'Have a slightly larger serving of rice at dinner to help meet your energy needs.';
+  const big = 'Add a fuller lunch and a yoghurt with granola and nuts, about 800 kcal more a day.';
+  assert.deepEqual(smallEnergyTips([small, big], w), [small]);
+  // Afvallen: geen grootte opgelegd
+  assert.deepEqual(smallEnergyTips([small], { ...w, goal: 'lose' }), []);
+  const reply = { response: { summary: 'Protein and energy were well below target this week.', tips: ['Add 120 g of salmon to dinner twice.', small] } };
+  const inputs = [];
+  const ai = { run: async (_m, input) => (inputs.push(input), reply) };
+  const out = await askCoach(ai, w, 5000);
+  assert.equal(inputs.length, 2);
+  assert.match(inputs[1].messages[0].content, /slightly larger serving/);
+  assert.deepEqual(out.tips, ['Add 120 g of salmon to dinner twice.']);
 });
