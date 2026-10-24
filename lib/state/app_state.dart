@@ -520,7 +520,7 @@ class AppState extends ChangeNotifier {
   List<BioTip> get bioTipsToday => bioTips(_entries, _targets);
 
   /// Maand- of jaaroverzicht van [from] tot en met [to] (niet later dan vandaag). Null als je niets logde.
-  Recap? recap(DateTime from, DateTime to, {required bool year}) {
+  Recap? recap(DateTime from, DateTime to, {required bool year, bool withPrevious = true}) {
     final today = _dateOnly(logicalNow());
     final end = to.isAfter(today) ? today : to;
     if (end.isBefore(from)) return null;
@@ -531,12 +531,18 @@ class AppState extends ChangeNotifier {
     if (entries.isEmpty) return null;
     final daily = dailyTotals(from, end);
     final scores = <String, int>{};
+    final dayKcal = <String, double>{};
     final sums = <String, double>{};
-    var kcal = 0.0;
+    var kcal = 0.0, goalKcal = 0.0, protein = 0.0, carbs = 0.0, fat = 0.0;
     for (final e in daily.entries) {
       final t = targetsForDate(DateTime.parse(e.key));
       scores[e.key] = completenessScore(e.value.values, t);
+      dayKcal[e.key] = e.value.values['energy'] ?? 0;
       kcal += e.value.values['energy'] ?? 0;
+      goalKcal += t['energy']?.goal ?? 0;
+      protein += e.value.values['protein'] ?? 0;
+      carbs += e.value.values['carbs'] ?? 0;
+      fat += e.value.values['fat'] ?? 0;
       for (final k in stripKeys) {
         final g = t[k]?.goal;
         if (g != null && g > 0) sums[k] = (sums[k] ?? 0) + math.min(1.5, (e.value.values[k] ?? 0) / g);
@@ -566,6 +572,12 @@ class AppState extends ChangeNotifier {
     // Superkracht: niet fosfor, natrium of chloride (die haalt bijna iedereen ruim)
     final candidates = sums.entries.where((e) => !const {'phosphorus', 'sodium', 'chloride'}.contains(e.key)).toList();
     final topNutrient = candidates.isEmpty ? null : candidates.reduce((a, b) => b.value > a.value ? b : a);
+    final weakNutrient = candidates.isEmpty ? null : candidates.reduce((a, b) => b.value < a.value ? b : a);
+    final macroKcal = protein * 4 + carbs * 4 + fat * 9;
+    // Vorige maand of vorig jaar, even lang, voor ▲/▼
+    final prevFrom = year ? DateTime(from.year - 1) : DateTime(from.year, from.month - 1);
+    final prevTo = year ? DateTime(from.year - 1, 12, 31) : DateTime(from.year, from.month, 0);
+    final previous = withPrevious ? recap(prevFrom, prevTo, year: year, withPrevious: false) : null;
     final fav = breakfasts.entries.isEmpty ? null : breakfasts.entries.reduce((a, b) => b.value > a.value ? b : a);
     final xp = level.days.where((d) => d.day.compareTo(dayKey(from)) >= 0 && d.day.compareTo(dayKey(end)) <= 0).fold(0, (a, d) => a + d.xp);
     return Recap(
@@ -585,6 +597,15 @@ class AppState extends ChangeNotifier {
       avgKcal: daily.isEmpty ? 0 : (kcal / daily.length).round(),
       topNutrient: topNutrient == null ? null : (nutrientByKey[topNutrient.key]!, topNutrient.value / daily.length),
       favouriteBreakfast: fav != null && fav.value >= 3 ? fav.key : null,
+      weakNutrient: weakNutrient == null || weakNutrient.key == topNutrient?.key
+          ? null
+          : (nutrientByKey[weakNutrient.key]!, weakNutrient.value / daily.length),
+      dayScores: scores,
+      dayKcal: dayKcal,
+      kcalGoal: daily.isEmpty ? 0 : (goalKcal / daily.length).round(),
+      split: macroKcal <= 0 ? null : (protein * 4 / macroKcal, carbs * 4 / macroKcal, fat * 9 / macroKcal),
+      avgProtein: daily.isEmpty ? 0 : (protein / daily.length).round(),
+      previous: previous,
     );
   }
 

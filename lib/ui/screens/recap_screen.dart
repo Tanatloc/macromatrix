@@ -37,26 +37,6 @@ class RecapScreen extends StatelessWidget {
     final p = context.pal;
     final r = s.recap(from, to, year: year);
 
-    // Zelfde opbouw als het weekrapport: rustige panelen, cijfers in inkt, één zachte merkkleur bovenaan
-    Widget section(String title, Widget child, {String? subtitle}) => Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Panel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [PanelTitle(title, subtitle: subtitle), const SizedBox(height: 10), child],
-        ),
-      ),
-    );
-    Widget big(String v, {String? unit}) => Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(v, style: numStyle(40, color: p.ink)),
-        if (unit != null) ...[const SizedBox(width: 6), Text(unit, style: TextStyle(fontSize: 14, color: p.ink2))],
-      ],
-    );
-    Widget note(String v) => Text(v, style: TextStyle(fontSize: 13, color: p.ink3, height: 1.35));
-
     return Scaffold(
       appBar: AppBar(
         title: Text(year ? tr('Year in review', 'Jaaroverzicht') : tr('Monthly recap', 'Maandoverzicht')),
@@ -87,163 +67,604 @@ class RecapScreen extends StatelessWidget {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Opening: wie, welke periode, en de drie kerncijfers
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Panel(
-                          shadow: false,
-                          color: p.brandSoft,
-                          borderColor: p.brandSoft,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  LevelAvatar(avatar: s.avatar, level: s.level.level, size: 56),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          title,
-                                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.3, color: p.ink),
-                                        ),
-                                        Text(
-                                          // 'van de 412 dagen' klinkt als een verwijt; enkel bij een maand of korter
-                                          r.daysInPeriod <= 31
-                                              ? tr(
-                                                  'You logged ${r.daysLogged} of ${r.daysInPeriod} days.',
-                                                  'Je logde ${r.daysLogged} van de ${r.daysInPeriod} dagen.',
-                                                )
-                                              : tr(
-                                                  '${r.daysLogged} ${r.daysLogged == 1 ? 'day' : 'days'} logged.',
-                                                  '${r.daysLogged} ${r.daysLogged == 1 ? 'dag' : 'dagen'} gelogd.',
-                                                ),
-                                          style: TextStyle(fontSize: 13.5, color: p.ink2),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: StatTile(
-                                      label: tr('Best streak', 'Beste reeks'),
-                                      value: tr('${r.longestStreak} ${r.longestStreak == 1 ? 'day' : 'days'}', '${r.longestStreak} ${r.longestStreak == 1 ? 'dag' : 'dagen'}'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: StatTile(label: tr('Foods', 'Producten'), value: fmtInt(r.distinctFoods))),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: StatTile(label: tr('XP earned', 'XP verdiend'), value: fmtInt(r.xp))),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      section(
-                        tr('Nutrient score', 'Voedingsscore'),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            big('${r.avgScore}', unit: tr('on average', 'gemiddeld')),
-                            if (r.bestDay != null)
-                              note(
-                                tr(
-                                  'Best day: ${DateFormat('EEEE d MMMM', appLocale).format(r.bestDay!.$1)} with ${r.bestDay!.$2}.',
-                                  'Beste dag: ${DateFormat('EEEE d MMMM', appLocale).format(r.bestDay!.$1)} met ${r.bestDay!.$2}.',
-                                ),
-                              ),
-                            if (r.bestMonth != null)
-                              note(
-                                tr(
-                                  'Best month: ${DateFormat('MMMM', appLocale).format(r.bestMonth!.$1)} (${r.bestMonth!.$2}).',
-                                  'Beste maand: ${DateFormat('MMMM', appLocale).format(r.bestMonth!.$1)} (${r.bestMonth!.$2}).',
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      section(
-                        tr('What you ate most', 'Wat je het meest at'),
-                        subtitle: tr(
-                          '${fmtInt(r.distinctFoods)} different foods in ${fmtInt(r.entries)} entries',
-                          '${fmtInt(r.distinctFoods)} verschillende producten in ${fmtInt(r.entries)} regels',
-                        ),
-                        Column(
-                          children: [
-                            for (final (i, (name, n)) in r.topFoods.indexed)
-                              Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                decoration: BoxDecoration(
-                                  border: i == 0 ? null : Border(top: BorderSide(color: p.line)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 24,
-                                      child: Text('${i + 1}', style: numStyle(13, color: p.ink3)),
-                                    ),
-                                    Expanded(
-                                      child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: p.ink)),
-                                    ),
-                                    Text('$n×', style: numStyle(13, color: p.ink2)),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      // Alleen als het echt goed ging: 28% van je doel is geen sterkste punt
-                      if (r.topNutrient != null && r.topNutrient!.$2 >= 0.75)
-                        section(
-                          tr('Your strongest nutrient', 'Je sterkste voedingsstof'),
-                          Row(
-                            children: [
-                              Icon(Icons.check_circle_rounded, color: p.ok, size: 22),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(r.topNutrient!.$1.name, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.ink)),
-                                    note(
-                                      tr(
-                                        'On average ${r.topNutrient!.$2 >= 1.5 ? '150%+' : fmtPct(r.topNutrient!.$2)} of your daily goal.',
-                                        'Gemiddeld ${r.topNutrient!.$2 >= 1.5 ? '150%+' : fmtPct(r.topNutrient!.$2)} van je dagdoel.',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      section(
-                        tr('Energy', 'Energie'),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            big(fmtInt(r.avgKcal), unit: tr('kcal per logged day', 'kcal per gelogde dag')),
-                            if (r.favouriteBreakfast != null) ...[
-                              const SizedBox(height: 10),
-                              Eyebrow(tr('Favourite breakfast', 'Favoriet ontbijt')),
-                              const SizedBox(height: 2),
-                              Text(r.favouriteBreakfast!, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: p.ink)),
-                            ],
-                          ],
-                        ),
-                      ),
+                      _Hero(r: r, avatar: LevelAvatar(avatar: s.avatar, level: s.level.level, size: 44)),
+                      const SizedBox(height: 12),
+                      if (!year) _Calendar(r: r) else _MonthBars(r: r),
+                      const SizedBox(height: 12),
+                      _Energy(r: r),
+                      if (r.split != null) ...[const SizedBox(height: 12), _Macros(r: r)],
+                      if (r.topFoods.isNotEmpty) ...[const SizedBox(height: 12), _TopFoods(r: r)],
+                      const SizedBox(height: 12),
+                      _Highlights(r: r),
                     ],
                   ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// ▲ 3 / ▼ 2 tegenover de vorige periode, of niets als die er niet is.
+String? _delta(num now, num? before, {String unit = ''}) {
+  if (before == null) return null;
+  final d = (now - before).round();
+  if (d == 0) return '=';
+  return '${d > 0 ? '▲' : '▼'} ${fmtInt(d.abs())}$unit';
+}
+
+/// Opening: de maand groot in de merkkleur, de scorering en je kerncijfers tegenover vorige maand.
+class _Hero extends StatelessWidget {
+  const _Hero({required this.r, required this.avatar});
+  final Recap r;
+  final Widget avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final on = p.onBrand;
+    final prev = r.previous;
+    final name = r.year ? '${r.from.year}' : DateFormat('MMMM', appLocale).format(r.from);
+    Widget stat(String label, String value, String? delta) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(
+            child: Text(label, style: TextStyle(fontSize: 12.5, color: on.withValues(alpha: 0.8))),
+          ),
+          Text(value, style: numStyle(17, color: on)),
+          if (delta != null) ...[
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 52,
+              child: Text(delta, maxLines: 1, overflow: TextOverflow.fade, softWrap: false, style: TextStyle(fontSize: 11, color: on.withValues(alpha: 0.75))),
+            ),
+          ],
+        ],
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: BoxDecoration(color: p.brand, borderRadius: BorderRadius.circular(24)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Eyebrow(r.year ? tr('Your year', 'Jouw jaar') : '${tr('Your month', 'Jouw maand')} · ${r.from.year}', color: on.withValues(alpha: 0.8)),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        name[0].toUpperCase() + name.substring(1),
+                        style: TextStyle(fontSize: 44, height: 1.1, fontWeight: FontWeight.w700, letterSpacing: -1.2, color: on),
+                      ),
+                    ),
+                    Text(
+                      r.daysInPeriod <= 31
+                          ? tr('${r.daysLogged} of ${r.daysInPeriod} days logged', '${r.daysLogged} van ${r.daysInPeriod} dagen gelogd')
+                          : tr('${r.daysLogged} ${r.daysLogged == 1 ? 'day' : 'days'} logged', '${r.daysLogged} ${r.daysLogged == 1 ? 'dag' : 'dagen'} gelogd'),
+                      style: TextStyle(fontSize: 13.5, color: on.withValues(alpha: 0.85)),
+                    ),
+                  ],
+                ),
+              ),
+              avatar,
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              SizedBox(
+                width: 104,
+                height: 104,
+                child: CustomPaint(
+                  painter: _Ring(r.avgScore / 100, track: on.withValues(alpha: 0.22), fill: on),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${r.avgScore}', style: numStyle(32, color: on, height: 1)),
+                        Text(
+                          _delta(r.avgScore, prev?.avgScore) ?? tr('score', 'score'),
+                          style: TextStyle(fontSize: 11, color: on.withValues(alpha: 0.8)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  children: [
+                    stat(tr('Items logged', 'Regels gelogd'), fmtInt(r.entries), _delta(r.entries, prev?.entries)),
+                    stat(tr('Different foods', 'Verschillende producten'), '${r.distinctFoods}', _delta(r.distinctFoods, prev?.distinctFoods)),
+                    stat(tr('Best streak', 'Beste reeks'), '${r.longestStreak}', null),
+                    stat(tr('XP earned', 'XP verdiend'), fmtInt(r.xp), _delta(r.xp, prev?.xp)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Ring extends CustomPainter {
+  _Ring(this.fraction, {required this.track, required this.fill});
+  final double fraction;
+  final Color track, fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 9.0;
+    final rect = (Offset.zero & size).deflate(stroke / 2 + 1);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, 0, 6.283, false, paint..color = track);
+    if (fraction > 0) canvas.drawArc(rect, -1.5708, 6.283 * fraction.clamp(0.0, 1.0), false, paint..color = fill);
+  }
+
+  @override
+  bool shouldRepaint(_Ring old) => old.fraction != fraction || old.fill != fill || old.track != track;
+}
+
+/// Kleur voor een score: één tint, van licht (laag) naar de volle merkkleur (hoog).
+Color _scoreColor(Palette p, int score) => Color.lerp(p.brandSoft, p.brand, (score / 100).clamp(0.08, 1.0))!;
+
+/// De maand dag per dag: een vakje per dag, hoe donkerder hoe hoger je Voedingsscore.
+class _Calendar extends StatelessWidget {
+  const _Calendar({required this.r});
+  final Recap r;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final first = DateTime(r.from.year, r.from.month);
+    final days = DateTime(r.from.year, r.from.month + 1, 0).day;
+    final lead = first.weekday - 1; // maandag eerst
+    final weeks = ((lead + days) / 7).ceil();
+    final best = r.bestDay?.$1;
+    final weekdays = [for (var i = 0; i < 7; i++) DateFormat('EEEEE', appLocale).format(DateTime(2024, 1, 1 + i))];
+
+    Widget cell(int day) {
+      final d = DateTime(r.from.year, r.from.month, day);
+      final key = dayKey(d);
+      final score = r.dayScores[key];
+      final future = d.isAfter(r.to);
+      final isBest = best != null && dayKey(best) == key;
+      final color = score == null ? (future ? Colors.transparent : p.track) : _scoreColor(p, score);
+      final dark = score != null && score >= 45;
+      final box = Container(
+        margin: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: isBest ? Border.all(color: p.ink, width: 1.6) : (future ? Border.all(color: p.line) : null),
+        ),
+        alignment: Alignment.center,
+        child: Text('$day', style: numStyle(11, color: dark ? p.onBrand : (future ? p.ink3 : p.ink2))),
+      );
+      return AspectRatio(
+        aspectRatio: 1,
+        child: score == null
+            ? box
+            : Tooltip(
+                triggerMode: TooltipTriggerMode.tap,
+                message: tr(
+                  '${DateFormat('EEE d MMM', appLocale).format(d)} · score $score · ${fmtInt(r.dayKcal[key] ?? 0)} kcal',
+                  '${DateFormat('EEE d MMM', appLocale).format(d)} · score $score · ${fmtInt(r.dayKcal[key] ?? 0)} kcal',
+                ),
+                child: box,
+              ),
+      );
+    }
+
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Day by day', 'Dag per dag'),
+            subtitle: tr('Darker means a higher Nutrient score · tap a day', 'Hoe donkerder, hoe hoger je Voedingsscore · tik op een dag'),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final w in weekdays)
+                Expanded(
+                  child: Center(child: Text(w.toUpperCase(), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: p.ink3))),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (var w = 0; w < weeks; w++)
+            Row(
+              children: [
+                for (var i = 0; i < 7; i++)
+                  Expanded(
+                    child: switch (w * 7 + i - lead + 1) {
+                      final day when day >= 1 && day <= days => cell(day),
+                      _ => const AspectRatio(aspectRatio: 1, child: SizedBox()),
+                    },
+                  ),
+              ],
+            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(tr('Low', 'Laag'), style: TextStyle(fontSize: 11, color: p.ink3)),
+              const SizedBox(width: 6),
+              for (final v in [10, 30, 50, 70, 90])
+                Container(
+                  width: 18,
+                  height: 10,
+                  margin: const EdgeInsets.only(right: 2),
+                  decoration: BoxDecoration(color: _scoreColor(p, v), borderRadius: BorderRadius.circular(3)),
+                ),
+              const SizedBox(width: 4),
+              Text(tr('High', 'Hoog'), style: TextStyle(fontSize: 11, color: p.ink3)),
+              const Spacer(),
+              if (best != null) ...[
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(border: Border.all(color: p.ink, width: 1.6), borderRadius: BorderRadius.circular(3)),
+                ),
+                const SizedBox(width: 5),
+                Text(tr('Best day', 'Beste dag'), style: TextStyle(fontSize: 11, color: p.ink3)),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Jaar: de gemiddelde score per maand als staafjes.
+class _MonthBars extends StatelessWidget {
+  const _MonthBars({required this.r});
+  final Recap r;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final byMonth = <int, List<int>>{};
+    for (final e in r.dayScores.entries) {
+      byMonth.putIfAbsent(DateTime.parse(e.key).month, () => []).add(e.value);
+    }
+    int? avg(int m) => byMonth[m] == null ? null : (byMonth[m]!.reduce((a, b) => a + b) / byMonth[m]!.length).round();
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(tr('Month by month', 'Maand per maand'), subtitle: tr('Average Nutrient score', 'Gemiddelde Voedingsscore')),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 120,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var m = 1; m <= 12; m++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (avg(m) != null) Text('${avg(m)}', style: numStyle(10, color: p.ink2)),
+                          const SizedBox(height: 3),
+                          Container(
+                            height: avg(m) == null ? 3 : 4 + 76 * avg(m)! / 100,
+                            decoration: BoxDecoration(
+                              color: avg(m) == null ? p.track : _scoreColor(p, avg(m)!),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(DateFormat('MMMMM', appLocale).format(DateTime(2024, m)), style: TextStyle(fontSize: 10.5, color: p.ink3)),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Energie: het gemiddelde groot, met per dag een staafje en je doel als lijn.
+class _Energy extends StatelessWidget {
+  const _Energy({required this.r});
+  final Recap r;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final days = [
+      for (var d = r.from; !d.isAfter(r.to); d = DateTime(d.year, d.month, d.day + 1)) r.dayKcal[dayKey(d)],
+    ];
+    final delta = _delta(r.avgKcal, r.previous?.avgKcal, unit: ' kcal');
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(tr('Energy', 'Energie')),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(fmtInt(r.avgKcal), style: numStyle(36, color: p.ink)),
+              const SizedBox(width: 6),
+              Flexible(child: Text(tr('kcal per logged day', 'kcal per gelogde dag'), style: TextStyle(fontSize: 13, color: p.ink2))),
+            ],
+          ),
+          Text(
+            [
+              if (r.kcalGoal > 0) tr('goal ${fmtInt(r.kcalGoal)}', 'doel ${fmtInt(r.kcalGoal)}'),
+              ?delta == null ? null : '$delta ${tr('vs last ${r.year ? 'year' : 'month'}', 't.o.v. vorige ${r.year ? 'jaar' : 'maand'}')}',
+            ].join(' · '),
+            style: TextStyle(fontSize: 12.5, color: p.ink3),
+          ),
+          if (!r.year && days.length > 1) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 72,
+              child: CustomPaint(painter: _KcalBars(days, r.kcalGoal.toDouble(), bar: p.brand, over: p.highFill, line: p.ink3, empty: p.track)),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text(DateFormat('d MMM', appLocale).format(r.from), style: TextStyle(fontSize: 11, color: p.ink3)),
+                const Spacer(),
+                Text(tr('- - - goal', '- - - doel'), style: TextStyle(fontSize: 11, color: p.ink3)),
+                const Spacer(),
+                Text(DateFormat('d MMM', appLocale).format(r.to), style: TextStyle(fontSize: 11, color: p.ink3)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _KcalBars extends CustomPainter {
+  _KcalBars(this.values, this.goal, {required this.bar, required this.over, required this.line, required this.empty});
+  final List<double?> values;
+  final double goal;
+  final Color bar, over, line, empty;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final known = values.whereType<double>();
+    final top = [goal, if (known.isNotEmpty) known.reduce((a, b) => a > b ? a : b)].reduce((a, b) => a > b ? a : b) * 1.1;
+    if (top <= 0) return;
+    final step = size.width / values.length;
+    final w = (step - 2).clamp(1.5, 14.0);
+    for (final (i, v) in values.indexed) {
+      final x = i * step + (step - w) / 2;
+      if (v == null || v <= 0) {
+        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x, size.height - 3, w, 3), const Radius.circular(1.5)), Paint()..color = empty);
+        continue;
+      }
+      final h = (v / top * size.height).clamp(3.0, size.height);
+      final r = Radius.circular((w / 2).clamp(0, 4));
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(Rect.fromLTWH(x, size.height - h, w, h), topLeft: r, topRight: r),
+        Paint()..color = goal > 0 && v > goal * 1.1 ? over : bar,
+      );
+    }
+    if (goal > 0) {
+      final y = size.height - goal / top * size.height;
+      final paint = Paint()
+        ..color = line
+        ..strokeWidth = 1;
+      for (var x = 0.0; x < size.width; x += 6) {
+        canvas.drawLine(Offset(x, y), Offset(x + 3, y), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_KcalBars old) => old.values != values || old.goal != goal || old.bar != bar;
+}
+
+/// Macroverdeling van de maand als één gestapelde balk, met een legende.
+class _Macros extends StatelessWidget {
+  const _Macros({required this.r});
+  final Recap r;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    // Afgerond tot samen precies 100%
+    final pr = (r.split!.$1 * 100).round() / 100, cb = (r.split!.$2 * 100).round() / 100, ft = 1 - pr - cb;
+    final parts = [
+      (tr('Protein', 'Eiwit'), pr, p.protein, tr('${r.avgProtein} g a day', '${r.avgProtein} g per dag')),
+      (tr('Carbs', 'Koolhydraten'), cb, p.carbs, null),
+      (tr('Fat', 'Vet'), ft, p.fat, null),
+    ];
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(tr('Where your energy came from', 'Waar je energie vandaan kwam')),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 14,
+              child: Row(
+                children: [
+                  for (final (i, (_, f, c, _)) in parts.indexed)
+                    if (f > 0)
+                      Expanded(
+                        flex: (f * 1000).round().clamp(1, 1000),
+                        child: Container(color: c, margin: EdgeInsets.only(left: i == 0 ? 0 : 2)),
+                      ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final (name, f, c, extra) in parts)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(width: 8, height: 8, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+                          const SizedBox(width: 6),
+                          Flexible(child: Text(name, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: p.ink2))),
+                        ],
+                      ),
+                      Text(fmtPct(f), style: numStyle(20, color: p.ink)),
+                      if (extra != null) Text(extra, style: TextStyle(fontSize: 11.5, color: p.ink3)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Wat je het meest at, met een balkje naar verhouding.
+class _TopFoods extends StatelessWidget {
+  const _TopFoods({required this.r});
+  final Recap r;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final most = r.topFoods.first.$2;
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Your top 5', 'Jouw top 5'),
+            subtitle: tr('${fmtInt(r.distinctFoods)} different foods in ${fmtInt(r.entries)} entries', '${fmtInt(r.distinctFoods)} verschillende producten in ${fmtInt(r.entries)} regels'),
+          ),
+          const SizedBox(height: 8),
+          for (final (i, (name, n)) in r.topFoods.indexed)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 26,
+                    child: Text('${i + 1}', style: numStyle(16, color: i == 0 ? p.brand : p.ink3)),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: p.ink)),
+                        const SizedBox(height: 4),
+                        FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: (n / most).clamp(0.04, 1.0),
+                          child: Container(
+                            height: 6,
+                            decoration: BoxDecoration(color: i == 0 ? p.brand : p.brand.withValues(alpha: 0.35), borderRadius: BorderRadius.circular(3)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('$n×', style: numStyle(13, color: p.ink2)),
+                ],
+              ),
+            ),
+          if (r.favouriteBreakfast != null) ...[
+            const SizedBox(height: 8),
+            Divider(color: p.line, height: 1),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.wb_sunny_outlined, size: 18, color: p.ink3),
+                const SizedBox(width: 8),
+                Text(tr('Favourite breakfast: ', 'Favoriet ontbijt: '), style: TextStyle(fontSize: 13, color: p.ink3)),
+                Expanded(
+                  child: Text(r.favouriteBreakfast!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.ink)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Je sterkste stof en iets om aan te werken, naast elkaar.
+class _Highlights extends StatelessWidget {
+  const _Highlights({required this.r});
+  final Recap r;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    Widget tile(IconData icon, Color color, Color soft, String label, String name, double frac) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: soft, borderRadius: BorderRadius.circular(18)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Flexible(child: Eyebrow(label, color: color)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: p.ink)),
+            const SizedBox(height: 2),
+            Text(
+              tr('${frac >= 1.5 ? '150%+' : fmtPct(frac)} of your goal', '${frac >= 1.5 ? '150%+' : fmtPct(frac)} van je doel'),
+              style: TextStyle(fontSize: 12, color: p.ink2),
+            ),
+          ],
+        ),
+      ),
+    );
+    final strong = r.topNutrient != null && r.topNutrient!.$2 >= 0.75 ? r.topNutrient : null;
+    final weak = r.weakNutrient != null && r.weakNutrient!.$2 < 0.75 ? r.weakNutrient : null;
+    if (strong == null && weak == null) return const SizedBox.shrink();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (strong != null) tile(Icons.check_circle_rounded, p.ok, p.okSoft, tr('Strongest', 'Sterkste'), strong.$1.name, strong.$2),
+        if (strong != null && weak != null) const SizedBox(width: 10),
+        if (weak != null) tile(Icons.trending_up_rounded, p.low, p.lowSoft, tr('To work on', 'Om aan te werken'), weak.$1.name, weak.$2),
+      ],
     );
   }
 }

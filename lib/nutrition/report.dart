@@ -153,6 +153,13 @@ class Recap {
     required this.avgKcal,
     this.topNutrient,
     this.favouriteBreakfast,
+    this.weakNutrient,
+    this.dayScores = const {},
+    this.dayKcal = const {},
+    this.kcalGoal = 0,
+    this.split,
+    this.avgProtein = 0,
+    this.previous,
   });
 
   final DateTime from, to;
@@ -169,4 +176,21 @@ class Recap {
   /// Stof die je het best haalde (naam, gemiddeld deel van het doel).
   final (Nutrient, double)? topNutrient;
   final String? favouriteBreakfast;
+
+  /// Stof die je het minst haalde (naam, gemiddeld deel van het doel): iets om aan te werken.
+  final (Nutrient, double)? weakNutrient;
+
+  /// Per gelogde dag (jjjj-mm-dd): Voedingsscore en kcal.
+  final Map<String, int> dayScores;
+  final Map<String, double> dayKcal;
+
+  /// Gemiddeld energiedoel over de gelogde dagen.
+  final int kcalGoal;
+
+  /// Gemiddelde verdeling van de energie over eiwit, koolhydraten en vet (samen 1).
+  final (double, double, double)? split;
+  final int avgProtein;
+
+  /// Dezelfde cijfers voor de vorige periode (vorige maand of vorig jaar), om te vergelijken.
+  final Recap? previous;
 }
