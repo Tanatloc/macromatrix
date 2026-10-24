@@ -113,6 +113,50 @@ final _notCake = RegExp(
   r'pork|meat|fish|crab|potato|mince|cupcakes?|snack cakes?|fried|madeleine|shortcake)\b',
 );
 
+/// Havermout (vlokken, droog of gekookt), ook "Oatmeal" uit de Noorse tabel (eigenlijk havermeel). Geen koek, reep,
+/// brood of haverdrank.
+bool isOats(Food f) {
+  final name = f.name.toLowerCase();
+  final l = f.label;
+  final oatsLike =
+      _oats.hasMatch(name) || const {'oats', 'rolled oats'}.contains(l?.food) || (l?.food == 'oat flour' && RegExp(r'^oatmeal\b').hasMatch(name));
+  return oatsLike &&
+      (l == null || const {'cereal', 'breakfast cereal'}.contains(l.group)) &&
+      !RegExp(r'\b(bars?|biscuits?|cookies?|bread|drink|porridge)\b').hasMatch(name);
+}
+
+final _porridge = RegExp(r'\b(porridge|oatmeal)\b');
+
+final _nutName = RegExp(r'\b(nuts?|almonds?|walnuts?|hazelnuts?|cashews?|pecans?|pistachios?|peanuts?|macadamias?|brazil nuts?|pine nuts?)\b');
+final _notNuts = RegExp(r'\b(butter|paste|spread|flour|meal|oil|milk|drink|powder|cream|chocolate|bar|sauce|coconut)\b');
+
+/// Noten om uit de hand te eten: een handvol (30 g).
+bool isNuts(Food f) {
+  final name = f.name.toLowerCase();
+  final l = f.label;
+  if (_notNuts.hasMatch(name)) return false;
+  if (l != null) {
+    return l.group == 'nut/seed' && !const {'flour', 'oil', 'powder', 'drink', 'paste'}.contains(l.part) && _nutName.hasMatch('$name ${l.food}');
+  }
+  return _nutName.hasMatch(name);
+}
+
+// Gerechten die je op een bord eet; wat hier staat is een stuk, een kom of een bijgerecht
+final _notPlate = RegExp(
+  r'\b(sandwich|burgers?|cheeseburger|hamburger|burrito|tacos?|wraps?|kebab|doner|pizza|sushi|maki|rolls?|dumplings?|wonton|'
+  r'potsticker|tarts?|quiche|cr[eê]pes?|pancakes?|omelett?e|samosa|salad|coleslaw|sauce|pudding|stuffed|skewer|nuggets?|'
+  r'hot pockets?|baguette|toast|buns?|pasty|pastry|porridge|oatmeal|soup|unprepared|dry mix|powder|baby|infant|children|sticks?|'
+  r'fingers?|bites?|crisp ?bread)\b',
+);
+
+/// Een warm hoofdgerecht (pasta, curry, stoofpot, lasagne, ovenschotel): een bord van ±350 g.
+bool isPlateDish(Food f) {
+  final l = f.label;
+  final name = f.name.toLowerCase();
+  if (l == null || l.group != 'dish' || l.flags.contains('infant')) return false;
+  return !_notPlate.hasMatch(name) && !_notPlate.hasMatch(l.food);
+}
+
 final _notPiece = RegExp(r'\b(puree|purée|sauce|compote|juice|jam|pie|crumble|soup|salad|mash(ed)?|chips|fries|noodles|pasta)\b');
 
 /// Groepen waarin "een stuk" iets betekent; voor andere groepen (bv. eiernoedels) geen stuk op naam alleen.
@@ -174,6 +218,15 @@ List<EverydayPortion> everydayPortions(Food f) {
   // Poeder of concentraat van een drank: geen glas
   if (const {'beverage', 'alcohol'}.contains(group)) return const [];
 
+  // Havermout: droog een kom en een eetlepel, gekookt een kom pap. Vóór bloem: "Oatmeal" uit de Noorse tabel is
+  // havermeel, maar wie "oatmeal" zoekt, eet een kom pap en geen eetlepel (NW-12). Een kom komt er altijd bij, ook
+  // als de databank alleen een eetlepel, een deciliter of een "portie" van 100 g heeft.
+  if (isOats(f)) {
+    final cookedOats = _cooked.hasMatch(name) || const {'boiled', 'cooked', 'prepared', 'steamed'}.contains(l?.state);
+    if (cookedOats) return unless([(_bowl, _p('1 bowl', '1 kom', 250))]);
+    return unless([(r'\bbowl\b', _p('1 bowl', '1 kom', 40)), (_tbsp, _p('1 tablespoon', '1 eetlepel', 10))]);
+  }
+
   // Bloem en zetmeel: een eetlepel (N84)
   if (part == 'flour' || (l == null && RegExp(r'\b(flour|cornflour|cornstarch|corn starch)\b').hasMatch(name))) {
     return unless([(_tbsp, _p('1 tablespoon', '1 eetlepel', 10))]);
@@ -219,16 +272,6 @@ List<EverydayPortion> everydayPortions(Food f) {
     return unless([(_bowl, _p('1 bowl', '1 kom', 250))]);
   }
 
-  // Havermout: droog een kom en een eetlepel, gekookt een kom pap
-  final oatsLike = _oats.hasMatch(name) || const {'oats', 'rolled oats'}.contains(l?.food);
-  if (oatsLike &&
-      (l == null || const {'cereal', 'breakfast cereal'}.contains(group)) &&
-      !RegExp(r'\b(bars?|biscuits?|cookies?|bread|drink)\b').hasMatch(name)) {
-    final cookedOats = _cooked.hasMatch(name) || const {'boiled', 'cooked', 'prepared', 'steamed'}.contains(l?.state);
-    if (cookedOats) return unless([(_bowl, _p('1 bowl', '1 kom', 250))]);
-    return unless([(_bowl, _p('1 bowl', '1 kom', 40)), (_tbsp, _p('1 tablespoon', '1 eetlepel', 10))]);
-  }
-
   // Taart en cake: een stuk
   final cakeName = (l?.food ?? name).toLowerCase();
   if ((l == null || const {'bakery', 'dessert'}.contains(group)) &&
@@ -237,6 +280,15 @@ List<EverydayPortion> everydayPortions(Food f) {
       !_notCake.hasMatch(name)) {
     return unless([(r'\b(slice|piece|pcs|serving|portion)\b', _p('1 slice', '1 stuk taart', 75))]);
   }
+
+  // Pap als gerecht ("Oatmeal porridge"): een kom
+  if (group == 'dish' && _porridge.hasMatch(name)) return unless([(_bowl, _p('1 bowl', '1 kom', 250))]);
+
+  // Noten: een handvol (geen notenpasta, -meel, -olie of -drank; die zijn hierboven al geweest of geen stuk)
+  if (isNuts(f)) return unless([(r'\bhandful\b', _p('1 handful', '1 handvol', 30))]);
+
+  // Warme gerechten (pasta, curry, stoofpot, lasagne): een bord. Broodjes, wraps, sushi en salades niet.
+  if (isPlateDish(f)) return unless([(r'\b(plate|portion|serving|meal)\b', _p('1 plate', '1 bord', 350))]);
 
   // Yoghurt, pap en ontbijtgranen: een kom
   if (group == 'breakfast cereal' || (_cereal.hasMatch(name) && !RegExp(r'\bbars?\b').hasMatch(name))) {
@@ -277,4 +329,85 @@ double stepQuantity(double q, {required bool up, required bool portion}) {
       : (up ? (q < 100 - eps ? 10 : 25) : (q <= 100 + eps ? 10 : 25));
   final next = up ? ((q / step + eps).floor() + 1) * step : ((q / step - eps).ceil() - 1) * step;
   return math.max(0, next);
+}
+
+// Maten die te klein zijn om mee te beginnen voor gewoon eten (wie meteen op Toevoegen tikt, logt anders 7 g havermout)
+final _tinyUnit = RegExp(r'\b(tsp|tbsp|teaspoons?|tablespoons?|eetlepels?|koffielepels?|theelepels?|pinch|dash|drops?)\b');
+
+/// Een gewone portie voor een soort product: het gewicht dat erbij hoort ([min]–[max]), het woord dat we liefst zien
+/// ([prefer]: kom, bord, stuk ...) en hoeveel gram als er geen passende portie is.
+typedef _Serving = ({RegExp prefer, double min, double max, double grams});
+
+_Serving _kind(String prefer, double min, double max, double grams) => (prefer: RegExp(prefer), min: min, max: max, grams: grams);
+
+final _berries = RegExp(r'(berr(y|ies)|\bgrapes?\b|\bcherr(y|ies)\b|\bcurrants?\b)');
+
+/// Welke gewone portie bij [f] hoort, of null als we niets beters weten dan de databank.
+_Serving? _servingKind(Food f) {
+  final name = f.name.toLowerCase();
+  final l = f.label;
+  final group = l?.group;
+  final part = l?.part;
+  final dried = l?.state == 'dried' || RegExp(r'\b(dried|dehydrated)\b').hasMatch(name);
+  if (isOats(f)) {
+    final cooked = _cooked.hasMatch(name) || const {'boiled', 'cooked', 'prepared', 'steamed'}.contains(l?.state);
+    return cooked ? _kind(r'\bbowl\b', 150, 400, 250) : _kind(r'\bbowl\b', 30, 80, 40);
+  }
+  if (group == 'dish' && _porridge.hasMatch(name)) return _kind(r'\bbowl\b', 150, 400, 250);
+  if (group == 'breakfast cereal' || (_cereal.hasMatch(name) && !RegExp(r'\bbars?\b').hasMatch(name))) {
+    return _kind(r'\bbowl\b', 25, 80, 40);
+  }
+  if (isPlateDish(f)) return _kind(r'\b(plate|portion|serving|meal)\b', 250, 600, 350);
+  if (group == 'soup' && !_notSoup.hasMatch(name)) return _kind(r'\bbowl\b', 200, 450, 250);
+  if (isNuts(f)) return _kind(r'\bhandful\b', 15, 40, 30);
+  if (isDrink(f) && !_spirits.hasMatch(name) && !_wine.hasMatch(name) && !_coconutMilk.hasMatch(name)) {
+    return _kind(r'\b(glass|cup|mug|can|bottle)\b', 150, 350, 200);
+  }
+  if ((group == 'bread' || (l == null && _bread.hasMatch(name))) && !_notSlice.hasMatch(name)) {
+    return _kind(r'\bslices?\b', 20, 60, 35);
+  }
+  if (group == 'fruit' && !const {'puree', 'juice', 'powder', 'concentrate', 'peel'}.contains(part) && !(l?.dish ?? false)) {
+    if (dried) return _kind(r'\bhandful\b', 20, 50, 30);
+    if (_berries.hasMatch(name)) return _kind(r'\b(cup|handful|bowl|portion|serving)\b', 80, 200, 125);
+    return _kind(r'\b(pcs|piece|medium|whole|fruit|unit|small|large)\b', 40, 300, typicalPieceGrams(name) ?? 120);
+  }
+  return null;
+}
+
+/// Wat je doorgaans in kleine maten logt: vet, beleg, sauzen, suiker, kruiden, bloem en supplementen.
+bool _smallUnitFood(Food f) {
+  final l = f.label;
+  final name = f.name.toLowerCase();
+  if (_spread.hasMatch(name)) return true;
+  if (l != null) {
+    return const {'oil/fat', 'oil', 'sauce/condiment', 'sugar/sweets', 'herb/spice', 'supplement', 'other'}.contains(l.group) ||
+        const {'flour', 'powder', 'oil', 'syrup', 'starch'}.contains(l.part);
+  }
+  return _oil.hasMatch(name) || RegExp(r'\b(sauce|dressing|ketchup|sugar|salt|spices?|herbs?|flour|powder)\b').hasMatch(name);
+}
+
+/// De standaardportie als je een product toevoegt (NW-12): een kom ontbijtgranen of havermout, een bord voor een
+/// gerecht, 1 stuk fruit, een glas drank, een sneetje brood, een handvol noten. Uit de porties van de databank en de
+/// gewone porties ([portionOptions]); past er geen, dan een gewone hoeveelheid in gram. Voor gewoon eten nooit een
+/// eetlepel of koffielepel; voor beleg, olie en sauzen wel (een eetlepel olie is juist).
+/// Geeft de portie (null = gram) en de hoeveelheid (aantal porties, of gram zonder portie).
+({Portion? portion, double quantity}) defaultServing(Food f) {
+  // Eigen producten en recepten: de portie die je zelf koos
+  if (f.source == FoodSource.custom || f.source == FoodSource.recipe) {
+    final first = f.portions.firstOrNull;
+    return (portion: first, quantity: first == null ? 100 : 1);
+  }
+  final options = portionOptions(f);
+  final kind = _servingKind(f);
+  bool tiny(Portion p) => p.grams < 5 || _tinyUnit.hasMatch(p.label.toLowerCase());
+  if (kind != null) {
+    bool fits(Portion p) => p.grams >= kind.min && p.grams <= kind.max && !tiny(p);
+    final pick = options.where((p) => fits(p) && kind.prefer.hasMatch(p.label.toLowerCase())).firstOrNull ?? options.where(fits).firstOrNull;
+    if (pick != null) return (portion: pick, quantity: 1);
+    return (portion: null, quantity: kind.grams);
+  }
+  // Geen bekende soort: zoals vroeger de eerste portie uit de databank, dan de gewone; geen lepeltje voor gewoon eten
+  final small = _smallUnitFood(f);
+  final first = [...f.portions, ...everydayPortions(f)].where((p) => p.grams > 0 && p.grams <= 1000 && (small || !tiny(p))).firstOrNull;
+  return (portion: first, quantity: first == null ? 100 : 1);
 }

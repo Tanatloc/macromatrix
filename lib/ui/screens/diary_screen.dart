@@ -1100,7 +1100,7 @@ class _SuggestionCard extends StatelessWidget {
     final p = context.pal;
     final x = suggestion;
     final amount = x.portion == null ? '${fmtInt(x.grams)} g' : '${x.portion!.label} (${fmtInt(x.grams)} g)';
-    final meal = context.read<AppState>().suggestedMeal;
+    final meal = s.adviceMeal;
     return Panel(
       shadow: false,
       color: p.brandSoft,
