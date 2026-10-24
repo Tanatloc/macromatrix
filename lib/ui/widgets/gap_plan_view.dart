@@ -78,7 +78,8 @@ class _GapPlanSheet extends StatefulWidget {
 }
 
 class _GapPlanSheetState extends State<_GapPlanSheet> {
-  Meal _meal = Meal.forHour(DateTime.now().hour);
+  // De maaltijd die nu komt (niet het ontbijt 's avonds), volgens de logische dag
+  late Meal _meal = context.read<AppState>().adviceMeal;
   final _added = <int>{};
 
   String _amount(PlanItem i) => i.portion == null ? '${fmtInt(i.grams)} g' : '${i.portion!.label} (${fmtInt(i.grams)} g)';
@@ -167,6 +168,12 @@ class _GapPlanSheetState extends State<_GapPlanSheet> {
                 ),
                 const SizedBox(height: 8),
               ],
+              // De percentages tellen op: elk product begint waar het vorige eindigde (NF-5)
+              if (plan.items.length > 1)
+                Text(
+                  tr('Each food builds on the ones above it.', 'Elk product bouwt verder op de producten erboven.'),
+                  style: TextStyle(fontSize: 12, color: p.ink3),
+                ),
               const SizedBox(height: 6),
               Segmented<Meal>(
                 height: 32,

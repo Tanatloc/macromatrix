@@ -37,7 +37,7 @@ import '../nutrition/report.dart';
 import '../nutrition/levels.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/preferences.dart';
-import '../nutrition/portions.dart' show EverydayPortion, everydayPortions, typicalPieceGrams;
+import '../nutrition/portions.dart' show EverydayPortion, defaultServing, everydayPortions, typicalPieceGrams;
 import '../nutrition/processing.dart';
 import '../nutrition/supplements.dart';
 import '../nutrition/targets.dart';
@@ -166,6 +166,27 @@ class AppState extends ChangeNotifier {
     if (isToday) return Meal.forHour(DateTime.now().hour);
     final used = {for (final e in _entries) e.meal};
     return Meal.values.firstWhere((m) => !used.contains(m), orElse: () => Meal.snacks);
+  }
+
+  /// Maaltijd voor een voorstel ("Wat moet ik nog eten?", "Grootste winst vandaag"): de maaltijd die nu komt, niet
+  /// het ontbijt 's avonds (NW-10, NW-11). Zie [nextMealFor]; op een andere dag zoals [suggestedMeal].
+  Meal get adviceMeal => isToday
+      ? nextMealFor(DateTime.now(), {
+          for (final e in _entries)
+            if (!e.foodRef.startsWith('supp:')) e.meal,
+        })
+      : suggestedMeal;
+
+  /// De volgende maaltijd om [clock]: die van het uur, of als die al gelogd is de volgende hoofdmaaltijd die nog leeg
+  /// is (ontbijt gelogd om 10 uur: lunch), daarna een tussendoortje. Na middernacht en vóór [dayStartHour] hoort het
+  /// nog bij gisteren: dan een tussendoortje, geen ontbijt.
+  static Meal nextMealFor(DateTime clock, Set<Meal> logged) {
+    final h = clock.hour;
+    if (h < dayStartHour) return Meal.snacks;
+    final now = Meal.forHour(h);
+    const main = [Meal.breakfast, Meal.lunch, Meal.dinner];
+    if (!main.contains(now) || !logged.contains(now)) return now;
+    return main.skip(main.indexOf(now) + 1).where((m) => !logged.contains(m)).firstOrNull ?? Meal.snacks;
   }
 
   List<DiaryEntry> _entries = const [];
@@ -776,7 +797,7 @@ class AppState extends ChangeNotifier {
     return _suggestion;
   }
 
-  static final _measure = RegExp(r'\b(cup|cups|tbsp|tsp|oz|fl|ml|dl|l|quart|pint)\b', caseSensitive: false);
+  static final _measure = RegExp(r'\b(cup|cups|tbsp|tsp|oz|fl|ml|dl|l|quart|pint|decilitres?|tablespoons?|teaspoons?)\b', caseSensitive: false);
 
   static final _notAFood = RegExp(r'\b(oil|supplement|powder|extract|fortified|infant|babyfood|yeast extract|spice|spices)\b', caseSensitive: false);
 
@@ -801,9 +822,11 @@ class AppState extends ChangeNotifier {
         final v = withDerived(f.per100g);
         final per100 = v[n.key] ?? 0;
         if (per100 <= 0) continue;
-        // Een herkenbare portie (1 ei, 1 filet, 1 snee) eerder dan een maatbeker of eetlepel; anders 100 g
-        final portion = f.portions.where((p) => p.grams >= 30 && p.grams <= 250 && !_measure.hasMatch(p.label)).firstOrNull;
-        final grams = portion?.grams ?? 100;
+        // Een herkenbare portie (1 ei, 1 filet, 1 snee) eerder dan een maatbeker, eetlepel of deciliter; anders een
+        // gewone portie voor dit soort product (30 g noten, 125 g vis, 50 g rauwe bladgroente: zie [adviceServing])
+        final (typical, cap) = adviceServing(f);
+        final portion = f.portions.where((p) => p.grams >= math.max(15, typical * 0.5) && p.grams <= cap && !_measure.hasMatch(p.label)).firstOrNull;
+        final grams = portion?.grams ?? typical;
         final added = per100 * grams / 100;
         final after = (_totals[n.key] + added) / t.goal!;
         final kcal = (v['energy'] ?? 0) * grams / 100;
@@ -1605,6 +1628,10 @@ class AppState extends ChangeNotifier {
         ...mine,
         for (final k in gaps.take(6))
           for (final r in richestFor(k, perKcal: true, limit: 25, advice: true)) r.$1,
+        // Voor de grootste tekorten ook de rijkste per gewone portie: per kcal staan bladgroenten boven yoghurt, melk
+        // en kaas, en dan bleef calcium liggen (NF-5)
+        for (final k in gaps.take(3))
+          for (final r in oracle(k, rank: OracleRank.perPortion, limit: 15, everyday: true)) r.$1,
       ])
         if (seen.add(f.ref)) f,
     ];
@@ -1900,6 +1927,26 @@ class AppState extends ChangeNotifier {
       m.remove(m.keys.first);
     }
     user.setSetting('_lastAmounts', m);
+  }
+
+  /// Wat je de laatste keer van dit product toevoegde (gram, aantal, portie), of null als het nieuw is.
+  ({double grams, double quantity, String? portion})? lastAmount(String ref) {
+    final a = _lastAmounts[ref];
+    if (a is! List || a.length < 3 || a[0] is! num || a[1] is! num) return null;
+    return (grams: (a[0] as num).toDouble(), quantity: (a[1] as num).toDouble(), portion: a[2] as String?);
+  }
+
+  /// Startportie op het productscherm: wat je de laatste keer van dit product nam, anders een gewone portie
+  /// ([defaultServing]: een kom havermout, een bord spaghetti, 1 appel). Geeft de portie (null = gram) en hoeveelheid.
+  ({Portion? portion, double quantity}) startServing(Food f) {
+    final last = lastAmount(f.ref);
+    if (last != null && last.grams > 0) {
+      if (last.portion == null) return (portion: null, quantity: last.grams);
+      final p = [...f.portions, ...everydayPortions(f)].where((p) => samePortion(p.label, last.portion)).firstOrNull;
+      // Portie bestaat niet meer: dezelfde grammen
+      return p == null ? (portion: null, quantity: last.grams) : (portion: p, quantity: last.quantity);
+    }
+    return defaultServing(f);
   }
 
   /// [e] met de hoeveelheid van de laatste keer dat je dit product toevoegde (als die gekend is).
