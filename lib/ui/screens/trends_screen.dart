@@ -412,7 +412,11 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                     Expanded(
                       child: grid([
                         for (final (i, c) in cats.indexed)
+                          // Alleen bij een bewuste tik of als de muis even blijft staan, niet als je eroverheen
+                          // scrolt (N53)
                           Tooltip(
+                            triggerMode: TooltipTriggerMode.tap,
+                            waitDuration: const Duration(milliseconds: 700),
                             message: '${n.name}, ${DateFormat('EEE d MMM', appLocale).format(parseDay(keys[i]))}: ${cellText(c)}',
                             child: Container(
                               height: 12,

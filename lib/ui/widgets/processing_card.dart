@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../i18n.dart';
 import '../../nutrition/processing.dart';
 import '../theme.dart';
+import 'info_tip.dart';
 import 'kit.dart';
 
 /// Kleur per NOVA-groep: groen (onbewerkt) tot rood (ultrabewerkt).
@@ -26,7 +27,10 @@ class ProcessingCard extends StatelessWidget {
     final p = context.pal;
     final ultra = (share.share(Nova.ultra) * 100).round();
     final verdict = ultra <= 10
-        ? tr('Mostly real food. Great!', 'Vooral echt eten. Top!')
+        // Gaat alleen over ultrabewerkt: bij veel 'bewerkt' (NOVA 3) is "vooral echt eten" niet waar (N56)
+        ? (ultra == 0
+              ? tr('No ultra-processed food. Great!', 'Geen ultrabewerkt eten. Top!')
+              : tr('Little ultra-processed food. Great!', 'Weinig ultrabewerkt eten. Top!'))
         : ultra <= 25
         ? tr('Fine. Less is better.', 'Prima. Minder is beter.')
         : ultra <= 50
@@ -41,6 +45,7 @@ class ProcessingCard extends StatelessWidget {
             subtitle: period
                 ? tr('share of your energy, NOVA', 'deel van je energie, NOVA')
                 : tr('share of today\'s energy, NOVA', 'deel van je energie vandaag, NOVA'),
+            trailing: InfoTip(title: 'NOVA', message: novaInfo()),
           ),
           const SizedBox(height: 10),
           if (!share.meaningful)

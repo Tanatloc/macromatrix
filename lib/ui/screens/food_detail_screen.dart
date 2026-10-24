@@ -14,6 +14,7 @@ import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/processing_card.dart';
 import '../widgets/allergen_banner.dart';
+import '../widgets/info_tip.dart';
 import '../widgets/kit.dart';
 import 'custom_food_screen.dart';
 import 'recipe_screen.dart';
@@ -627,15 +628,22 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                                 if (s.novaFor(_food.ref, food: _food) case final nova?)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 2),
-                                    child: Row(
-                                      children: [
-                                        LegendItem.box(novaColor(p, nova), w: 10, h: 10, radius: 3),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          tr('${nova.label} (NOVA ${nova.group})', '${nova.label} (NOVA ${nova.group})'),
-                                          style: TextStyle(fontSize: 13, color: p.ink2),
-                                        ),
-                                      ],
+                                    // Een tik legt de vier groepen uit (N34)
+                                    child: InfoTip(
+                                      title: 'NOVA',
+                                      message: novaInfo(),
+                                      child: Row(
+                                        children: [
+                                          LegendItem.box(novaColor(p, nova), w: 10, h: 10, radius: 3),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            tr('${nova.label} (NOVA ${nova.group})', '${nova.label} (NOVA ${nova.group})'),
+                                            style: TextStyle(fontSize: 13, color: p.ink2),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(Icons.info_outline_rounded, size: 14, color: p.ink3),
+                                        ],
+                                      ),
                                     ),
                                   ),
                               ],

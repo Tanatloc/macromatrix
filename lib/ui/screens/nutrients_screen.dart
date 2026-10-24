@@ -11,6 +11,7 @@ import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/processing_card.dart';
 import '../widgets/bio_tips_view.dart';
+import '../widgets/info_tip.dart';
 import '../widgets/kit.dart';
 import '../widgets/nutrient_row.dart';
 import 'nutrient_detail_screen.dart';
@@ -359,20 +360,21 @@ class ScoreCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    tr('Nutrient score', 'Voedingsscore'),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                  Flexible(
+                    child: Text(
+                      tr('Nutrient score', 'Voedingsscore'),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                  Tooltip(
-                    triggerMode: TooltipTriggerMode.tap,
+                  InfoTip(
+                    title: tr('Nutrient score', 'Voedingsscore'),
                     message: tr(
                       'How close you are to your goal for ${stripKeys.length} vitamins and minerals, on average. '
                           'Each nutrient counts up to 100%; above an upper limit the score drops.',
                       'Hoe dicht je bij je doel zit voor ${stripKeys.length} vitaminen en mineralen, gemiddeld. '
                           'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score.',
                     ),
-                    child: Icon(Icons.info_outline_rounded, size: 15, color: p.ink3),
                   ),
                 ],
               ),

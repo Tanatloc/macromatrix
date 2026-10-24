@@ -30,6 +30,7 @@ import '../widgets/allergen_picker.dart';
 import '../widgets/bio_tips_view.dart';
 import '../widgets/exercise_view.dart';
 import '../widgets/gap_plan_view.dart';
+import '../widgets/info_tip.dart';
 import '../widgets/nutrient_row.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
@@ -2485,7 +2486,7 @@ class _UsualStrip extends StatelessWidget {
   }
 }
 
-/// Je reeks naast de titel: oranje vlam met het aantal dagen. Grijs met een uitroepteken als je vandaag nog niets
+/// Je reeks naast de titel: oranje vlam met het aantal dagen. Grijs en omlijnd als je vandaag nog niets
 /// logde en je reeks vanavond zou eindigen.
 class StreakFlame extends StatelessWidget {
   const StreakFlame({super.key});
@@ -2498,11 +2499,17 @@ class StreakFlame extends StatelessWidget {
     final loggedToday = s.user.loggedDays().contains(dayKey(logicalNow()));
     final atRisk = !loggedToday && streak.current > 0;
     if (streak.current == 0) return const SizedBox.shrink();
-    return Tooltip(
-      message: atRisk
-          ? tr('Log something today to keep your ${streak.current}-day streak', 'Log vandaag iets om je reeks van ${streak.current} dagen te houden')
-          : tr('${streak.current} days in a row · longest ${streak.longest}', '${streak.current} dagen op rij · langste ${streak.longest}'),
-      triggerMode: TooltipTriggerMode.tap,
+    // Een tik legt de reeks uit (N39)
+    return InfoTip(
+      title: tr('Your streak', 'Je reeks'),
+      message: [
+        tr('You logged ${streak.current} days in a row.', 'Je logde ${streak.current} dagen op rij.'),
+        if (atRisk)
+          tr('You haven\'t logged anything today yet. Log something today to keep your streak.', 'Je logde vandaag nog niets. Log vandaag iets om je reeks te houden.')
+        else
+          tr('Log something every day to keep it going.', 'Log elke dag iets om ze te houden.'),
+        tr('Longest streak: ${streak.longest} days.', 'Langste reeks: ${streak.longest} dagen.'),
+      ].join('\n\n'),
       child: Container(
         padding: const EdgeInsets.fromLTRB(8, 4, 11, 4),
         decoration: BoxDecoration(
@@ -2518,7 +2525,8 @@ class StreakFlame extends StatelessWidget {
             Icon(Icons.local_fire_department_rounded, size: 20, color: atRisk ? p.carbs : Colors.white),
             const SizedBox(width: 3),
             Text('${streak.current}', style: numStyle(16, color: atRisk ? p.carbs : Colors.white)),
-            if (atRisk) ...[const SizedBox(width: 3), Icon(Icons.priority_high_rounded, size: 16, color: p.carbs)],
+            // Geen uitroepteken meer: dat las als een waarschuwing en paste niet naast twee cijfers. De omlijnde, grijze
+            // stijl toont al dat je vandaag nog moet loggen; een tik legt het uit (N39).
           ],
         ),
       ),
