@@ -88,7 +88,8 @@ void main() {
       target = Meal.values.firstWhere((m) => m != s.suggestedMeal);
       s.user.saveMeal('Kipcurry', [item], meal: target);
     });
-    await tester.tap(find.text('Kipcurry'));
+    // De titel noemt de maaltijd waar hij heen gaat (N20)
+    await tester.tap(find.text('${target.label} · Kipcurry'));
     await tester.pump();
     expect(s.entriesFor(target), hasLength(1));
     expect(s.entriesFor(s.suggestedMeal), isEmpty);

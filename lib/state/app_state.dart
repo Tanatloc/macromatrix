@@ -1741,11 +1741,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addSavedMeal(SavedMeal m, Meal meal) {
-    for (final i in m.items) {
-      user.addTemplate(day, meal, i);
-    }
+  /// Geef het resultaat aan [undoAdds] om het ongedaan te maken.
+  List<AddedEntry> addSavedMeal(SavedMeal m, Meal meal) {
+    final added = [for (final i in m.items) AddedEntry(user.addTemplate(day, meal, i))];
     _refresh();
+    return added;
   }
 
   void deleteSavedMeal(SavedMeal m) {

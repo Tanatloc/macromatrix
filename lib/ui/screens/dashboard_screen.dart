@@ -15,23 +15,27 @@ enum _Period { day, week, month }
 /// Dashboard: alle macro's en micro's van één dag, of het gemiddelde en verloop van een week of maand.
 /// Met de pijltjes blader je naar vorige dagen, weken of maanden.
 /// Telkens [showDay] afgaat (bv. "Alle voedingsstoffen" in het dagboek), springt het terug naar de dagweergave:
-/// die volgt de dag die in het dagboek gekozen is.
+/// die volgt de dag die in het dagboek gekozen is. Telkens [showWeek] afgaat (de kaart "Laatste 7 dagen"), springt
+/// het naar de week van die dag. Met [startOnWeek] opent het meteen op Week.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, this.showDay});
+  const DashboardScreen({super.key, this.showDay, this.showWeek, this.startOnWeek = false});
   final Listenable? showDay;
+  final Listenable? showWeek;
+  final bool startOnWeek;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  _Period _period = _Period.day;
-  DateTime _anchor = _today();
+  late _Period _period = widget.startOnWeek ? _Period.week : _Period.day;
+  late DateTime _anchor = widget.startOnWeek ? context.read<AppState>().date : _today();
 
   @override
   void initState() {
     super.initState();
     widget.showDay?.addListener(_toDay);
+    widget.showWeek?.addListener(_toWeek);
   }
 
   @override
@@ -41,12 +45,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       old.showDay?.removeListener(_toDay);
       widget.showDay?.addListener(_toDay);
     }
+    if (old.showWeek != widget.showWeek) {
+      old.showWeek?.removeListener(_toWeek);
+      widget.showWeek?.addListener(_toWeek);
+    }
   }
 
   @override
   void dispose() {
     widget.showDay?.removeListener(_toDay);
+    widget.showWeek?.removeListener(_toWeek);
     super.dispose();
+  }
+
+  /// Naar de weekweergave van de dag die in het dagboek gekozen is (N16).
+  void _toWeek() {
+    if (!mounted) return;
+    setState(() {
+      _period = _Period.week;
+      _anchor = context.read<AppState>().date;
+    });
   }
 
   /// Terug naar de dagweergave (de dag zelf staat in AppState.date).
@@ -130,6 +148,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }),
     );
 
+    // Bovenop een ander scherm geopend (niet als tabblad): een terugpijl, want er is dan geen menubalk (N16)
+    final canPop = ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -141,6 +162,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return ListView(
               padding: const EdgeInsets.only(bottom: 32),
               children: [
+                if (canPop)
+                  Narrow(
+                    maxWidth: mw,
+                    child: const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(padding: EdgeInsets.only(left: 8, top: 4), child: BackButton()),
+                    ),
+                  ),
                 Narrow(
                   maxWidth: mw,
                   child: PageHeader(
