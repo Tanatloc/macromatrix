@@ -219,18 +219,22 @@ double energyTarget(Profile p, int year, {double? tdee}) => p.energyOverride ?? 
 const proteinMinPerKg = 0.83;
 
 /// Energie waarop het eiwitdoel rust: je onderhoud, dus zonder het tekort of overschot van je doel, plus beweging.
-/// Met een eigen energiedoel is dat doel de basis (de app weet dan niet welk deel tekort is).
-double maintenanceKcal(Profile p, int year, {double extraKcal = 0, double? tdee}) =>
-    (p.energyOverride ?? (tdee ?? formulaTdee(p, year)).roundToDouble()) + extraKcal;
+/// Ook met een eigen energiedoel blijft dat je berekende onderhoud: zo daalt eiwit niet mee als je een lager doel
+/// typt, net zoals bij afvallen met een tempo.
+double maintenanceKcal(Profile p, int year, {double extraKcal = 0, double? tdee}) => (tdee ?? formulaTdee(p, year)).roundToDouble() + extraKcal;
 
 /// Macro's in gram (eiwit, koolhydraten, vet) voor een dag met [kcal] als energiedoel.
 ///
 /// Eiwit rekenen we eerst, op de onderhoudsenergie [maintenance]: afvallen verlaagt je eiwitdoel dus niet, want net
 /// dan heb je eiwit nodig om je spieren te behouden. Nooit onder 0,83 g per kg. Wat overblijft van [kcal] gaat naar
 /// koolhydraten en vet in hun onderlinge verhouding: die vangen het tekort of overschot op, en samen komen de macro's
-/// zo precies uit op het energiedoel.
-(double, double, double) macroGrams(Profile p, double kcal, double maintenance) {
-  final protein = math.min(math.max(maintenance * p.proteinPct / 100 / 4, proteinMinPerKg * p.weightKg), math.max(0.0, kcal) / 4);
+/// zo precies uit op het energiedoel. Met een eigen eiwitdoel [proteinGoal] telt dat getal, en verdelen
+/// koolhydraten en vet wat daarna overblijft.
+(double, double, double) macroGrams(Profile p, double kcal, double maintenance, {double? proteinGoal}) {
+  final cap = math.max(0.0, kcal) / 4;
+  final protein = proteinGoal != null
+      ? math.min(math.max(0.0, proteinGoal), cap)
+      : math.min(math.max(maintenance * p.proteinPct / 100 / 4, proteinMinPerKg * p.weightKg), cap);
   final rest = math.max(0.0, kcal - protein * 4);
   final cf = p.carbsPct + p.fatPct;
   if (cf <= 0) return (protein, 0, 0);
@@ -239,15 +243,52 @@ double maintenanceKcal(Profile p, int year, {double extraKcal = 0, double? tdee}
 
 /// Omgekeerd van [macroGrams]: welk percentage voor [key] (protein, carbs of fat) geeft [grams] gram. Eiwit is een
 /// deel van de onderhoudsenergie; koolhydraten en vet een deel van wat na eiwit overblijft (geschaald naar procent).
-double macroPctForGrams(String key, double grams, Profile p, double kcal, double maintenance) {
+double macroPctForGrams(String key, double grams, Profile p, double kcal, double maintenance, {double? proteinGoal}) {
   if (key == 'protein') return maintenance <= 0 ? p.proteinPct : grams * 4 / maintenance * 100;
-  final rest = kcal - macroGrams(p, kcal, maintenance).$1 * 4;
+  final rest = kcal - macroGrams(p, kcal, maintenance, proteinGoal: proteinGoal).$1 * 4;
   if (rest <= 0) return 0;
   return grams * (key == 'fat' ? 9 : 4) / rest * (100 - p.proteinPct);
 }
 
+/// Aandeel van een macro in het energiedoel, uit de echte grammen (0..1). Zo kloppen de procenten altijd met de
+/// grammen ernaast, ook met een eigen eiwitdoel.
+double macroShare(String key, double grams, double kcal) => kcal <= 0 ? 0 : grams * (key == 'fat' ? 9 : 4) / kcal;
+
+/// Gemiddelde richtwaarden over een reeks dagen, voor gemiddelden over een week of maand: elke dag telt met het doel
+/// dat toen gold.
+Map<String, Target> averageTargets(Iterable<Map<String, Target>> days) {
+  final list = days.toList();
+  if (list.isEmpty) return const {};
+  if (list.length == 1) return list.first;
+  final out = <String, Target>{};
+  for (final k in {for (final d in list) ...d.keys}) {
+    final ts = [for (final d in list) ?d[k]];
+    final goals = [for (final t in ts) ?t.goal];
+    final uppers = [for (final t in ts) ?t.upper];
+    double? avg(List<double> v) => v.isEmpty ? null : v.reduce((a, b) => a + b) / v.length;
+    out[k] = Target(goal: avg(goals), upper: avg(uppers), about: ts.last.about);
+  }
+  return out;
+}
+
+/// Doel voor een kop boven een week of maand: één getal als het doel niet veranderde, anders het doel van nu met
+/// het gemiddelde van de dagen ervoor ("2.000 (eerder 1.495)"). [goals] in volgorde, de laatste is nu.
+String goalNowEarlier(List<double> goals, String Function(double) fmt) {
+  if (goals.isEmpty) return '–';
+  final now = goals.last;
+  final earlier = goals.sublist(0, goals.length - 1).where((g) => fmt(g) != fmt(now)).toList();
+  if (earlier.isEmpty) return fmt(now);
+  final before = goals.sublist(0, goals.length - 1);
+  return tr(
+    '${fmt(now)} (earlier ${fmt(before.reduce((a, b) => a + b) / before.length)})',
+    '${fmt(now)} (eerder ${fmt(before.reduce((a, b) => a + b) / before.length)})',
+  );
+}
+
 /// Richtwaarden voor een profiel. [extraKcal] = verbrande energie door beweging die bij het doel komt.
-Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal = 0, double? tdee}) {
+///
+/// [proteinGoal] = een eigen eiwitdoel: koolhydraten en vet verdelen dan wat na dat eiwit overblijft.
+Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal = 0, double? tdee, double? proteinGoal}) {
   final age = p.ageIn(year);
   final male = p.sex == Sex.male;
   final kcal = energyTarget(p, year, tdee: tdee) + extraKcal;
@@ -258,7 +299,12 @@ Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal =
   // Essentiële aminozuren: mg per kg lichaamsgewicht -> g per dag
   Target aa(double mgPerKg) => Target(goal: mgPerKg * kg / 1000);
 
-  final (protein, carbs, fat) = macroGrams(p, kcal, maintenanceKcal(p, year, extraKcal: extraKcal, tdee: tdee));
+  final (protein, carbs, fat) = macroGrams(
+    p,
+    kcal,
+    maintenanceKcal(p, year, extraKcal: extraKcal, tdee: tdee),
+    proteinGoal: proteinGoal,
+  );
 
   return {
     'energy': Target(goal: kcal, about: true),

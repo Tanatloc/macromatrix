@@ -868,16 +868,27 @@ class _WeekCard extends StatelessWidget {
     final from = to.subtract(const Duration(days: 6));
     final daily = s.dailyTotals(from, to);
     final days = [for (var i = 0; i < 7; i++) dayKey(from.add(Duration(days: i)))];
+    // Elke dag met het doel dat toen gold (vroegere dagen zijn bevroren), niet met het doel van nu
+    final perDay = s.targetsBetween(from, to);
     final targets = s.targetsForDate(to);
     List<double?> series(String key) => [for (final d in days) daily[d]?[key]];
+    double goalOn(String d, String key) => perDay[d]?[key]?.goal ?? targets[key]?.goal ?? 0;
+    final loggedDays = [
+      for (final d in days)
+        if (daily[d] != null) d,
+    ];
 
     final energyGoal = targets['energy']?.goal ?? 2000;
     final proteinGoal = targets['protein']?.goal ?? 0;
     final kcal = series('energy');
     final protein = series('protein');
-    final inBand = kcal.whereType<double>().where((v) => (v - energyGoal).abs() <= energyGoal * 0.1).length;
-    final proteinOk = protein.whereType<double>().where((v) => v >= proteinGoal).length;
-    final logged = kcal.whereType<double>().length;
+    final inBand = loggedDays.where((d) => (daily[d]!['energy'] - goalOn(d, 'energy')).abs() <= goalOn(d, 'energy') * 0.1).length;
+    final proteinOk = loggedDays.where((d) => daily[d]!['protein'] >= goalOn(d, 'protein')).length;
+    final logged = loggedDays.length;
+    final proteinGoalText = goalNowEarlier([
+      for (final d in days)
+        if (daily[d] != null || d == days.last) goalOn(d, 'protein'),
+    ], (g) => '${fmtInt(g)} g');
 
     return Panel(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
@@ -908,8 +919,8 @@ class _WeekCard extends StatelessWidget {
                   target: proteinGoal,
                   color: p.protein,
                   note: tr(
-                    'Goal ${fmtInt(proteinGoal)} g · $proteinOk of $logged days',
-                    'Doel ${fmtInt(proteinGoal)} g · $proteinOk van $logged dagen',
+                    'Goal $proteinGoalText · $proteinOk of $logged days',
+                    'Doel $proteinGoalText · $proteinOk van $logged dagen',
                   ),
                 ),
               ),
@@ -2322,13 +2333,20 @@ class _GoalsPage extends StatelessWidget {
     final remaining = s.macrosRemaining;
     Widget row(String key, String name, String unit, Color color) {
       final v = s.totals[key];
-      final goal = s.targets[key]?.goal ?? 0;
+      final t = s.targets[key];
+      // Een eigen "hoogstens" (bv. koolhydraten of suikers bij diabetes) toont als maximum
+      final limit = t?.isLimit ?? false;
+      final goal = t?.goal ?? t?.upper ?? 0;
       final over = goal > 0 && v > goal;
       // Rood "te veel" alleen bij een doel-om-ongeveer (energie/koolh./vet) boven 110% of boven een bovengrens;
       // eiwit erboven is prima.
-      final tooMuch = levelOf(v, s.targets[key]) == Level.high;
+      final tooMuch = levelOf(v, t) == Level.high;
       final value = !remaining
-          ? '${fmtInt(v)} / ${fmtInt(goal)} $unit'
+          ? '${fmtInt(v)} / ${limit ? 'max ' : ''}${fmtInt(goal)} $unit'
+          : limit
+          ? (over
+                ? tr('${fmtInt(v - goal)} $unit over your max', '${fmtInt(v - goal)} $unit boven je max')
+                : tr('${fmtInt(goal - v)} $unit left', 'nog ${fmtInt(goal - v)} $unit ruimte'))
           : over
           ? (tooMuch
                 ? tr('${fmtInt(v - goal)} $unit over', '${fmtInt(v - goal)} $unit te veel')
@@ -2400,6 +2418,12 @@ class _GoalsPage extends StatelessWidget {
         row('protein', tr('Protein', 'Eiwit'), 'g', p.macro('protein')),
         row('carbs', tr('Carbs', 'Koolhydraten'), 'g', p.macro('carbs')),
         row('fat', tr('Fat', 'Vet'), 'g', p.macro('fat')),
+        // "Let op suiker": ook de suikergrens hier, met je eigen grens voor alle suikers als je die hebt
+        if (s.sugarFocus)
+          if (s.targets['sugars']?.upper != null)
+            row('sugars', tr('Sugars', 'Suikers'), 'g', p.macro('carbs'))
+          else if (s.targets['free_sugars']?.upper != null)
+            row('free_sugars', tr('Free sugars', 'Vrije suikers'), 'g', p.macro('carbs')),
       ],
     );
   }

@@ -61,12 +61,43 @@ void main() {
       expect(man['vit_d']!.upper, 100);
     });
 
-    test('macro\'s volgen de energieverdeling', () {
-      const p = Profile(energyOverride: 2000, proteinPct: 25, carbsPct: 45, fatPct: 30);
-      final t = targetsFor(p, year: 2026);
-      expect(t['protein']!.goal, 125);
-      expect(t['carbs']!.goal, 225);
-      expect(t['fat']!.goal, closeTo(66.7, 0.1));
+    test('macro\'s volgen de energieverdeling; een eigen energiedoel verlaagt eiwit niet (N67)', () {
+      const base = Profile(proteinPct: 25, carbsPct: 45, fatPct: 30);
+      final p = base.copyWith(energyOverride: () => 1900);
+      final t = targetsFor(p, year: 2026), free = targetsFor(base, year: 2026);
+      expect(t['energy']!.goal, 1900);
+      // Eiwit rust op je berekende onderhoud, ook met een eigen (lager) energiedoel
+      expect(t['protein']!.goal, closeTo(free['protein']!.goal!, 0.01));
+      final rest = 1900 - t['protein']!.goal! * 4;
+      expect(t['carbs']!.goal, closeTo(rest * 45 / 75 / 4, 0.01));
+      expect(t['fat']!.goal, closeTo(rest * 30 / 75 / 9, 0.01));
+      // Procenten uit de echte grammen tellen op tot 100
+      final shares = ['protein', 'carbs', 'fat'].map((k) => macroShare(k, t[k]!.goal!, 1900)).reduce((a, b) => a + b);
+      expect(shares, closeTo(1, 0.001));
+    });
+
+    test('een eigen eiwitdoel telt in de verdeling: koolhydraten en vet delen de rest (N06)', () {
+      const p = Profile(energyOverride: 2500);
+      final t = targetsFor(p, year: 2026, proteinGoal: 200);
+      expect(t['protein']!.goal, 200);
+      expect(t['protein']!.goal! * 4 + t['carbs']!.goal! * 4 + t['fat']!.goal! * 9, closeTo(2500, 0.01));
+      // Grammen naar procent en terug houdt rekening met dat eiwit
+      final m = maintenanceKcal(p, 2026);
+      final pct = macroPctForGrams('carbs', 130, p, 2500, m, proteinGoal: 200);
+      final q = p.copyWith(carbsPct: pct, fatPct: 100 - p.proteinPct - pct);
+      expect(macroGrams(q, 2500, m, proteinGoal: 200).$2, closeTo(130, 0.01));
+    });
+
+    test('gemiddeld doel en "doel nu (eerder)" voor overzichten (N61)', () {
+      final avg = averageTargets([
+        {'energy': const Target(goal: 1500), 'sodium': const Target(upper: 2000)},
+        {'energy': const Target(goal: 2000), 'sodium': const Target(upper: 2000)},
+      ]);
+      expect(avg['energy']!.goal, 1750);
+      expect(avg['sodium']!.isLimit, isTrue);
+      String f(double g) => g.round().toString();
+      expect(goalNowEarlier([2000, 2000], f), '2000');
+      expect(goalNowEarlier([1495, 1495, 2000], f), contains('1495'));
     });
 
     test('afvallen verlaagt het eiwitdoel niet; koolhydraten en vet vangen het tekort op', () {

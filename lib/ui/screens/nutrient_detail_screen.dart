@@ -61,6 +61,17 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     return (daily.values.fold<double>(0, (a, t) => a + t[n.key]) / daily.length, daily.length);
   }
 
+  /// Doel voor het gemiddelde van een periode: het gemiddelde van de doelen die op de gelogde dagen golden.
+  Target? _periodTarget(AppState s) {
+    final daily = s.dailyTotals(widget.from!, widget.to!);
+    final all = s.targetsBetween(widget.from!, widget.to!);
+    final days = [
+      for (final e in all.entries)
+        if (daily.containsKey(e.key)) e.value,
+    ];
+    return averageTargets(days.isEmpty ? [all.values.last] : days)[n.key];
+  }
+
   /// Welke dag of periode je ziet, bovenaan de grote kaart.
   String _viewLabel(AppState s) {
     if (_isPeriod) {
@@ -93,8 +104,13 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
 
   Future<void> _editTarget() async {
     final s = context.read<AppState>();
-    final current = s.targets[n.key];
     final standard = s.defaultTargets[n.key];
+    final custom = s.settings.overrides.containsKey(n.key);
+    // Zonder eigen doel: het vorige eigen doel als je dat ooit had. Een doel om ongeveer te halen (koolhydraten, vet)
+    // vullen we niet in als "minstens": wie alleen een maximum typt, krijgt dan geen verborgen minimum (N24).
+    final current = custom
+        ? s.targets[n.key]
+        : (s.lastOverride(n.key) ?? (standard?.about == true ? Target(upper: standard?.upper) : s.targets[n.key]));
     final goal = TextEditingController(text: current?.goal == null ? '' : _plain(current!.goal!));
     final upper = TextEditingController(text: current?.upper == null ? '' : _plain(current!.upper!));
     double? parse(TextEditingController c) => parseNum(c.text);
@@ -202,7 +218,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final target = _isPeriod ? s.targetsForDate(widget.to!)[n.key] : s.targets[n.key];
+    final target = _isPeriod ? _periodTarget(s) : s.targets[n.key];
     final (total, logged) = _isPeriod ? _periodAverage(s) : (s.totals[n.key], 1);
 
     return Scaffold(
@@ -859,6 +875,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   Widget _targetCard(AppState s, Palette p, Target? target) {
     final custom = s.settings.overrides.containsKey(n.key);
     final standard = s.defaultTargets[n.key];
+    final remembered = custom ? null : s.lastOverride(n.key);
     String describe(Target? t) => t == null || (t.goal == null && t.upper == null)
         ? '–'
         : t.goal != null
@@ -914,15 +931,43 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: option(label: _sourceLabel, value: describe(standard), selected: !custom, onTap: () => s.setOverride(n.key, null)),
+                child: option(
+                  label: _sourceLabel,
+                  value: describe(standard),
+                  selected: !custom,
+                  // Een eigen grens is werk: de app onthoudt ze (Eigen doel zet ze terug) en je kan meteen ongedaan maken
+                  onTap: () {
+                    if (!custom) return;
+                    final before = s.settings.overrides[n.key];
+                    s.setOverride(n.key, null);
+                    showUndo(
+                      context,
+                      tr(
+                        'Back to ${inSentence(_sourceLabel)} for ${inSentence(n.name)}',
+                        'Terug naar ${inSentence(_sourceLabel)} voor ${inSentence(n.name)}',
+                      ),
+                      () => s.setOverride(n.key, before),
+                    );
+                  },
+                ),
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: option(
                   label: tr('Custom goal', 'Eigen doel'),
-                  value: custom ? describe(target) : tr('Set', 'Instellen'),
+                  value: custom ? describe(target) : (remembered != null ? describe(remembered) : tr('Set', 'Instellen')),
                   selected: custom,
-                  onTap: _editTarget,
+                  // Een onthouden eigen doel zet één tik terug; daarna opent een tik het venster om het aan te passen
+                  onTap: custom || remembered == null
+                      ? _editTarget
+                      : () {
+                          s.setOverride(n.key, remembered);
+                          showUndo(
+                            context,
+                            tr('Your custom goal is back: ${describe(remembered)}', 'Je eigen doel staat terug: ${describe(remembered)}'),
+                            () => s.setOverride(n.key, null),
+                          );
+                        },
                   trailing: Icon(Icons.edit_outlined, size: 16, color: custom ? p.brand : p.ink3),
                 ),
               ),
