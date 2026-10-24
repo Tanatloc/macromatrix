@@ -153,8 +153,27 @@ class _ShellState extends State<Shell> {
     (Icons.person_outline_rounded, Icons.person_rounded, tr('Profile', 'Profiel')),
   ];
 
-  /// Eén navigator per tabblad op een pc, zodat schermen die je opent naast de zijbalk blijven.
+  /// Eén navigator per tabblad, zodat schermen die je opent naast de zijbalk blijven. Ze staan op elke breedte in
+  /// dezelfde [_tabsKey]-boom: wordt het venster smaller of breder dan [desktopWidth], dan verandert alleen de
+  /// zijbalk of de balk onderaan, en blijft een scherm dat in een tabblad openstaat gewoon staan.
   final _navigators = [for (var i = 0; i < 5; i++) GlobalKey<NavigatorState>()];
+  final _tabsKey = GlobalKey();
+
+  /// Houden bij of een tabblad een scherm open heeft, voor de terugknop (zie [_routesChanged]).
+  late final _observers = [for (var i = 0; i < 5; i++) _TabObserver(_routesChanged)];
+  bool _routesDirty = false;
+
+  /// Een scherm geopend of gesloten in een tabblad: na dit beeld opnieuw bouwen, zodat de terugknop van het
+  /// toestel eerst dat scherm sluit en pas daarna de app.
+  void _routesChanged() {
+    if (_routesDirty) return;
+    _routesDirty = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _routesDirty = false;
+      if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
 
   /// Het actieve tabblad voor de schermen in die navigators: die bouwen niet mee als de shell herbouwt.
   late final _tab = ValueNotifier(_index);
@@ -201,27 +220,106 @@ class _ShellState extends State<Shell> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final p = context.pal;
-    List<Widget> pagesFor(int index) => [
-      DiaryScreen(onOpenNutrients: _openDayNutrients, onOpenProfile: () => _go(4)),
-      DashboardScreen(showDay: _dashboardToDay),
-      const ProductScanScreen(),
-      FriendsScreen(active: index == 3),
-      const ProfileScreen(),
-    ];
-    final pages = pagesFor(_index);
-    // Openstaande vriendschapsverzoeken en uitdagingen als bolletje op het tabblad Vrienden
+  /// De beginschermen van de vijf tabbladen, met [tab] het actieve tabblad.
+  List<Widget> _pagesFor(int tab) => [
+    DiaryScreen(onOpenNutrients: _openDayNutrients, onOpenProfile: () => _go(4)),
+    DashboardScreen(showDay: _dashboardToDay),
+    const ProductScanScreen(),
+    FriendsScreen(active: tab == 3),
+    const ProfileScreen(),
+  ];
+
+  /// Tabbladicoon, met openstaande vriendschapsverzoeken en uitdagingen als bolletje op Vrienden.
+  Widget Function(int i, IconData d) _icons(BuildContext context) {
     final requests = context.select<Friends, int>(
       (f) => f.list.where((x) => x.state == FriendState.incoming).length + f.battles.where((b) => b.pending && !b.challengedByMe).length,
     );
-    Widget icon(int i, IconData d) => i == 3 && requests > 0 ? Badge(label: Text('$requests'), child: Icon(d)) : Icon(d);
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 800;
+    return (i, d) => i == 3 && requests > 0 ? Badge(label: Text('$requests'), child: Icon(d)) : Icon(d);
+  }
 
-    if (width >= desktopWidth) {
-      final theme = Theme.of(context);
+  /// Het beginscherm van tabblad [i]. Op een gsm staat de balk onderaan hierin, zodat een scherm dat je in het
+  /// tabblad opent er volledig overheen schuift, net als vroeger.
+  Widget _tabRoot(int i) => ValueListenableBuilder(
+    valueListenable: _tab,
+    builder: (context, tab, _) => Scaffold(
+      body: _pagesFor(tab)[i],
+      bottomNavigationBar: MediaQuery.sizeOf(context).width >= _railWidth
+          ? null
+          // Gsm: een ronde + in het midden (in plaats van het tabblad Scan, dat in het +-menu zit)
+          : _PhoneBar(
+              items: [
+                for (final j in [0, 1, 3, 4]) (j, _items[j]),
+              ],
+              index: tab,
+              icon: _icons(context),
+              onSelect: _go,
+              onAdd: () {
+                if (_index != 0) _go(0);
+                // Binnen het tabblad Vandaag, zodat wat je opent ook blijft staan als het venster breder wordt
+                showAddMenu(_navigators[0].currentContext ?? this.context);
+              },
+            ),
+    ),
+  );
+
+  /// De grote titel van Vandaag, maar als aanpassing van de gewone titelstijl: knoppen animeren hun thema, en dat
+  /// lukt niet tussen een stijl die erft en een die dat niet doet (bij het smaller of breder maken van het venster).
+  static TextStyle? _bigTitle(ThemeData theme) {
+    final h = theme.textTheme.headlineMedium;
+    return theme.appBarTheme.titleTextStyle?.copyWith(
+      fontSize: h?.fontSize,
+      fontWeight: h?.fontWeight,
+      letterSpacing: h?.letterSpacing,
+      height: h?.height,
+      color: h?.color,
+    );
+  }
+
+  /// Vanaf deze breedte (tot [desktopWidth]) een smalle rail links in plaats van de balk onderaan.
+  static const _railWidth = 800.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final theme = Theme.of(context);
+    final icon = _icons(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final desktop = width >= desktopWidth;
+
+    // De tabbladen met hun navigators. Door [_tabsKey] verhuist deze boom mee als de indeling verandert, in plaats
+    // van opnieuw gemaakt te worden.
+    final tabs = PopScope(
+      key: _tabsKey,
+      // Terugknop van het toestel: eerst het scherm sluiten dat in het tabblad openstaat
+      canPop: !(_navigators[_index].currentState?.canPop() ?? false),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _navigators[_index].currentState?.maybePop();
+      },
+      // Schermen met een titelbalk (snelkoppelingen, details) krijgen op een pc dezelfde grote titel als Vandaag
+      // en Profiel, zodat de kop niet per scherm verspringt
+      child: Theme(
+        data: desktop
+            ? theme.copyWith(appBarTheme: theme.appBarTheme.copyWith(titleTextStyle: _bigTitle(theme), toolbarHeight: 76, titleSpacing: 8))
+            : theme,
+        child: IndexedStack(
+          index: _index,
+          children: [
+            for (var i = 0; i < _navigators.length; i++)
+              // Een tabblad dat niet zichtbaar is, mag geen sneltoetsen of focus pakken
+              TickerMode(
+                enabled: i == _index,
+                child: Navigator(
+                  key: _navigators[i],
+                  observers: [_observers[i]],
+                  onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _tabRoot(i)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (desktop) {
       return Scaffold(
         body: Row(
           children: [
@@ -241,38 +339,13 @@ class _ShellState extends State<Shell> {
                 (Icons.settings_outlined, tr('Settings', 'Instellingen'), () => _open(6, const SettingsScreen())),
               ],
             ),
-            Expanded(
-              // Schermen met een titelbalk (snelkoppelingen, details) krijgen op een pc dezelfde grote titel als
-              // Vandaag en Profiel, zodat de kop niet per scherm verspringt
-              child: Theme(
-                data: theme.copyWith(
-                  appBarTheme: theme.appBarTheme.copyWith(titleTextStyle: theme.textTheme.headlineMedium, toolbarHeight: 76, titleSpacing: 8),
-                ),
-                child: IndexedStack(
-                  index: _index,
-                  children: [
-                    for (var i = 0; i < pages.length; i++)
-                      // Een tabblad dat niet zichtbaar is, mag geen sneltoetsen of focus pakken
-                      TickerMode(
-                        enabled: i == _index,
-                        child: Navigator(
-                          key: _navigators[i],
-                          onGenerateRoute: (_) => MaterialPageRoute(
-                            builder: (_) => ValueListenableBuilder(valueListenable: _tab, builder: (_, tab, _) => pagesFor(tab)[i]),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+            Expanded(child: tabs),
           ],
         ),
       );
     }
 
-    final body = IndexedStack(index: _index, children: pages);
-    if (wide) {
+    if (width >= _railWidth) {
       return Scaffold(
         body: Row(
           children: [
@@ -285,28 +358,33 @@ class _ShellState extends State<Shell> {
               ],
             ),
             VerticalDivider(width: 1, color: p.line),
-            Expanded(child: body),
+            Expanded(child: tabs),
           ],
         ),
       );
     }
-    // Gsm: een ronde + in het midden (in plaats van het tabblad Scan, dat in het +-menu zit)
-    return Scaffold(
-      body: body,
-      bottomNavigationBar: _PhoneBar(
-        items: [
-          for (final i in [0, 1, 3, 4]) (i, _items[i]),
-        ],
-        index: _index,
-        icon: icon,
-        onSelect: _go,
-        onAdd: () {
-          if (_index != 0) _go(0);
-          showAddMenu(context);
-        },
-      ),
-    );
+    // Gsm: de balk onderaan zit in het beginscherm van elk tabblad (zie [_tabRoot]). Geen Scaffold eromheen, zodat
+    // meldingen onderaan boven die balk verschijnen en niet erover.
+    return tabs;
   }
+}
+
+/// Meldt elke wijziging in de schermen van een tabblad.
+class _TabObserver extends NavigatorObserver {
+  _TabObserver(this.onChange);
+  final VoidCallback onChange;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => onChange();
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => onChange();
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) => onChange();
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => onChange();
 }
 
 /// Navigatie onderaan op een gsm: twee tabbladen, de +-knop, twee tabbladen.

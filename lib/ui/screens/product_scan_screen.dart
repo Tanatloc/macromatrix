@@ -67,6 +67,8 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
     final scans = s.scans;
     // Op een gsm geopend vanuit het +-menu: dan met een terugknop
     final pushed = ModalRoute.of(context)?.canPop ?? false;
+    // Op een pc even breed als Vandaag en Profiel, met de recente scans in een tweede kolom
+    final maxWidth = isDesktop(context) ? wideMaxWidth : 760.0;
     return Scaffold(
       appBar: pushed ? AppBar() : null,
       body: SafeArea(
@@ -75,14 +77,16 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
           padding: const EdgeInsets.only(bottom: 32),
           children: [
             Narrow(
+              maxWidth: maxWidth,
               child: PageHeader(eyebrow: tr('What is in it?', 'Wat zit erin?'), title: 'Scan'),
             ),
             Narrow(
+              maxWidth: maxWidth,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+                child: SplitColumns(
+                  gap: 14,
+                  left: [
                     Panel(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -148,7 +152,8 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
                     ),
                     const SizedBox(height: 14),
                     const _ScoreLegend(),
-                    const SizedBox(height: 14),
+                  ],
+                  right: [
                     Panel(
                       padding: const EdgeInsets.fromLTRB(6, 14, 6, 8),
                       child: Column(
