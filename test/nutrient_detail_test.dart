@@ -122,4 +122,29 @@ void main() {
     expect(find.text('DEZE WEEK'), findsNothing);
     expect(find.text('VANDAAG'), findsOneWidget);
   });
+
+  testWidgets('meeste suikers: geen groene + of "eet je vaker" bij cola, ook zonder maximum (N26)', (tester) async {
+    final s = newState();
+    s.addFood(s.foods.byRef('ciqual:18018')!, meal: Meal.snacks, grams: 330, quantity: 330);
+    await pump(tester, s, NutrientDetailScreen(nutrient: nutrientByKey['sugars']!), height: 3000);
+    expect(find.text('Meeste suikers'), findsOneWidget);
+    expect(find.text('Rijkste bronnen'), findsNothing);
+    expect(find.text('eet je vaker'), findsNothing);
+    expect(find.text('in je dagboek'), findsOneWidget);
+    expect(find.byTooltip('Toevoegen'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('vrije suikers: het doel is WHO-advies, met 5% (VK) als keuze (N21)', (tester) async {
+    final s = newState();
+    final who = s.defaultTargets['free_sugars']!.upper!;
+    await pump(tester, s, NutrientDetailScreen(nutrient: nutrientByKey['free_sugars']!), height: 3000);
+    expect(find.text('WHO-advies'), findsOneWidget);
+    expect(find.text('EFSA-advies'), findsNothing);
+    await tester.tap(find.text('5% gebruiken (VK)'));
+    await tester.pump();
+    expect(s.targets['free_sugars']!.upper, closeTo(who / 2, 0.001));
+    expect(find.text('5% gebruiken (VK)'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

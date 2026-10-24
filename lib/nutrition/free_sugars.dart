@@ -18,6 +18,13 @@ const _freeParts = {'juice', 'concentrate', 'jam', 'syrup'};
 /// Lactose per 100 g in melk en yoghurt: dat deel van de suikers in gezoete zuivel is niet vrij.
 const _lactosePer100g = 4.5;
 
+/// Suikers per 100 g die bij bonen of groenten in een saus zelf horen (de bonen en de tomaat). Wat erboven zit, is
+/// toegevoegde suiker: baked beans hebben ±5 g suikers per 100 g, waarvan het grootste deel toegevoegd (N21).
+const _ownSugarsInSauce = 1.5;
+
+/// Sauzen waarin bijna altijd suiker zit: tomaat, barbecue, chili, zoetzuur.
+final _sweetSauce = RegExp(r'tomato|tomaat|barbecue|bbq|chil+i|sweet|zoet|ketchup|baked beans|beans, baked', caseSensitive: false);
+
 /// Woorden die op toegevoegde suiker of sap wijzen (Engels, Nederlands, Frans). Bewust zonder \b vooraan:
 /// Nederlandse samenstellingen als "appelsap" of "chocoladerepen" moeten ook tellen.
 final _addedName = RegExp(
@@ -119,6 +126,11 @@ double _freeShare(FoodLabel? l, String name, double sugarsPer100g) {
   final plain = l.flags.contains('unsweetened') || unsweetened;
   if (_wholeGroups.contains(l.group)) {
     if (sweetened || _freeParts.contains(l.part)) return 1;
+    // Bonen of groenten in tomaten- of barbecuesaus (uit blik): de suiker boven die van de bonen en tomaat zelf is
+    // toegevoegd, tenzij er "zonder suiker" bij staat
+    if (l.flags.contains('in sauce') && !plain && _sweetSauce.hasMatch('${l.food} $name')) {
+      return ((sugarsPer100g - _ownSugarsInSauce) / sugarsPer100g).clamp(0, 1);
+    }
     // Compote en moes: meestal met suiker, behalve als er uitdrukkelijk "zonder suiker" bij staat
     if (l.part == 'puree' && l.group == 'fruit' && !plain) return 1;
     if (!plain && _added('${l.food} $name')) return 1;

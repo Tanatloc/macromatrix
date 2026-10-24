@@ -26,6 +26,15 @@ void main() {
   double free(Food f) => freeSugarsPer100g(f.per100g, label: f.label, name: f.name)!;
 
   group('vrije suikers (P183)', () {
+    test('baked beans in tomatensaus: de toegevoegde suiker telt, de suiker van bonen en tomaat niet (N21)', () {
+      final beans = food('cofid:13-532'), reduced = food('cofid:13-535'), white = food('slv:880');
+      expect(free(beans), closeTo(beans.per100g['sugars']! - 1.5, 0.01));
+      expect(free(beans), greaterThan(2));
+      expect(free(reduced), lessThan(free(beans)));
+      // Gewone bonen zonder saus blijven 0
+      expect(free(white), 0);
+    });
+
     test('een appel telt niet mee, cola volledig, sinaasappelsap ook', () {
       final apple = food('mvt:06.758'), cola = food('ciqual:18018'), juice = food('ciqual:2070');
       expect(apple.per100g['sugars'], greaterThan(5));

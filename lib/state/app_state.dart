@@ -1036,6 +1036,18 @@ class AppState extends ChangeNotifier {
     'pepsi max': 'cola sweetener',
     // Britse chips zijn een zakje chips, geen knäckebröd ("crispbread")
     'crisps': 'potato crisps',
+    // Frietjes: "fries" is geen gebakken ei of vis ("fried"), en in België en Nederland heten ze friet of patat
+    'fries': 'french fries',
+    'friet': 'french fries',
+    'frieten': 'french fries',
+    'frietjes': 'french fries',
+    'frites': 'french fries',
+    'patat': 'french fries',
+    'patatjes': 'french fries',
+    // Het gewone basisproduct bij een algemeen woord (N15): spaghetti is gekookte witte spaghetti, bloem is tarwebloem
+    'spaghetti': 'spaghetti white boiled',
+    'flour': 'wheat flour',
+    'plain flour': 'wheat flour',
     // Een boterham is een sneetje brood (het meest getypte woord bij het ontbijt)
     'boterham': 'bread',
     'boterhammen': 'bread',
@@ -1079,7 +1091,10 @@ class AppState extends ChangeNotifier {
   /// Kandidaten voor een zoekterm, in de volgorde van de databank: bij een meervoud ("breads", "eieren") eerst het
   /// enkelvoud. Een energiedrank alleen als je die vraagt (P151).
   List<Food> _candidates(String query, {Food? first}) {
-    final singular = query.replaceAll(RegExp(r'(es|s|en)$'), '');
+    // Een kort woord op -ies: "fries" wordt "fry", niet "fri" (dat ook "fried" vindt: gebakken ei bij frietjes, N15)
+    final singular = query.endsWith('ies') && query.length <= 6
+        ? '${query.substring(0, query.length - 3)}y'
+        : query.replaceAll(RegExp(r'(es|s|en)$'), '');
     final seen = <String>{};
     return [
       for (final f in [
@@ -1088,8 +1103,36 @@ class AppState extends ChangeNotifier {
         ...user.searchSaved(query),
         ...foods.search(query, limit: 200),
       ])
-        if (!unaskedEnergyDrink(f, query) && seen.add(f.ref)) f,
+        if (!unaskedEnergyDrink(f, query) && !unaskedFree(f, query) && seen.add(f.ref)) f,
     ];
+  }
+
+  /// Eén tikfout in een woord ("porrige", "spagetti"): één letter te veel, te weinig of verkeerd (N15). Alleen als er
+  /// anders niets is. Geeft het juiste woord zoals het in de namen staat (het vaakst gevonden), en anders de gevonden
+  /// producten zelf (een woord dat alleen in de oorspronkelijke taal van de bron staat). Een `_` in LIKE is precies
+  /// één willekeurige letter.
+  (String?, List<Food>) _typoFix(String word) {
+    if (word.length < 5 || word.contains(RegExp(r'[^a-zà-ÿ]'))) return (null, const []);
+    final variants = <String>{
+      for (var i = 1; i < word.length; i++) '${word.substring(0, i)}_${word.substring(i)}',
+      for (var i = 1; i < word.length; i++) '${word.substring(0, i)}_${word.substring(i + 1)}',
+      for (var i = 1; i < word.length; i++) '${word.substring(0, i)}${word.substring(i + 1)}',
+    };
+    final seen = <String>{};
+    final found = <Food>[];
+    final words = <String, int>{};
+    for (final v in variants) {
+      final whole = RegExp('^${v.replaceAll('_', '.')}\$');
+      for (final f in foods.search(v, limit: 30)) {
+        if (unaskedEnergyDrink(f, word) || !seen.add(f.ref)) continue;
+        found.add(f);
+        for (final w in f.name.toLowerCase().split(RegExp(r'[^a-zà-ÿ]+'))) {
+          if (whole.hasMatch(w)) words[w] = (words[w] ?? 0) + 1;
+        }
+      }
+    }
+    final best = (words.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).firstOrNull?.key;
+    return (best, found);
   }
 
   List<(Food, double, Portion?)> resolveQuick(QuickItem q) {
@@ -1116,6 +1159,8 @@ class AppState extends ChangeNotifier {
     final words = q.query.split(RegExp(r'\s+'));
     if (all.isEmpty && words.length > 1) all = searchLocal(words.join()).take(25).toList();
     if (all.isEmpty && words.length > 1) all = searchLocal(words.last).take(25).toList();
+    // Eén woord met een tikfout ("porrige"): wat het zoekvak dan vindt
+    if (all.isEmpty && words.length == 1) all = searchLocal(q.query).take(25).toList();
     // Hetzelfde basisproduct als bovenaan in het zoekvak, zodat Snel loggen en zoeken geen twee eierregels geven (N10)
     final boxTop = all.isEmpty ? null : groupFoods(searchLocal(q.query)).firstOrNull?.main;
     if (boxTop != null && !all.any((f) => f.ref == boxTop.ref)) all = [...all, boxTop];
@@ -2139,6 +2184,13 @@ class AppState extends ChangeNotifier {
     final words = norm.split(' ');
     if (all.isEmpty && words.length > 1) all.addAll(_candidates(words.join()));
     if (all.isEmpty && words.length > 1) all.addAll(_candidates(words.last));
+    // Een tikfout: niets gevonden, of alleen in de oorspronkelijke taal van een bron (Zweeds "spagetti"). Niet bij een
+    // Nederlands woord dat de vertaling kent.
+    if (words.length == 1 && searchTokens(norm).join(' ') == norm && !all.any((f) => f.name.toLowerCase().contains(norm))) {
+      final (fix, found) = _typoFix(norm);
+      if (fix != null && fix != norm) return searchLocal(fix);
+      if (all.isEmpty) all.addAll(found);
+    }
     double score(int i, Food f) =>
         20.0 -
         i * 0.15 +

@@ -93,4 +93,28 @@ void main() {
       expect(f.name.toLowerCase(), isNot(contains('crispbread')));
     }
   });
+
+  test('gewone Engelse woorden: het basisproduct, in het zoekvak en bij Snel loggen (N15)', () {
+    final want = {
+      'fries': RegExp(r'^french fries'),
+      'spaghetti': RegExp(r'spaghetti.*(boiled|cooked)'),
+      'baked beans': RegExp(r'baked beans|beans, baked'),
+      'protein bar': RegExp(r'protein.*bar|bar.*protein'),
+      'flour': RegExp(r'wheat.*flour|flour.*wheat'),
+      // Eén tikfout
+      'porrige': RegExp(r'porridge'),
+      'spagetti': RegExp(r'spaghetti.*(boiled|cooked)'),
+    };
+    final other = RegExp(r'\b(egg|fish|cod|spinach|squash|bolognese|pork|sausages?|beef|franks|rye|corn|fast food)\b');
+    for (final MapEntry(key: q, value: re) in want.entries) {
+      for (final f in [box(q), quick(q)]) {
+        expect(f.name.toLowerCase(), allOf(matches(re), isNot(matches(other))), reason: '$q: ${f.name}');
+      }
+    }
+    // "fries" vindt geen gebakken ei of vis vóór de frietjes, "protein bar" geen pap "milk protein free"
+    expect(groupFoods(s.searchLocal('fries')).take(3).map((g) => g.main.name.toLowerCase()), everyElement(contains('french fries')));
+    expect(s.searchLocal('protein bar').map((f) => f.name.toLowerCase()), everyElement(isNot(contains('protein free'))));
+    // Een Nederlands woord blijft gewoon vertaald, geen "tikfout"
+    expect(box('appel').name.toLowerCase(), contains('apple'));
+  });
 }
