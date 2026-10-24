@@ -31,6 +31,7 @@ import '../widgets/bio_tips_view.dart';
 import '../widgets/exercise_view.dart';
 import '../widgets/challenges_view.dart';
 import '../widgets/gap_plan_view.dart';
+import '../widgets/guest_nudge.dart';
 import '../widgets/info_tip.dart';
 import '../widgets/nutrient_row.dart';
 import '../../i18n.dart';
@@ -105,6 +106,7 @@ class DiaryScreen extends StatelessWidget {
           if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const SizedBox(height: 20), const _AllergyAsk()],
           if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[gap, const WeeklyReportCard()],
           if (s.isToday && RecapCard.due(s) != null) ...[gap, const RecapCard()],
+          if (s.isToday && GuestNudgeCard.shouldShow(context, s)) ...[gap, const GuestNudgeCard()],
           if (!empty) ...[
             const SizedBox(height: 20),
             const _ForTodayCard(),
@@ -542,6 +544,7 @@ class _DesktopDiary extends StatelessWidget {
             if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const _AllergyAsk(), gap],
             if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[const WeeklyReportCard(), gap],
             if (s.isToday && RecapCard.due(s) != null) ...[const RecapCard(), gap],
+            if (s.isToday && GuestNudgeCard.shouldShow(context, s)) ...[const GuestNudgeCard(), gap],
             if (s.note.trim().isNotEmpty) ...[const _NoteCard(), gap],
             if (s.planFor(s.day).isNotEmpty) ...[const _PlanCard(), gap],
             SectionHeader(tr('Meals', 'Maaltijden'), trailing: empty ? null : '${fmtInt(s.totals['energy'])} kcal'),

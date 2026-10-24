@@ -160,39 +160,7 @@ class _AccountCardState extends State<AccountCard> {
     final a = context.watch<Account>();
     final p = context.pal;
 
-    if (Account.configured && !a.signedIn && a.localOnly) {
-      return Panel(
-        shadow: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.phone_android_rounded, color: p.ink3),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    tr(
-                      'You use MacroMatrix without an account: your data is only on this device. Create an account to sync between devices, back up your data and add friends.',
-                      'Je gebruikt MacroMatrix zonder account: je gegevens staan alleen op dit toestel. Maak een account om te synchroniseren, een back-up te hebben en vrienden toe te voegen.',
-                    ),
-                    style: TextStyle(fontSize: 13, height: 1.45, color: p.ink2),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            FilledButton(
-              onPressed: () {
-                a.setLocalOnly(false);
-                Navigator.of(context).popUntil((r) => r.isFirst);
-              },
-              child: Text(tr('Create account or log in', 'Account maken of inloggen')),
-            ),
-          ],
-        ),
-      );
-    }
+    if (Account.configured && !a.signedIn && a.localOnly) return const GuestAccountPanel();
 
     if (!Account.configured || !a.signedIn) {
       return Panel(
@@ -316,5 +284,55 @@ class _AccountCardState extends State<AccountCard> {
     final now = DateTime.now();
     final sameDay = t.year == now.year && t.month == now.month && t.day == now.day;
     return sameDay ? tr('at ', 'om ') + DateFormat('HH:mm').format(t) : tr('on ', 'op ') + DateFormat('d MMM, HH:mm', appLocale).format(t);
+  }
+}
+
+/// Zonder account: waar je gegevens staan, en een account maken of inloggen. Je blijft gast tot dat lukt; daarna
+/// gaat alles mee naar het account (zie [Account] en [UserDb.yieldUnsentSettings]).
+class GuestAccountPanel extends StatelessWidget {
+  const GuestAccountPanel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    void open(bool register) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AuthScreen(register: register)));
+    return Panel(
+      shadow: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(runsOnWeb ? Icons.web_rounded : Icons.phone_android_rounded, color: p.ink3),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  runsOnWeb
+                      ? tr(
+                          'You use MacroMatrix without an account. Your data is kept in this browser only; create a free account to keep it safe and use it on your phone. What you logged comes along.',
+                          'Je gebruikt MacroMatrix zonder account. Je gegevens blijven alleen in deze browser; maak een gratis account om ze veilig te bewaren en ze op je gsm te gebruiken. Wat je logde, gaat mee.',
+                        )
+                      : tr(
+                          'You use MacroMatrix without an account: your data is only on this device. Create a free account to sync between devices, back up your data and add friends. What you logged comes along.',
+                          'Je gebruikt MacroMatrix zonder account: je gegevens staan alleen op dit toestel. Maak een gratis account om te synchroniseren, een back-up te hebben en vrienden toe te voegen. Wat je logde, gaat mee.',
+                        ),
+                  style: TextStyle(fontSize: 13, height: 1.45, color: p.ink2),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              FilledButton(onPressed: () => open(true), child: Text(tr('Create free account', 'Gratis account maken'))),
+              OutlinedButton(onPressed: () => open(false), child: Text(tr('Log in', 'Inloggen'))),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

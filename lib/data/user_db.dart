@@ -239,6 +239,13 @@ class UserDb {
       {for (final c in t.columns) c: r[c]},
   ];
 
+  /// Eerste keer inloggen op dit toestel (bv. na gebruik zonder account): je dagboek, producten en metingen
+  /// gaan gewoon mee, maar bij instellingen (profiel, doelen …) wint wat al in het account staat. Daarvoor
+  /// krijgen de instellingen die nog niet verstuurd zijn de oudst mogelijke tijd: de server houdt dan zijn eigen
+  /// versie, en wat er nog niet was komt er wel bij.
+  void yieldUnsentSettings() =>
+      _db.execute("UPDATE settings SET updated_at = 1 WHERE synced = 0 AND key != 'ui' AND key NOT LIKE '\\_%' ESCAPE '\\'");
+
   /// Is er iets wat nog naar de server moet?
   bool get hasDirtyRows => syncTables.any((t) => dirtyRows(t, limit: 1).isNotEmpty);
 

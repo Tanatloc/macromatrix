@@ -1,5 +1,5 @@
 /// Browser: sqlite als WebAssembly (web/sqlite3.wasm). De voedingsdatabase staat in het geheugen; de
-/// gegevens van de gebruiker in IndexedDB van de browser (tot er accounts met synchronisatie zijn).
+/// gegevens van de gebruiker in IndexedDB van de browser (blijft na herladen; met een account ook op de server).
 library;
 
 import 'dart:convert';
@@ -19,6 +19,19 @@ const isWeb = true;
 
 /// In de browser kan scannen met de camera (gsm of webcam).
 bool get canScanBarcodes => true;
+
+/// De browser vragen om de opslag van deze site niet zelf op te ruimen als de schijf vol raakt. Zonder account
+/// staan je gegevens alleen hier, dus dan vragen we dat. Wissen via de browserinstellingen blijft altijd mogelijk.
+Future<bool> askPersistentStorage() async {
+  try {
+    final storage = web.window.navigator.storage;
+    if ((await storage.persisted().toDart).toDart) return true;
+    return (await storage.persist().toDart).toDart;
+  } catch (_) {
+    // Oude browser of geen toestemming: dan blijft het gewone (best-effort) bewaren
+    return false;
+  }
+}
 
 Future<(FoodDb, UserDb)> openDatabases() async {
   final sqlite = await WasmSqlite3.loadFromUrl(Uri.base.resolve('sqlite3.wasm'));

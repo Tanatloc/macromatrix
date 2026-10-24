@@ -1,14 +1,17 @@
-/// Welkom, registreren, inloggen, wachtwoord vergeten en je profiel instellen. Zonder account kom je niet in de app
-/// (als de app met Supabase gebouwd is); zie [AuthGate].
+/// Welkom, registreren, inloggen, wachtwoord vergeten en je profiel instellen. Als de app met Supabase gebouwd is,
+/// kies je op het welkomscherm: een account, of bewust zonder account (ook in de browser); zie [AuthGate].
 library;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase/supabase.dart' show AuthException;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../nutrition/targets.dart';
+import '../../platform/platform.dart' show askPersistentStorage;
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
 import '../shell.dart';
@@ -29,6 +32,22 @@ Future<void> openPage(String path) => launchUrl(
   mode: LaunchMode.externalApplication,
 );
 
+/// Draait dit in de browser? kIsWeb is een constante; tests zetten [debugWebOverride] om het webpad na te bootsen.
+@visibleForTesting
+bool? debugWebOverride;
+bool get runsOnWeb => debugWebOverride ?? kIsWeb;
+
+enum GateScreen { loading, welcome, profileSetup, app }
+
+/// Wat [AuthGate] toont. Zonder account (bewust gekozen) kom je overal in de app, ook in de browser: je gegevens
+/// staan dan in de opslag van de browser (IndexedDB, zie platform_web.dart).
+GateScreen gateScreen({required bool ready, required bool configured, required bool signedIn, required bool localOnly, required bool hasProfile}) {
+  if (!ready) return GateScreen.loading;
+  if (configured && !signedIn && !localOnly) return GateScreen.welcome;
+  if (configured && !hasProfile) return GateScreen.profileSetup;
+  return GateScreen.app;
+}
+
 /// Kiest wat je ziet: opstarten, welkom (niet ingelogd), profiel instellen (nieuw account) of de app.
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -37,10 +56,18 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = context.watch<Account>();
     final s = context.watch<AppState>();
-    if (!a.ready) return Scaffold(backgroundColor: context.pal.bg, body: const SizedBox.expand());
-    if (Account.configured && !a.signedIn && (kIsWeb || !a.localOnly)) return const WelcomeScreen();
-    if (Account.configured && !s.hasProfile) return const ProfileSetupScreen();
-    return const Shell();
+    return switch (gateScreen(
+      ready: a.ready,
+      configured: Account.configured,
+      signedIn: a.signedIn,
+      localOnly: a.localOnly,
+      hasProfile: s.hasProfile,
+    )) {
+      GateScreen.loading => Scaffold(backgroundColor: context.pal.bg, body: const SizedBox.expand()),
+      GateScreen.welcome => const WelcomeScreen(),
+      GateScreen.profileSetup => const ProfileSetupScreen(),
+      GateScreen.app => const Shell(),
+    };
   }
 }
 
@@ -99,7 +126,8 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
-  /// De knoppen op de homepage openen /app/?start=register of ?start=login: meteen naar dat scherm.
+  /// Links van de site naar /app/?start=register of ?start=login openen meteen dat scherm. Gewoon /app/ (de knop
+  /// "Open in browser") toont dit welkomscherm, waar je ook zonder account kunt beginnen.
   static bool _handledStart = false;
 
   @override
@@ -219,11 +247,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen(register: false))),
                     child: Text(tr('Log in', 'Inloggen')),
                   ),
-                  // Zonder account alleen in de app (gsm, pc); op de website altijd met account
-                  if (!kIsWeb) ...[
-                    const SizedBox(height: 6),
-                    TextButton(onPressed: () => _withoutAccount(context), child: Text(tr('Use without an account', 'Gebruiken zonder account'))),
-                  ],
+                  // Zonder account: in de app (gsm, pc) en in de browser
+                  const SizedBox(height: 6),
+                  TextButton(onPressed: () => withoutAccount(context), child: Text(tr('Use without an account', 'Gebruiken zonder account'))),
+                  if (runsOnWeb)
+                    Text(
+                      tr('Your data is then kept in this browser only.', 'Je gegevens blijven dan alleen in deze browser.'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12.5, color: p.ink3),
+                    ),
                   const SizedBox(height: 12),
                   Wrap(
                     alignment: WrapAlignment.center,
@@ -418,6 +450,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _Step.forgot => (tr('Forgot password', 'Wachtwoord vergeten'), tr('Send me a code', 'Stuur me een code')),
       _Step.reset => (tr('New password', 'Nieuw wachtwoord'), tr('Save password', 'Wachtwoord opslaan')),
     };
+    final guest = context.select<Account, bool>((a) => a.localOnly && !a.signedIn);
     final needsEmail = _step == _Step.register || _step == _Step.login || _step == _Step.forgot;
     final needsPassword = _step == _Step.register || _step == _Step.login || _step == _Step.reset;
     final needsTwice = _step == _Step.register || _step == _Step.reset;
@@ -478,6 +511,23 @@ class _AuthScreenState extends State<AuthScreen> {
                         tr('We will email you a code to choose a new password.', 'We mailen je een code om een nieuw wachtwoord te kiezen.'),
                         style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
                       ),
+                    // Eerst zonder account gebruikt: zeggen dat dat niet verloren gaat
+                    if (guest && (_step == _Step.register || _step == _Step.login)) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _step == _Step.register
+                            ? tr(
+                                'Everything you logged so far comes along to your new account.',
+                                'Alles wat je tot nu toe logde, gaat mee naar je nieuwe account.',
+                              )
+                            : tr(
+                                'What you logged so far is added to your account. If your account already has a profile and goals, those are kept.',
+                                'Wat je tot nu toe logde, komt bij je account. Heeft je account al een profiel en doelen, dan blijven die.',
+                              ),
+                        key: const ValueKey('guest-upgrade-note'),
+                        style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
+                      ),
+                    ],
                     const SizedBox(height: 22),
                     if (needsEmail) ...[
                       TextField(
@@ -852,20 +902,33 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 }
 
 /// Zonder account verder: eerst uitleggen wat je dan mist.
-Future<void> _withoutAccount(BuildContext context) async {
+/// Bewust zonder account beginnen, na uitleg wat dat betekent. In de browser eerlijk zeggen dat alles alleen in
+/// die browser staat (browsergegevens wissen of een privévenster = weg), en de browser vragen het niet zelf op te
+/// ruimen.
+Future<void> withoutAccount(BuildContext context) async {
+  final web = runsOnWeb;
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(tr('Use without an account?', 'Zonder account gebruiken?')),
       content: Text(
-        tr(
-          'Everything stays on this device only. Without an account there is no sync between devices, no friends or battles, '
-              'and voice logging only works if your phone has its own speech recognition. If you lose or reset this device, your data is gone.\n\n'
-              'You can create an account later in the settings; your data then comes along.',
-          'Alles blijft alleen op dit toestel. Zonder account is er geen synchronisatie tussen toestellen, geen vrienden of battles, '
-              'en spraak werkt alleen als je gsm zelf spraakherkenning heeft. Verlies of reset je dit toestel, dan zijn je gegevens weg.\n\n'
-              'Je kunt later in de instellingen alsnog een account maken; je gegevens gaan dan mee.',
-        ),
+        web
+            ? tr(
+                'Your data is kept in this browser only. If you clear your browsing data, use a private window or switch to another browser or device, you start over.\n\n'
+                    'Without an account there is no sync, no friends or battles, and logging with a photo is not available.\n\n'
+                    'Create a free account later in Settings to keep your data safe and use it on your phone. What you logged here comes along.',
+                'Je gegevens blijven alleen in deze browser. Wis je je browsergegevens, gebruik je een privévenster of stap je over naar een andere browser of toestel, dan begin je opnieuw.\n\n'
+                    'Zonder account is er geen synchronisatie, geen vrienden of battles, en loggen met een foto kan niet.\n\n'
+                    'Maak later in de Instellingen een gratis account om je gegevens veilig te bewaren en ze op je gsm te gebruiken. Wat je hier logde, gaat mee.',
+              )
+            : tr(
+                'Everything stays on this device only. Without an account there is no sync between devices, no friends or battles, '
+                    'and voice logging only works if your phone has its own speech recognition. If you lose or reset this device, your data is gone.\n\n'
+                    'You can create an account later in the settings; your data then comes along.',
+                'Alles blijft alleen op dit toestel. Zonder account is er geen synchronisatie tussen toestellen, geen vrienden of battles, '
+                    'en spraak werkt alleen als je gsm zelf spraakherkenning heeft. Verlies of reset je dit toestel, dan zijn je gegevens weg.\n\n'
+                    'Je kunt later in de instellingen alsnog een account maken; je gegevens gaan dan mee.',
+              ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
@@ -873,5 +936,7 @@ Future<void> _withoutAccount(BuildContext context) async {
       ],
     ),
   );
-  if (ok == true && context.mounted) context.read<Account>().setLocalOnly(true);
+  if (ok != true || !context.mounted) return;
+  context.read<Account>().setLocalOnly(true);
+  if (web) unawaited(askPersistentStorage());
 }
