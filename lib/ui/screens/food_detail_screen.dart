@@ -558,9 +558,15 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                         onPressed: () {
                           final e = widget.entry!;
                           final messenger = ScaffoldMessenger.of(context);
-                          s.deleteEntry(e);
                           Navigator.of(context).pop(true);
-                          showUndo(null, tr('${e.name} removed', '${e.name} verwijderd'), () => s.restoreEntries([e]), messenger: messenger);
+                          // Pas verwijderen als het dagboek weer in beeld staat. In hetzelfde frame als het sluiten
+                          // maakte het laatste item weghalen (lege dag) de toegankelijkheidsboom van het dagboek stuk
+                          // (Flutter-fout: een lijstitem zonder geometrie), met bij elke stap daarna "Null check
+                          // operator used on a null value" en een kapotte schermlezer (N88).
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            s.deleteEntry(e);
+                            showUndo(null, tr('${e.name} removed', '${e.name} verwijderd'), () => s.restoreEntries([e]), messenger: messenger);
+                          });
                         },
                       ),
                     ],
