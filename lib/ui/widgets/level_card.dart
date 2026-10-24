@@ -59,8 +59,11 @@ class _LevelCardState extends State<LevelCard> {
                             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: pal.ink),
                           ),
                         ),
-                        // Supporter (Pro): hetzelfde badge dat je vrienden naast je naam zien
-                        if (proOf(context)?.supporter ?? false) ...[const SizedBox(width: 8), const SupporterBadge()],
+                        // Supporter (Pro): hetzelfde badge dat je vrienden naast je naam zien, niet als je titel al Supporter is
+                        if (showSupporterBadge(supporter: proOf(context)?.supporter ?? false, title: s.title)) ...[
+                          const SizedBox(width: 8),
+                          const SupporterBadge(),
+                        ],
                       ],
                     ),
                     InkWell(

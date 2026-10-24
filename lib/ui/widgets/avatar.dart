@@ -289,7 +289,7 @@ Future<String?> pickAvatar(BuildContext context, String? current) => showModalBo
                 child: TextButton(
                   key: const ValueKey('avatar-sheet-pro'),
                   onPressed: () => openProScreen(ctx),
-                  child: Text(tr('About Pro', 'Over Pro')),
+                  child: Text(tr('About Supporter', 'Over Supporter')),
                 ),
               ),
           ],

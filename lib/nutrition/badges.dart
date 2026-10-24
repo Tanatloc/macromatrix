@@ -196,10 +196,14 @@ const badgeCategories = [
     'Maak of importeer # recepten.',
   )),
   // Diamant na een jaar Pro: wie een jaar steunt, krijgt het hoogste niveau
-  BadgeCategory('loyal', BadgeGroup.supporter, ('Loyal supporter', 'Trouwe supporter'), [1, 3, 6, 9, 12], (
-    'Support MacroMatrix with Pro for # months.',
-    'Steun MacroMatrix # maanden met Pro.',
-  )),
+  BadgeCategory(
+    'loyal',
+    BadgeGroup.supporter,
+    ('Loyal supporter', 'Trouwe supporter'),
+    [1, 3, 6, 9, 12],
+    ('Be a supporter for # months.', 'Wees # maanden supporter.'),
+    ('Be a supporter for # month.', 'Wees # maand supporter.'),
+  ),
 ];
 
 final categoryById = {for (final c in badgeCategories) c.id: c};

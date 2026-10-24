@@ -25,15 +25,15 @@ class AiQuotaNote extends StatelessWidget {
     if (kind.proOnly && !pro) {
       upsell = true;
       text = tr(
-        'Importing recipes from a link or a photo is part of Pro. You can still make a recipe yourself, for free.',
-        'Recepten importeren uit een link of een foto hoort bij Pro. Zelf een recept maken blijft gratis.',
+        'Importing recipes from a link or a photo is for supporters. You can still make a recipe yourself, for free.',
+        'Recepten importeren uit een link of een foto is voor supporters. Zelf een recept maken blijft gratis.',
       );
     } else if (q != null && !q.allowed) {
       upsell = !pro;
       text = switch (kind) {
         AiKind.label when !pro => tr(
-          'Free label scan used today, back tomorrow, or go Pro.',
-          'Gratis etiketscan van vandaag gebruikt. Morgen kan het weer, of neem Pro.',
+          'Free label scan used today, back tomorrow, or become a supporter.',
+          'Gratis etiketscan van vandaag gebruikt. Morgen kan het weer, of word supporter.',
         ),
         AiKind.label => tr(
           "That's ${q.limit} label scans today, the most we allow in one day. Tomorrow you can scan again; you can still enter it yourself.",
@@ -71,7 +71,11 @@ class AiQuotaNote extends StatelessWidget {
           ),
           if (upsell) ...[
             const SizedBox(width: 8),
-            FilledButton.tonal(key: ValueKey('ai-quota-pro-${kind.name}'), onPressed: () => openProScreen(context), child: const Text('Pro')),
+            FilledButton.tonal(
+              key: ValueKey('ai-quota-pro-${kind.name}'),
+              onPressed: () => openProScreen(context),
+              child: Text(tr('Supporter', 'Supporter')),
+            ),
           ],
         ],
       ),
@@ -84,12 +88,15 @@ String aiErrorText(String code, {AiKind kind = AiKind.label}) => switch (code) {
   'login' => tr('This needs an account. Log in under Profile → Account.', 'Dit kan alleen met een account. Log in via Profiel → Account.'),
   'not_configured' => tr('This is not available yet.', 'Dit is nog niet beschikbaar.'),
   'pro_required' => tr(
-    "Importing recipes is part of Pro, and we couldn't confirm Pro for this account right now.",
-    'Recepten importeren hoort bij Pro, en we konden Pro voor dit account nu niet bevestigen.',
+    "Importing recipes is for supporters, and we couldn't confirm that this account is a supporter right now.",
+    'Recepten importeren is voor supporters, en we konden nu niet nakijken of dit account supporter is.',
   ),
   'quota' =>
     kind == AiKind.label
-        ? tr('Free label scan used today, back tomorrow, or go Pro.', 'Gratis etiketscan van vandaag gebruikt. Morgen kan het weer, of neem Pro.')
+        ? tr(
+            'Free label scan used today, back tomorrow, or become a supporter.',
+            'Gratis etiketscan van vandaag gebruikt. Morgen kan het weer, of word supporter.',
+          )
         : tr('You have imported the most recipes for today. Try again tomorrow.', 'Je hebt vandaag het maximum aan recepten geïmporteerd. Morgen kan het weer.'),
   'too_many' => tr('You have done this a lot this hour. Try again later.', 'Je hebt dit uur al vaak gedaan. Probeer later opnieuw.'),
   'network' || 'timeout' => tr('No connection. Check your internet and try again.', 'Geen verbinding. Kijk je internet na en probeer opnieuw.'),

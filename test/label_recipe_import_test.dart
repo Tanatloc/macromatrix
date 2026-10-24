@@ -288,7 +288,7 @@ void main() {
       final server = FakeAiRemote()..ai[AiKind.label] = q(1, 1);
       final pro = newPro(s, server);
       await pump(tester, s, pro, const LabelScanScreen(barcode: '5449000000996'));
-      expect(find.text('Free label scan used today, back tomorrow, or go Pro.'), findsOneWidget);
+      expect(find.text('Free label scan used today, back tomorrow, or become a supporter.'), findsOneWidget);
       expect(find.byKey(const ValueKey('ai-quota-pro-label')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('label-photo-table')));
       await tester.pumpAndSettle();
@@ -321,7 +321,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('label-read')));
       await tester.pumpAndSettle();
       expect(pro.aiQuota(AiKind.label)!.used, 1);
-      expect(find.text('Free label scan used today, back tomorrow, or go Pro.'), findsOneWidget);
+      expect(find.text('Free label scan used today, back tomorrow, or become a supporter.'), findsOneWidget);
       expect(find.byKey(const ValueKey('label-error')), findsNothing);
     });
 
@@ -375,7 +375,7 @@ void main() {
     testWidgets('AiQuotaNote: alle standen', (tester) async {
       Future<void> show(Widget w) => tester.pumpWidget(MaterialApp(theme: buildTheme(Brightness.light), home: Scaffold(body: w)));
       await show(AiQuotaNote(kind: AiKind.label, quota: q(1, 1), pro: false));
-      expect(find.text('Free label scan used today, back tomorrow, or go Pro.'), findsOneWidget);
+      expect(find.text('Free label scan used today, back tomorrow, or become a supporter.'), findsOneWidget);
       expect(find.byKey(const ValueKey('ai-quota-pro-label')), findsOneWidget);
       await show(AiQuotaNote(kind: AiKind.label, quota: q(0, 1), pro: false));
       expect(find.text('1 of 1 free label scan left today'), findsOneWidget);
@@ -385,10 +385,10 @@ void main() {
       await show(AiQuotaNote(kind: AiKind.label, quota: q(3, 30, pro: true), pro: true));
       expect(find.byType(Container), findsNothing);
       await show(const AiQuotaNote(kind: AiKind.recipe, quota: null, pro: false));
-      expect(find.textContaining('part of Pro'), findsOneWidget);
+      expect(find.textContaining('is for supporters'), findsOneWidget);
       expect(find.byKey(const ValueKey('ai-quota-pro-recipe')), findsOneWidget);
       await show(const AiQuotaNote(kind: AiKind.recipe, quota: null, pro: true));
-      expect(find.textContaining('part of Pro'), findsNothing);
+      expect(find.textContaining('is for supporters'), findsNothing);
     });
   });
 
@@ -548,7 +548,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('recipe-from-photo')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('recipe-import-error')), findsOneWidget);
-      expect(find.textContaining("couldn't confirm Pro"), findsOneWidget);
+      expect(find.textContaining("couldn't confirm that this account is a supporter"), findsOneWidget);
     });
 
     testWidgets('het receptscherm heeft een knop Importeren', (tester) async {

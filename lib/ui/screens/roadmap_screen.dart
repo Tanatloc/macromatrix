@@ -216,7 +216,11 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
               style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink2),
             ),
           ),
-          TextButton(key: const ValueKey('roadmap-about-pro'), onPressed: () => openProScreen(context), child: Text(tr('About Pro', 'Over Pro'))),
+          TextButton(
+            key: const ValueKey('roadmap-about-pro'),
+            onPressed: () => openProScreen(context),
+            child: Text(tr('About Supporter', 'Over Supporter')),
+          ),
         ],
       ),
     );

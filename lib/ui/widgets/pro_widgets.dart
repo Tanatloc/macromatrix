@@ -24,6 +24,10 @@ void openProScreen(BuildContext context) => Navigator.of(context).push(MaterialP
     ? (const Color(0xFFE5B85C), const Color(0xFF2E2510))
     : (const Color(0xFF835C00), const Color(0xFFF6EDD6));
 
+/// Het Supporter-badge naast een naam tonen? Niet als de gekozen titel al "Supporter" is, anders staat er twee keer
+/// Supporter onder elkaar (SU-11, SO-9). De titel zegt het dan al.
+bool showSupporterBadge({required bool supporter, String? title}) => supporter && title != 'supporter';
+
 /// "Supporter" naast een naam. Met [compact] alleen het hartje (met uitleg bij lang indrukken), voor smalle rijen.
 class SupporterBadge extends StatelessWidget {
   const SupporterBadge({super.key, this.compact = false});
@@ -69,19 +73,40 @@ class SupporterBadge extends StatelessWidget {
   }
 }
 
-/// Klein "Pro"-label bij iets wat alleen met Pro kan.
+/// Klein "SUPPORTER"-label bij iets wat alleen voor supporters is. Met [compact] alleen het hartje, voor smalle
+/// plekken (bv. een badge van 72 breed).
 class ProTag extends StatelessWidget {
-  const ProTag({super.key});
+  const ProTag({super.key, this.compact = false});
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final (fg, bg) = _gold(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(
-        'Pro',
-        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: fg),
+    final heart = Icon(Icons.favorite_rounded, size: 10, color: fg);
+    return Tooltip(
+      message: tr('For supporters', 'Voor supporters'),
+      child: Semantics(
+        label: tr('For supporters', 'Voor supporters'),
+        excludeSemantics: true,
+        child: Container(
+          key: const ValueKey('supporter-tag'),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 6, vertical: compact ? 3 : 2),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+          child: compact
+              ? heart
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    heart,
+                    const SizedBox(width: 3),
+                    Text(
+                      'SUPPORTER',
+                      maxLines: 1,
+                      style: TextStyle(fontSize: 9.5, height: 1.2, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: fg),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -126,9 +151,9 @@ class PhotoQuotaNote extends StatelessWidget {
           )
         : tr(
             "You've used your ${q.limit} free photos for today. They're back tomorrow. You can still type or say what you ate, "
-                'or get up to $proPhotosPerDay photos a day with Pro.',
+                'or get up to $proPhotosPerDay photos a day as a supporter.',
             "Je ${q.limit} gratis foto's van vandaag zijn op. Morgen heb je er weer ${q.limit}. Je kunt nog altijd typen of zeggen wat je at, "
-                "of tot $proPhotosPerDay foto's per dag gebruiken met Pro.",
+                "of als supporter tot $proPhotosPerDay foto's per dag gebruiken.",
           );
     return Container(
       key: const ValueKey('photo-quota-out'),
@@ -144,7 +169,11 @@ class PhotoQuotaNote extends StatelessWidget {
           ),
           if (!pro) ...[
             const SizedBox(width: 8),
-            FilledButton.tonal(key: const ValueKey('photo-quota-pro'), onPressed: () => openProScreen(context), child: const Text('Pro')),
+            FilledButton.tonal(
+              key: const ValueKey('photo-quota-pro'),
+              onPressed: () => openProScreen(context),
+              child: Text(tr('Supporter', 'Supporter')),
+            ),
           ],
         ],
       ),
@@ -176,7 +205,7 @@ class ProTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'MacroMatrix Pro',
+                  isPro ? tr("You're a supporter", 'Je bent supporter') : tr('Become a supporter', 'Supporter worden'),
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
                 ),
                 Text(

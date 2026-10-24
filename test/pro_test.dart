@@ -377,10 +377,10 @@ void main() {
       expect(find.text('Logging with a photo: 3 photos per day'), findsOneWidget);
       expect(find.text('Friends, battles and challenges'), findsOneWidget);
       expect(find.text('Quick log by typing or with your voice'), findsOneWidget);
-      expect(find.text('What Pro adds'), findsOneWidget);
+      expect(find.text('What Supporter adds'), findsOneWidget);
       expect(find.text('Logging with a photo: up to 50 photos a day'), findsOneWidget);
       expect(find.textContaining('Unlimited'), findsNothing);
-      expect(find.text('Why Pro?'), findsOneWidget);
+      expect(find.text('Why become a supporter?'), findsOneWidget);
       expect(find.textContaining('costs real computing'), findsOneWidget);
       expect(find.text('€2.99'), findsOneWidget);
       expect(find.text('€19.99'), findsOneWidget);
@@ -396,7 +396,7 @@ void main() {
       // Herstellen vraagt de server: niets gevonden
       await tester.tap(find.byKey(const ValueKey('pro-restore')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('No Pro found'), findsOneWidget);
+      expect(find.text('No Supporter subscription found for this account.'), findsOneWidget);
     });
 
     testWidgets('herstellen vindt Pro dat met de hand toegekend werd', (tester) async {
@@ -407,9 +407,9 @@ void main() {
       server.status = ProStatus(until: DateTime(2099, 3, 1), source: 'manual');
       await tester.tap(find.byKey(const ValueKey('pro-restore')));
       await tester.pumpAndSettle();
-      expect(find.text('Pro is active on this account.'), findsOneWidget);
+      expect(find.text("You're a supporter on this account."), findsOneWidget);
       expect(find.text('You are a supporter'), findsOneWidget);
-      expect(find.textContaining('Pro until 1 March 2099'), findsOneWidget);
+      expect(find.textContaining('Supporter until 1 March 2099'), findsOneWidget);
       expect(find.byKey(const ValueKey('pro-prices')), findsNothing);
       // Badge verbergen voor vrienden
       await tester.tap(find.byKey(const ValueKey('pro-show-badge')));
@@ -430,7 +430,7 @@ void main() {
 
       final pro = newPro(s, FakeProRemote()..missing = true);
       await pump(tester, s, pro, const ProScreen());
-      expect(find.text('Pro is not available yet.'), findsOneWidget);
+      expect(find.text('Supporter is not available yet.'), findsOneWidget);
       expect(find.text('Free plan'), findsOneWidget);
     });
 

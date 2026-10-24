@@ -372,7 +372,7 @@ void main() {
       expect(find.text('Subscribe · £16.99 / year'), findsOneWidget);
       // Google-regel voor abonnementen: prijs, plan en automatische verlenging bij de knop (GP-2)
       expect(find.byKey(const ValueKey('pro-coming-soon')), findsNothing);
-      expect(find.textContaining('MacroMatrix Pro, yearly: £16.99 per year. Renews automatically every year'), findsOneWidget);
+      expect(find.textContaining('MacroMatrix Supporter, yearly: £16.99 per year. Renews automatically every year'), findsOneWidget);
       expect(find.textContaining('Cancel anytime in Google Play'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('pro-plan-monthly')));
       await tester.pump();
@@ -420,7 +420,7 @@ void main() {
       };
       await tester.tap(find.byKey(const ValueKey('pro-subscribe')));
       await tester.pumpAndSettle();
-      expect(find.text('Thank you! Pro is active.'), findsOneWidget);
+      expect(find.text("Thank you! You're a supporter now."), findsOneWidget);
       expect(store.completed, ['tok-w2']);
     });
 

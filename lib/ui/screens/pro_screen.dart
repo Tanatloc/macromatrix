@@ -41,7 +41,7 @@ class _ProScreenState extends State<ProScreen> {
     setState(() {
       _busy = false;
       _message = switch (out) {
-        PurchaseOutcome.done => tr('Thank you! Pro is active.', 'Bedankt! Pro staat aan.'),
+        PurchaseOutcome.done => tr("Thank you! You're a supporter now.", 'Bedankt! Je bent nu supporter.'),
         PurchaseOutcome.cancelled => null,
         PurchaseOutcome.unavailable => tr(
           "Coming soon. You can't subscribe in the app yet; we'll let you know as soon as you can. Everything that's free stays free.",
@@ -60,11 +60,12 @@ class _ProScreenState extends State<ProScreen> {
     });
   }
 
-  static String get _loginText => tr('Log in first: Pro belongs to your account.', 'Log eerst in: Pro hoort bij je account.');
+  static String get _loginText =>
+      tr('Log in first: being a supporter belongs to your account.', 'Log eerst in: supporter zijn hoort bij je account.');
 
   static String get _pendingText => tr(
-    'Payment pending. Pro turns on as soon as Google Play confirms your payment.',
-    'Betaling in behandeling. Pro gaat aan zodra Google Play je betaling bevestigt.',
+    'Payment pending. Your supporter extras turn on as soon as Google Play confirms your payment.',
+    "Betaling in behandeling. Je supporterextra's gaan aan zodra Google Play je betaling bevestigt.",
   );
 
   static String get _otherAccountText => tr(
@@ -73,8 +74,8 @@ class _ProScreenState extends State<ProScreen> {
   );
 
   static String get _notConfiguredText => tr(
-    "Your payment went through, but we can't switch Pro on just yet. It will turn on by itself soon; you don't need to pay again.",
-    'Je betaling is gelukt, maar we kunnen Pro nog niet meteen aanzetten. Het gaat binnenkort vanzelf aan; je hoeft niet opnieuw te betalen.',
+    "Your payment went through, but we can't switch on your supporter extras just yet. They will turn on by themselves soon; you don't need to pay again.",
+    "Je betaling is gelukt, maar we kunnen je supporterextra's nog niet meteen aanzetten. Ze gaan binnenkort vanzelf aan; je hoeft niet opnieuw te betalen.",
   );
 
   Future<void> _restore(Pro? pro) async {
@@ -89,9 +90,9 @@ class _ProScreenState extends State<ProScreen> {
     setState(() {
       _busy = false;
       _message = ok
-          ? tr('Pro is active on this account.', 'Pro staat aan op dit account.')
+          ? tr("You're a supporter on this account.", 'Je bent supporter op dit account.')
           : !pro.available
-          ? tr('Pro is not available yet.', 'Pro is nog niet beschikbaar.')
+          ? tr('Supporter is not available yet.', 'Supporter is nog niet beschikbaar.')
           : switch (pro.restoreOutcome) {
               PurchaseOutcome.otherAccount => _otherAccountText,
               PurchaseOutcome.notConfigured => _notConfiguredText,
@@ -100,7 +101,7 @@ class _ProScreenState extends State<ProScreen> {
                 'That did not work. Check your connection and try again.',
                 'Dat lukte niet. Controleer je verbinding en probeer opnieuw.',
               ),
-              _ => tr('No Pro found for this account.', 'Geen Pro gevonden voor dit account.'),
+              _ => tr('No Supporter subscription found for this account.', 'Geen Supporter-abonnement gevonden voor dit account.'),
             };
     });
   }
@@ -126,7 +127,7 @@ class _ProScreenState extends State<ProScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('MacroMatrix Pro')),
+      appBar: AppBar(title: Text(tr('Supporter', 'Supporter'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
         children: [
@@ -197,7 +198,7 @@ class _ProScreenState extends State<ProScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      PanelTitle(tr('What Pro adds', 'Wat Pro toevoegt')),
+                      PanelTitle(tr('What Supporter adds', 'Wat Supporter toevoegt')),
                       const SizedBox(height: 8),
                       bullet(
                         Icons.photo_camera_outlined,
@@ -267,15 +268,15 @@ class _ProScreenState extends State<ProScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      PanelTitle(tr('Why Pro?', 'Waarom Pro?')),
+                      PanelTitle(tr('Why become a supporter?', 'Waarom supporter worden?')),
                       const SizedBox(height: 6),
                       Text(
                         tr(
                           'Reading a photo of your plate runs an AI model on a server, and every photo costs real computing. '
-                              'Everything else in MacroMatrix costs us very little, so it stays free. Pro pays for the photos and '
-                              'helps keep the rest free for everyone. No ads, and we never sell your data.',
+                              'Everything else in MacroMatrix costs us very little, so it stays free. Supporters pay for the photos and '
+                              'help keep the rest free for everyone. No ads, and we never sell your data.',
                           'Een foto van je bord lezen gebeurt door een AI-model op een server, en elke foto kost echte rekenkracht. '
-                              'Al de rest van MacroMatrix kost ons heel weinig, dus dat blijft gratis. Pro betaalt de foto\'s en helpt '
+                              'Al de rest van MacroMatrix kost ons heel weinig, dus dat blijft gratis. Supporters betalen de foto\'s en helpen '
                               'de rest voor iedereen gratis te houden. Geen reclame, en we verkopen nooit je gegevens.',
                         ),
                         style: TextStyle(fontSize: 13.5, height: 1.5, color: p.ink2),
@@ -321,19 +322,19 @@ class _ProScreenState extends State<ProScreen> {
     if (isPro) {
       title = tr('You are a supporter', 'Je bent supporter');
       sub = until == null || pro?.debugPro == true
-          ? tr('Pro is active.', 'Pro staat aan.')
+          ? tr('Your supporter extras are on.', "Je supporterextra's staan aan.")
           : until.year >= 9000
-          ? tr('Pro for life. Thank you!', 'Pro voor altijd. Bedankt!')
+          ? tr('Supporter for life. Thank you!', 'Supporter voor altijd. Bedankt!')
           : tr(
-              'Pro until ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Thank you!',
-              'Pro tot ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Bedankt!',
+              'Supporter until ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Thank you!',
+              'Supporter tot ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Bedankt!',
             );
     } else {
       title = tr('Free plan', 'Gratis');
       sub = until != null
           ? tr(
-              'Your Pro ended on ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Everything free keeps working.',
-              'Je Pro liep af op ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Alles wat gratis is, blijft werken.',
+              'Your supporter extras ended on ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Everything free keeps working.',
+              "Je supporterextra's liepen af op ${DateFormat('d MMMM y', appLocale).format(until.toLocal())}. Alles wat gratis is, blijft werken.",
             )
           : tr('You have everything that is free, for good.', 'Je hebt alles wat gratis is, voor altijd.');
     }
@@ -352,7 +353,8 @@ class _ProScreenState extends State<ProScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: p.ink),
                 ),
               ),
-              if (pro?.supporter ?? false) const SupporterBadge(),
+              // De titel zegt al "Je bent supporter": alleen het hartje, anders staat er twee keer Supporter
+              if (pro?.supporter ?? false) const SupporterBadge(compact: true),
             ],
           ),
           const SizedBox(height: 4),
@@ -366,7 +368,7 @@ class _ProScreenState extends State<ProScreen> {
           ],
           if (pro != null && !pro.available) ...[
             const SizedBox(height: 6),
-            Text(tr('Pro is not available yet.', 'Pro is nog niet beschikbaar.'), style: TextStyle(fontSize: 12.5, color: p.ink3)),
+            Text(tr('Supporter is not available yet.', 'Supporter is nog niet beschikbaar.'), style: TextStyle(fontSize: 12.5, color: p.ink3)),
           ],
           if (isPro && pro != null && pro.debugPro == null) ...[
             const SizedBox(height: 4),
@@ -426,15 +428,15 @@ class _ProScreenState extends State<ProScreen> {
     final price = priceOf(_plan);
     final renews = _plan == ProPlan.monthly
         ? tr(
-            'MacroMatrix Pro, monthly: $price per month. Renews automatically every month until you cancel. '
+            'MacroMatrix Supporter, monthly: $price per month. Renews automatically every month until you cancel. '
                 'Cancel anytime in Google Play under Payments & subscriptions.',
-            'MacroMatrix Pro, per maand: $price per maand. Verlengt automatisch elke maand tot je opzegt. '
+            'MacroMatrix Supporter, per maand: $price per maand. Verlengt automatisch elke maand tot je opzegt. '
                 'Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
           )
         : tr(
-            'MacroMatrix Pro, yearly: $price per year. Renews automatically every year until you cancel. '
+            'MacroMatrix Supporter, yearly: $price per year. Renews automatically every year until you cancel. '
                 'Cancel anytime in Google Play under Payments & subscriptions.',
-            'MacroMatrix Pro, per jaar: $price per jaar. Verlengt automatisch elk jaar tot je opzegt. '
+            'MacroMatrix Supporter, per jaar: $price per jaar. Verlengt automatisch elk jaar tot je opzegt. '
                 'Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
           );
     final android = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

@@ -694,7 +694,8 @@ class RankTile extends StatelessWidget {
                             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
                           ),
                         ),
-                        if (r.supporter) const Padding(padding: EdgeInsets.only(left: 4, bottom: 2), child: SupporterBadge(compact: true)),
+                        if (showSupporterBadge(supporter: r.supporter, title: r.title))
+                          const Padding(padding: EdgeInsets.only(left: 4, bottom: 2), child: SupporterBadge(compact: true)),
                         for (final (id, tier) in r.showcase)
                           Padding(
                             padding: const EdgeInsets.only(left: 4, bottom: 2),

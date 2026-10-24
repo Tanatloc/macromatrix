@@ -636,9 +636,9 @@ class AccentPicker extends StatelessWidget {
                   return Semantics(
                     button: true,
                     selected: on,
-                    label: locked ? tr('${a.name} (Pro)', '${a.name} (Pro)') : a.name,
+                    label: locked ? tr('${a.name} (Supporter)', '${a.name} (Supporter)') : a.name,
                     child: Tooltip(
-                      message: locked ? tr('${a.name} · with Pro', '${a.name} · met Pro') : a.name,
+                      message: locked ? tr('${a.name} · for supporters', '${a.name} · voor supporters') : a.name,
                       child: InkResponse(
                         key: ValueKey('accent-${a.id}'),
                         radius: 24,
@@ -709,7 +709,7 @@ class BackdropPicker extends StatelessWidget {
                   return Semantics(
                     button: true,
                     selected: on,
-                    label: locked ? tr('${d.name} (Pro)', '${d.name} (Pro)') : d.name,
+                    label: locked ? tr('${d.name} (Supporter)', '${d.name} (Supporter)') : d.name,
                     excludeSemantics: true,
                     child: InkWell(
                       key: ValueKey('backdrop-${d.id}'),

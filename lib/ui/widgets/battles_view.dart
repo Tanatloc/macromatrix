@@ -344,7 +344,8 @@ class _FriendSheet extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: pal.ink),
             ),
-            if (x.supporter)
+            // Geen badge als de titel eronder al "Supporter" is (SO-9)
+            if (showSupporterBadge(supporter: x.supporter, title: x.title))
               const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Center(child: SupporterBadge()),
