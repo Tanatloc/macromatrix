@@ -58,7 +58,7 @@ void main() {
       final milk = _food('Milk, whole', group: 'dairy', part: 'drink', portions: const [Portion('1 cup', 244)]);
       expect(everydayPortions(milk), isEmpty);
       final butter = _food('Butter', group: 'oil/fat', portions: const [Portion('1 tbsp', 14)]);
-      expect(_labels(butter), ['on a slice (≈10 g)', '1 teaspoon (≈5 g)']);
+      expect(_labels(butter), ['on 1 slice (≈10 g)', '1 teaspoon (≈5 g)']);
     });
 
     test('hoogstens 6 knoppen, schattingen na de databankporties', () {
@@ -88,6 +88,23 @@ void main() {
       expect(_labels(_food('Oat flakes, boiled/cooked in water', group: 'cereal')), ['1 bowl (≈250 g)']);
     });
 
+    test('bloem een eetlepel, kokosmelk een lepel of blik, bier ook een pint, pizza een punt (N84, N48)', () {
+      expect(_labels(_food('Wheat flour', group: 'cereal', part: 'flour')), ['1 tablespoon (≈10 g)']);
+      expect(_labels(_food('Plain flour')), ['1 tablespoon (≈10 g)']);
+      expect(_labels(_food('Coconut milk', group: 'beverage', part: 'drink')), ['1 tablespoon (≈15 ml)', '1 can (≈400 ml)']);
+      expect(_labels(_food('Lager, standard', group: 'alcohol', part: 'drink')), ['1 glass (≈250 ml)', '1 pint (≈568 ml)']);
+      expect(_labels(_food('Pizza, cheese and tomato, retail', group: 'dish')), ['1 slice (≈100 g)', '1 pizza (≈400 g)']);
+      expect(_labels(_food('Pizza sauce')), isEmpty);
+    });
+
+    test('dranken in ml, de rest in gram (N85)', () {
+      expect(isDrink(_food('Milk, whole', group: 'dairy', part: 'drink')), isTrue);
+      expect(isDrink(_food('Water, tap water', group: 'beverage', part: 'drink')), isTrue);
+      expect(isDrink(_food('Orange juice')), isTrue);
+      expect(isDrink(_food('Milk powder', group: 'dairy', part: 'powder')), isFalse);
+      expect(isDrink(_food('Yoghurt, plain', group: 'dairy')), isFalse);
+    });
+
     test('stukgewicht blijft hetzelfde voor Snel loggen', () {
       expect(typicalPieceGrams('apple'), 150);
       expect(typicalPieceGrams('protein powder'), 30);
@@ -113,14 +130,16 @@ void main() {
       expect(down(0), 0);
     });
 
-    test('porties: per 1, onder 2 per halve', () {
-      expect(up(1, portion: true), 1.5);
+    test('porties (stuks, recepten): per 1, alleen onder 1 per halve (N32)', () {
+      expect(up(1, portion: true), 2);
       expect(up(1.5, portion: true), 2);
       expect(up(2, portion: true), 3);
       expect(up(2.5, portion: true), 3);
       expect(down(3, portion: true), 2);
-      expect(down(2, portion: true), 1.5);
-      expect(down(2.5, portion: true), 2);
+      expect(down(2, portion: true), 1);
+      expect(down(1.5, portion: true), 1);
+      expect(down(1, portion: true), 0.5);
+      expect(up(0.5, portion: true), 1);
       expect(down(0.5, portion: true), 0);
       expect(up(0.3, portion: true), 0.5);
     });

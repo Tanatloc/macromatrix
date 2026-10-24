@@ -324,6 +324,8 @@ class Importer {
         _ => null,
       };
     }
+    // Water staat in ml; 1 g water is 1 ml (N85)
+    if (key == 'water' && to == 'ml') return from == 'g' || from == 'ml' ? 1 : null;
     if (from == 'iu') {
       // Vitamine D: 40 IE = 1 µg. Vitamine A en E in IE hangen af van de vorm: niet omrekenen.
       return key == 'vit_d' && to == 'µg' ? 1 / 40 : null;

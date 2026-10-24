@@ -10,6 +10,11 @@ import 'package:sqlite3/common.dart';
 import 'food.dart';
 import 'search_terms.dart';
 
+/// Een verhaspelde naam uit de bron rechtzetten zonder de databank opnieuw te bouwen (N85):
+/// "Milk, whole, 3.5, (UHT), % fat" wordt "Milk, whole, 3.5% fat (UHT)".
+String tidyFoodName(String name) =>
+    name.replaceFirstMapped(RegExp(r', (\d+(?:\.\d+)?), (\([^)]*\)), % fat'), (m) => ', ${m[1]}% fat ${m[2]}');
+
 class FoodDb {
   /// Openen gebeurt per platform (lib/platform/): als bestand op gsm en pc, in het geheugen in de browser.
   FoodDb(this._db);
@@ -36,7 +41,7 @@ class FoodDb {
     final local = r['name_local'] as String;
     return Food(
       ref: '${r['source']}:${r['source_id']}',
-      name: r['name'] as String,
+      name: tidyFoodName(r['name'] as String),
       localName: local.isEmpty ? null : local,
       category: (r['category'] as String).isEmpty ? null : r['category'] as String,
       source: FoodSource.fromDb(r['source'] as String),
