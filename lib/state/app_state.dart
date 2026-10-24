@@ -892,6 +892,8 @@ class AppState extends ChangeNotifier {
     'cola light': 'cola sweetener',
     'diet coke': 'cola sweetener',
     'pepsi max': 'cola sweetener',
+    // Britse chips zijn een zakje chips, geen knäckebröd ("crispbread")
+    'crisps': 'potato crisps',
     // Een merknaam voor gewone cola: de gewone cola uit de databank (merkproducten zoek je via 'Merken')
     'coca cola': 'cola',
     'coca-cola': 'cola',

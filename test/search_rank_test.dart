@@ -86,4 +86,11 @@ void main() {
       expect(f.name.toLowerCase(), isNot(contains('fast food')));
     }
   });
+
+  test('crisps zijn chips, geen knäckebröd', () {
+    for (final f in [box('crisps'), quick('crisps')]) {
+      expect(f.name.toLowerCase(), contains('crisps'), reason: f.name);
+      expect(f.name.toLowerCase(), isNot(contains('crispbread')));
+    }
+  });
 }
