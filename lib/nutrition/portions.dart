@@ -87,6 +87,30 @@ final _cereal = RegExp(r'\b(cereal|muesli|granola|cornflakes|corn flakes|bran fl
 final _bread = RegExp(r'\b(bread|toast|baguette|loaf|sourdough|pumpernickel|brioche)\b');
 final _notSlice = RegExp(r'\b(roll|bagel|croissant|bun|pitt?a|wrap|tortilla|naan|crumbs?|breadcrumbs|sticks?|pudding|sauce)\b');
 
+// Snacks uit een zakje: chips, popcorn, puffs (geen "stuk": een stuk aardappel van 150 g is geen zakje chips)
+final _bagSnack = RegExp(
+  r'\b(crisps|(potato|tortilla|corn|vegetable|veggie|lentil|rice|wheat|taro|multigrain|bean|pita|bagel) chips|popcorn|puffs|puffed|'
+  r'cheese doodles|twiglets|prawn crackers?|shrimp crackers?|pork scratchings|pork rinds|bombay mix|trail mix|corn snack|'
+  r'potato snack|potato rings|chevda|nachos)\b',
+);
+final _chips = RegExp(r'\bchips\b');
+final _fries = RegExp(r'\b(fries|french|chips shop|chip shop|oven chips|frozen|deep[- ]fried potatoes|fast food)\b');
+
+// Havermout: een kom (droog) en een eetlepel; gekookt (pap) een grote kom
+final _oats = RegExp(r'\b(oats|rolled oats|oat flakes|porridge oats|oatmeal flakes|steel cut)\b');
+final _cooked = RegExp(r'\b(cooked|boiled|bolied|prepared|with water|in water|with milk)\b');
+
+// Soep: een kom (geen poeder, blokje of geconcentreerde soep)
+final _soup = RegExp(r'\b(soup|broth|bouillon|consomm[eé]|chowder|gazpacho|bisque)\b');
+final _notSoup = RegExp(r'\b(powder|dried|dry|cubes?|condensed|concentrate|mix|undiluted|vegetables for soups?|soup vegetables)\b');
+
+// Taart en cake: een stuk (geen bodem, mix of vulling, en geen koekjes of stukgoed zoals een mince pie)
+final _cake = RegExp(r'\b(cakes?|gateau|gâteau|cheesecake|pies?|tarts?|tarte|torte|swiss roll|yule log)\b');
+final _notCake = RegExp(
+  r'\b(mix|base|crust|shell|filling|cookies?|bars?|rusk|cone|rice cakes?|corn cakes?|oatcakes?|pancakes?|griddle|jaffa|welsh|rock|eccles|'
+  r'pork|meat|fish|crab|potato|mince|cupcakes?|snack cakes?|fried|madeleine|shortcake)\b',
+);
+
 final _notPiece = RegExp(r'\b(puree|purée|sauce|compote|juice|jam|pie|crumble|soup|salad|mash(ed)?|chips|fries|noodles|pasta)\b');
 
 /// Groepen waarin "een stuk" iets betekent; voor andere groepen (bv. eiernoedels) geen stuk op naam alleen.
@@ -143,6 +167,46 @@ List<EverydayPortion> everydayPortions(Food f) {
       (_tsp, _p('1 teaspoon', '1 koffielepel', 5)),
       (_tbsp, _p('1 tablespoon', '1 eetlepel', 15)),
     ]);
+  }
+
+  // Chips en andere snacks uit een zakje: een (klein) zakje, nooit een stuk
+  final snackName = '$name ${l?.food ?? ''}'.toLowerCase();
+  final bag =
+      !(l?.dish ?? false) &&
+      // Rijstwafels en crackers blijven per stuk (behalve kroepoek)
+      !RegExp(r'\bcakes?\b|(?<!prawn |shrimp )\bcrackers?\b').hasMatch(snackName) &&
+      (group == 'snack' && (_bagSnack.hasMatch(snackName) || _chips.hasMatch(snackName)) ||
+          l == null && _bagSnack.hasMatch(name) && !_fries.hasMatch(name));
+  if (bag) {
+    return unless([
+      (r'\b(small bag|multipack|bag|packet|pack|package|sachet)\b', _p('1 small bag', '1 klein zakje', 25)),
+      (r'\b(bag|packet|pack|package)\b', _p('1 bag', '1 zakje', 32)),
+    ]);
+  }
+
+  // Soep: een kom
+  final soupLike = group == 'soup' || (l == null && _soup.hasMatch(name));
+  if (soupLike && !_notSoup.hasMatch(name) && !const {'powder', 'concentrate'}.contains(part) && l?.state != 'dried') {
+    return unless([(_bowl, _p('1 bowl', '1 kom', 250))]);
+  }
+
+  // Havermout: droog een kom en een eetlepel, gekookt een kom pap
+  final oatsLike = _oats.hasMatch(name) || const {'oats', 'rolled oats'}.contains(l?.food);
+  if (oatsLike &&
+      (l == null || const {'cereal', 'breakfast cereal'}.contains(group)) &&
+      !RegExp(r'\b(bars?|biscuits?|cookies?|bread|drink)\b').hasMatch(name)) {
+    final cookedOats = _cooked.hasMatch(name) || const {'boiled', 'cooked', 'prepared', 'steamed'}.contains(l?.state);
+    if (cookedOats) return unless([(_bowl, _p('1 bowl', '1 kom', 250))]);
+    return unless([(_bowl, _p('1 bowl', '1 kom', 40)), (_tbsp, _p('1 tablespoon', '1 eetlepel', 10))]);
+  }
+
+  // Taart en cake: een stuk
+  final cakeName = (l?.food ?? name).toLowerCase();
+  if ((l == null || const {'bakery', 'dessert'}.contains(group)) &&
+      _cake.hasMatch(cakeName) &&
+      !_notCake.hasMatch(cakeName) &&
+      !_notCake.hasMatch(name)) {
+    return unless([(r'\b(slice|piece|pcs|serving|portion)\b', _p('1 slice', '1 stuk taart', 75))]);
   }
 
   // Yoghurt, pap en ontbijtgranen: een kom
