@@ -70,7 +70,7 @@ T = {
                          mail('Confirm it is you', 'Type this code in the app to confirm this action:')),
     'password_changed_notification': ('Your MacroMatrix password was changed', 'password-changed.html',
                                       mail('Your password was changed', 'The password of your MacroMatrix account ({{ .Email }}) was just changed.', code=False,
-                                           outro="Was this you? Then you don't need to do anything.<br>Wasn't it you? Choose a new password right away in the app via <b>Forgot password</b>, and email us at <a href=\"mailto:privacy@divinenet.online\" style=\"color:#0E6B65\">privacy@divinenet.online</a>.")),
+                                           outro="Was this you? Then you don't need to do anything.<br>Wasn't it you? Choose a new password right away in the app via <b>Forgot password</b>, and email us at <a href=\"mailto:privacy@macromatrix.eu\" style=\"color:#0E6B65\">privacy@macromatrix.eu</a>.")),
 }
 api = {}
 for key, (subject, fname, html) in T.items():

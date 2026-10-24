@@ -29,7 +29,7 @@ Future<void> main() async {
     child: Padding(
       padding: const EdgeInsets.all(12),
       child: Text(
-        'Something went wrong here. Please send a screenshot to privacy@divinenet.online.\n\n${details.exceptionAsString()}',
+        'Something went wrong here. Please send a screenshot to privacy@macromatrix.eu.\n\n${details.exceptionAsString()}',
         style: const TextStyle(color: Color(0xFF9B1C1C), fontSize: 12),
         maxLines: 8,
         overflow: TextOverflow.ellipsis,

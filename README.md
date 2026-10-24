@@ -76,7 +76,7 @@ More (in Dutch): [docs/ONTWIKKELEN.md](docs/ONTWIKKELEN.md).
 ## Contributing
 
 Bug reports and ideas are welcome as issues. For code changes, open an issue first so we can agree on the approach.
-Security problems: please email privacy@divinenet.online instead of opening a public issue.
+Security problems: please email privacy@macromatrix.eu instead of opening a public issue.
 
 ## Licence
 
