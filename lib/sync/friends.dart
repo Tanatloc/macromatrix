@@ -66,6 +66,26 @@ class Friend {
   );
 }
 
+/// Iemand die je geblokkeerd hebt (uit friend_blocked_list).
+class BlockedUser {
+  const BlockedUser({required this.id, required this.name, this.avatar});
+  final String id, name;
+  final String? avatar;
+
+  factory BlockedUser.fromRow(Map<String, dynamic> r) =>
+      BlockedUser(id: r['other'] as String, name: (r['name'] as String?) ?? '', avatar: r['avatar'] as String?);
+}
+
+/// Redenen om iemand te melden (zoals de server ze kent).
+const reportReasons = ['spam', 'harassment', 'inappropriate', 'other'];
+
+/// De uitleg bij een uitkomst van friend_report.
+String reportMessage(String result) => switch (result) {
+  'reported' => tr('Thanks. We received your report and will look into it.', 'Bedankt. We kregen je melding en bekijken ze.'),
+  'limit' => tr('You sent a lot of reports today. Try again tomorrow.', 'Je stuurde vandaag al veel meldingen. Probeer morgen opnieuw.'),
+  _ => tr('That did not work.', 'Dat lukte niet.'),
+};
+
 enum BattleResult { won, lost, draw }
 
 /// Een battle van één week (maandag tot en met zondag) tegen een vriend.
@@ -274,6 +294,7 @@ class Friends extends ChangeNotifier {
       _sentLevel = null;
       _sentExtra = null;
       battles = const [];
+      blocked = const [];
       code = null;
       name = '';
       list = const [];
@@ -286,6 +307,11 @@ class Friends extends ChangeNotifier {
   String? _sentAvatar;
   int? _sentLevel;
   String? _sentExtra;
+
+  /// Wie je geblokkeerd hebt. [blockAvailable] is false zolang de migratie block_report.sql niet op de server
+  /// staat: dan verbergt het scherm Blokkeren en Melden.
+  List<BlockedUser> blocked = const [];
+  bool blockAvailable = true;
 
   /// Battles (leeg als de databank ze nog niet kent).
   List<Battle> battles = const [];
@@ -470,6 +496,16 @@ class Friends extends ChangeNotifier {
       list = [for (final r in rows) Friend.fromRow((r as Map).cast<String, dynamic>())];
       _keepSocialBest();
       try {
+        final bl = await client.rpc('friend_blocked_list') as List;
+        if (gen != _loadGen) return;
+        blocked = [for (final r in bl) BlockedUser.fromRow((r as Map).cast<String, dynamic>())];
+        blockAvailable = true;
+      } on PostgrestException catch (e) {
+        if (!isMissingTable(e)) rethrow;
+        blocked = const [];
+        blockAvailable = false;
+      }
+      try {
         final bs = await client.rpc('battle_list') as List;
         if (gen != _loadGen) return;
         battles = [for (final r in bs) Battle.fromRow((r as Map).cast<String, dynamic>())];
@@ -645,6 +681,69 @@ class Friends extends ChangeNotifier {
       notifyListeners();
     }
     await load();
+  }
+
+  /// Voert een functie voor blokkeren of melden uit. Kent de server ze niet (migratie nog niet uitgevoerd), dan
+  /// verdwijnen de knoppen en geeft dit null terug.
+  Future<T?> _blockRpc<T>(Future<T> Function() f) => _run<T?>(() async {
+    try {
+      return await f();
+    } on PostgrestException catch (e) {
+      if (!isMissingTable(e)) rethrow;
+      blockAvailable = false;
+      return null;
+    }
+  });
+
+  /// Iemand blokkeren: de vriendschap of het verzoek verdwijnt, net als open battles en uitnodigingen tussen jullie.
+  /// Geeft true terug als het lukte.
+  Future<bool> block(String id, {String name = '', String? avatar}) async {
+    final ok = await _blockRpc(() async {
+      await account.client!.rpc('friend_block', params: {'p_other': id});
+      return true;
+    });
+    if (ok != true) return false;
+    // Meteen tonen: weg uit de lijst en de battles, en bij de geblokkeerden
+    list = [
+      for (final x in list)
+        if (x.id != id) x,
+    ];
+    battles = [
+      for (final b in battles)
+        if (b.other != id || b.finished) b,
+    ];
+    if (!blocked.any((b) => b.id == id)) blocked = [BlockedUser(id: id, name: name, avatar: avatar), ...blocked];
+    notifyListeners();
+    await load();
+    return true;
+  }
+
+  /// Een blokkade opheffen. Vrienden worden jullie pas opnieuw met een nieuw verzoek.
+  Future<bool> unblock(String id) async {
+    final ok = await _blockRpc(() async {
+      await account.client!.rpc('friend_unblock', params: {'p_other': id});
+      return true;
+    });
+    if (ok != true) return false;
+    blocked = [
+      for (final b in blocked)
+        if (b.id != id) b,
+    ];
+    notifyListeners();
+    await load();
+    return true;
+  }
+
+  /// Iemand melden met een reden uit [reportReasons] en een optionele notitie (max. 500 tekens).
+  /// Geeft de uitkomst van de server terug (reported, limit, ...), of null bij een fout.
+  Future<String?> report(String id, String reason, {String? note}) {
+    final n = note?.trim() ?? '';
+    return _blockRpc(
+      () async => await account.client!.rpc(
+        'friend_report',
+        params: {'p_other': id, 'p_reason': reason, 'p_note': n.isEmpty ? null : (n.length > 500 ? n.substring(0, 500) : n)},
+      ) as String,
+    );
   }
 
   @override
