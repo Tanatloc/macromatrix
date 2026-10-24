@@ -13,6 +13,7 @@ import 'platform/reminders.dart';
 import 'state/app_state.dart';
 import 'sync/account.dart';
 import 'i18n.dart';
+import 'sync/features.dart';
 import 'sync/friends.dart';
 import 'sync/pro.dart';
 import 'ui/screens/auth_screens.dart';
@@ -50,6 +51,8 @@ Future<void> main() async {
   // Pro-status en fototeller: meteen gemaakt, zodat de status na het inloggen meteen opgehaald wordt (en de
   // vriendenlijst er de supporterbadges uit kan halen)
   final pro = Pro(account);
+  // Vroege toegang: welke functies aan staan (bij de start, na het inloggen en als Pro verandert)
+  final features = Features(account, pro: pro);
 
   runApp(
     MultiProvider(
@@ -60,6 +63,7 @@ Future<void> main() async {
         // Niet lui: moet vanaf de start je level en score doorsturen, ook als je het vriendenscherm niet opent
         ChangeNotifierProvider(lazy: false, create: (_) => Friends(state, account, pro: pro)),
         ChangeNotifierProvider.value(value: pro),
+        ChangeNotifierProvider.value(value: features),
       ],
       child: const MacroMatrixApp(),
     ),

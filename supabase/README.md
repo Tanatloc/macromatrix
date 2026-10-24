@@ -78,6 +78,36 @@ Zonder `supabase.json` bouwt de app gewoon, zonder account (alles blijft op het 
 - Uitloggen verstuurt eerst alles en wist dan de gegevens op dat toestel. *Account verwijderen* wist de
   gebruiker en al zijn rijen (functie `delete_account`, vereist door de Play Store).
 
+## Vroege toegang en roadmap (supporters)
+
+Migratie `migrations/20261031000000_early_access.sql` (na `20261026000000_pro.sql`). Zonder die migratie werkt de
+app gewoon: vlaggen volgen hun standaard in de app en het scherm "What's next" zegt dat het er nog niet is.
+
+**Een nieuwe functie achter een vlag zetten** (zie ook de uitleg bovenaan `lib/sync/features.dart`):
+
+1. In de app: een id en een standaard in `knownFeatures` (`lib/sync/features.dart`), bv. `'training_days': false`,
+   en de knop of het scherm achter `featureOn(context, 'training_days')` (`lib/ui/widgets/feature_gate.dart`).
+   Zolang de server geen rij voor die id heeft, geldt de standaard.
+2. Na de release, in de SQL-editor: supporters nu, iedereen over 3 weken.
+
+   ```sql
+   insert into public.features (id, title_en, title_nl, early_from, public_from)
+   values ('training_days', 'Training and rest days', 'Trainings- en rustdagen', now(), now() + interval '3 weeks')
+   on conflict (id) do update set early_from = excluded.early_from, public_from = excluded.public_from;
+   ```
+
+**Roadmap**: de items staan in `public.roadmap_items` (de migratie zet er zes ideeën in). Alleen supporters
+stemmen, hoogstens 3 stemmen tegelijk op wat nog niet klaar is; stemmen van wie geen Pro meer heeft, blijven staan
+maar tellen niet mee. Beheer in de SQL-editor:
+
+```sql
+-- Een item toevoegen
+insert into public.roadmap_items (title_en, title_nl, desc_en, desc_nl, status, sort)
+values ('Dark widgets', 'Donkere widgets', 'Home screen widgets in dark mode.', 'Widgets op je startscherm in donkere modus.', 'idea', 70);
+-- De status wijzigen: idea, planned, building of done (op wat klaar is, kan niet meer gestemd worden)
+update public.roadmap_items set status = 'building' where title_en = 'Training and rest days';
+```
+
 ## Testen
 
 - `flutter test test/sync_test.dart`: twee toestellen via een nagebootste server (toevoegen, wijzigen,
