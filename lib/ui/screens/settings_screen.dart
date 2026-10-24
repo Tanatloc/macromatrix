@@ -213,8 +213,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _language(s, pal),
-                  const SizedBox(height: 10),
+                  // Taalkeuze alleen als Nederlands openstaat (zie dutchAvailable)
+                  if (dutchAvailable) ...[_language(s, pal), const SizedBox(height: 10)],
                   const AccountCard(),
                   const SizedBox(height: 10),
                   const ProTile(),

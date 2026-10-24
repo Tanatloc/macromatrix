@@ -79,7 +79,7 @@ class BattleNotify {
       if (fresh.isEmpty) return true;
 
       // Taal van de app volgen
-      if (db.setting('ui')?['lang'] == 'nl') setAppLang(AppLang.nl);
+      if (dutchAvailable && db.setting('ui')?['lang'] == 'nl') setAppLang(AppLang.nl);
       final plugin = FlutterLocalNotificationsPlugin();
       await plugin.initialize(settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')));
       for (final r in fresh) {

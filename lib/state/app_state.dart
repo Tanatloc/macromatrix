@@ -112,7 +112,11 @@ class AppState extends ChangeNotifier {
     _settings = ts == null ? const TargetSettings() : TargetSettings.fromJson(ts);
     dayStartHour = ((user.setting('ui')?['dayStart'] as num?)?.toInt() ?? 3).clamp(0, 5);
     // De gekozen taal blijft na een herstart (werd wel bewaard maar nooit teruggelezen)
-    if (AppLang.values.asNameMap()[user.setting('ui')?['lang']] case final lang? when lang != appLang.value) setAppLang(lang);
+    // Zolang Nederlands niet openstaat (dutchAvailable), blijft een vroeger gekozen Nederlands gewoon Engels
+    if (AppLang.values.asNameMap()[user.setting('ui')?['lang']] case final lang?
+        when lang != appLang.value && (dutchAvailable || lang == AppLang.en)) {
+      setAppLang(lang);
+    }
     _preferences = {for (final n in ((user.setting('preferences')?['list'] as List?) ?? const [])) ?DietPref.values.asNameMap()[n]};
   }
 

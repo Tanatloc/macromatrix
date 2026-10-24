@@ -45,7 +45,7 @@ def mail(title, intro, code=True, note=None, outro="Didn't ask for this? You can
     </table>
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:480px">
       <tr><td align="center" style="padding:18px 8px 0;font-family:{FONT};font-size:12px;line-height:1.6;color:#8B919A">
-        MacroMatrix by DivineNet · <a href="https://macromatrix.eu" style="color:#8B919A">macromatrix.eu</a><br>
+        MacroMatrix by VanoWeb · <a href="https://macromatrix.eu" style="color:#8B919A">macromatrix.eu</a><br>
         You get this email because of an action on your MacroMatrix account.
       </td></tr>
     </table>

@@ -15,6 +15,11 @@ enum AppLang {
   final String label;
 }
 
+/// Staat Nederlands open voor gebruikers? Voorlopig niet: de app lanceert eerst volledig in het Engels, en Nederlands
+/// komt terug als een volledige update zodra ook de namen van de voedingsmiddelen en het zoeken vertaald zijn. De
+/// vertalingen blijven in de code staan; deze schakelaar verbergt alleen de keuze en negeert een bewaarde keuze.
+const dutchAvailable = false;
+
 /// Huidige taal. De app bouwt opnieuw op als ze verandert.
 final appLang = ValueNotifier<AppLang>(AppLang.en);
 
@@ -30,7 +35,7 @@ String get appLocale => isNl ? 'nl_BE' : 'en_GB';
 AppLang get deviceLang {
   final locales = PlatformDispatcher.instance.locales;
   final first = locales.isEmpty ? PlatformDispatcher.instance.locale : locales.first;
-  return first.languageCode == 'nl' ? AppLang.nl : AppLang.en;
+  return dutchAvailable && first.languageCode == 'nl' ? AppLang.nl : AppLang.en;
 }
 
 void setAppLang(AppLang lang) {

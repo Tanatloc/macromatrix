@@ -80,7 +80,7 @@ Security problems: please email privacy@macromatrix.eu instead of opening a publ
 
 ## Licence
 
-Copyright © 2026 DivineNet.
+Copyright © 2026 VanoWeb.
 
 MacroMatrix is free software: you can redistribute it and/or modify it under the terms of the
 [GNU Affero General Public License v3.0](LICENSE). If you run a modified version as a service, you must make your
