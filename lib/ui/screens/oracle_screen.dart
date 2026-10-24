@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -46,8 +48,8 @@ const oracleGroups = <(String, String, String)>[
   ('sauce/condiment', 'Sauces', 'Sauzen'),
 ];
 
-/// Orakel: zoek de voedingsmiddelen die het rijkst zijn aan één voedingsstof, per 100 g, per 100 kcal of per portie,
-/// eventueel alleen in bepaalde voedingsgroepen.
+/// Orakel: zoek de voedingsmiddelen die het rijkst zijn aan één voedingsstof (of er het minst van hebben), per 100 g,
+/// per 100 kcal of per portie, eventueel alleen in bepaalde voedingsgroepen.
 class OracleScreen extends StatefulWidget {
   const OracleScreen({super.key, this.nutrient});
 
@@ -71,6 +73,12 @@ class _OracleScreenState extends State<OracleScreen> {
   final Set<String> _groups = {};
   bool _everyday = true;
 
+  /// Meeste of minste; null = de standaard voor deze stof (zie [_leastFor]). Een andere stof kiezen zet dit terug.
+  bool? _least;
+
+  /// Met "Let op suiker" zoek je bij koolhydraten en suikers wat er het minst van heeft (N97).
+  bool _leastFor(AppState s) => _least ?? (s.sugarFocus && AppState.oracleLeastByDefault.contains(_key));
+
   /// Alle stoffen uit de lijst (afgeleide stoffen staan ook in de databank of worden er in SQL uit berekend).
   static const _searchable = nutrients;
 
@@ -81,13 +89,15 @@ class _OracleScreenState extends State<OracleScreen> {
     final n = nutrientByKey[_key]!;
     // Groepen waar "alleen gewone voedingsmiddelen" niets overliet: daar staan toch de rijkste producten (N12)
     final relaxed = <String>{};
-    final results = s.oracle(_key, rank: _rank, limit: _limit, groups: _groups, everyday: _everyday, relaxed: relaxed);
+    final least = _leastFor(s);
+    final results = s.oracle(_key, rank: _rank, limit: _limit, groups: _groups, everyday: _everyday, least: least, relaxed: relaxed);
     final relaxedNames = [
       for (final g in relaxed)
         if (g.isNotEmpty) oracleGroups.where((x) => x.$1 == g).map((x) => tr(x.$2, x.$3).toLowerCase()).firstOrNull ?? g,
     ];
     final goal = s.targets[_key]?.goal;
-    final top = results.isEmpty ? 1.0 : results.first.$2;
+    // Bij "minst" staat het hoogste onderaan
+    final top = results.isEmpty ? 1.0 : results.map((r) => r.$2).reduce(math.max);
 
     return Scaffold(
       appBar: AppBar(title: Text(tr('Ask the Oracle', 'Vraag het Orakel'))),
@@ -102,10 +112,15 @@ class _OracleScreenState extends State<OracleScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    tr(
-                      'Find the foods richest in one nutrient. Your preferences and allergies are taken into account.',
-                      'Zoek de voedingsmiddelen die het rijkst zijn aan één voedingsstof. Je voorkeuren en allergieën tellen mee.',
-                    ),
+                    least
+                        ? tr(
+                            'Find the foods with the least of one nutrient. Water, tea, coffee, spices and sweeteners are left out. Your preferences and allergies are taken into account.',
+                            'Zoek de voedingsmiddelen met het minst van één voedingsstof. Water, thee, koffie, kruiden en zoetstoffen vallen weg. Je voorkeuren en allergieën tellen mee.',
+                          )
+                        : tr(
+                            'Find the foods richest in one nutrient. Your preferences and allergies are taken into account.',
+                            'Zoek de voedingsmiddelen die het rijkst zijn aan één voedingsstof. Je voorkeuren en allergieën tellen mee.',
+                          ),
                     style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
                   ),
                   const SizedBox(height: 12),
@@ -120,6 +135,11 @@ class _OracleScreenState extends State<OracleScreen> {
                           // Nooit "Top 0": zonder resultaten gewoon de stof
                           results.isEmpty
                               ? '${n.name} ${_rank.label}'
+                              : least
+                              ? tr(
+                                  'Lowest ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
+                                  'Laagste ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
+                                )
                               : tr(
                                   'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
                                   'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
@@ -159,7 +179,7 @@ class _OracleScreenState extends State<OracleScreen> {
                               style: TextStyle(color: p.ink2),
                             ),
                           ),
-                        for (final (i, (f, v)) in results.indexed) _row(p, i + 1, f, v, top, n, goal),
+                        for (final (i, (f, v)) in results.indexed) _row(p, i + 1, f, v, top, n, goal, least: least),
                       ],
                     ),
                   ),
@@ -191,8 +211,24 @@ class _OracleScreenState extends State<OracleScreen> {
             final k = await showNutrientSearch(context, _searchable, _key);
             if (k == null || !mounted) return;
             OracleScreen.lastNutrient = k;
-            setState(() => _key = k);
+            setState(() {
+              _key = k;
+              _least = null;
+            });
           },
+        ),
+      ],
+    );
+    final s = context.read<AppState>();
+    final directionField = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        label(tr('Show', 'Toon')),
+        Segmented<bool>(
+          height: 36,
+          items: [(false, tr('Most', 'Meeste')), (true, tr('Least', 'Minste'))],
+          selected: _leastFor(s),
+          onChanged: (v) => setState(() => _least = v),
         ),
       ],
     );
@@ -211,7 +247,7 @@ class _OracleScreenState extends State<OracleScreen> {
     final topField = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        label(tr('Show the top', 'Toon de top')),
+        label(_leastFor(s) ? tr('How many', 'Hoeveel') : tr('Show the top', 'Toon de top')),
         Segmented<int>(
           height: 36,
           items: const [(10, '10'), (25, '25'), (50, '50'), (100, '100')],
@@ -276,6 +312,8 @@ class _OracleScreenState extends State<OracleScreen> {
                   children: [
                     nutrientField,
                     const SizedBox(height: 16),
+                    directionField,
+                    const SizedBox(height: 16),
                     rankField,
                     const SizedBox(height: 16),
                     topField,
@@ -294,6 +332,8 @@ class _OracleScreenState extends State<OracleScreen> {
           children: [
             nutrientField,
             const SizedBox(height: 14),
+            directionField,
+            const SizedBox(height: 14),
             rankField,
             const SizedBox(height: 14),
             topField,
@@ -307,7 +347,7 @@ class _OracleScreenState extends State<OracleScreen> {
     );
   }
 
-  Widget _row(Palette p, int rank, Food f, double v, double top, Nutrient n, double? goal) {
+  Widget _row(Palette p, int rank, Food f, double v, double top, Nutrient n, double? goal, {bool least = false}) {
     final portion = _rank == OracleRank.perPortion ? AppState.oraclePortion(f) : null;
     final portionLabel = portion == null ? null : (f.portions.where((x) => x.grams == portion).firstOrNull?.label ?? '100 g');
     final kcal = f.per100g['energy'];
@@ -355,7 +395,8 @@ class _OracleScreenState extends State<OracleScreen> {
                     child: LinearProgressIndicator(
                       value: top <= 0 ? 0 : (v / top).clamp(0, 1),
                       minHeight: 5,
-                      color: p.brand,
+                      // Bij "minst" is een korte balk het goede nieuws; niet in de merkkleur alsof meer beter is
+                      color: least ? p.ink3 : p.brand,
                       backgroundColor: p.track,
                     ),
                   ),
