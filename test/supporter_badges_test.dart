@@ -59,7 +59,7 @@ void main() {
     );
     expect(
       [
-        for (final v in [2, 3, 6, 12, 24, 36]) tier('loyal', v),
+        for (final v in [0, 1, 3, 6, 9, 12]) tier('loyal', v),
       ],
       [0, 1, 2, 3, 4, 5],
     );
@@ -122,7 +122,7 @@ void main() {
     expect(lapsed['labels'], 120);
     expect(t['labels'], 3, reason: 'goud blijft');
     expect(t['chef'], 1);
-    expect(t['loyal'], 1);
+    expect(t['loyal'], 2, reason: '3 maanden is zilver');
     expect(availableTitles(t, supporter: r.hadPro, founder: isFounder(r.firstPro)).map((x) => x.id), containsAll(['supporter', 'founder']));
 
     // Weer Pro: het huidige aantal telt opnieuw en de maanden lopen verder vanaf de afgesloten dagen
@@ -168,7 +168,7 @@ void main() {
     expect(ids(const {}, supporter: true), isNot(contains('founder')));
     expect(ids(const {}, supporter: true, founder: true), contains('founder'));
     expect(ids(const {'loyal': 2}, supporter: true), isNot(contains('patron')));
-    expect(ids(const {'loyal': 3}, supporter: true), contains('patron'), reason: '12 maanden Pro');
+    expect(ids(const {'loyal': 3}, supporter: true), contains('patron'), reason: '6 maanden Pro');
     for (final id in ['supporter', 'patron', 'founder']) {
       expect(titleById[id]!.pro, isTrue);
     }

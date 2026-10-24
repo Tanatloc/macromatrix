@@ -10,6 +10,8 @@ import '../../sync/pro.dart';
 import '../theme.dart';
 import '../../i18n.dart';
 import 'avatar_frame.dart';
+import 'avatar_frame_picker.dart';
+import 'pro_widgets.dart';
 
 /// Standaardavatars: een icoon op een kleur.
 const avatarPresets = <(IconData, Color)>[
@@ -193,8 +195,9 @@ Future<String?> pickAvatar(BuildContext context, String? current) => showModalBo
   isScrollControlled: true,
   builder: (ctx) {
     final pal = ctx.pal;
+    final isPro = proOf(ctx)?.isPro ?? false;
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -277,6 +280,18 @@ Future<String?> pickAvatar(BuildContext context, String? current) => showModalBo
                   ),
               ],
             ),
+            // De rand kies je hier ook, naast je foto (zonder Pro op slot, met een knop naar Pro)
+            const SizedBox(height: 18),
+            const AvatarFramePicker(),
+            if (!isPro)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const ValueKey('avatar-sheet-pro'),
+                  onPressed: () => openProScreen(ctx),
+                  child: Text(tr('About Pro', 'Over Pro')),
+                ),
+              ),
           ],
         ),
       ),

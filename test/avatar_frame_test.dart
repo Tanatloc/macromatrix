@@ -172,5 +172,33 @@ void main() {
       await tester.pumpAndSettle();
       expect(pro.frame, isNull);
     });
+
+    testWidgets('ook te kiezen in het venster van je profielfoto', (tester) async {
+      final s = newState();
+      final server = _FrameRemote()..status = ProStatus(until: DateTime.now().add(const Duration(days: 30)));
+      final pro = newPro(s, server);
+      await pro.refresh();
+      await pump(tester, s, pro, Builder(builder: (context) => Scaffold(body: TextButton(onPressed: () => pickAvatar(context, null), child: const Text('open')))));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('frame-picker')), findsOneWidget);
+      expect(find.byKey(const ValueKey('avatar-sheet-pro')), findsNothing);
+      await tester.ensureVisible(find.byKey(const ValueKey('frame-wings')));
+      await tester.tap(find.byKey(const ValueKey('frame-wings')));
+      await tester.pumpAndSettle();
+      expect(server.sent, [AvatarFrame.wings]);
+    });
+
+    testWidgets('profielfoto zonder Pro: randen op slot, met een knop naar Pro', (tester) async {
+      final s = newState();
+      final pro = newPro(s, _FrameRemote());
+      await pump(tester, s, pro, Builder(builder: (context) => Scaffold(body: TextButton(onPressed: () => pickAvatar(context, null), child: const Text('open')))));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('avatar-sheet-pro')));
+      await tester.tap(find.byKey(const ValueKey('avatar-sheet-pro')));
+      await tester.pumpAndSettle();
+      expect(find.byType(ProScreen), findsOneWidget);
+    });
   });
 }

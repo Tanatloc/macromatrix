@@ -195,7 +195,8 @@ const badgeCategories = [
     'Create or import # recipes.',
     'Maak of importeer # recepten.',
   )),
-  BadgeCategory('loyal', BadgeGroup.supporter, ('Loyal supporter', 'Trouwe supporter'), [3, 6, 12, 24, 36], (
+  // Diamant na een jaar Pro: wie een jaar steunt, krijgt het hoogste niveau
+  BadgeCategory('loyal', BadgeGroup.supporter, ('Loyal supporter', 'Trouwe supporter'), [1, 3, 6, 9, 12], (
     'Support MacroMatrix with Pro for # months.',
     'Steun MacroMatrix # maanden met Pro.',
   )),
