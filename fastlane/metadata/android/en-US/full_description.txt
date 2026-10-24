@@ -1,10 +1,11 @@
-<p>MacroMatrix shows what you really eat: energy, macros and all 69 nutrients, against EFSA reference values.</p>
+<p>MacroMatrix shows what you really eat: energy, macros and all 69 nutrients, compared with EFSA reference values. It is free for nearly everything, open source, and has no ads.</p>
 <ul>
-<li><b>Track</b> every vitamin, mineral, fatty acid and essential amino acid, with a Nutrient Score per day, week and month.</li>
-<li><b>Log</b> quickly: search 15,000+ basic foods from official European tables and millions of branded products, scan barcodes, or just say what you ate.</li>
-<li><b>Scan</b> products for a product score, Nutri-Score, processing level, additives with their EFSA-based risk, your allergens, origin (EU or US) and better choices.</li>
-<li><b>Friends</b>: weekly leaderboard, battles, levels, badges and titles. Friends only see your name, level and weekly score.</li>
-<li>Health Connect import, home screen widget, reminders, English and Dutch, light and dark theme, works offline.</li>
+<li><b>Diary</b>: every vitamin, mineral, fatty acid and essential amino acid, with a Nutrient Score per day, week and month, and a short list of foods that fill today's gaps.</li>
+<li><b>Logging</b>: search 20,000+ basic foods from official European tables and millions of branded products, scan a barcode, say what you ate, or take a photo of your meal (3 a day free; you check the estimate before it is saved).</li>
+<li><b>Scanner</b>: product score, Nutri-Score, processing level, additives with their EFSA-based risk, your allergens and a healthier alternative. Unknown product? Scan the label instead (1 a day free) and, if you want, share it with Open Food Facts.</li>
+<li><b>Friends</b>, if you want them: a weekly leaderboard, battles, challenges, levels, badges and titles. Friends only see your name, level, badges and weekly score. You can block and report.</li>
+<li>Week menu with shopping list, copy a day, backups, Health Connect import, home screen widget, reminders, English and Dutch, light and dark theme. Works offline.</li>
 </ul>
-<p>Works without an account; with a free account your data is synced between devices and stored in the EU. No ads, no tracking, no selling of data.</p>
+<p>Supporter is optional (€2.99 a month or €19.99 a year). It adds extras you don't need, such as avatar frames, more colours, more photo and label scans per day, recipe import and early access. It mainly pays for the servers and the AI scans, so the app can stay online without ads.</p>
+<p>Works without an account. With a free account your data is synced between devices and stored in the EU. No tracking, and your data is never sold. Source code: github.com/Tanatloc/macromatrix</p>
 <p>Not medical advice.</p>

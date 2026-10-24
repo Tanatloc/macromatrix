@@ -1,10 +1,11 @@
-<p>MacroMatrix toont wat je echt binnenkrijgt: energie, macro's en alle 69 voedingsstoffen, afgezet tegen de EFSA-richtwaarden.</p>
+<p>MacroMatrix toont wat je echt eet: energie, macro's en alle 69 voedingsstoffen, vergeleken met de referentiewaarden van EFSA. Bijna alles is gratis, de app is open source en heeft geen advertenties.</p>
 <ul>
-<li><b>Bijhouden</b>: elke vitamine, elk mineraal, vetzuren en essentiële aminozuren, met een Nutrient Score per dag, week en maand.</li>
-<li><b>Snel loggen</b>: zoek in meer dan 15.000 basisproducten uit officiële Europese tabellen en miljoenen merkproducten, scan barcodes of zeg gewoon wat je at.</li>
-<li><b>Scannen</b>: productscore, Nutri-Score, bewerkingsgraad, additieven met hun risico volgens EFSA, je allergenen, herkomst (EU of VS) en betere keuzes.</li>
-<li><b>Vrienden</b>: weekklassement, battles, levels, badges en titels. Vrienden zien alleen je naam, level en weekscore.</li>
-<li>Health Connect, widget op je startscherm, herinneringen, Nederlands en Engels, licht en donker thema, werkt offline.</li>
+<li><b>Dagboek</b>: elke vitamine, elk mineraal, alle vetzuren en essentiële aminozuren, met een Nutrient Score per dag, week en maand, en een kort lijstje met wat je tekort vandaag aanvult.</li>
+<li><b>Loggen</b>: zoek in meer dan 20.000 basisvoedingsmiddelen uit officiële Europese tabellen en miljoenen merkproducten, scan een barcode, zeg wat je at, of neem een foto van je maaltijd (3 per dag gratis; je controleert de schatting voor ze bewaard wordt).</li>
+<li><b>Scanner</b>: productscore, Nutri-Score, bewerkingsgraad, additieven met hun risico volgens EFSA, je allergenen en een gezonder alternatief. Product onbekend? Scan dan het etiket (1 per dag gratis) en deel het als je wil met Open Food Facts.</li>
+<li><b>Vrienden</b>, als je dat wil: een wekelijkse ranglijst, battles, uitdagingen, levels, badges en titels. Vrienden zien alleen je naam, level, badges en weekscore. Je kan blokkeren en melden.</li>
+<li>Weekmenu met boodschappenlijst, een dag kopiëren, back-ups, Health Connect, widget op je startscherm, herinneringen, Engels en Nederlands, licht en donker thema. Werkt ook offline.</li>
 </ul>
-<p>Werkt zonder account; met een gratis account worden je gegevens gesynchroniseerd en in de EU bewaard. Geen advertenties, geen tracking, geen verkoop van gegevens.</p>
+<p>Supporter is optioneel (€2,99 per maand of €19,99 per jaar). Je krijgt er extra's bij die je niet nodig hebt, zoals avatarranden, meer kleuren, meer foto's en etiketscans per dag, recepten importeren en vroege toegang. Het betaalt vooral de servers en de AI-scans, zodat de app online blijft zonder advertenties.</p>
+<p>Werkt zonder account. Met een gratis account worden je gegevens tussen je toestellen gesynchroniseerd en in de EU bewaard. Geen tracking, en je gegevens worden nooit verkocht. Broncode: github.com/Tanatloc/macromatrix</p>
 <p>Geen medisch advies.</p>
