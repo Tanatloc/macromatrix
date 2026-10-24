@@ -83,7 +83,10 @@ class RecapScreen extends StatelessWidget {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _Hero(r: r, avatar: LevelAvatar(avatar: s.avatar, level: s.level.level, size: 44)),
+                      _Hero(
+                        r: r,
+                        avatar: LevelAvatar(avatar: s.avatar, level: s.level.level, size: 44, frame: myFrameOf(context)),
+                      ),
                       const SizedBox(height: 12),
                       if (!year) _Calendar(r: r) else _MonthBars(r: r),
                       const SizedBox(height: 12),

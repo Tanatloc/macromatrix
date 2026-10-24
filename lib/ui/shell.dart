@@ -35,6 +35,7 @@ import 'widgets/share_actions.dart';
 import 'widgets/kit.dart';
 import 'widgets/logo.dart';
 import '../i18n.dart';
+import 'widgets/pro_widgets.dart';
 
 /// Hoofdscherm met vijf tabbladen (Lichaam zit onder Profiel). Op een gsm onderaan, op een tablet als smalle rail
 /// links, en op een pc als zijbalk met namen en snelkoppelingen. Op een pc opent alles binnen het tabblad, zodat de
@@ -181,7 +182,7 @@ class _ShellState extends State<Shell> {
     if (seen == null || level < seen || !mounted) return;
     final stars = starsFor(level) > starsFor(seen);
     _celebrate(
-      leading: LevelAvatar(avatar: _state.avatar, level: level, size: 36),
+      leading: LevelAvatar(avatar: _state.avatar, level: level, size: 36, frame: myFrameOf(context, listen: false)),
       text: stars
           ? tr('Level $level! You earned a new star.', 'Level $level! Je verdiende een nieuwe ster.')
           : tr('Level up: you are now level $level!', 'Level omhoog: je bent nu level $level!'),
@@ -668,7 +669,7 @@ class _SideBar extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     child: Row(
                       children: [
-                        LevelAvatar(avatar: s.avatar, level: level, size: 38),
+                        LevelAvatar(avatar: s.avatar, level: level, size: 38, frame: myFrameOf(context)),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(

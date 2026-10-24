@@ -15,6 +15,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:supabase/supabase.dart';
 
+import '../i18n.dart';
 import 'account.dart';
 import 'challenges.dart' show isMissingTable;
 import 'purchase.dart';
@@ -62,10 +63,43 @@ class ProMissing implements Exception {
   String toString() => 'ProMissing';
 }
 
+/// Supporterranden rond je avatar (migratie 20261030000000_supporter_frame.sql). De ring houdt altijd de kleur van
+/// je level; een rand verandert alleen de stijl, de beweging en de versiering. De [id]'s moeten gelijk zijn aan de
+/// check op pro_status.frame.
+enum AvatarFrame {
+  /// Een zachte gloed in de levelkleur die traag aanzwelt.
+  glow('glow'),
+
+  /// Een helder lichtje dat rond de ring draait.
+  orbit('orbit'),
+
+  /// Een paar fonkelende sterretjes op de ring.
+  sparkle('sparkle'),
+
+  /// Een lauwerkrans aan de onderkant (staat stil).
+  laurel('laurel');
+
+  const AvatarFrame(this.id);
+  final String id;
+
+  String get label => switch (this) {
+    glow => tr('Glow', 'Gloed'),
+    orbit => tr('Orbit', 'Omloop'),
+    sparkle => tr('Sparkle', 'Fonkeling'),
+    laurel => tr('Laurel', 'Lauwerkrans'),
+  };
+
+  /// Beweegt deze rand (de lauwerkrans niet)?
+  bool get animated => this != laurel;
+
+  /// Uit een id van de server; onbekend of leeg = geen rand.
+  static AvatarFrame? parse(Object? id) => values.where((f) => f.id == id).firstOrNull;
+}
+
 /// Pro zoals de server het kent.
 @immutable
 class ProStatus {
-  const ProStatus({this.until, this.source, this.showBadge = true});
+  const ProStatus({this.until, this.source, this.showBadge = true, this.frame});
 
   /// Tot wanneer Pro loopt (null = nooit gehad).
   final DateTime? until;
@@ -76,17 +110,24 @@ class ProStatus {
   /// Het Supporter-badge tonen aan vrienden.
   final bool showBadge;
 
+  /// De gekozen supporterrand (null = geen, of een server zonder de migratie).
+  final AvatarFrame? frame;
+
   bool activeAt(DateTime now) => until != null && until!.isAfter(now);
 
   factory ProStatus.fromJson(Map j) => ProStatus(
     until: j['until'] is String ? DateTime.tryParse(j['until'] as String) : null,
     source: j['source'] as String?,
     showBadge: j['show_badge'] != false,
+    frame: AvatarFrame.parse(j['frame']),
   );
 
-  Map<String, Object?> toJson() => {'until': until?.toUtc().toIso8601String(), 'source': source, 'show_badge': showBadge};
+  Map<String, Object?> toJson() => {'until': until?.toUtc().toIso8601String(), 'source': source, 'show_badge': showBadge, 'frame': frame?.id};
 
-  ProStatus copyWith({bool? showBadge}) => ProStatus(until: until, source: source, showBadge: showBadge ?? this.showBadge);
+  ProStatus copyWith({bool? showBadge}) => ProStatus(until: until, source: source, showBadge: showBadge ?? this.showBadge, frame: frame);
+
+  /// Dezelfde status met een andere rand (null = geen).
+  ProStatus withFrame(AvatarFrame? f) => ProStatus(until: until, source: source, showBadge: showBadge, frame: f);
 }
 
 /// Dag in UTC (jjjj-mm-dd): de teller op de server telt per UTC-dag.
@@ -126,6 +167,20 @@ class PhotoQuota {
   }
 }
 
+/// De supporterrand bestaat (nog) niet op de server.
+class FrameMissing implements Exception {
+  const FrameMissing();
+  @override
+  String toString() => 'FrameMissing';
+}
+
+/// Voor de supporterrand: los van [ProRemote], zodat een server (of een nabootsing) zonder randen gewoon werkt.
+abstract class ProFrameRemote {
+  /// Je rand kiezen (null = geen). Geeft false als de server weigert (geen Pro). Gooit [FrameMissing] als de
+  /// migratie er nog niet staat.
+  Future<bool> setFrame(AvatarFrame? frame);
+}
+
 /// Wat de app van de server nodig heeft. Gooit [ProMissing] als de migratie er nog niet staat.
 abstract class ProRemote {
   Future<ProStatus> mine();
@@ -133,7 +188,7 @@ abstract class ProRemote {
   Future<void> showBadge(bool show);
 }
 
-class SupabaseProRemote implements ProRemote, AiQuotaRemote {
+class SupabaseProRemote implements ProRemote, AiQuotaRemote, ProFrameRemote {
   SupabaseProRemote(this.client);
   final SupabaseClient client;
 
@@ -157,6 +212,16 @@ class SupabaseProRemote implements ProRemote, AiQuotaRemote {
 
   @override
   Future<void> showBadge(bool show) => _guard(() => client.rpc('pro_show_badge', params: {'p_show': show}));
+
+  @override
+  Future<bool> setFrame(AvatarFrame? frame) async {
+    try {
+      return await client.rpc('pro_set_frame', params: {'p_frame': frame?.id}) == true;
+    } on PostgrestException catch (e) {
+      if (isMissingTable(e)) throw const FrameMissing();
+      rethrow;
+    }
+  }
 
   @override
   Future<PhotoQuota?> aiQuota(AiKind kind) async {
@@ -243,6 +308,7 @@ class Pro extends ChangeNotifier {
     _ai.clear();
     available = true;
     aiAvailable = true;
+    frameAvailable = true;
     _loadCache();
     notifyListeners();
     if (uid != null) unawaited(refresh());
@@ -368,6 +434,36 @@ class Pro extends ChangeNotifier {
     }
     notifyListeners();
     return ok == true;
+  }
+
+  /// false zodra blijkt dat de server de supporterranden niet kent (migratie 20261030000000 nog niet uitgevoerd).
+  bool frameAvailable = true;
+
+  /// Je eigen rand: alleen zolang Pro loopt. Loopt Pro af, dan verdwijnt hij (de server bewaart de keuze wel).
+  AvatarFrame? get frame => isPro ? status.frame : null;
+
+  /// Een rand kiezen (null = geen). In een debug-build met Pro nagebootst alleen op dit toestel. Geeft true als het
+  /// lukte.
+  Future<bool> setFrame(AvatarFrame? f) async {
+    final r = remote;
+    var ok = false;
+    if (r is ProFrameRemote && isPro && debugPro == null) {
+      try {
+        ok = await (r as ProFrameRemote).setFrame(f);
+        frameAvailable = true;
+      } on FrameMissing {
+        frameAvailable = false;
+      } catch (e) {
+        debugPrint('pro frame: $e');
+      }
+    }
+    if (ok || debugPro == true) {
+      status = status.withFrame(f);
+      _saveCache();
+      ok = true;
+    }
+    notifyListeners();
+    return ok;
   }
 
   /// Abonneren via de [purchases]; bij succes de status opnieuw ophalen.

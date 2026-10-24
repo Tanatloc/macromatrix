@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
 import '../../nutrition/levels.dart';
+import '../../sync/pro.dart';
 import '../theme.dart';
 import '../../i18n.dart';
+import 'avatar_frame.dart';
 
 /// Standaardavatars: een icoon op een kleur.
 const avatarPresets = <(IconData, Color)>[
@@ -75,12 +77,19 @@ class AvatarImage extends StatelessWidget {
 }
 
 /// Avatar met een rand in de kleur van je level, sterren (één per 25 levels) en je level in een bolletje.
+///
+/// Met [frame] een supporterrand eromheen (zie avatar_frame.dart). De ring blijft de levelkleur en de maat van de
+/// avatar verandert niet, zodat lijsten niet verspringen.
 class LevelAvatar extends StatelessWidget {
-  const LevelAvatar({super.key, required this.avatar, required this.level, this.size = 56, this.onTap});
+  const LevelAvatar({super.key, required this.avatar, required this.level, this.size = 56, this.onTap, this.frame, this.animate = true});
   final String? avatar;
   final int level;
   final double size;
   final VoidCallback? onTap;
+  final AvatarFrame? frame;
+
+  /// false: de rand staat altijd stil (bv. op een deelkaart).
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
@@ -97,20 +106,24 @@ class LevelAvatar extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.topCenter,
         children: [
-          Container(
-            width: size,
-            height: size,
-            margin: const EdgeInsets.all(3),
-            padding: EdgeInsets.all(border),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: SweepGradient(colors: [ring, HSLColor.fromColor(ring).withLightness(0.68).toColor(), ring]),
+          _framed(
+            Container(
+              width: size,
+              height: size,
+              margin: const EdgeInsets.all(3),
+              padding: EdgeInsets.all(border),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: SweepGradient(colors: [ring, HSLColor.fromColor(ring).withLightness(0.68).toColor(), ring]),
+              ),
+              child: Container(
+                decoration: BoxDecoration(shape: BoxShape.circle, color: pal.surface),
+                padding: EdgeInsets.all(border * 0.4),
+                child: AvatarImage(avatar: avatar, size: size),
+              ),
             ),
-            child: Container(
-              decoration: BoxDecoration(shape: BoxShape.circle, color: pal.surface),
-              padding: EdgeInsets.all(border * 0.4),
-              child: AvatarImage(avatar: avatar, size: size),
-            ),
+            ring,
+            border,
           ),
           if (stars > 0)
             Positioned(
@@ -156,6 +169,12 @@ class LevelAvatar extends StatelessWidget {
             label: tr('Change profile photo', 'Profielfoto wijzigen'),
             child: GestureDetector(onTap: onTap, child: child),
           );
+  }
+
+  Widget _framed(Widget ringWidget, Color ring, double border) {
+    final f = frame;
+    if (f == null) return ringWidget;
+    return FramedRing(frame: f, color: ring, size: size, border: border, animate: animate, child: ringWidget);
   }
 }
 

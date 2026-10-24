@@ -11,17 +11,19 @@ import '../../nutrition/report.dart';
 import '../../nutrition/targets.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
+import 'pro_widgets.dart';
 import 'share_cards.dart';
 import 'share_sheet.dart';
 
-ShareProfile _profile(AppState s) => ShareProfile(avatar: s.avatar, level: s.level.level);
+ShareProfile _profile(BuildContext context, AppState s) =>
+    ShareProfile(avatar: s.avatar, level: s.level.level, frame: myFrameOf(context, listen: false));
 
 ShareToggle get _profileToggle => ShareToggle(ShareShow.profile, tr('Show my profile picture and level', 'Mijn profielfoto en level tonen'));
 
 /// Maand- of jaaroverzicht delen.
 Future<void> shareRecap(BuildContext context, Recap r, {String? copyText}) {
   final s = context.read<AppState>();
-  final profile = _profile(s);
+  final profile = _profile(context, s);
   return showShareSheet(
     context,
     fileName: r.year ? 'macromatrix-${r.from.year}' : 'macromatrix-${dayKey(r.from).substring(0, 7)}',
@@ -45,7 +47,7 @@ Future<void> shareStreak(BuildContext context, {int? days}) {
   final s = context.read<AppState>();
   final logged = s.user.loggedDays();
   final st = s.streak;
-  final profile = _profile(s);
+  final profile = _profile(context, s);
   final n = days ?? st.current;
   return showShareSheet(
     context,
@@ -66,7 +68,7 @@ Future<void> shareStreak(BuildContext context, {int? days}) {
 Future<void> shareBadge(BuildContext context, {required String category, required int tier, required int value}) {
   final s = context.read<AppState>();
   if (category == 'streak' && s.streak.current >= 2) return shareStreak(context);
-  final profile = _profile(s);
+  final profile = _profile(context, s);
   return showShareSheet(
     context,
     fileName: 'macromatrix-badge-$category',
@@ -90,7 +92,7 @@ List<(String, String)> _microsWithGoal(Map<String, Target> targets) => [
 /// "Alle vitaminen en mineralen vandaag" delen.
 Future<void> shareAllMicros(BuildContext context, {required NutrientMap values, required Map<String, Target> targets, DateTime? day}) {
   final s = context.read<AppState>();
-  final profile = _profile(s);
+  final profile = _profile(context, s);
   final m = microsReached(values, targets);
   final labels = [for (final (_, a) in _microsWithGoal(targets)) a];
   final d = day ?? logicalNow();
@@ -105,7 +107,7 @@ Future<void> shareAllMicros(BuildContext context, {required NutrientMap values, 
 /// Weekrapport delen. Gewicht en energie alleen als je ze aanvinkt.
 Future<void> shareWeek(BuildContext context, WeeklyReport r, {String? copyText}) {
   final s = context.read<AppState>();
-  final profile = _profile(s);
+  final profile = _profile(context, s);
   final stats = s.dayStats;
   final scores = [for (var i = 0; i < 7; i++) stats[dayKey(DateTime(r.monday.year, r.monday.month, r.monday.day + i))]?.score];
   final streak = s.streak.current;

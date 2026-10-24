@@ -271,6 +271,17 @@ class Friends extends ChangeNotifier {
       if (x.supporter && x.state == FriendState.friend) x.id,
   };
 
+  /// Supporterranden van vrienden, tegenstanders en medespelers (id → rand), uit friend_frames. Leeg zolang de
+  /// migratie supporter_frame.sql niet op de server staat ([framesAvailable] false).
+  Map<String, AvatarFrame> frames = const {};
+  bool framesAvailable = true;
+
+  /// De rand van iemand anders (null = geen). Voor jezelf: [myFrame].
+  AvatarFrame? frameFor(String? id) => id == null ? null : frames[id];
+
+  /// Je eigen rand: alleen zolang Pro loopt.
+  AvatarFrame? get myFrame => pro?.frame;
+
   bool loading = false;
 
   /// Elke laadbeurt krijgt een nummer: een oudere die later terugkomt (bv. van bij het openen van het tabblad)
@@ -295,6 +306,8 @@ class Friends extends ChangeNotifier {
       _sentExtra = null;
       battles = const [];
       blocked = const [];
+      frames = const {};
+      framesAvailable = true;
       code = null;
       name = '';
       list = const [];
@@ -495,6 +508,7 @@ class Friends extends ChangeNotifier {
       if (gen != _loadGen) return;
       list = [for (final r in rows) Friend.fromRow((r as Map).cast<String, dynamic>())];
       _keepSocialBest();
+      await _loadFrames(client, gen);
       try {
         final bl = await client.rpc('friend_blocked_list') as List;
         if (gen != _loadGen) return;
@@ -531,6 +545,27 @@ class Friends extends ChangeNotifier {
     await challenges.load();
     if (gen == _loadGen) loading = false;
     notifyListeners();
+  }
+
+  /// De supporterranden ophalen. Een server zonder de migratie (PGRST202): geen randen, geen foutmelding.
+  Future<void> _loadFrames(SupabaseClient client, int gen) async {
+    if (!framesAvailable) return;
+    try {
+      final rows = await client.rpc('friend_frames') as List;
+      if (gen != _loadGen) return;
+      frames = {
+        for (final r in rows.cast<Map>())
+          if (r['other'] is String && AvatarFrame.parse(r['frame']) != null) r['other'] as String: AvatarFrame.parse(r['frame'])!,
+      };
+    } catch (e) {
+      // Randen zijn versiering: een storing hier mag de vriendenlijst niet tegenhouden (de vorige blijven staan)
+      if (isMissingTable(e)) {
+        frames = const {};
+        framesAvailable = false;
+      } else {
+        debugPrint('vrienden randen: $e');
+      }
+    }
   }
 
   Future<void> setName(String n) => load(newName: n);

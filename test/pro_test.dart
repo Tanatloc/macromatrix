@@ -453,6 +453,9 @@ void main() {
       final pro = newPro(s, FakeProRemote());
       await pump(tester, s, pro, const ProScreen());
       expect(find.byKey(const ValueKey('pro-debug')), findsOneWidget);
+      // Het scherm is langer geworden (avatarrand): eerst naar de debug-schakelaar scrollen
+      await tester.ensureVisible(find.byKey(const ValueKey('pro-debug')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Pro').last);
       await tester.pumpAndSettle();
       expect(pro.isPro, isTrue);

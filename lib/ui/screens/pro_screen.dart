@@ -6,6 +6,7 @@ import '../../i18n.dart';
 import '../../sync/pro.dart';
 import '../../sync/purchase.dart';
 import '../theme.dart';
+import '../widgets/avatar_frame_picker.dart';
 import '../widgets/kit.dart';
 import '../widgets/pro_widgets.dart';
 
@@ -199,6 +200,14 @@ class _ProScreenState extends State<ProScreen> {
                         color: p.brand,
                       ),
                       bullet(
+                        Icons.blur_circular_rounded,
+                        tr(
+                          'A special frame around your avatar, in your level colour, that your friends see',
+                          'Een speciale rand rond je avatar, in de kleur van je level, die je vrienden zien',
+                        ),
+                        color: p.brand,
+                      ),
+                      bullet(
                         Icons.calendar_month_outlined,
                         tr(
                           'An extended year in review: nutrients month by month, your top 10 and your records',
@@ -209,6 +218,8 @@ class _ProScreenState extends State<ProScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+                const AvatarFramePicker(),
                 const SizedBox(height: 12),
                 Panel(
                   shadow: false,
