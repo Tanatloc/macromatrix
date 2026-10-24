@@ -14,6 +14,7 @@ import '../widgets/avatar.dart';
 import '../widgets/health_view.dart';
 import '../widgets/kit.dart';
 import '../widgets/share_actions.dart';
+import '../widgets/pro_widgets.dart';
 
 /// Weekrapport: je gemiddelde Voedingsscore tegenover vorige week, een gezondheidsoordeel, beste en zwakste stoffen,
 /// battles en een tip.
@@ -58,7 +59,10 @@ class WeeklyReportScreen extends StatelessWidget {
     final change = c == null ? '' : ' (${c > 0 ? '+' : (c < 0 ? '−' : '±')}${fmtGrouped(c.abs())} kg ${tr('this week', 'deze week')})';
     final t = r.weightTrend;
     final stable = t != null && t.stable ? tr(' · stable over ${t.days} days', ' · stabiel over ${t.days} dagen') : '';
-    return tr('Weight: ${fmtGrouped(end)} kg at your last weigh-in$change$stable', 'Gewicht: ${fmtGrouped(end)} kg bij je laatste weging$change$stable');
+    return tr(
+      'Weight: ${fmtGrouped(end)} kg at your last weigh-in$change$stable',
+      'Gewicht: ${fmtGrouped(end)} kg bij je laatste weging$change$stable',
+    );
   }
 
   /// Beweging, bv. "Exercise: 3 sessions, 140 min logged, 950 kcal", of null zonder activiteiten.
@@ -269,7 +273,7 @@ class WeeklyReportScreen extends StatelessWidget {
                         Panel(
                           child: Row(
                             children: [
-                              LevelAvatar(avatar: s.avatar, level: level.level, size: 56),
+                              LevelAvatar(avatar: s.avatar, level: level.level, size: 56, frame: myFrameOf(context)),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(

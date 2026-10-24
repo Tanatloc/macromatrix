@@ -11,6 +11,7 @@ import 'avatar.dart';
 import 'badges_view.dart';
 import 'kit.dart';
 import 'pro_widgets.dart';
+import '../../sync/pro.dart' show AvatarFrame;
 
 String _name(String n) => n.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : n;
 
@@ -76,7 +77,7 @@ class BattlesPanel extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        LevelAvatar(avatar: b.otherAvatar, level: b.otherLevel, size: 36),
+                        LevelAvatar(avatar: b.otherAvatar, level: b.otherLevel, size: 36, frame: f.frameFor(b.other)),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -155,12 +156,21 @@ class _LiveBattle extends StatelessWidget {
     final mine = s.battlePoints(b.week).points;
     final total = (mine + b.otherPoints).clamp(1, 1 << 30);
     final ahead = mine > b.otherPoints, tied = mine == b.otherPoints;
-    final supporters = context.watch<Friends?>()?.supporters ?? const <String>{};
-    Widget side(String? avatar, int level, String name, int points, CrossAxisAlignment align, {bool supporter = false}) => Expanded(
+    final friends = context.watch<Friends?>();
+    final supporters = friends?.supporters ?? const <String>{};
+    Widget side(
+      String? avatar,
+      int level,
+      String name,
+      int points,
+      CrossAxisAlignment align, {
+      bool supporter = false,
+      AvatarFrame? frame,
+    }) => Expanded(
       child: Column(
         crossAxisAlignment: align,
         children: [
-          LevelAvatar(avatar: avatar, level: level, size: 40),
+          LevelAvatar(avatar: avatar, level: level, size: 40, frame: frame),
           const SizedBox(height: 4),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -191,12 +201,28 @@ class _LiveBattle extends StatelessWidget {
         children: [
           Row(
             children: [
-              side(s.avatar, s.level.level, tr('You', 'Jij'), mine, CrossAxisAlignment.start, supporter: proOf(context)?.supporter ?? false),
+              side(
+                s.avatar,
+                s.level.level,
+                tr('You', 'Jij'),
+                mine,
+                CrossAxisAlignment.start,
+                supporter: proOf(context)?.supporter ?? false,
+                frame: myFrameOf(context),
+              ),
               Text(
                 'VS',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: pal.ink3),
               ),
-              side(b.otherAvatar, b.otherLevel, _name(b.otherName), b.otherPoints, CrossAxisAlignment.end, supporter: supporters.contains(b.other)),
+              side(
+                b.otherAvatar,
+                b.otherLevel,
+                _name(b.otherName),
+                b.otherPoints,
+                CrossAxisAlignment.end,
+                supporter: supporters.contains(b.other),
+                frame: friends?.frameFor(b.other),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -310,7 +336,7 @@ class _FriendSheet extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           children: [
             Center(
-              child: LevelAvatar(avatar: x.avatar, level: x.level, size: 84),
+              child: LevelAvatar(avatar: x.avatar, level: x.level, size: 84, frame: f.frameFor(x.id)),
             ),
             const SizedBox(height: 8),
             Text(

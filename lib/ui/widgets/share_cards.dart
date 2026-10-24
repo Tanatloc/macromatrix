@@ -19,6 +19,7 @@ import '../theme.dart';
 import 'avatar.dart';
 import 'badges_view.dart';
 import 'kit.dart';
+import '../../sync/pro.dart' show AvatarFrame;
 
 /// Grootte van elke kaart in pixels (Instagram-staand, 4:5).
 const shareCardSize = Size(1080, 1350);
@@ -48,9 +49,12 @@ class ShareToggle {
 
 /// Wie deelt: alleen getoond met het vinkje [ShareShow.profile].
 class ShareProfile {
-  const ShareProfile({this.avatar, required this.level});
+  const ShareProfile({this.avatar, required this.level, this.frame});
   final String? avatar;
   final int level;
+
+  /// Je supporterrand (stil, want de kaart wordt een afbeelding).
+  final AvatarFrame? frame;
 }
 
 /// Kleur van de vlam van je reeks (dezelfde als in de app).
@@ -94,7 +98,7 @@ class ShareCardFrame extends StatelessWidget {
                     child: Align(
                       alignment: Alignment.centerRight,
                       child: profile != null
-                          ? LevelAvatar(avatar: profile!.avatar, level: profile!.level, size: 84)
+                          ? LevelAvatar(avatar: profile!.avatar, level: profile!.level, size: 84, frame: profile!.frame, animate: false)
                           : FittedBox(fit: BoxFit.scaleDown, child: _Pill(kicker)),
                     ),
                   ),

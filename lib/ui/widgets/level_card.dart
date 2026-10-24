@@ -38,6 +38,7 @@ class _LevelCardState extends State<LevelCard> {
                 avatar: s.avatar,
                 level: info.level,
                 size: 72,
+                frame: myFrameOf(context),
                 onTap: () async {
                   final v = await pickAvatar(context, s.avatar);
                   if (v != null) s.setAvatar(v);

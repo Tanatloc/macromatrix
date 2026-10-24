@@ -14,6 +14,9 @@ import 'kit.dart';
 /// Pro, als het er is. Schermen die zonder (bv. in tests) gebouwd worden, krijgen null en gedragen zich als gratis.
 Pro? proOf(BuildContext context, {bool listen = true}) => listen ? context.watch<Pro?>() : context.read<Pro?>();
 
+/// Je eigen supporterrand: alleen zolang Pro loopt (null = geen).
+AvatarFrame? myFrameOf(BuildContext context, {bool listen = true}) => proOf(context, listen: listen)?.frame;
+
 void openProScreen(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProScreen()));
 
 /// Warm goud voor supporters, los van de merkkleur (die kan zelf een andere kleur zijn).

@@ -17,6 +17,7 @@ import '../widgets/challenges_view.dart';
 import '../widgets/kit.dart';
 import '../widgets/pro_widgets.dart';
 import '../../i18n.dart';
+import '../../sync/pro.dart' show AvatarFrame;
 
 enum _Rank { week, level }
 
@@ -212,6 +213,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           title: s.title,
           showcase: [for (final id in f.showcase) (id, f.tiers[id] ?? 1)],
           supporter: proOf(context)?.supporter ?? false,
+          frame: myFrameOf(context),
         ),
         for (final x in friends)
           RankRow(
@@ -225,6 +227,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             title: x.title,
             showcase: x.badges,
             supporter: x.supporter,
+            frame: f.frameFor(x.id),
           ),
       ];
       rows.sort(
@@ -246,6 +249,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     avatar: s.avatar,
                     level: lvl.level,
                     size: 64,
+                    frame: myFrameOf(context),
                     onTap: () async {
                       final v = await pickAvatar(context, s.avatar);
                       if (v != null) s.setAvatar(v);
@@ -586,8 +590,12 @@ class RankRow {
     this.title,
     this.showcase = const [],
     this.supporter = false,
+    this.frame,
   });
   final String? title;
+
+  /// Supporterrand rond de avatar.
+  final AvatarFrame? frame;
 
   /// Supporter-badge naast de naam.
   final bool supporter;
@@ -651,7 +659,7 @@ class RankTile extends StatelessWidget {
                       ),
               ),
               const SizedBox(width: 6),
-              LevelAvatar(avatar: r.avatar, level: r.level, size: 44),
+              LevelAvatar(avatar: r.avatar, level: r.level, size: 44, frame: r.frame),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
