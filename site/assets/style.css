@@ -224,7 +224,7 @@ section.block { padding: 88px 0; }
 .av { position: relative; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; color: #fff; background: var(--bg); box-shadow: 0 0 0 3px #15181B, 0 0 0 5px var(--ring); }
 .av.big { width: 64px; height: 64px; font-size: 22px; }
 .av.xl { width: 76px; height: 76px; font-size: 26px; }
-.lb-shot { display: block; width: 100%; height: auto; margin: 4px 0 0; }
+.lb-shot { display: block; width: 100%; height: auto; margin: 4px 0 0; flex: none; min-height: 0; aspect-ratio: 1020 / 936; object-fit: contain; }
 .av-img { display: block; width: auto; }
 .av-img.big { height: 72px; }
 .av-img.xl { height: 104px; }
