@@ -89,9 +89,20 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     };
   }
 
-  /// Energie en macro's volgen je eigen verdeling (profiel), de rest de EFSA-richtwaarden.
+  /// Energie en macro's volgen je eigen verdeling (profiel), de rest de EFSA-richtwaarden. De grenzen van 10% van je
+  /// energie voor vrije suikers en verzadigd vet en 1% voor transvet komen van de WHO, niet van EFSA (N21).
   bool get _fromPlan => const {'energy', 'protein', 'carbs', 'fat'}.contains(n.key);
-  String get _sourceLabel => _fromPlan ? tr('From your plan', 'Uit je plan') : tr('EFSA advice', 'EFSA-advies');
+  bool get _fromWho => const {'free_sugars', 'sfa', 'trans'}.contains(n.key);
+  String get _authority => _fromWho ? 'WHO' : 'EFSA';
+  String get _sourceLabel => _fromPlan
+      ? tr('From your plan', 'Uit je plan')
+      : _fromWho
+      ? tr('WHO advice', 'WHO-advies')
+      : tr('EFSA advice', 'EFSA-advies');
+
+  /// Stoffen waarvan minder beter is, ook zonder ingesteld maximum (alle suikers samen hebben er geen): de lijst met
+  /// bronnen is dan een waarschuwing, geen aanrader (N26).
+  static const _lessIsBetter = {'sugars', 'free_sugars', 'sfa', 'trans', 'sodium', 'salt', 'alcohol', 'cholesterol', 'caffeine'};
 
   static String _groupLabel(NutrientGroup g) => switch (g) {
     NutrientGroup.vitamins => tr('Vitamin', 'Vitamine'),
@@ -735,7 +746,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
         ),
       );
     }
-    final isLimit = s.targets[n.key]?.isLimit ?? false;
+    final isLimit = (s.targets[n.key]?.isLimit ?? false) || _lessIsBetter.contains(n.key);
     final recentRefs = <String>{};
     final mine = <(Food, double)>[];
     for (final f in s.recentFoods()) {
@@ -784,7 +795,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               ),
             ),
           const SizedBox(height: 4),
-          for (final (f, v) in list) _sourceRow(p, f, v, top, recentRefs.contains(f.ref)),
+          for (final (f, v) in list) _sourceRow(p, f, v, top, recentRefs.contains(f.ref), limit: isLimit),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -803,7 +814,9 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     );
   }
 
-  Widget _sourceRow(Palette p, Food f, double v, double top, bool mine) {
+  /// Bij een stof met een maximum ([limit]) geen groene + en geen "eet je vaker" in de merkkleur: een groene + bij
+  /// cola leest als "voeg dit toe" (N26). Tikken opent nog altijd het product.
+  Widget _sourceRow(Palette p, Food f, double v, double top, bool mine, {bool limit = false}) {
     final portion = f.portions.where((x) => x.grams >= 5 && x.grams <= 250).firstOrNull;
     final per100 = withDerived(f.per100g)[n.key] ?? 0;
     final portionText = portion == null ? null : '${portion.label} ≈ ${_amount(per100 * portion.grams / 100)}';
@@ -841,14 +854,17 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(color: p.brandSoft, borderRadius: BorderRadius.circular(999)),
-                          child: Text(tr('you eat often', 'eet je vaker'), style: TextStyle(fontSize: 10.5, color: p.brand)),
+                          decoration: BoxDecoration(color: limit ? p.surface2 : p.brandSoft, borderRadius: BorderRadius.circular(999)),
+                          child: Text(
+                            limit ? tr('in your diary', 'in je dagboek') : tr('you eat often', 'eet je vaker'),
+                            style: TextStyle(fontSize: 10.5, color: limit ? p.ink3 : p.brand),
+                          ),
                         ),
                       ],
                     ],
                   ),
                   const SizedBox(height: 5),
-                  Bar(fraction: top <= 0 ? 0 : v / top, color: p.brand, height: 4),
+                  Bar(fraction: top <= 0 ? 0 : v / top, color: limit ? p.ink3 : p.brand, height: 4),
                   if (portionText != null) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -865,7 +881,10 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
               child: Text(_amount(v), textAlign: TextAlign.right, style: numStyle(13)),
             ),
             const SizedBox(width: 8),
-            StepButton(icon: Icons.add_rounded, tooltip: tr('Add', 'Toevoegen'), size: 32, onTap: open),
+            if (limit)
+              Icon(Icons.chevron_right_rounded, size: 20, color: p.ink3)
+            else
+              StepButton(icon: Icons.add_rounded, tooltip: tr('Add', 'Toevoegen'), size: 32, onTap: open),
           ],
         ),
       ),
@@ -978,10 +997,38 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             _note(
               p,
               tr(
-                'Upper limit ${_amount(target!.upper!)}${custom || _fromPlan ? '' : ' (EFSA)'}: above it the bar turns red.',
-                'Bovengrens ${_amount(target.upper!)}${custom || _fromPlan ? '' : ' (EFSA)'}: daarboven kleurt de balk rood.',
+                'Upper limit ${_amount(target!.upper!)}${custom || _fromPlan ? '' : ' ($_authority)'}: above it the bar turns red.',
+                'Bovengrens ${_amount(target.upper!)}${custom || _fromPlan ? '' : ' ($_authority)'}: daarboven kleurt de balk rood.',
               ),
             ),
+          ],
+          // Vrije suikers: de WHO zegt minder dan 10% van je energie, en liefst minder dan 5%; het VK (SACN) houdt 5%
+          // aan. Eén tik zet die strengere grens als eigen doel (N21).
+          if (n.key == 'free_sugars' && standard?.upper != null) ...[
+            const SizedBox(height: 12),
+            _note(
+              p,
+              tr(
+                'WHO: under 10% of your energy, ideally under 5%. The UK advises 5%: at most ${_amount(standard!.upper! / 2)}.',
+                'WHO: minder dan 10% van je energie, liefst minder dan 5%. Het VK raadt 5% aan: hoogstens ${_amount(standard.upper! / 2)}.',
+              ),
+            ),
+            if (target?.upper != standard.upper! / 2)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () {
+                    final before = s.settings.overrides[n.key];
+                    s.setOverride(n.key, Target(upper: standard.upper! / 2));
+                    showUndo(
+                      context,
+                      tr('Free sugars: at most ${_amount(standard.upper! / 2)}', 'Vrije suikers: hoogstens ${_amount(standard.upper! / 2)}'),
+                      () => s.setOverride(n.key, before),
+                    );
+                  },
+                  child: Text(tr('Use 5% (UK)', '5% gebruiken (VK)')),
+                ),
+              ),
           ],
           if (n.key == 'magnesium') ...[
             const SizedBox(height: 12),

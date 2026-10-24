@@ -115,9 +115,17 @@ Set<String> _disagreeing(List<Food> members) {
   };
 }
 
-/// Een bijzondere vorm van het gewone product: diepvries, gehakt, poeder, lactosevrij, "light" (P156).
+/// Een bijzondere vorm van het gewone product: diepvries, gehakt, poeder, lactosevrij, "light" (P156), of uit een
+/// fastfoodzaak (frietjes van de frituur thuis vóór die van een keten).
 final _variant = RegExp(
-  r'\b(frozen|minced?|powder(ed)?|dried|dehydrated|concentrate|reduced|lactose[- ]?(free|reduced)|low lactose|flavou?red|long eggs|organic)\b',
+  r'\b(frozen|minced?|powder(ed)?|dried|dehydrated|concentrate|reduced|lactose[- ]?(free|reduced)|low lactose|flavou?red|long eggs|organic|fast food|restaurant|takeaway)\b',
+  caseSensitive: false,
+);
+
+/// Diepvries of gedroogd en daarna bereid ("frozen, deep-fried", "dried, boiled"): dan geen bijzondere vorm meer. Wel
+/// nog als het omgekeerd is ("boiled, frozen" is een diepvries-ei).
+final _prepared = RegExp(
+  r'\b(frozen|dried)\b.*\b(boiled|cooked|(?<!pre-)fried|baked|roasted|grilled|reheated|oven[- ]heated|microwaved)\b',
   caseSensitive: false,
 );
 
@@ -126,7 +134,9 @@ final _variant = RegExp(
 int _better(Food a, Food b) {
   int score(Food f) =>
       (weighedWithWaste(f) ? 0 : 2000) +
-      (_variant.allMatches(f.name).length * -300).clamp(-900, 0) +
+      (_variant.allMatches(_prepared.hasMatch(f.name) ? f.name.replaceAll(RegExp(r'\b(frozen|dried)\b', caseSensitive: false), '') : f.name).length *
+              -300)
+          .clamp(-900, 0) +
       (f.source.european ? 500 : 0) +
       (f.per100g.length - f.estimated.length).clamp(0, 499);
   return score(b).compareTo(score(a));
@@ -138,6 +148,12 @@ int _better(Food a, Food b) {
 /// peulvruchten, vlees en eieren de bereide vorm. Eigen voorkeuren (eerder gekozen of gegeten) komen er los bij.
 double foodQueryScore(Food f, String rawQuery) {
   final n = f.name.toLowerCase();
+  // Waarin iets gekookt of gebakken is, maakt er geen gerecht of dieetvariant van ("boiled in unsalted water",
+  // "fried in corn oil")
+  final dish = n.replaceAll(RegExp(r'\bin (unsalted |salted )?water\b|\bin (\w+ )?oil\b|\bin (beef )?dripping\b'), '');
+  // Diepvries of gedroogd, maar daarna bereid: dat is gewoon het bereide product (gekookte gedroogde spaghetti,
+  // gefrituurde diepvriesfrietjes)
+  final prepared = _prepared.hasMatch(n);
   final tokens = searchTokens(rawQuery);
   // Zowel wat je typte als de Engelse vertaling ("halfvolle melk" = "milk reduced fat") telt als "gevraagd"
   final query = '${rawQuery.toLowerCase()} ${tokens.join(' ')}';
@@ -170,7 +186,10 @@ double foodQueryScore(Food f, String rawQuery) {
       .where((w) => w.length > 2 && !plain.contains(w) && !query.contains(w.replaceAll(RegExp(r'(es|s)$'), '')));
   s -= math.min(9, extra.length * 1.5);
   // Een gerecht met het product erin, terwijl je het product zelf noemt
-  if (RegExp(r'(w/|\b(with|in|sauce|pudding|pie|soup|salad|sandwich)\b)').hasMatch(n) &&
+  // Baked beans zitten altijd in tomatensaus en in blik: dat maakt er geen gerecht of conserve van (N15)
+  final bakedBeans = RegExp(r'\bbaked beans?\b').hasMatch(query) && RegExp(r'\bbaked beans?\b|\bbeans, baked\b').hasMatch(n);
+  if (RegExp(r'(w/|\b(with|in|sauce|pudding|pie|soup|salad|sandwich)\b)')
+          .hasMatch(bakedBeans ? dish.replaceAll(RegExp(r'\bin tomato sauce\b'), '') : dish) &&
       !RegExp(r'\b(with|sauce|pudding|pie|soup|salad|sandwich)\b').hasMatch(query)) {
     s -= 10;
   }
@@ -185,7 +204,7 @@ double foodQueryScore(Food f, String rawQuery) {
   // "Whey" of "protein shake" is eiwitpoeder, geen wei
   if (RegExp(r'^whey$|protein').hasMatch(query.trim()) && n.contains('protein')) s += 15;
   // Een ingrediënt in plaats van wat je eet of drinkt: melkpoeder, concentraat, energiedrank (whey en eiwit zijn wel poeder)
-  if (RegExp(r'\b(powder(ed)?|dry|dried|dehydrated|concentrate|bulk|energy drink)\b').hasMatch(n) &&
+  if (RegExp(r'\b(powder(ed)?|dry|dehydrated|concentrate|bulk|energy drink)\b|\bdried\b(?!.*\b(boiled|cooked)\b)').hasMatch(n) &&
       !RegExp(r'powder|dry|dried|dehydrated|concentrate|bulk|energy|whey|protein|cocoa|spice|curry|paprika|cinnamon').hasMatch(query)) {
     s -= 25;
   }
@@ -211,8 +230,9 @@ double foodQueryScore(Food f, String rawQuery) {
     r'\b(chicken|beef|pork|turkey|lamb|fish|salmon|cod|tuna|rice|pasta|spaghetti|noodles?|quinoa|potato(es)?|lentils?|beans?|egg|eggs|kip|rijst|vis|aardappel(en)?)\b',
   );
   if (cookable.hasMatch(n) && RegExp(r'\b(cooked|boiled|baked|grilled|roasted|steamed|whole)\b').hasMatch(n)) s += 12;
-  if (RegExp(r'\b(fried|deep fried|candied|canned|syrup|chips|sweetened)\b').hasMatch(n) &&
-      !RegExp(r'fried|candied|canned|syrup|chips|sweet').hasMatch(query)) {
+  // Frietjes zijn gefrituurd ("fries" vraagt dus wel om "fried" en "chips")
+  if (RegExp(r'\b(fried|deep fried|candied|canned|syrup|chips|sweetened)\b').hasMatch(bakedBeans ? n.replaceAll('canned', '') : n) &&
+      !RegExp(r'fried|fries|candied|canned|syrup|chips|sweet').hasMatch(query)) {
     s -= 15;
   }
   if (!isEverydayFood(f) && !(n.contains('protein') && RegExp(r'whey|protein').hasMatch(query))) s -= 30;
@@ -222,7 +242,8 @@ double foodQueryScore(Food f, String rawQuery) {
     s -= 30;
   }
   // "White" alleen bij eieren (eiwit): wit brood en witte rijst zijn gewoon de gewone
-  if ((RegExp(r'\b(yolk|powder|dried|flour|substitute|frozen)\b').hasMatch(n) ||
+  if ((RegExp(r'\b(yolk|powder|flour|substitute)\b').hasMatch(n) ||
+          (!prepared && RegExp(r'\b(dried|frozen)\b').hasMatch(n)) ||
           (RegExp(r'\begg').hasMatch(n) && RegExp(r'\bwhite\b').hasMatch(n))) &&
       !query.contains(RegExp(r'yolk|white|powder|dried|flour|frozen|whey|protein'))) {
     s -= 15;
@@ -270,7 +291,7 @@ double foodQueryScore(Food f, String rawQuery) {
       !RegExp(r'liver|kidney|heart|gizzard|tongue|lever').hasMatch(query)) {
     s -= 25;
   }
-  if (RegExp(r'\b(gluten free|low fat|reduced|diet|light|sugar free|unsalted|low sodium)\b').hasMatch(n) &&
+  if (RegExp(r'\b(gluten free|low fat|reduced|diet|light|sugar free|unsalted|low sodium)\b').hasMatch(dish) &&
       !RegExp(r'gluten|low|reduced|diet|light|free|unsalted').hasMatch(query)) {
     s -= 10;
   }
@@ -282,3 +303,12 @@ double foodQueryScore(Food f, String rawQuery) {
 bool unaskedEnergyDrink(Food f, String query) =>
     RegExp(r'\benergy drink', caseSensitive: false).hasMatch(f.name) &&
     !RegExp(r'energ|\bnos\b|red ?bull|monster|rockstar|burn', caseSensitive: false).hasMatch(query);
+
+/// Een product zónder wat je vraagt: "protein bar" is geen kinderpap "milk protein free", "milk" geen melkvrije pap
+/// (N15). Zoekvak en Snel loggen laten die weg, tenzij je zelf "free" of "vrij" typt.
+bool unaskedFree(Food f, String query) {
+  final q = query.toLowerCase();
+  if (RegExp(r'free|vrij').hasMatch(q)) return false;
+  final n = f.name.toLowerCase();
+  return searchTokens(q).any((w) => w.length > 2 && RegExp('\\b${RegExp.escape(w)}[- ]?free\\b').hasMatch(n));
+}
