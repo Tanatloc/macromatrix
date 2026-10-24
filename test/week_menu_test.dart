@@ -32,7 +32,7 @@ void expectGoodDays(WeekMenu m) {
   for (final d in m.days) {
     final e = d.share('energy')!, p = d.share('protein')!;
     expect(e, inInclusiveRange(0.9, 1.1), reason: '${d.date}: energie ${(e * 100).round()}%');
-    expect(p, inInclusiveRange(0.85, 1.6), reason: '${d.date}: eiwit ${(p * 100).round()}%');
+    expect(p, inInclusiveRange(0.85, 1.4), reason: '${d.date}: eiwit ${(p * 100).round()}%');
     final counts = <String, int>{};
     for (final i in d.items) {
       counts[i.food.key] = (counts[i.food.key] ?? 0) + 1;
@@ -215,7 +215,7 @@ void main() {
       await tester.tap(find.byType(ListTile).first);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Add to shopping list'));
+      await tester.tap(find.text('Shopping list'));
       await tester.pump();
       expect(s.shopping, isNotEmpty);
       await tester.tap(find.text('Use this plan'));

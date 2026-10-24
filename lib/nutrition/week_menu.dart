@@ -547,10 +547,10 @@ class WeekMenuPlanner {
     final e = g[_iE] > 0 ? t[_iE] / g[_iE] : 1.0;
     final de = (e - 1).abs();
     s -= 10 * de + (de > 0.05 ? 25 * (de - 0.05) : 0);
-    // Eiwit: tekort weegt, veel te veel een beetje
+    // Eiwit: tekort weegt, en ver boven je doel ook (anders vult vlees en zuivel de kcal op)
     if (g[_iP] > 0) {
       final p = t[_iP] / g[_iP];
-      s -= 3.5 * math.max(0, 1 - p) + (p < 0.9 ? 6 * (0.9 - p) : 0) + 1.5 * math.max(0, p - 1.25);
+      s -= 3.5 * math.max(0, 1 - p) + (p < 0.9 ? 6 * (0.9 - p) : 0) + 2.5 * math.max(0, p - 1.15) + 6 * math.max(0, p - 1.35);
     }
     // Koolhydraten en vet: binnen een ruime marge
     for (final i in const [_iC, _iF]) {

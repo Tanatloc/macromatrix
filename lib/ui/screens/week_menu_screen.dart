@@ -275,7 +275,7 @@ class _WeekMenuScreenState extends State<WeekMenuScreen> {
                         child: OutlinedButton.icon(
                           onPressed: () => _toShopping(context.read<AppState>(), ScaffoldMessenger.of(context)),
                           icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-                          label: Text(tr('Add to shopping list', 'Op boodschappenlijst'), overflow: TextOverflow.ellipsis),
+                          label: Text(tr('Shopping list', 'Boodschappen'), overflow: TextOverflow.ellipsis),
                         ),
                       ),
                     ],
