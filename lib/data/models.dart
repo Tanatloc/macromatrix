@@ -90,7 +90,8 @@ const exerciseTypes = [
   ExerciseType('Zwemmen (rustig)', 5.8),
   ExerciseType('Zwemmen (stevig)', 9.8),
   ExerciseType('Krachttraining (gemiddeld)', 3.5),
-  ExerciseType('Krachttraining (intensief)', 6.0),
+  // Een krachtsessie bestaat voor een groot deel uit rust tussen de sets: 5 MET in plaats van 6 (75 min bij 84 kg ≈ 525 kcal, niet 630)
+  ExerciseType('Krachttraining (intensief)', 5.0),
   ExerciseType('Roeien (ergometer)', 7.0),
   ExerciseType('Crosstrainer', 5.0),
   ExerciseType('Wandeltocht / hiken', 6.0),

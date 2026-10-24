@@ -1657,8 +1657,8 @@ Future<void> addExercise(BuildContext context) async {
                 helperText: type == null
                     ? null
                     : tr(
-                        'Estimate: ${estimate().round()} kcal (at ${s.currentWeight.round()} kg)',
-                        'Schatting: ${estimate().round()} kcal (bij ${s.currentWeight.round()} kg)',
+                        'Estimate: ${estimate().round()} kcal (at ${fmtDec(s.currentWeight)} kg)',
+                        'Schatting: ${estimate().round()} kcal (bij ${fmtDec(s.currentWeight)} kg)',
                       ),
               ),
             ),
