@@ -1,7 +1,8 @@
 /// Een recept importeren uit een link of een foto van een kookboekpagina (/api/recipe, alleen Pro).
 ///
-/// De server geeft de naam, het aantal porties en de ingrediënten als regels tekst. Die regels worden hier
-/// opgekuist (breuken, ounces, "fijngehakt") zodat de parser van Snel loggen ze begrijpt.
+/// De server geeft de naam, het aantal porties en de ingrediënten als regels tekst (bij een link de JSON-LD
+/// recipeIngredient zoals die op de pagina staat). De app leest en zoekt elke regel met nutrition/recipe_line.dart;
+/// [cleanRecipeLine] blijft voor de zoekterm bij "Zoeken".
 library;
 
 import 'dart:convert';
