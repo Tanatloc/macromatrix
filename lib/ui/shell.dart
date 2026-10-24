@@ -105,9 +105,9 @@ class _ShellState extends State<Shell> {
     }
     _state.user.setSetting('_streak_seen', {'n': hit});
     if (seen == 0 && n > 30 || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _celebrate(
       SnackBar(
-        duration: const Duration(seconds: 5),
+        duration: const Duration(seconds: 4),
         content: Row(
           children: [
             const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF8A00), size: 28),
@@ -119,6 +119,12 @@ class _ShellState extends State<Shell> {
     );
   }
 
+  /// Feestelijke melding pas na dit beeld: de actie die het level of de reeks opleverde, toont meteen daarna
+  /// haar eigen melding (met Ongedaan maken). Die komt dan eerst, deze schuift erachter in de rij (N42).
+  void _celebrate(SnackBar bar) => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(bar);
+  });
+
   void _checkLevel() {
     final level = _state.level.level;
     final seen = _state.user.setting('_level_seen')?['level'] as int?;
@@ -126,9 +132,9 @@ class _ShellState extends State<Shell> {
     _state.user.setSetting('_level_seen', {'level': level});
     if (seen == null || level < seen || !mounted) return;
     final stars = starsFor(level) > starsFor(seen);
-    ScaffoldMessenger.of(context).showSnackBar(
+    _celebrate(
       SnackBar(
-        duration: const Duration(seconds: 5),
+        duration: const Duration(seconds: 4),
         content: Row(
           children: [
             LevelAvatar(avatar: _state.avatar, level: level, size: 36),
@@ -199,6 +205,8 @@ class _ShellState extends State<Shell> {
     _navigators[i].currentState?.popUntil((r) => r.isFirst);
     // Het tabblad Vandaag brengt je ook echt naar vandaag, niet naar de dag die je laatst bekeek
     if (i == 0) context.read<AppState>().goToToday();
+    // Een melding hoort bij het scherm waar ze ontstond, niet bij het volgende tabblad (N42)
+    if (i != _index) ScaffoldMessenger.of(context).clearSnackBars();
     setState(() => _index = _tab.value = i);
   }
 
@@ -379,7 +387,15 @@ class _TabObserver extends NavigatorObserver {
   final VoidCallback onChange;
 
   @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => onChange();
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    // Een nieuw scherm: meldingen van het vorige (bv. "Meting verwijderd") volgen niet mee (N42). Vensters en
+    // menu's laten ze staan.
+    if (route is PageRoute && previousRoute != null) {
+      final c = navigator?.context;
+      if (c != null) ScaffoldMessenger.maybeOf(c)?.clearSnackBars();
+    }
+    onChange();
+  }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => onChange();

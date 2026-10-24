@@ -11,6 +11,7 @@ import '../../platform/platform.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/allergen_banner.dart';
+import '../widgets/info_tip.dart';
 import '../widgets/kit.dart';
 import 'food_detail_screen.dart';
 import 'scan_screen.dart';
@@ -645,6 +646,7 @@ class _QualityCard extends StatelessWidget {
           PanelTitle(
             tr('Processing', 'Bewerking'),
             subtitle: tr('NOVA group: from 1 (natural) to 4 (ultra-processed)', 'NOVA-groep: van 1 (natuurlijk) tot 4 (ultrabewerkt)'),
+            trailing: InfoTip(title: 'NOVA', message: novaInfo()),
           ),
           const SizedBox(height: 10),
           Row(

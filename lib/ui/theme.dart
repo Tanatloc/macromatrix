@@ -216,6 +216,10 @@ ThemeData buildTheme(Brightness b) {
     canvasColor: p.bg,
     dividerColor: p.line,
     splashFactory: InkSparkle.splashFactory,
+    // Geen grijze vlakken die blijven staan na een tik of scroll (N55): ingedrukt toont alleen de rimpel, en de
+    // hover is zo licht dat een rij onder de muis niet als geselecteerd (p.sunken) oogt.
+    highlightColor: Colors.transparent,
+    hoverColor: p.ink.withValues(alpha: 0.025),
     cardTheme: CardThemeData(
       elevation: 0,
       margin: EdgeInsets.zero,

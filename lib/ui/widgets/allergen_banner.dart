@@ -13,7 +13,8 @@ List<AllergenHit> hitsFor(Food f, Set<Allergen> mine) => allergenHits(
   label: LabelInfo(allergens: f.allergenTags, traces: f.traceTags, ingredients: f.ingredients),
 );
 
-/// Rode (bevat) of oranje (kan sporen bevatten / op naam) melding voor jouw allergenen.
+/// Rode (bevat) of oranje (kan sporen bevatten / op naam) melding voor jouw allergenen. Zonder ingestelde
+/// allergie toont ze niets; rood blijft voor wat het etiket echt meldt, een gok op naam is oranje (N91).
 class AllergenBanner extends StatelessWidget {
   const AllergenBanner({super.key, required this.food});
   final Food food;
@@ -24,6 +25,7 @@ class AllergenBanner extends StatelessWidget {
     final hits = hitsFor(food, mine);
     if (hits.isEmpty) return const SizedBox.shrink();
     final p = context.pal;
+    Color fg(AllergenHit h) => h.level == AllergenLevel.contains ? Colors.white : p.low;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -32,13 +34,13 @@ class AllergenBanner extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             decoration: BoxDecoration(
-              color: h.level == AllergenLevel.contains ? p.high : p.highSoft,
+              color: h.level == AllergenLevel.contains ? p.high : p.lowSoft,
               borderRadius: BorderRadius.circular(12),
-              border: h.level == AllergenLevel.contains ? null : Border.all(color: p.high),
+              border: h.level == AllergenLevel.contains ? null : Border.all(color: p.lowFill),
             ),
             child: Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: h.level == AllergenLevel.contains ? Colors.white : p.high),
+                Icon(Icons.warning_amber_rounded, color: fg(h)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(switch (h.level) {
@@ -51,7 +53,7 @@ class AllergenBanner extends StatelessWidget {
                       'Probably contains ${h.allergen.label.toLowerCase()} (based on the name, check the label)',
                       'Bevat waarschijnlijk ${h.allergen.label.toLowerCase()} (op basis van de naam, controleer het etiket)',
                     ),
-                  }, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: h.level == AllergenLevel.contains ? Colors.white : p.high)),
+                  }, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg(h))),
                 ),
               ],
             ),
