@@ -35,7 +35,7 @@ class AddButton extends StatelessWidget {
   }
 }
 
-/// Alles wat je kunt toevoegen, als raster van 3 × 3 onderaan het scherm. Eten gaat naar de maaltijd die past bij
+/// Alles wat je kunt toevoegen, als raster van drie kolommen onderaan het scherm. Eten gaat naar de maaltijd die past bij
 /// het uur (op een andere dag: de eerste lege maaltijd), op de dag die open staat in je dagboek.
 Future<void> showAddMenu(BuildContext context) {
   final p = context.pal;
@@ -45,6 +45,8 @@ Future<void> showAddMenu(BuildContext context) {
     (Icons.restaurant_rounded, p.protein, tr('Add food', 'Eten toevoegen'), () => push(AddFoodScreen(meal: meal))),
     (Icons.qr_code_scanner_rounded, p.ink, tr('Scan barcode', 'Barcode scannen'), () => push(AddFoodScreen(meal: meal, scan: true))),
     (Icons.bolt_rounded, p.carbs, tr('Quick log', 'Snel loggen'), () => showQuickLog(context, meal: meal)),
+    // Foto van je bord: hetzelfde venster als Snel loggen, dat meteen om een foto vraagt
+    (Icons.photo_camera_outlined, p.protein, tr('Photo', 'Foto'), () => showQuickLog(context, meal: meal, photo: true)),
     (Icons.directions_run_rounded, p.brand, tr('Exercise', 'Beweging'), () => addExercise(context)),
     (Icons.monitor_weight_outlined, p.fat, tr('Weight', 'Gewicht'), () => push(const BodyScreen(addWeight: true))),
     (Icons.sticky_note_2_outlined, p.fiber, tr('Note', 'Notitie'), () => editNote(context)),

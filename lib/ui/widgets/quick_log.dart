@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,9 +13,12 @@ import '../../i18n.dart';
 import '../../nutrition/portions.dart' show stepQuantity;
 import '../../nutrition/quick_parse.dart';
 import '../../platform/cloud_voice.dart';
+import '../../platform/photo_log.dart';
+import '../../platform/platform.dart' show canScanBarcodes;
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
 import '../screens/add_food_screen.dart';
+import '../screens/photo_capture_screen.dart';
 import '../theme.dart';
 import 'kit.dart';
 import 'number_input.dart';
@@ -24,11 +28,65 @@ import 'undo.dart';
 bool get speechSupported => kIsWeb || defaultTargetPlatform == TargetPlatform.android;
 
 /// Snel loggen: zeg of typ wat je at ("200 g chicken and a bowl of rice"), controleer en voeg alles toe.
-Future<void> showQuickLog(BuildContext context, {Meal? meal}) => showModalBottomSheet<void>(
+/// Met [photo] vraagt het venster meteen een foto van je bord (loggen met een foto, vanuit het +-menu).
+Future<void> showQuickLog(BuildContext context, {Meal? meal, bool photo = false}) => showModalBottomSheet<void>(
   context: context,
   isScrollControlled: true,
-  builder: (_) => _QuickLogSheet(meal: meal ?? context.read<AppState>().suggestedMeal),
+  builder: (_) => _QuickLogSheet(meal: meal ?? context.read<AppState>().suggestedMeal, photo: photo),
 );
+
+/// Een foto van je bord nemen of kiezen, al verkleind voor de server; null = geannuleerd. Te vervangen in tests.
+@visibleForTesting
+Future<Uint8List?> Function(BuildContext context) pickPlatePhoto = _pickPlatePhoto;
+
+/// De verbinding met /api/photo. Te vervangen in tests (met een nagebootste http-client).
+@visibleForTesting
+PhotoLog photoLog = PhotoLog();
+
+/// Het token van je account, of null als je niet ingelogd bent. Te vervangen in tests.
+@visibleForTesting
+String? Function(BuildContext context) photoToken = (context) => context.read<Account>().client?.auth.currentSession?.accessToken;
+
+/// Op gsm en in de browser: kiezen tussen de camera en een bestaande foto. Op een pc meteen een bestand kiezen.
+Future<Uint8List?> _pickPlatePhoto(BuildContext context) async {
+  var camera = false;
+  if (canScanBarcodes) {
+    final choice = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(tr('Take a photo', 'Foto nemen')),
+              onTap: () => Navigator.pop(ctx, true),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(tr('Choose a photo', 'Foto kiezen')),
+              onTap: () => Navigator.pop(ctx, false),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return null;
+    camera = choice;
+  }
+  final Uint8List? raw;
+  if (camera) {
+    raw = await Navigator.of(context).push<Uint8List>(MaterialPageRoute(builder: (_) => const PhotoCaptureScreen()));
+  } else {
+    final picked = await FilePicker.pickFiles(dialogTitle: tr('Choose a photo of your meal', 'Kies een foto van je maaltijd'), type: FileType.image);
+    raw = picked.isEmpty ? null : await picked.single.readAsBytes();
+  }
+  if (raw == null) return null;
+  // Verkleinen tot 1024 px en JPEG 80 voor het versturen (in een aparte isolate: een foto van 12 MP is zwaar)
+  return compute(shrinkPhoto, raw);
+}
 
 class _Line {
   _Line(this.item, this.options) {
@@ -93,8 +151,9 @@ String _count(double n) => n == n.roundToDouble() ? '${n.round()}' : fmtDec(n);
 String _big(double v) => v > 99999 ? '> ${fmtInt(99999)}' : fmtInt(v);
 
 class _QuickLogSheet extends StatefulWidget {
-  const _QuickLogSheet({required this.meal});
+  const _QuickLogSheet({required this.meal, this.photo = false});
   final Meal meal;
+  final bool photo;
 
   @override
   State<_QuickLogSheet> createState() => _QuickLogSheetState();
@@ -122,6 +181,77 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
   CloudVoice? _cloud;
   bool _cloudRecording = false, _transcribing = false;
   Timer? _cloudTimer;
+
+  // Loggen met een foto: bezig met kijken, een foutmelding, en of de lijst uit een foto komt (dan geschat)
+  bool _looking = false, _fromPhoto = false;
+  String? _photoError;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.photo) WidgetsBinding.instance.addPostFrameCallback((_) => _photo());
+  }
+
+  /// Foto nemen of kiezen, naar de server sturen en de zin die terugkomt opzoeken zoals een getypte zin. Je ziet
+  /// alles eerst in de lijst en past het aan met +, −, Andere en ×, voor er iets toegevoegd wordt.
+  Future<void> _photo() async {
+    if (_looking || _transcribing || _cloudRecording || !mounted) return;
+    final token = photoToken(context);
+    if (token == null) {
+      setState(() => _photoError = _photoErrorText('login'));
+      return;
+    }
+    setState(() => _photoError = null);
+    final Uint8List? jpeg;
+    try {
+      jpeg = await pickPlatePhoto(context);
+    } catch (_) {
+      if (mounted) setState(() => _photoError = _photoErrorText('bad_image'));
+      return;
+    }
+    if (jpeg == null || !mounted) return;
+    setState(() => _looking = true);
+    try {
+      final text = await photoLog.describe(jpeg, token: token);
+      if (!mounted) return;
+      setState(() => _looking = false);
+      if (text.isEmpty) {
+        setState(() => _photoError = _photoErrorText('none'));
+        return;
+      }
+      _text.text = text;
+      _fromPhoto = true;
+      _parse();
+    } on PhotoLogException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _looking = false;
+        _photoError = _photoErrorText(e.code);
+      });
+    }
+  }
+
+  String _photoErrorText(String code) => switch (code) {
+    'login' => tr(
+      'Logging with a photo needs an account. Log in under Profile → Account, or type what you ate.',
+      'Loggen met een foto kan alleen met een account. Log in via Profiel → Account, of typ wat je at.',
+    ),
+    'not_configured' => tr(
+      'Logging with a photo is not available yet. Type or say what you ate.',
+      'Loggen met een foto is nog niet beschikbaar. Typ of zeg wat je at.',
+    ),
+    'too_many' => tr(
+      'You have used a lot of photos this hour. Try again later, or type what you ate.',
+      "Je hebt dit uur al veel foto's gebruikt. Probeer later opnieuw, of typ wat je at.",
+    ),
+    'network' => tr('No connection. Check your internet and try again.', 'Geen verbinding. Kijk je internet na en probeer opnieuw.'),
+    'none' => tr(
+      'No food found in that photo. Try again with the whole plate in view, or type it.',
+      'Geen eten gevonden op die foto. Probeer opnieuw met het hele bord in beeld, of typ het.',
+    ),
+    'bad_image' || 'too_big' => tr('That photo could not be opened. Try a JPG or PNG.', 'Die foto kon niet geopend worden. Probeer een JPG of PNG.'),
+    _ => tr("Couldn't read the photo. Try again or type what you ate.", 'De foto lezen lukte niet. Probeer opnieuw of typ wat je at.'),
+  };
 
   @override
   void dispose() {
@@ -230,6 +360,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
     setState(() {
       _lines = const [];
       _notice = null;
+      _fromPhoto = false;
     });
     _focus.requestFocus();
   }
@@ -438,8 +569,14 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
               const SizedBox(height: 4),
               Text(
                 speechSupported
-                    ? tr('Tap the microphone and say what you ate, or type it.', 'Tik op de microfoon en zeg wat je at, of typ het.')
-                    : tr('Type what you ate in one sentence.', 'Typ in één zin wat je at.'),
+                    ? tr(
+                        'Tap the microphone and say what you ate, type it, or take a photo of your plate.',
+                        'Tik op de microfoon en zeg wat je at, typ het, of neem een foto van je bord.',
+                      )
+                    : tr(
+                        'Type what you ate in one sentence, or add a photo of your plate.',
+                        'Typ in één zin wat je at, of voeg een foto van je bord toe.',
+                      ),
                 style: TextStyle(fontSize: 13, color: p.ink2),
               ),
               const SizedBox(height: 12),
@@ -473,8 +610,52 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                       style: IconButton.styleFrom(backgroundColor: _listening ? p.high : p.brand, minimumSize: const Size(52, 52)),
                     ),
                   ],
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: tr('Photo of your meal', 'Foto van je maaltijd'),
+                    onPressed: _looking ? null : _photo,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
+                  ),
                 ],
               ),
+              if (_looking) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(tr('Looking at your photo…', 'Je foto wordt bekeken…'), style: TextStyle(fontSize: 12.5, color: p.ink2)),
+                    ),
+                  ],
+                ),
+              ],
+              if (_photoError != null) ...[const SizedBox(height: 6), Text(_photoError!, style: TextStyle(fontSize: 12.5, color: p.high))],
+              // Een foto geeft schattingen: dat moet duidelijk zijn voor je toevoegt
+              if (_fromPhoto && _lines.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: BoxDecoration(color: p.sunken, borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline_rounded, size: 18, color: p.ink2),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          tr(
+                            'Estimated from your photo. Check each food and amount, and fix them with − and +, Other or × before you add them.',
+                            'Geschat op basis van je foto. Kijk elk product en elke hoeveelheid na, en pas ze aan met − en +, Andere of × voor je ze toevoegt.',
+                          ),
+                          style: TextStyle(fontSize: 12.5, color: p.ink2, height: 1.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               if (_cloudRecording || _transcribing) ...[
                 const SizedBox(height: 6),
                 Text(
