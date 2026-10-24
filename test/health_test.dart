@@ -74,6 +74,15 @@ void main() {
     expect(factor(healthCheck(week(day({'alcohol': 30}), 4), weightKg: 75)!, 'alcohol').rating, HealthRating.poor);
   });
 
+  test('alcohol in het Engels ook in Britse units van 8 g (N48)', () {
+    setAppLang(AppLang.en);
+    addTearDown(() => setAppLang(AppLang.nl));
+    // 30 g in 3 dagen = 3 glazen van 10 g = 3,8 units
+    expect(factor(healthCheck(week(day({'alcohol': 10}), 3), weightKg: 75)!, 'alcohol').value, '3 drinks in 3 days (3.8 UK units)');
+    // 8 g per dag = 5,6 glazen per week = 7 units
+    expect(factor(healthCheck(week(day({'alcohol': 8})), weightKg: 75)!, 'alcohol').value, '5.6 drinks per week (7 UK units)');
+  });
+
   test('alcohol: oordeel en uitleg volgen dezelfde grens van 10 glazen', () {
     // 8,4 glazen: onder de grens, dus "oké", en de uitleg zegt ook dat dat binnen de grens is
     final some = factor(healthCheck(week(day({'alcohol': 12})), weightKg: 75)!, 'alcohol');

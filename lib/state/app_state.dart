@@ -2577,6 +2577,18 @@ class AppState extends ChangeNotifier {
   /// Voedingswaarden per 100 g van een product zoals ze in de totalen tellen: met afgeleide waarden en vrije suikers.
   NutrientMap per100gWithSugars(Food f) => withDerived(_freeSugars(f.per100g, f.ref, f.name));
 
+  /// Totalen van een (nog niet bewaard) recept met de vrije suikers uit de ingrediënten erbij (N80). Een ingrediënt
+  /// zonder schatting telt volledig mee, zoals bij [_recipeShare].
+  NutrientMap recipeTotalsWithSugars(Recipe r) {
+    final t = r.totals;
+    if (!t.containsKey('sugars')) return t;
+    var free = 0.0;
+    for (final i in r.ingredients) {
+      free += (_freeSugars(i.per100g, i.foodRef, i.name, 1)['free_sugars'] ?? i.per100g['sugars'] ?? 0) * i.grams / 100;
+    }
+    return {...t, 'free_sugars': free};
+  }
+
   /// Voedingswaarden van een dagboekregel zoals ze in de totalen tellen: met afgeleide waarden en vrije suikers.
   NutrientMap entryValues(DiaryEntry e) => _withSugars(e.per100g, e.foodRef, e.name, e.grams);
 

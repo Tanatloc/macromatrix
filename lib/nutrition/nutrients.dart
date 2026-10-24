@@ -53,7 +53,7 @@ class Nutrient {
 const nutrients = <Nutrient>[
   // Algemeen
   Nutrient('energy', 'Energie', 'kcal', NutrientGroup.general),
-  Nutrient('water', 'Water', 'g', NutrientGroup.general, decimals: 0),
+  Nutrient('water', 'Water', 'ml', NutrientGroup.general, decimals: 0),
   Nutrient('alcohol', 'Alcohol', 'g', NutrientGroup.general),
   Nutrient('caffeine', 'Cafeïne', 'mg', NutrientGroup.general, decimals: 0),
 

@@ -123,6 +123,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   double get _quantity => double.tryParse(_qty.text.replaceAll(',', '.')) ?? 0;
   double get _grams => _portion == null ? _quantity : _quantity * _portion!.grams;
 
+  /// Dranken in ml, de rest in gram (N85); 1 g drank telt als 1 ml.
+  String get _unit => isDrink(_food) ? 'ml' : 'g';
+
   void _setQuantity(double v) => setState(() => _qty.text = _fmt(math.max(0, v)));
 
   /// Plus en min: per portie (per halve onder 2), in gram per 10 tot 100 g en daarboven per 25 (P19).
@@ -294,7 +297,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(_portion == null ? 'g' : '× ${_portion!.label}  (= ${_fmt(qty() * unitGrams)} g)', overflow: TextOverflow.ellipsis),
+                    child: Text(_portion == null ? _unit : '× ${_portion!.label}  (= ${_fmt(qty() * unitGrams)} $_unit)', overflow: TextOverflow.ellipsis),
                   ),
                 ],
               ),
@@ -646,9 +649,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
 
   Widget _amountPanel(Palette p) {
     final options = <(Portion?, String, String)>[
-      (null, tr('Grams', 'Gram'), ''),
+      (null, _unit == 'ml' ? 'ml' : tr('Grams', 'Gram'), ''),
       // Porties uit de databank, aangevuld met gewone porties (sneetje, glas, kom ...) als geschatting (P19)
-      for (final x in portionOptions(_food)) x is EverydayPortion ? (x, x.short, '≈${_fmt(x.grams)} g') : (x, x.label, '${_fmt(x.grams)} g'),
+      for (final x in portionOptions(_food)) x is EverydayPortion ? (x, x.short, '≈${_fmt(x.grams)} $_unit') : (x, x.label, '${_fmt(x.grams)} $_unit'),
     ];
     // Op label: geschatte porties worden bij elke opbouw opnieuw gemaakt
     bool selected(Portion? x) => x == null ? _portion == null : _portion?.label == x.label;
@@ -690,7 +693,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        _portion == null ? 'g' : '× ${_portion!.label}',
+                        _portion == null ? _unit : '× ${_portion!.label}',
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 16, color: p.ink2),
                       ),
@@ -705,7 +708,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                '= ${_fmt(_grams)} g',
+                '= ${_fmt(_grams)} $_unit',
                 textAlign: TextAlign.center,
                 style: numStyle(12, weight: FontWeight.w400, color: p.ink3),
               ),

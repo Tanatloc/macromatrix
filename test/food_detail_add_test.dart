@@ -109,7 +109,7 @@ void main() {
   testWidgets('naar gram wisselen rekent de hoeveelheid om', (tester) async {
     final s = newState();
     await pump(tester, s, () => const FoodDetailScreen(food: skyr, meal: Meal.breakfast));
-    await tester.tap(find.byTooltip('More'));
+    // Per 1 portie (N32): 1 → 2 kommen
     await tester.tap(find.byTooltip('More'));
     await tester.pump();
     expect(find.text('= 300 g'), findsOneWidget);

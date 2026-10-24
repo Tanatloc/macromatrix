@@ -117,6 +117,7 @@ const _adviceSkipParts = {
   'gizzard',
   'yolk',
   'white',
+  'roe',
 };
 
 /// Ongezond als advies, ook al levert het een stof: gefrituurd, fastfood, chips en snoep.
@@ -127,11 +128,14 @@ final _unhealthyAdvice = RegExp(
 
 final _oddVariant = RegExp(r'\b(low[- ]sodium|sodium[- ]free|topping|imitation)\b', caseSensitive: false);
 
-/// Staat wel in een paar tabellen, maar ligt hier zelden in de winkel.
+/// Staat wel in een paar tabellen, maar ligt hier zelden in de winkel (ook paling, gans en viskuit: N35).
 final _exotic = RegExp(
-  r'\b(amaranth|rose ?hip|acerola|fenugreek|dock|sorrel|jute|taro|cassava|moringa|purslane|epazote|kantola|bitter gourd|balsam|jujube|sea lion|seal|whale|walrus|caribou|tunicate)\b',
+  r'\b(eel|goose|roe|caviar|amaranth|rose ?hip|acerola|fenugreek|dock|sorrel|jute|taro|cassava|moringa|purslane|epazote|kantola|bitter gourd|balsam|jujube|sea lion|seal|whale|walrus|caribou|tunicate)\b',
 );
-final _unusual = RegExp(r'Alaska Native|Navajo|Shoshone|Hopi|Apache|Northern Plains|ultraviolet', caseSensitive: false);
+final _unusual = RegExp(
+  r'Alaska Native|Navajo|Shoshone|Hopi|Apache|Northern Plains|ultraviolet|soy ?beans?\b.*\broasted|roasted soy',
+  caseSensitive: false,
+);
 
 /// Wat je niet rauw eet (of droog, zoals ongekookte peulvruchten en pasta).
 const _cookFirst = {'meat', 'poultry', 'fish', 'shellfish', 'egg', 'legume', 'cereal', 'rice', 'pasta', 'potato/tuber'};

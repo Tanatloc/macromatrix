@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../data/food_db.dart';
 import '../../data/models.dart';
 import '../../data/user_db.dart';
+import '../../nutrition/nutrients.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../widgets/kit.dart';
@@ -155,7 +156,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
     final s = context.watch<AppState>();
     final theme = Theme.of(context);
     final recipe = _recipe;
-    final perServing = withDerived({for (final e in recipe.totals.entries) e.key: e.value / recipe.servings});
+    final perServing = withDerived({for (final e in s.recipeTotalsWithSugars(recipe).entries) e.key: e.value / recipe.servings});
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.existing == null ? tr('New recipe', 'Nieuw recept') : tr('Edit recipe', 'Recept bewerken'))),
@@ -292,8 +293,25 @@ class _RecipeScreenState extends State<RecipeScreen> {
                   '${tr('Per serving', 'Per portie')} (${(recipe.totalGrams / recipe.servings).round()} g): ${(perServing['energy'] ?? 0).round()} kcal',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
+                // Eerst de macro's op één regel; water, alcohol en cafeïne pas onderaan (N80)
+                const SizedBox(height: 4),
+                Text(
+                  [
+                    '${tr('Protein', 'Eiwit')} ${fmtDec(perServing['protein'] ?? 0)} g',
+                    '${tr('Carbs', 'Koolhydraten')} ${fmtDec(perServing['carbs'] ?? 0)} g',
+                    '${tr('Sugars', 'Suikers')} ${fmtDec(perServing['sugars'] ?? 0)} g',
+                    '${tr('Fat', 'Vet')} ${fmtDec(perServing['fat'] ?? 0)} g',
+                  ].join(' · '),
+                  style: theme.textTheme.bodyMedium,
+                ),
                 const SizedBox(height: 8),
-                NutrientPanel(values: perServing, targets: s.targets, onlyWithData: true, single: true),
+                NutrientPanel(
+                  values: perServing,
+                  targets: s.targets,
+                  onlyWithData: true,
+                  single: true,
+                  groups: [...NutrientGroup.values.where((g) => g != NutrientGroup.general), NutrientGroup.general],
+                ),
               ],
             ],
           ),

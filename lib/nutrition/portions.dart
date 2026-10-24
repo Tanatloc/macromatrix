@@ -78,6 +78,7 @@ final _notDrink = RegExp(
   r'\b(powder|powdered|dried|condensed|evaporated|chocolate|ground|beans?|instant|granules|leaves|concentrate|ice cream|'
   r'bread|cake|biscuits?|cookies?|pudding|sauce|vinegar|coconut flesh)\b',
 );
+final _coconutMilk = RegExp(r'\bcoconut milk\b');
 final _oil = RegExp(r'\b(oil|ghee|lard|dripping|suet)\b');
 final _spread = RegExp(
   r'\b(butter|margarine|spread|peanut butter|nut butter|nutella|jam|marmalade|honey|syrup|cream cheese|hummus|houmous|'
@@ -124,6 +125,15 @@ EverydayPortion _p(String en, String nl, double grams, {String unit = 'g'}) {
   return EverydayPortion(short, '$short (≈${_approx(grams)} $unit)', grams);
 }
 
+/// Een drank (melk, sap, water, bier, koffie): hoeveelheden in ml in plaats van gram (N85). Poeder, concentraat en
+/// gecondenseerde melk tellen niet.
+bool isDrink(Food f) {
+  final l = f.label;
+  final name = f.name.toLowerCase();
+  if (l != null) return (l.part == 'drink' || l.part == 'juice') && const {'beverage', 'dairy', 'alcohol'}.contains(l.group);
+  return _drinkName.hasMatch(name) && !_notDrink.hasMatch(name);
+}
+
 /// Gewone porties voor dit product die de databank nog niet heeft (hoogstens 3), op basis van naam en label.
 /// Leeg als het product niet herkend wordt of de databank al zo'n portie heeft.
 /// Niet bij eigen producten: daar kies je zelf de portie, en één woord in de naam ("honey" in een yoghurt) gaf
@@ -147,17 +157,32 @@ List<EverydayPortion> everydayPortions(Food f) {
   }
 
   // Dranken: een glas (wijn kleiner, sterkedrank een borrel), koffie en thee een mok
-  final drinkByLabel = l != null && (part == 'drink' || part == 'juice') && const {'beverage', 'dairy', 'alcohol'}.contains(group);
-  final drinkByName = l == null && _drinkName.hasMatch(name) && !_notDrink.hasMatch(name);
-  if (drinkByLabel || drinkByName) {
+  if (isDrink(f)) {
+    // Kokosmelk uit blik is om mee te koken: een eetlepel of een blik, geen glas van 400 kcal (N84)
+    if (_coconutMilk.hasMatch(name) && !RegExp(r'\bdrink\b').hasMatch(name)) {
+      return unless([(_tbsp, _p('1 tablespoon', '1 eetlepel', 15, unit: 'ml')), (r'\b(can|tin|box)\b', _p('1 can', '1 blik', 400, unit: 'ml'))]);
+    }
     if (_spirits.hasMatch(name)) return unless([(r'\b(shot|glass|measure|fl oz)\b', _p('1 shot', '1 borrel', 35, unit: 'ml'))]);
     if (_wine.hasMatch(name)) return unless([(_glass, _p('1 glass', '1 glas', 150, unit: 'ml'))]);
-    if (_beer.hasMatch(name)) return unless([(_glass, _p('1 glass', '1 glas', 250, unit: 'ml'))]);
+    // Bier: een glas en een Britse pint van 568 ml (N48, N84)
+    if (_beer.hasMatch(name)) {
+      return unless([(_glass, _p('1 glass', '1 glas', 250, unit: 'ml')), (r'\bpint\b', _p('1 pint', '1 pint', 568, unit: 'ml'))]);
+    }
     if (_hotDrink.hasMatch(name)) return unless([(_glass, _p('1 mug', '1 mok', 250, unit: 'ml'))]);
     return unless([(_glass, _p('1 glass', '1 glas', 200, unit: 'ml'))]);
   }
   // Poeder of concentraat van een drank: geen glas
   if (const {'beverage', 'alcohol'}.contains(group)) return const [];
+
+  // Bloem en zetmeel: een eetlepel (N84)
+  if (part == 'flour' || (l == null && RegExp(r'\b(flour|cornflour|cornstarch|corn starch)\b').hasMatch(name))) {
+    return unless([(_tbsp, _p('1 tablespoon', '1 eetlepel', 10))]);
+  }
+
+  // Pizza: een punt en een hele (zoals bij Snel loggen)
+  if (RegExp(r'\bpizzas?\b(?! ?(sauce|dough|base|topping|cheese|seasoning|bread))').hasMatch(name)) {
+    return unless([(r'\b(slice|piece)\b', _p('1 slice', '1 punt', 100)), (r'\b(whole|pizza)\b', _p('1 pizza', '1 pizza', 400))]);
+  }
 
   // Vetten en beleg: een koffielepel, een eetlepel, en voor beleg wat je op een boterham smeert
   final fat = group == 'oil/fat' || (l == null && _oil.hasMatch(name));
@@ -167,7 +192,7 @@ List<EverydayPortion> everydayPortions(Food f) {
   if (fat || spread) {
     final isOil = _oil.hasMatch(name) || part == 'oil';
     return unless([
-      if (!isOil) (_slice, _p('on a slice', 'op een boterham', 10)),
+      if (!isOil) (_slice, _p('on 1 slice', 'op 1 boterham', 10)),
       (_tsp, _p('1 teaspoon', '1 koffielepel', 5)),
       (_tbsp, _p('1 tablespoon', '1 eetlepel', 15)),
     ]);
@@ -242,12 +267,13 @@ List<Portion> portionOptions(Food f, {int max = 6}) {
   return [...f.portions.take(math.max(max - extra.length, 3)), ...extra].take(max).toList();
 }
 
-/// Volgende waarde voor de plus- of minknop. Porties: per 1, onder 2 per halve. Gram: per 10 onder 100 g, daarboven
+/// Volgende waarde voor de plus- of minknop. Porties (stuks, recepten): per 1, alleen onder 1 per halve (N32); een
+/// halve portie daarboven tik je zelf in. Gram: per 10 onder 100 g, daarboven
 /// per 25. Het resultaat ligt altijd op een veelvoud van de stap (97 → 100, niet 107), nooit onder 0.
 double stepQuantity(double q, {required bool up, required bool portion}) {
   const eps = 1e-9;
   final double step = portion
-      ? (up ? (q < 2 - eps ? 0.5 : 1) : (q <= 2 + eps ? 0.5 : 1))
+      ? (up ? (q < 1 - eps ? 0.5 : 1) : (q <= 1 + eps ? 0.5 : 1))
       : (up ? (q < 100 - eps ? 10 : 25) : (q <= 100 + eps ? 10 : 25));
   final next = up ? ((q / step + eps).floor() + 1) * step : ((q / step - eps).ceil() - 1) * step;
   return math.max(0, next);

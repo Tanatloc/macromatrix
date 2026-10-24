@@ -389,6 +389,9 @@ const healthMinDays = 3;
 /// Minstens zoveel volledig gelogde dagen om alcohol naar een week om te rekenen.
 const alcoholMinDays = 4;
 
+/// Een Britse alcohol-unit: 8 g (10 ml) pure alcohol.
+const ukUnitGrams = 8.0;
+
 /// Een dag telt als volledig gelogd vanaf de helft van je energiedoel (en minstens 800 kcal).
 bool isFullDay(NutrientTotals t, Map<String, Target> targets) => t['energy'] >= math.max(800, (targets['energy']?.goal ?? 0) * 0.5);
 
@@ -482,7 +485,7 @@ HealthCheck? healthCheck(
   final sugars = freeSugars ? pctEnergy('free_sugars', 4) : pctEnergy('sugars', 4);
   final epaDha = avg('epa_dha');
   final protein = weightKg > 0 ? avg('protein') / weightKg : 0.0;
-  // Alcohol in standaardglazen van 10 g per week. Pas vanaf [alcoholMinDays] volledige dagen omrekenen naar een week:
+  // Alcohol in standaardglazen van 10 g per week ([ukUnitGrams] voor Britse units). Pas vanaf [alcoholMinDays] volledige dagen omrekenen naar een week:
   // uit 3 dagen een weekcijfer maken, overdrijft een feestje of verbergt een gewone week
   final glasses = avg('alcohol') * 7 / 10;
   final alcoholKnown = n >= alcoholMinDays;
@@ -824,13 +827,17 @@ HealthCheck? healthCheck(
       'alcohol',
       tr('Alcohol', 'Alcohol'),
       alcoholKnown
-          ? tr('${fmtNum(glasses)} drinks per week', '${fmtNum(glasses)} glazen per week')
-          : tr('${fmtNum(drinksLogged)} drinks in $n days', '${fmtNum(drinksLogged)} glazen in $n dagen'),
+          // In het Engels ook Britse units van 8 g (N48): een glas van 10 g is 1,25 unit
+          ? tr('${fmtNum(glasses)} drinks per week (${fmtNum(glasses * 10 / ukUnitGrams)} UK units)', '${fmtNum(glasses)} glazen per week')
+          : tr(
+              '${fmtNum(drinksLogged)} drinks in $n days (${fmtNum(drinksLogged * 10 / ukUnitGrams)} UK units)',
+              '${fmtNum(drinksLogged)} glazen in $n dagen',
+            ),
       // Zelfde grens als de uitleg en het advies (Hoge Gezondheidsraad: hooguit 10 glazen per week): eronder "oké",
       // erboven "kan beter"
       rateDown(glasses, 1, 10),
       isKnown: alcoholKnown,
-      aim: tr('at most 10 a week, less is better', 'hooguit 10 per week, minder is beter'),
+      aim: tr('at most 10 a week (12.5 UK units), less is better', 'hooguit 10 per week, minder is beter'),
       unknown: tr(
         'Too few fully logged days to work out a weekly figure. Log at least $alcoholMinDays days.',
         'Te weinig volledig gelogde dagen om een weekcijfer te berekenen. Log minstens $alcoholMinDays dagen.',
