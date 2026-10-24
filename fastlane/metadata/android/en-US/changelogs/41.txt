@@ -1,0 +1,1 @@
+Block and report friends. Account deletion page. Fix for an error after removing the last entry of a day with a screen reader on. Works on devices without a camera.

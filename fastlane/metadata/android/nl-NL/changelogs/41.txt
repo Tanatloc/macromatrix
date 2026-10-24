@@ -1,0 +1,1 @@
+Vrienden blokkeren en melden. Pagina om je account te verwijderen. Fout opgelost na het verwijderen van het laatste item van een dag met schermlezer aan. Werkt op toestellen zonder camera.
