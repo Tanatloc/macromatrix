@@ -834,6 +834,7 @@ class AppState extends ChangeNotifier {
       Map<String, double> avg,
       Map<String, double> goals,
       Set<String> overUpper,
+      Set<String> rarelyReached,
       List<(NutrientTotals, Map<String, Target>)> full,
       double kcal,
       double kcalGoal,
@@ -844,6 +845,7 @@ class AppState extends ChangeNotifier {
       final daily = dailyTotals(m, end);
       final scores = <int>[];
       final sums = <String, double>{}, goalSums = <String, double>{}, valueSums = <String, double>{}, upperSums = <String, double>{};
+      final reached = <String, int>{};
       final withTargets = <(NutrientTotals, Map<String, Target>)>[];
       var kcal = 0.0, kcalGoal = 0.0, partial = 0;
       for (final e in daily.entries) {
@@ -861,6 +863,7 @@ class AppState extends ChangeNotifier {
           if (g != null && g > 0) {
             sums[k] = (sums[k] ?? 0) + (e.value.values[k] ?? 0) / g;
             goalSums[k] = (goalSums[k] ?? 0) + g;
+            if ((e.value.values[k] ?? 0) >= g) reached[k] = (reached[k] ?? 0) + 1;
           }
           if (t[k]?.upper case final u?) {
             valueSums[k] = (valueSums[k] ?? 0) + (e.value.values[k] ?? 0);
@@ -880,6 +883,11 @@ class AppState extends ChangeNotifier {
         overUpper: {
           for (final e in valueSums.entries)
             if (e.value > upperSums[e.key]!) e.key,
+        },
+        // Hoog gemiddelde door één uitschieter, maar op minder dan de helft van de dagen op doel: ook niet "sterkste"
+        rarelyReached: {
+          for (final k in sums.keys)
+            if ((reached[k] ?? 0) * 2 < n) k,
         },
         full: withTargets,
         kcal: kcal / n,
@@ -988,7 +996,10 @@ class AppState extends ChangeNotifier {
       days: now.days,
       partialDays: now.partial,
       prevScore: prev?.score,
-      best: [for (final e in micros.where((e) => !now.overUpper.contains(e.key)).take(3)) (nutrientByKey[e.key]!, e.value)],
+      best: [
+        for (final e in micros.where((e) => !now.overUpper.contains(e.key) && !now.rarelyReached.contains(e.key)).take(3))
+          (nutrientByKey[e.key]!, e.value),
+      ],
       worst: [for (final e in worst) (nutrientByKey[e.key]!, e.value)],
       tip: tip,
       health: now.health,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../nutrition/health.dart' show isFullDay;
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
 import '../../nutrition/targets.dart';
@@ -30,6 +31,9 @@ class PeriodTrends extends StatefulWidget {
 class _PeriodTrendsState extends State<PeriodTrends> {
   bool _allHeat = false;
 
+  /// Volledig gelogde dagen vóór vandaag: de basis voor alle tellers en gemiddelden (zie [_basis]).
+  Set<String> _full = const {};
+
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
@@ -40,11 +44,25 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final daily = s.dailyTotals(from, to);
     // Doelen per dag met de beweging van die dag erbij, zoals op Vandaag: een vroegere dag houdt het doel van toen
     final targets = s.targetsBetween(from, to);
+    // Eén basis voor alle tellers en gemiddelden, zoals in het weekrapport: volledig gelogde dagen, nooit vandaag
+    // (die loopt nog). Zonder één volledige dag tonen de gemiddelden wat je wel logde.
+    final today = dayKey(logicalNow());
+    final full = [
+      for (final k in keys)
+        if (k != today && daily[k] != null && isFullDay(daily[k]!, targets[k]!)) k,
+    ];
+    final partial = [
+      for (final k in keys)
+        if (k != today && daily[k] != null && !full.contains(k)) k,
+    ];
+    _full = full.toSet();
 
     final processing = ProcessingCard(share: s.processingBetween(from, to), period: true);
     // Suiker per dag alleen in de weekweergave; met "Let op suiker" bovenaan
     final sugar = days <= 7 && daily.isNotEmpty ? _sugar(s, p, keys, daily, targets) : null;
     final sugarFirst = sugar != null && s.sugarFocus;
+
+    final basis = Padding(padding: const EdgeInsets.only(bottom: 8), child: _basis(p, full.length, partial.length, daily.containsKey(today)));
 
     Widget pair(Widget a, Widget b) => Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,16 +93,18 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                   ),
                 )
               else if (wide) ...[
+                basis,
                 _minis(p, keys, daily, targets),
                 const SizedBox(height: 12),
                 if (sugarFirst) ...[pair(sugar, processing), const SizedBox(height: 12)],
                 pair(_energy(s, p, keys, daily, targets, from), _macros(s, p, keys, daily, targets)),
                 const SizedBox(height: 12),
-                pair(_heatmap(p, keys, daily, targets), _weight(s, p, keys, from)),
+                pair(_heatmap(p, keys, daily, targets), _weight(s, p, keys, from, logged: daily.isNotEmpty)),
                 if (!sugarFirst) ...[const SizedBox(height: 12), pair(processing, sugar ?? const SizedBox())],
                 const SizedBox(height: 18),
                 _averages(s, p, daily, targets, columns: 2),
               ] else ...[
+                basis,
                 _minis(p, keys, daily, targets),
                 const SizedBox(height: 10),
                 if (sugarFirst) ...[sugar, const SizedBox(height: 10)],
@@ -99,11 +119,30 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 const SizedBox(height: 18),
                 _averages(s, p, daily, targets),
               ],
-              if (daily.isEmpty || !wide) ...[const SizedBox(height: 10), _weight(s, p, keys, from)],
+              if (daily.isEmpty || !wide) ...[const SizedBox(height: 10), _weight(s, p, keys, from, logged: daily.isNotEmpty)],
             ],
           ),
         );
       },
+    );
+  }
+
+  /// Eén regel bovenaan: op hoeveel dagen de tellers en gemiddelden steunen, met vandaag apart.
+  Widget _basis(Palette p, int full, int partial, bool today) {
+    final parts = [
+      full == 0
+          ? tr(
+              'No fully logged days yet: averages use what you logged so far',
+              'Nog geen volledig gelogde dagen: gemiddelden over wat je tot nu logde',
+            )
+          : tr('Based on $full fully logged ${full == 1 ? 'day' : 'days'}', 'Op basis van $full volledig gelogde ${full == 1 ? 'dag' : 'dagen'}'),
+      if (today) tr('today counts from tomorrow', 'vandaag telt vanaf morgen'),
+      if (partial > 0)
+        tr('$partial ${partial == 1 ? 'day' : 'days'} with too little logged', '$partial ${partial == 1 ? 'dag' : 'dagen'} met te weinig gelogd'),
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text(parts.join(' · '), style: TextStyle(fontSize: 12, color: p.ink3)),
     );
   }
 
@@ -118,14 +157,13 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final values = [for (final k in keys) daily[k]?['energy']];
     // Basisdoel zonder beweging; dagen met beweging hebben hun eigen, hoger doel
     final goal = s.targetsForDate(parseDay(keys.last))['energy']?.goal ?? 2000;
-    // Vandaag is nog bezig: telt niet mee in het gemiddelde
-    final today = dayKey(logicalNow());
+    // Alleen volledig gelogde dagen (zie [_basis]): een half gelogde dag of vandaag is nooit "binnen ±10%"
     final done = [
       for (final k in keys)
-        if (k != today && daily[k] != null) (daily[k]!['energy'], targets[k]!['energy']?.goal ?? goal),
+        if (_full.contains(k)) (daily[k]!['energy'], targets[k]!['energy']?.goal ?? goal),
     ];
     final avg = done.isEmpty ? null : done.map((d) => d.$1).reduce((a, b) => a + b) / done.length;
-    final inBand = done.where((d) => (d.$1 - d.$2).abs() <= d.$2 * 0.1).length;
+    final inBand = done.where((d) => withinEnergyMargin(d.$1, d.$2)).length;
     // Veranderde je doel in deze periode, dan het gemiddelde doel van de gelogde dagen (zonder beweging), zodat het
     // naast het gemiddelde past
     final baseGoals = [
@@ -254,11 +292,14 @@ class _PeriodTrendsState extends State<PeriodTrends> {
 
   Widget _heatmap(Palette p, List<String> allKeys, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets) {
     final keys = allKeys.length > 14 ? allKeys.sublist(allKeys.length - 14) : allKeys;
-    final logged = keys.where(daily.containsKey).length;
+    // Teller over de volledig gelogde dagen, zoals de rest van het scherm
+    final logged = keys.where(_full.contains).length;
     final candidates = [...stripKeys, 'fiber', 'epa_dha'];
 
-    // Categorie per dag: 0 = < 50%, 1 = 50–99%, 2 = op doel, 3 = boven maximum, null = niet gelogd
+    // Categorie per dag: 0 = < 50%, 1 = 50–99%, 2 = op doel, 3 = boven maximum, -1 = telt (nog) niet mee,
+    // null = niet gelogd
     int? category(String day, String key) {
+      if (daily[day] != null && !_full.contains(day)) return -1;
       final t = daily[day];
       final target = targets[day]![key];
       if (t == null || target == null) return null;
@@ -273,7 +314,8 @@ class _PeriodTrendsState extends State<PeriodTrends> {
       for (final k in candidates)
         if (targets[keys.last]![k] != null) (nutrientByKey[k]!, [for (final d in keys) category(d, k)]),
     ]..sort((a, b) => a.$2.where((c) => c == 2).length.compareTo(b.$2.where((c) => c == 2).length));
-    final shown = _allHeat ? rows : rows.take(12).toList();
+    // Niet alleen wat misloopt: bij veel rijen ook de drie die je het vaakst haalt (onderaan)
+    final shown = _allHeat || rows.length <= 12 ? rows : [...rows.take(9), ...rows.sublist(rows.length - 3)];
     final rare = [
       for (final r in rows)
         if (logged >= 5 && r.$2.where((c) => c == 2).length <= logged * 0.25) r.$1,
@@ -292,6 +334,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
       1 => '50–99%',
       2 => tr('on target', 'op doel'),
       3 => tr('above maximum', 'boven maximum'),
+      -1 => tr('not counted: too little logged, or today', 'telt niet mee: te weinig gelogd, of vandaag'),
       _ => tr('not logged', 'niet gelogd'),
     };
 
@@ -369,7 +412,9 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                               decoration: BoxDecoration(
                                 color: cellColor(c),
                                 borderRadius: BorderRadius.circular(3),
-                                border: c == 1 ? Border.all(color: p.lowFill) : (c == null ? Border.all(color: p.line) : null),
+                                border: c == 1
+                                    ? Border.all(color: p.lowFill)
+                                    : (c == null ? Border.all(color: p.line) : (c == -1 ? Border.all(color: p.lineStrong) : null)),
                               ),
                             ),
                           ),
@@ -464,11 +509,11 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final measured = own ? 'sugars' : 'free_sugars';
     double? max(String d) => targets[d]?[measured]?.upper;
     double value(NutrientTotals t) => own ? math.max(t['sugars'], t['free_sugars']) : t['free_sugars'];
-    // Vandaag is nog bezig: telt niet mee in het gemiddelde
+    // Dezelfde basis als de rest van het scherm: volledig gelogde dagen, vandaag niet
     final today = dayKey(logicalNow());
     final done = [
       for (final k in keys)
-        if (k != today && daily[k] != null) k,
+        if (_full.contains(k)) k,
     ];
     final avg = done.isEmpty ? null : done.map((k) => value(daily[k]!)).reduce((a, b) => a + b) / done.length;
     final over = done.where((k) => max(k) != null && value(daily[k]!) > max(k)!).length;
@@ -488,35 +533,84 @@ class _PeriodTrendsState extends State<PeriodTrends> {
       ),
     );
 
+    // Twee balken op één schaal: vrije suikers (dik) en alle suikers (dun eronder). De max-streep staat alleen op de
+    // balk waar de grens over gaat, zodat alle suikers niet "over de grens" lijken te gaan als die alleen voor de
+    // vrije suikers geldt.
     Widget bar(String d) {
       final t = daily[d];
       if (t == null) return Container(height: 10, decoration: BoxDecoration(border: Border.all(color: p.line), borderRadius: BorderRadius.circular(4)));
       final f = t['free_sugars'], all = math.max(t['sugars'], f), limit = max(d);
       final tooMuch = limit != null && value(t) > limit;
-      return LayoutBuilder(
+      Widget one(double amount, double height, Color color, bool withLimit) => LayoutBuilder(
         builder: (context, c) => SizedBox(
-          height: 10,
+          height: height,
           child: Stack(
             children: [
-              Container(decoration: BoxDecoration(color: p.track, borderRadius: BorderRadius.circular(4))),
-              // Alle suikers licht, de vrije suikers donker eroverheen
               Container(
-                width: c.maxWidth * all / scaleMax,
-                decoration: BoxDecoration(
-                  color: own && tooMuch ? p.highFill : p.carbs.withValues(alpha: own ? 0.55 : 0.3),
-                  borderRadius: BorderRadius.circular(4),
+                decoration: BoxDecoration(color: p.track, borderRadius: BorderRadius.circular(3)),
+              ),
+              Container(
+                width: c.maxWidth * amount / scaleMax,
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+              ),
+              if (withLimit && limit != null)
+                Positioned(
+                  left: (c.maxWidth * limit / scaleMax - 1).clamp(0, c.maxWidth - 2),
+                  top: 0,
+                  bottom: 0,
+                  child: Container(width: 2, color: p.ink),
                 ),
-              ),
-              Container(
-                width: c.maxWidth * f / scaleMax,
-                decoration: BoxDecoration(color: !own && tooMuch ? p.highFill : p.carbs, borderRadius: BorderRadius.circular(4)),
-              ),
-              if (limit != null) Positioned(left: (c.maxWidth * limit / scaleMax - 1).clamp(0, c.maxWidth - 2), top: 0, bottom: 0, child: Container(width: 2, color: p.ink)),
             ],
           ),
         ),
       );
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          one(f, 7, !own && tooMuch ? p.highFill : p.carbs, !own),
+          const SizedBox(height: 2),
+          one(all, 4, own && tooMuch ? p.highFill : p.carbs.withValues(alpha: 0.4), own),
+        ],
+      );
     }
+
+    // Uitleg bij een gewone tik, in een onderblad met een vaste achtergrond (leesbaar in de donkere modus)
+    void explain() => showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: p.surface,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr('Sugar per day', 'Suiker per dag'),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.ink),
+              ),
+              const SizedBox(height: 8),
+              Text(nutrientNote('free_sugars')!, style: TextStyle(fontSize: 14, height: 1.45, color: p.ink)),
+              const SizedBox(height: 8),
+              Text(
+                own
+                    ? tr(
+                        'Your own maximum applies to all sugars, so the line sits on the thin bar for all sugars.',
+                        'Je eigen maximum geldt voor alle suikers, dus de streep staat op de dunne balk van alle suikers.',
+                      )
+                    : tr(
+                        'The maximum applies to free sugars only, so the line sits on the thick bar. The thin bar shows all sugars, including fruit and milk.',
+                        'Het maximum geldt alleen voor vrije suikers, dus de streep staat op de dikke balk. De dunne balk toont alle suikers, ook die uit fruit en melk.',
+                      ),
+                style: TextStyle(fontSize: 13, height: 1.45, color: p.ink2),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
 
     String extra(String d) => [
       if (daily[d] case final t?) tr('carbs ${fmtInt(t['carbs'])} g', 'koolhydr. ${fmtInt(t['carbs'])} g'),
@@ -531,10 +625,11 @@ class _PeriodTrendsState extends State<PeriodTrends> {
         children: [
           PanelTitle(
             tr('Sugar per day', 'Suiker per dag'),
-            trailing: Tooltip(
-              triggerMode: TooltipTriggerMode.tap,
-              message: nutrientNote('free_sugars')!,
-              child: Icon(Icons.info_outline_rounded, size: 16, color: p.ink3),
+            trailing: IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: tr('About sugar per day', 'Over suiker per dag'),
+              icon: Icon(Icons.info_outline_rounded, size: 18, color: p.ink3),
+              onPressed: explain,
             ),
           ),
           const SizedBox(height: 10),
@@ -607,9 +702,15 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           const SizedBox(height: 6),
           ChartLegend(
             items: [
-              (LegendItem.box(p.carbs, w: 10, h: 10, radius: 3), tr('free sugars', 'vrije suikers')),
-              (LegendItem.box(p.carbs.withValues(alpha: 0.3), w: 10, h: 10, radius: 3), tr('from fruit and milk', 'uit fruit en melk')),
-              (LegendItem.box(p.ink, w: 2, h: 10), own ? tr('your max (all sugars)', 'jouw max (alle suikers)') : tr('max (free sugars)', 'max (vrije suikers)')),
+              (LegendItem.box(p.carbs, w: 10, h: 7, radius: 3), tr('free sugars', 'vrije suikers')),
+              (
+                LegendItem.box(p.carbs.withValues(alpha: 0.4), w: 10, h: 4, radius: 2),
+                tr('all sugars, incl. fruit and milk', 'alle suikers, ook fruit en melk'),
+              ),
+              (
+                LegendItem.box(p.ink, w: 2, h: 10),
+                own ? tr('your max (all sugars)', 'jouw max (alle suikers)') : tr('max (free sugars)', 'max (vrije suikers)'),
+              ),
             ],
           ),
         ],
@@ -620,7 +721,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
   static String _joinNames(List<String> names) =>
       names.length <= 1 ? names.join() : '${names.sublist(0, names.length - 1).join(', ')} ${tr('and', 'en')} ${inSentence(names.last)}';
 
-  Widget _weight(AppState s, Palette p, List<String> keys, DateTime from) {
+  Widget _weight(AppState s, Palette p, List<String> keys, DateTime from, {required bool logged}) {
     final history = {for (final b in s.user.biometricHistory('weight', from: dayKey(from.subtract(const Duration(days: 30))))) b.day: b.value};
     final weights = [for (final k in keys) history[k]];
     // Trend vanaf een maand vóór de periode, zodat de lijn aan het begin al ingelopen is
@@ -628,7 +729,12 @@ class _PeriodTrendsState extends State<PeriodTrends> {
     final trendAll = weightTrend(history, [...warm, ...keys]);
     final trend = trendAll.sublist(warm.length);
     final known = trend.whereType<double>().toList();
-    final est = s.energyEstimate;
+    // De schatting gaat over de laatste 4 weken: alleen tonen bij een periode die daarin valt en waarin je iets
+    // logde. Een lege of oude maand krijgt geen getal dat er niets mee te maken heeft.
+    final now = logicalNow();
+    final window = dayKey(DateTime(now.year, now.month, now.day - 28));
+    final showEstimate = logged && keys.last.compareTo(window) >= 0;
+    final est = showEstimate ? s.energyEstimate : null;
 
     return Panel(
       shadow: false,
@@ -680,50 +786,61 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             WeightChart(weights: weights, trend: trend),
             DayAxis(from: from, days: keys.length),
           ],
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: p.surface2,
-              border: Border.all(color: p.line),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tr('Estimated expenditure', 'Geschat verbruik'),
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: p.ink),
-                      ),
-                      Text(
-                        est == null
-                            ? tr(
-                                'Not enough data yet: weigh yourself at least 5 times and log 10 complete days within 4 weeks.',
-                                'Nog te weinig gegevens: weeg je minstens 5 keer en log 10 volledige dagen binnen 4 weken.',
-                              )
-                            : tr('From your weight trend and what you logged, last 4 weeks', 'Uit je gewichtstrend en wat je logde, laatste 4 weken'),
-                        style: TextStyle(fontSize: 11.5, color: p.ink3),
-                      ),
-                    ],
+          if (showEstimate) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: p.surface2,
+                border: Border.all(color: p.line),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr('Estimated expenditure', 'Geschat verbruik'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: p.ink),
+                        ),
+                        Text(
+                          est == null
+                              ? tr(
+                                  'Not enough data yet: weigh yourself at least 5 times and log 10 complete days within 4 weeks.',
+                                  'Nog te weinig gegevens: weeg je minstens 5 keer en log 10 volledige dagen binnen 4 weken.',
+                                )
+                              : est.reliable
+                              ? tr(
+                                  'From your weight trend and what you logged, last 4 weeks (${est.loggedDays} days, ${est.weighIns} weigh-ins)',
+                                  'Uit je gewichtstrend en wat je logde, laatste 4 weken (${est.loggedDays} dagen, ${est.weighIns} wegingen)',
+                                )
+                              : tr(
+                                  'Rough estimate: only ${est.loggedDays} logged days and ${est.weighIns} weigh-ins in the last 4 weeks',
+                                  'Ruwe schatting: maar ${est.loggedDays} gelogde dagen en ${est.weighIns} wegingen in de laatste 4 weken',
+                                ),
+                          style: TextStyle(fontSize: 11.5, color: p.ink3),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                if (est != null) Text('${fmtInt((est.tdee / 10).round() * 10)} kcal', style: numStyle(17)),
-              ],
+                  if (est != null) Text('${est.reliable ? '' : '≈ '}${fmtInt((est.tdee / 10).round() * 10)} kcal', style: numStyle(17)),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 
   Widget _minis(Palette p, List<String> keys, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets) {
-    final scores = [for (final k in keys) daily[k] == null ? null : completenessScore(daily[k]!.values, targets[k]!).toDouble()];
+    // Eén score voor de periode, met dezelfde regel als het weekrapport: het gemiddelde van de volledig gelogde dagen
+    final scores = [for (final k in keys) _full.contains(k) ? completenessScore(daily[k]!.values, targets[k]!).toDouble() : null];
     final known = scores.whereType<double>().toList();
-    final avg = known.isEmpty ? 0 : known.reduce((a, b) => a + b) / known.length;
-    final logged = keys.where(daily.containsKey).length;
+    final avg = known.isEmpty ? null : known.reduce((a, b) => a + b) / known.length;
+    final today = dayKey(logicalNow());
     final perRow = keys.length <= 7 ? 7 : 16;
 
     return Row(
@@ -737,15 +854,15 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Nutrient score', style: TextStyle(fontSize: 12, color: p.ink2)),
+                Text(tr('Nutrient score', 'Voedingsscore'), style: TextStyle(fontSize: 12, color: p.ink2)),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text(known.isEmpty ? '–' : fmtInt(known.last), style: numStyle(22)),
+                    Text(avg == null ? '–' : fmtInt(avg), style: numStyle(22)),
                     const SizedBox(width: 6),
                     Text(
-                      tr('avg. ${fmtInt(avg)}', 'gem. ${fmtInt(avg)}'),
+                      tr('average', 'gemiddeld'),
                       style: numStyle(11, weight: FontWeight.w400, color: p.ink3),
                     ),
                   ],
@@ -765,12 +882,12 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tr('Days logged', 'Gelogde dagen'), style: TextStyle(fontSize: 12, color: p.ink2)),
+                Text(tr('Full days', 'Volledige dagen'), style: TextStyle(fontSize: 12, color: p.ink2)),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text('$logged', style: numStyle(22)),
+                    Text('${_full.length}', style: numStyle(22)),
                     const SizedBox(width: 6),
                     Text(
                       tr('of ${keys.length}', 'van ${keys.length}'),
@@ -786,14 +903,17 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                       spacing: 3,
                       runSpacing: 3,
                       children: [
+                        // Vol = volledige dag, licht = iets gelogd maar telt niet mee (te weinig, of vandaag), leeg = niets
                         for (final k in keys)
                           Container(
                             width: size,
                             height: size,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: daily.containsKey(k) ? (k == dayKey(logicalNow()) ? p.ink : p.brand) : Colors.transparent,
-                              border: daily.containsKey(k) ? null : Border.all(color: p.lineStrong, width: 1.5),
+                              color: _full.contains(k) ? p.brand : (daily.containsKey(k) ? p.brand.withValues(alpha: 0.3) : Colors.transparent),
+                              border: daily.containsKey(k)
+                                  ? (k == today ? Border.all(color: p.ink, width: 1.5) : null)
+                                  : Border.all(color: p.lineStrong, width: 1.5),
                             ),
                           ),
                       ],
@@ -810,10 +930,12 @@ class _PeriodTrendsState extends State<PeriodTrends> {
 
   /// Daggemiddelde van alle voedingsstoffen over de gelogde dagen.
   Widget _averages(AppState s, Palette p, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets, {int columns = 1}) {
-    final logged = daily.length;
+    // Dezelfde basis als de rest: volledig gelogde dagen; zonder één volledige dag wat je wel logde
+    final counted = _full.isEmpty ? daily : {for (final k in _full) k: daily[k]!};
+    final logged = counted.length;
     final averages = <String, double>{};
     final incomplete = <String>{};
-    for (final t in daily.values) {
+    for (final t in counted.values) {
       for (final e in t.values.entries) {
         averages[e.key] = (averages[e.key] ?? 0) + e.value / logged;
       }
@@ -824,7 +946,9 @@ class _PeriodTrendsState extends State<PeriodTrends> {
       children: [
         SectionHeader(
           tr('Average per day', 'Gemiddeld per dag'),
-          trailing: tr('over $logged ${logged == 1 ? 'day' : 'days'}', 'over $logged ${logged == 1 ? 'dag' : 'dagen'}'),
+          trailing: _full.isEmpty
+              ? tr('over $logged ${logged == 1 ? 'day' : 'days'}', 'over $logged ${logged == 1 ? 'dag' : 'dagen'}')
+              : tr('over $logged full ${logged == 1 ? 'day' : 'days'}', 'over $logged volledige ${logged == 1 ? 'dag' : 'dagen'}'),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
@@ -840,7 +964,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           values: averages,
           // Elke dag met het doel dat toen gold: het gemiddelde doel van de gelogde dagen
           targets: averageTargets([
-            for (final k in daily.keys)
+            for (final k in counted.keys)
               if (targets[k] != null) targets[k]!,
           ]),
           incomplete: incomplete,

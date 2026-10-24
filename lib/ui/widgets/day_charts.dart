@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../../day_clock.dart';
+import '../../nutrition/insights.dart' show withinEnergyMargin;
 import '../theme.dart';
 import 'kit.dart';
 import '../../i18n.dart';
@@ -687,8 +688,9 @@ class _EnergyBarsState extends State<EnergyBars> {
 
 Color _below(Palette p) => p.lowFill.withValues(alpha: 0.55);
 
-/// Kleur van een dag tegenover zijn doel: groen binnen ±10%, rood erboven, zand eronder.
-Color energyColor(Palette p, double kcal, double goal) => (kcal - goal).abs() <= goal * 0.1 ? p.okFill : (kcal > goal ? p.highFill : _below(p));
+/// Kleur van een dag tegenover zijn doel: groen binnen ±10% ([withinEnergyMargin], zoals op Vandaag), rood erboven,
+/// zand eronder.
+Color energyColor(Palette p, double kcal, double goal) => withinEnergyMargin(kcal, goal) ? p.okFill : (kcal > goal ? p.highFill : _below(p));
 
 class _EnergyPainter extends CustomPainter {
   _EnergyPainter({

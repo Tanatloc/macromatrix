@@ -22,6 +22,12 @@ Level levelOf(double amount, Target? t) {
   return amount >= t.goal! ? Level.ok : Level.low;
 }
 
+/// Marge rond je energiedoel: binnen ±10% telt een dag als op doel, op elk scherm dezelfde regel.
+const energyMargin = 0.1;
+
+/// Energie van een dag binnen ±10% van het doel.
+bool withinEnergyMargin(double kcal, double goal) => goal > 0 && (kcal - goal).abs() <= goal * energyMargin;
+
 /// Hoeveelheid als deel van het doel (of van het maximum bij een limiet), of null zonder richtwaarde.
 double? fractionOf(double amount, Target? t) {
   final ref = t?.goal ?? t?.upper;
@@ -137,7 +143,14 @@ List<double?> weightTrend(Map<String, double> weights, List<String> days, {doubl
 
 /// Geschat verbruik uit wat je at en hoe je trendgewicht veranderde (7700 kcal per kg lichaamsgewicht).
 class EnergyEstimate {
-  const EnergyEstimate({required this.tdee, required this.avgIntake, required this.trendChange, required this.days});
+  const EnergyEstimate({
+    required this.tdee,
+    required this.avgIntake,
+    required this.trendChange,
+    required this.days,
+    this.loggedDays = 0,
+    this.weighIns = 0,
+  });
 
   /// Geschat dagelijks verbruik in kcal.
   final double tdee;
@@ -150,6 +163,12 @@ class EnergyEstimate {
 
   /// Aantal dagen in de periode.
   final int days;
+
+  /// Volledig gelogde dagen en wegingen waarop de schatting steunt.
+  final int loggedDays, weighIns;
+
+  /// Genoeg gegevens voor meer dan een ruwe schatting: minstens 20 gelogde dagen en 8 wegingen.
+  bool get reliable => loggedDays >= 20 && weighIns >= 8;
 }
 
 /// Pas betrouwbaar met genoeg gegevens: minstens 14 dagen, 10 gelogde dagen en 5 wegingen.
@@ -177,7 +196,14 @@ EnergyEstimate? estimateEnergy(Map<String, double> kcalPerDay, Map<String, doubl
   }
   final slope = sxy / sxx; // kg per dag
   final avg = logged.reduce((a, b) => a + b) / logged.length;
-  return EnergyEstimate(tdee: avg - slope * 7700, avgIntake: avg, trendChange: slope * days.length, days: days.length);
+  return EnergyEstimate(
+    tdee: avg - slope * 7700,
+    avgIntake: avg,
+    trendChange: slope * days.length,
+    days: days.length,
+    loggedDays: logged.length,
+    weighIns: xs.length,
+  );
 }
 
 /// Reeks dagelijks loggen: hoeveel dagen op rij tot vandaag (of tot gisteren, als je vandaag nog niets logde),
