@@ -77,7 +77,19 @@ enum AvatarFrame {
   sparkle('sparkle'),
 
   /// Een lauwerkrans aan de onderkant (staat stil).
-  laurel('laurel');
+  laurel('laurel'),
+
+  /// Golfjes die van de ring naar buiten lopen en vervagen.
+  ripple('ripple'),
+
+  /// Een streepjeskrans net buiten de ring die traag ronddraait.
+  spin('spin'),
+
+  /// Korte zonnestralen rondom die om beurten langer worden.
+  sunburst('sunburst'),
+
+  /// Een kroontje linksboven op de ring (staat stil).
+  crown('crown');
 
   const AvatarFrame(this.id);
   final String id;
@@ -87,10 +99,14 @@ enum AvatarFrame {
     orbit => tr('Orbit', 'Omloop'),
     sparkle => tr('Sparkle', 'Fonkeling'),
     laurel => tr('Laurel', 'Lauwerkrans'),
+    ripple => tr('Ripple', 'Rimpeling'),
+    spin => tr('Spin', 'Draaikrans'),
+    sunburst => tr('Sunburst', 'Zonnestralen'),
+    crown => tr('Crown', 'Kroon'),
   };
 
-  /// Beweegt deze rand (de lauwerkrans niet)?
-  bool get animated => this != laurel;
+  /// Beweegt deze rand (de lauwerkrans en de kroon niet)?
+  bool get animated => this != laurel && this != crown;
 
   /// Uit een id van de server; onbekend of leeg = geen rand.
   static AvatarFrame? parse(Object? id) => values.where((f) => f.id == id).firstOrNull;

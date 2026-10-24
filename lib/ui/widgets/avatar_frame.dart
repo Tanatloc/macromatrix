@@ -23,7 +23,10 @@ Duration framePeriod(AvatarFrame f) => switch (f) {
   AvatarFrame.glow => const Duration(milliseconds: 3200),
   AvatarFrame.orbit => const Duration(milliseconds: 3000),
   AvatarFrame.sparkle => const Duration(milliseconds: 2600),
-  AvatarFrame.laurel => Duration.zero,
+  AvatarFrame.ripple => const Duration(milliseconds: 2800),
+  AvatarFrame.spin => const Duration(milliseconds: 9000),
+  AvatarFrame.sunburst => const Duration(milliseconds: 3600),
+  AvatarFrame.laurel || AvatarFrame.crown => Duration.zero,
 };
 
 /// Dezelfde kleur met een andere lichtheid (zelfde kleurtoon).
@@ -56,7 +59,114 @@ class AvatarFramePainter extends CustomPainter {
         if (front) _sparkle(canvas, c);
       case AvatarFrame.laurel:
         if (front) _laurel(canvas, c);
+      case AvatarFrame.ripple:
+        if (!front) _ripple(canvas, c);
+      case AvatarFrame.spin:
+        if (!front) _spin(canvas, c);
+      case AvatarFrame.sunburst:
+        if (!front) _sunburst(canvas, c);
+      case AvatarFrame.crown:
+        if (front) _crown(canvas, c);
     }
+  }
+
+  // --- Rimpeling: twee golfjes die van de ring naar buiten lopen en daarbij vervagen
+
+  void _ripple(Canvas canvas, Offset c) {
+    final g = (ring * 0.32).clamp(4.0, 11.0);
+    for (final k in _moving ? [_t, (_t + 0.5) % 1] : [0.3, 0.75]) {
+      canvas.drawCircle(
+        c,
+        ring + 0.5 + g * k,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(0.8, border * (0.75 - 0.45 * k))
+          ..color = frameTint(color, 0.5 + 0.25 * k).withValues(alpha: 0.85 * (1 - k)),
+      );
+    }
+  }
+
+  // --- Draaikrans: een krans van streepjes net buiten de ring die traag ronddraait
+
+  void _spin(Canvas canvas, Offset c) {
+    final r = ring + math.max(2.2, border * 0.8);
+    final n = ring >= 26 ? 16 : 12;
+    final rect = Rect.fromCircle(center: c, radius: r);
+    final step = 2 * math.pi / n;
+    final turn = 2 * math.pi * _t;
+    for (var i = 0; i < n; i++) {
+      canvas.drawArc(
+        rect,
+        turn + i * step,
+        step * 0.55,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = math.max(1.2, border * 0.55)
+          ..color = (i.isEven ? color : frameTint(color, 0.78)),
+      );
+    }
+  }
+
+  // --- Zonnestralen: korte stralen rondom die om beurten langer worden
+
+  void _sunburst(Canvas canvas, Offset c) {
+    final n = ring >= 26 ? 20 : 14;
+    final g = (ring * 0.3).clamp(3.5, 10.0);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = math.max(1.1, border * 0.45);
+    for (var i = 0; i < n; i++) {
+      final a = -math.pi / 2 + 2 * math.pi * i / n;
+      final wave = _moving ? 0.5 + 0.5 * math.sin(2 * math.pi * (_t * 2 - i / n * 2)) : (i.isEven ? 1.0 : 0.4);
+      final len = g * (i.isEven ? 0.55 + 0.45 * wave : 0.35 + 0.3 * wave);
+      final d = Offset(math.cos(a), math.sin(a));
+      canvas.drawLine(
+        c + d * (ring + 1),
+        c + d * (ring + 1 + len),
+        paint..color = (i.isEven ? color : frameTint(color, 0.72)).withValues(alpha: 0.6 + 0.4 * wave),
+      );
+    }
+  }
+
+  // --- Kroon: een kroontje linksboven op de ring (rechtsboven zit het levelbolletje), staat stil
+
+  void _crown(Canvas canvas, Offset c) {
+    const a = -2.1;
+    final w = (ring * 0.9).clamp(13.0, 34.0);
+    final h = w * 0.66;
+    final base = c + Offset(math.cos(a), math.sin(a)) * (ring - border * 0.9);
+    canvas.save();
+    canvas.translate(base.dx, base.dy);
+    canvas.rotate(a + math.pi / 2);
+    // Onderkant op de ring, punten naar buiten (naar boven in dit assenstelsel)
+    final path = Path()
+      ..moveTo(-w / 2, 0)
+      ..lineTo(-w / 2, -h * 0.55)
+      ..lineTo(-w / 4, -h * 0.25)
+      ..lineTo(0, -h)
+      ..lineTo(w / 4, -h * 0.25)
+      ..lineTo(w / 2, -h * 0.55)
+      ..lineTo(w / 2, 0)
+      ..close();
+    canvas.drawPath(path.shift(const Offset(0, 0.8)), Paint()..color = Colors.black.withValues(alpha: 0.18));
+    canvas.drawPath(path, Paint()..color = frameTint(color, 0.62));
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = math.max(0.8, w * 0.06)
+        ..color = frameTint(color, 0.3),
+    );
+    final dot = Paint()..color = frameTint(color, 0.9);
+    final r = math.max(0.9, w * 0.07);
+    for (final q in [Offset(-w / 2, -h * 0.55), Offset(0, -h), Offset(w / 2, -h * 0.55)]) {
+      canvas.drawCircle(q, r, dot);
+    }
+    canvas.restore();
   }
 
   // --- Gloed: een zachte halo in de levelkleur die traag aanzwelt en weer afneemt
