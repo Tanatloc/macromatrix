@@ -1,7 +1,7 @@
 /// Alles wat de Scan-tab over een product toont: Nutri-Score, NOVA, additieven, allergenen, ingrediënten,
 /// herkomst en een productscore.
 ///
-/// Productscore (zoals Yuka het doet): 60% voedingswaarde (Nutri-Score), 30% additieven, 10% biologisch. Een
+/// Productscore: 60% voedingswaarde (Nutri-Score), 30% additieven, 10% biologisch. Een
 /// additief met een hoog risico (EFSA: overschrijding van de aanvaardbare inname mogelijk) zet de score op
 /// hoogstens 49.
 library;

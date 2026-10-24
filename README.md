@@ -3,7 +3,7 @@
 **Know what you eat. Better together.**
 
 MacroMatrix is a food diary that tracks all 69 nutrients (energy, macros, vitamins, minerals, fatty acids and
-essential amino acids) against EFSA reference values, with a Yuka-style scanner for additives and allergens, and
+essential amino acids) against EFSA reference values, with a product scanner that rates additives and flags allergens, and
 friends, levels, badges and weekly battles to keep you going. European data first, privacy first.
 
 <p>
