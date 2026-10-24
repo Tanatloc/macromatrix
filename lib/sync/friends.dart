@@ -109,6 +109,22 @@ class Battle {
     otherMid: (r['other_mid'] as int?) ?? 0,
   );
 
+  Battle copyWith({bool? accepted}) => Battle(
+    id: id,
+    week: week,
+    challengedByMe: challengedByMe,
+    accepted: accepted ?? this.accepted,
+    other: other,
+    otherName: otherName,
+    otherAvatar: otherAvatar,
+    otherLevel: otherLevel,
+    otherTitle: otherTitle,
+    myPoints: myPoints,
+    myMid: myMid,
+    otherPoints: otherPoints,
+    otherMid: otherMid,
+  );
+
   /// Afgelopen: de week is voorbij (vanaf maandag erna).
   bool get finished => accepted && !DateTime.now().isBefore(DateTime(week.year, week.month, week.day + 7));
   bool get live => accepted && !finished && !DateTime.now().isBefore(week);
@@ -117,6 +133,67 @@ class Battle {
 
   /// Na woensdag achter en toch gewonnen.
   bool get comeback => finished && result == BattleResult.won && myMid < otherMid;
+}
+
+/// Instelling met het hoogste aantal vrienden ooit (voor de badge Sociaal).
+const socialBestSetting = 'social_best';
+
+/// Lokale instelling met je verstuurde battle-uitdagingen die nog open stonden.
+const sentBattlesSetting = '_battles_sent';
+
+/// Antwoord op "vriend toevoegen": de uitkomst van de server ([result] null bij een fout) en een korte uitleg.
+class AddResult {
+  const AddResult(this.result, this.message);
+  final String? result;
+  final String message;
+
+  /// Gelukt (of niets meer te doen): het codeveld mag leeg. Bij een tikfout blijft de code staan (S12).
+  bool get clearField => result != null && result != 'not_found' && result != 'self';
+}
+
+/// De uitleg bij een uitkomst van friend_add. [name]: de naam van de vriend, als we die kennen.
+String addMessage(String result, {String name = ''}) => switch (result) {
+  'requested' => tr(
+    'Request sent. As soon as they accept, you will see each other\'s score.',
+    'Verzoek verstuurd. Zodra die persoon het aanvaardt, zien jullie elkaars score.',
+  ),
+  'accepted' =>
+    name.isEmpty ? tr('You are now friends.', 'Jullie zijn nu vrienden.') : tr('You and $name are now friends.', 'Jij en $name zijn nu vrienden.'),
+  'friends' =>
+    name.isEmpty
+        ? tr('You are already friends.', 'Jullie zijn al vrienden.')
+        : tr('You\'re already friends with $name.', 'Je bent al vrienden met $name.'),
+  'already' => tr('You already sent this person a request.', 'Je hebt die persoon al een verzoek gestuurd.'),
+  'self' => tr('That is your own code.', 'Dat is je eigen code.'),
+  _ => tr('No account found with that code. Check the letters and numbers.', 'Geen account gevonden met die code. Controleer de letters en cijfers.'),
+};
+
+/// Vergelijkt je open battle-uitdagingen van vroeger ([before], id → naam) met de lijst van nu. Geeft de meldingen
+/// terug (geweigerd of aanvaard) en de uitdagingen die nu nog open staan. Wat je zelf introk ([cancelled]) of wat
+/// gewoon verliep, geeft geen melding.
+(List<String>, Map<String, String>) sentBattleNotices(Map<String, String> before, List<Battle> battles, {Set<String> cancelled = const {}}) {
+  final byId = {for (final b in battles) b.id: b};
+  final messages = <String>[];
+  String name(String n) => n.isEmpty ? tr('Your friend', 'Je vriend') : n;
+  for (final MapEntry(key: id, value: n) in before.entries) {
+    final b = byId[id];
+    if (b == null) {
+      if (!cancelled.contains(id)) {
+        messages.add(tr('${name(n)} declined your battle challenge.', '${name(n)} weigerde je uitdaging voor een battle.'));
+      }
+    } else if (b.accepted && !b.finished) {
+      messages.add(
+        tr('${name(b.otherName)} accepted your challenge: the battle is on!', '${name(b.otherName)} aanvaardde je uitdaging: de battle is begonnen!'),
+      );
+    }
+  }
+  return (
+    messages,
+    {
+      for (final b in battles)
+        if (b.challengedByMe && b.pending) b.id: b.otherName,
+    },
+  );
 }
 
 /// Maandag van de week van [d] (lokale tijd).
@@ -248,15 +325,24 @@ class Friends extends ChangeNotifier {
     return battles.where((b) => b.other == friendId && b.week == monday && (b.accepted || b.pending)).firstOrNull;
   }
 
+  /// Hoogste aantal vrienden dat je ooit tegelijk had (bewaard bij je account). De badge Sociaal blijft zo staan
+  /// als je een vriend verwijdert (S11).
+  int get socialBest {
+    final now = list.where((x) => x.state == FriendState.friend).length;
+    final kept = (state.user.setting(socialBestSetting)?['n'] as num?)?.toInt() ?? 0;
+    return now > kept ? now : kept;
+  }
+
+  /// Het hoogste aantal vrienden bewaren zodra het stijgt.
+  void _keepSocialBest() {
+    final now = list.where((x) => x.state == FriendState.friend).length;
+    final kept = (state.user.setting(socialBestSetting)?['n'] as num?)?.toInt() ?? 0;
+    if (now > kept) state.user.setSetting(socialBestSetting, {'n': now});
+  }
+
   /// Je waarde en niveau per badgecategorie, met de supporterbadges (alleen met Pro; zie supporter.dart).
   Map<String, int> get badgeValuesNow => {
-    ...badgeValues(
-      days: state.dayStats,
-      level: state.level,
-      battles: record,
-      friends: list.where((x) => x.state == FriendState.friend).length,
-      scanned: state.scannedCount,
-    ),
+    ...badgeValues(days: state.dayStats, level: state.level, battles: record, friends: socialBest, scanned: state.scannedCount),
     ...supporterValues(
       active: proActive,
       record: supporterRecord,
@@ -268,8 +354,8 @@ class Friends extends ChangeNotifier {
   };
   Map<String, int> get tiers => badgeTiers(badgeValuesNow);
 
-  /// De 3 badges die vrienden zien.
-  List<String> get showcase => showcaseOf(state.showcase, tiers);
+  /// De badges die vrienden zien: je eigen keuze (ook als die kleiner is dan 3), anders je hoogste 3 (S08).
+  List<String> get showcase => showcaseOf(state.showcase, tiers, fill: !state.showcaseChosen);
 
   /// Titel en badges naar je vriendenprofiel (alleen als ze veranderden).
   Future<void> _pushExtra() async {
@@ -382,11 +468,13 @@ class Friends extends ChangeNotifier {
       }
       if (gen != _loadGen) return;
       list = [for (final r in rows) Friend.fromRow((r as Map).cast<String, dynamic>())];
+      _keepSocialBest();
       try {
         final bs = await client.rpc('battle_list') as List;
         if (gen != _loadGen) return;
         battles = [for (final r in bs) Battle.fromRow((r as Map).cast<String, dynamic>())];
         battlesAvailable = true;
+        _checkSentBattles();
         // Wat je hier al ziet, hoeft geen melding meer; en meldingen voor nieuwe uitdagingen inplannen
         BattleNotify.markSeen(state, [
           for (final b in battles)
@@ -411,26 +499,66 @@ class Friends extends ChangeNotifier {
 
   Future<void> setName(String n) => load(newName: n);
 
-  /// Geeft een korte uitleg terug voor de gebruiker.
-  Future<String?> add(String code) async {
-    final client = account.client;
-    if (client == null) return null;
-    final r = await _run(() async => await client.rpc('friend_add', params: {'p_code': code}) as String);
-    if (r == null) return null;
-    await load();
-    return switch (r) {
-      'requested' => tr(
-        'Request sent. As soon as they accept, you will see each other\'s score.',
-        'Verzoek verstuurd. Zodra die persoon het aanvaardt, zien jullie elkaars score.',
-      ),
-      'accepted' => tr('You are now friends.', 'Jullie zijn nu vrienden.'),
-      'already' => tr('You already sent this person a request.', 'Je hebt die persoon al een verzoek gestuurd.'),
-      'self' => tr('That is your own code.', 'Dat is je eigen code.'),
-      _ => tr(
-        'No account found with that code. Check the letters and numbers.',
-        'Geen account gevonden met die code. Controleer de letters en cijfers.',
-      ),
+  /// Korte meldingen voor het vriendenscherm (bv. een geweigerde battle). Het scherm toont ze één keer.
+  final List<String> notices = [];
+
+  /// Meldingen ophalen en wissen.
+  List<String> takeNotices() {
+    final out = [...notices];
+    notices.clear();
+    return out;
+  }
+
+  /// Battles die je zelf introk: daarvoor geen melding "geweigerd".
+  final _cancelled = <String>{};
+
+  /// Je verstuurde battle-uitdagingen die nog open stonden (id → naam), bewaard op dit toestel. Verdwijnt er een
+  /// van de server zonder dat je ze introk, dan weigerde de ander; staat ze aanvaard, dan begint de battle (S06).
+  void _checkSentBattles() {
+    final before = {
+      for (final e in ((state.user.setting(sentBattlesSetting)?['open'] as Map?) ?? const {}).entries) e.key as String: e.value as String,
     };
+    final (messages, open) = sentBattleNotices(before, battles, cancelled: _cancelled);
+    notices.addAll(messages);
+    _cancelled.removeWhere((id) => !open.containsKey(id));
+    if (!mapEquals(before, open)) state.user.setSetting(sentBattlesSetting, {'open': open});
+  }
+
+  /// Een vriend toevoegen met een code. Geeft het antwoord van de server terug ([AddResult.result] null bij een fout).
+  Future<AddResult> add(String code) async {
+    final client = account.client;
+    if (client == null) return const AddResult(null, '');
+    final friendsBefore = {
+      for (final x in list)
+        if (x.state == FriendState.friend) x.id,
+    };
+    final r = await _run(() async {
+      try {
+        // Met wie en of jullie al vrienden zijn; een databank zonder de migratie kent alleen friend_add
+        final rows = await client.rpc('friend_add_v2', params: {'p_code': code}) as List;
+        final row = (rows.first as Map).cast<String, dynamic>();
+        return (row['result'] as String, row['other'] as String?);
+      } on PostgrestException catch (e) {
+        if (!isMissingTable(e)) rethrow;
+        return (await client.rpc('friend_add', params: {'p_code': code}) as String, null);
+      }
+    });
+    if (r == null) return const AddResult(null, '');
+    await load();
+    var (result, other) = r;
+    final friendsNow = {
+      for (final x in list)
+        if (x.state == FriendState.friend) x.id,
+    };
+    // Oude server: die zegt "accepted" (of "already") ook als jullie al lang vrienden zijn (S05)
+    if (other == null) {
+      final fresh = friendsNow.difference(friendsBefore);
+      if (result == 'accepted' && fresh.isEmpty) result = 'friends';
+      if (result == 'already' && !list.any((x) => x.state == FriendState.outgoing)) result = 'friends';
+      if (fresh.length == 1) other = fresh.first;
+    }
+    final name = list.where((x) => x.id == other).firstOrNull?.name ?? '';
+    return AddResult(result, addMessage(result, name: name));
   }
 
   /// Een vriend uitdagen voor deze week. Geeft een korte uitleg terug.
@@ -440,11 +568,15 @@ class Friends extends ChangeNotifier {
     );
     if (r == null) return null;
     await load();
+    final name = list.where((x) => x.id == friendId).firstOrNull?.name ?? '';
     return switch (r) {
-      'created' => tr(
-        'Challenge sent. The battle starts as soon as they accept.',
-        'Uitdaging verstuurd. De battle begint zodra die persoon aanvaardt.',
-      ),
+      'created' =>
+        name.isEmpty
+            ? tr('Challenge sent. The battle starts as soon as they accept.', 'Uitdaging verstuurd. De battle begint zodra die persoon aanvaardt.')
+            : tr(
+                'Challenge sent to $name. The battle starts as soon as they accept.',
+                'Uitdaging verstuurd naar $name. De battle begint zodra die aanvaardt.',
+              ),
       'accepted' => tr('They had already challenged you: the battle is on!', 'Die persoon had jou al uitgedaagd: de battle is begonnen!'),
       'exists' => tr('You already have a battle with this friend this week.', 'Je hebt deze week al een battle met deze vriend.'),
       _ => tr('That did not work.', 'Dat lukte niet.'),
@@ -452,12 +584,34 @@ class Friends extends ChangeNotifier {
   }
 
   Future<void> respondBattle(Battle b, bool accept) async {
-    await _run(() => account.client!.rpc('battle_respond', params: {'p_id': b.id, 'p_accept': accept}));
+    final ok = await _run(() async {
+      await account.client!.rpc('battle_respond', params: {'p_id': b.id, 'p_accept': accept});
+      return true;
+    });
+    // Meteen tonen: de uitnodiging verdwijnt, of de battle staat er (ook voor het herladen klaar is)
+    if (ok == true) {
+      battles = [
+        for (final x in battles)
+          if (x.id != b.id) x else if (accept) x.copyWith(accepted: true),
+      ];
+      notifyListeners();
+    }
     await load();
   }
 
   Future<void> cancelBattle(Battle b) async {
-    await _run(() => account.client!.rpc('battle_cancel', params: {'p_id': b.id}));
+    _cancelled.add(b.id);
+    final ok = await _run(() async {
+      await account.client!.rpc('battle_cancel', params: {'p_id': b.id});
+      return true;
+    });
+    if (ok == true) {
+      battles = [
+        for (final x in battles)
+          if (x.id != b.id) x,
+      ];
+      notifyListeners();
+    }
     await load();
   }
 
@@ -478,7 +632,18 @@ class Friends extends ChangeNotifier {
   }
 
   Future<void> remove(Friend f) async {
-    await _run(() => account.client!.rpc('friend_remove', params: {'p_other': f.id}));
+    final ok = await _run(() async {
+      await account.client!.rpc('friend_remove', params: {'p_other': f.id});
+      return true;
+    });
+    // Meteen weg uit de lijst (verwijderde vriend of ingetrokken verzoek)
+    if (ok == true) {
+      list = [
+        for (final x in list)
+          if (x.id != f.id) x,
+      ];
+      notifyListeners();
+    }
     await load();
   }
 

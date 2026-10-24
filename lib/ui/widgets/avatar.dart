@@ -25,6 +25,24 @@ const avatarPresets = <(IconData, Color)>[
   (Icons.favorite_rounded, Color(0xFFD23F4E)),
 ];
 
+/// Namen van de standaardavatars (in dezelfde volgorde), onder het icoon en voor de schermlezer (S14).
+const avatarPresetNames = <(String, String)>[
+  ('Leaf', 'Blad'),
+  ('Flame', 'Vlam'),
+  ('Bolt', 'Bliksem'),
+  ('Dumbbell', 'Halter'),
+  ('Runner', 'Loper'),
+  ('Yoga', 'Yoga'),
+  ('Paw', 'Pootje'),
+  ('Flower', 'Bloem'),
+  ('Plate', 'Bord'),
+  ('Fish', 'Vis'),
+  ('Egg', 'Ei'),
+  ('Heart', 'Hartje'),
+];
+
+String avatarPresetName(int i) => tr(avatarPresetNames[i].$1, avatarPresetNames[i].$2);
+
 /// Kleur van de rand voor een level (zie levelHue).
 Color levelColor(int level) => HSLColor.fromAHSL(1, levelHue(level), 0.62, 0.5).toColor();
 
@@ -204,16 +222,38 @@ Future<String?> pickAvatar(BuildContext context, String? current) => showModalBo
               runSpacing: 12,
               children: [
                 for (var i = 0; i < avatarPresets.length; i++)
-                  InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => Navigator.pop(ctx, 'preset:$i'),
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: current == 'preset:$i' ? pal.ink : Colors.transparent, width: 2),
+                  Semantics(
+                    button: true,
+                    selected: current == 'preset:$i',
+                    label: avatarPresetName(i),
+                    excludeSemantics: true,
+                    child: InkWell(
+                      key: ValueKey('avatar-preset-$i'),
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.pop(ctx, 'preset:$i'),
+                      child: SizedBox(
+                        width: 64,
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: current == 'preset:$i' ? pal.ink : Colors.transparent, width: 2),
+                              ),
+                              child: AvatarImage(avatar: 'preset:$i', size: 52),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              avatarPresetName(i),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: pal.ink2),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: AvatarImage(avatar: 'preset:$i', size: 52),
                     ),
                   ),
               ],

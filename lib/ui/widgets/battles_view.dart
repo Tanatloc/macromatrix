@@ -16,9 +16,11 @@ String _name(String n) => n.isEmpty ? tr('Someone without a name', 'Iemand zonde
 /// Uitleg hoe een battle werkt.
 String get battleRules => tr(
   'A battle runs Monday to Sunday. Every day you log your food on time, your Nutrient score counts as points (up to 100 a day). '
-      'Whoever has the most points on Sunday evening wins. Battles give no XP: you earn badges, titles and bragging rights.',
+      'Whoever has the most points on Sunday evening wins. You can have one battle a week with each friend, so several at once. '
+      'Battles give no XP: you earn badges, titles and bragging rights.',
   'Een battle loopt van maandag tot en met zondag. Elke dag dat je op tijd je eten logt, telt je Voedingsscore als punten (max. 100 per dag). '
-      'Wie zondagavond de meeste punten heeft, wint. Battles geven geen XP: je verdient badges, titels en eer.',
+      'Wie zondagavond de meeste punten heeft, wint. Met elke vriend kan je één battle per week hebben, dus ook meerdere tegelijk. '
+      'Battles geven geen XP: je verdient badges, titels en eer.',
 );
 
 /// Battles op het tabblad Vrienden: uitdagingen, lopende battles van deze week en de uitslagen van vorige week.
@@ -61,29 +63,38 @@ class BattlesPanel extends StatelessWidget {
           if (!f.battlesAvailable)
             Text(tr('Battles are not available yet.', 'Battles zijn nog niet beschikbaar.'), style: TextStyle(fontSize: 13, color: pal.ink3))
           else ...[
+            // Uitnodiging: tekst boven, knoppen eronder (anders brak de zin op vier regels tussen de knoppen: S14)
             for (final b in incoming)
               Container(
+                key: ValueKey('battle-invite-${b.id}'),
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: pal.brandSoft, borderRadius: BorderRadius.circular(14)),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    LevelAvatar(avatar: b.otherAvatar, level: b.otherLevel, size: 36),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        tr('${_name(b.otherName)} challenges you this week', '${_name(b.otherName)} daagt je uit deze week'),
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: pal.ink),
-                      ),
+                    Row(
+                      children: [
+                        LevelAvatar(avatar: b.otherAvatar, level: b.otherLevel, size: 36),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            tr('${_name(b.otherName)} challenges you this week', '${_name(b.otherName)} daagt je uit deze week'),
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: pal.ink),
+                          ),
+                        ),
+                      ],
                     ),
-                    TextButton(onPressed: () => f.respondBattle(b, false), child: Text(tr('Decline', 'Weigeren'))),
-                    FilledButton(onPressed: () => f.respondBattle(b, true), child: Text(tr('Accept', 'Aanvaarden'))),
+                    const SizedBox(height: 6),
+                    AnswerButtons(onDecline: () => f.respondBattle(b, false), onAccept: () => f.respondBattle(b, true)),
                   ],
                 ),
               ),
             for (final b in live) _LiveBattle(battle: b, daysLeft: daysLeft),
+            // Je eigen uitdaging die nog open staat, met Annuleren (S06)
             for (final b in outgoing)
               Padding(
+                key: ValueKey('battle-sent-${b.id}'),
                 padding: const EdgeInsets.only(top: 8),
                 child: Row(
                   children: [
@@ -95,7 +106,11 @@ class BattlesPanel extends StatelessWidget {
                         style: TextStyle(fontSize: 13, color: pal.ink2),
                       ),
                     ),
-                    TextButton(onPressed: () => f.cancelBattle(b), child: Text(tr('Withdraw', 'Intrekken'))),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+                      onPressed: () => f.cancelBattle(b),
+                      child: Text(tr('Cancel', 'Annuleren')),
+                    ),
                   ],
                 ),
               ),
@@ -213,6 +228,17 @@ class _LiveBattle extends StatelessWidget {
               daysLeft == 1 ? tr('last day', 'laatste dag') : tr('$daysLeft days left', 'nog $daysLeft dagen'),
             ].join(' · '),
             style: TextStyle(fontSize: 12.5, color: pal.ink2),
+          ),
+          const SizedBox(height: 4),
+          // Battlepunten zijn een som (alleen op tijd gelogd), de ranglijst toont een gemiddelde: zeggen waarom de
+          // getallen verschillen (S02)
+          Text(
+            tr(
+              'Points: the sum of the day scores you logged on time this week. The leaderboard shows the average.',
+              'Punten: de som van de dagscores die je deze week op tijd logde. De ranglijst toont het gemiddelde.',
+            ),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11.5, color: pal.ink3),
           ),
         ],
       ),
@@ -343,8 +369,11 @@ class _FriendSheet extends StatelessWidget {
                       label: Text(tr('Challenge to a battle this week', 'Uitdagen voor een battle deze week')),
                       onPressed: () async {
                         final messenger = ScaffoldMessenger.of(context);
+                        final nav = Navigator.of(context);
                         final m = await f.challenge(x.id);
-                        if (m != null) messenger.showSnackBar(SnackBar(content: Text(m)));
+                        // Verstuurd: het blad sluiten, zodat je op de Battles-kaart meteen "Wachten op …" ziet
+                        if (m != null && context.mounted) nav.pop();
+                        messenger.showSnackBar(SnackBar(content: Text(m ?? f.error ?? tr('That did not work.', 'Dat lukte niet.'))));
                       },
                     )
                   : Text(

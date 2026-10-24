@@ -46,7 +46,7 @@ const tierNames = [('Bronze', 'Brons'), ('Silver', 'Zilver'), ('Gold', 'Goud'), 
 String tierName(int tier) => tier < 1 ? tr('Locked', 'Nog niet verdiend') : tr(tierNames[tier - 1].$1, tierNames[tier - 1].$2);
 
 class BadgeCategory {
-  const BadgeCategory(this.id, this.group, this._name, this.thresholds, this._goal);
+  const BadgeCategory(this.id, this.group, this._name, this.thresholds, this._goal, [this.goalOne]);
   final String id;
   final BadgeGroup group;
 
@@ -60,26 +60,40 @@ class BadgeCategory {
   /// Doel als zin, met `#` voor het getal.
   final (String, String) _goal;
 
+  /// Het doel in het enkelvoud, voor een drempel van 1 ("Finish 1 battle", niet "1 battles").
+  final (String, String)? goalOne;
+
   String get name => tr(_name.$1, _name.$2);
-  String goal(int n) => tr(_goal.$1, _goal.$2).replaceAll('#', '$n');
+  String goal(int n) {
+    final g = n == 1 && goalOne != null ? goalOne! : _goal;
+    return tr(g.$1, g.$2).replaceAll('#', '$n');
+  }
 
   /// Niveau (0 = nog niet verdiend, 1 tot 5) voor een waarde.
   int tierFor(int value) => thresholds.where((t) => value >= t).length;
 }
 
 const badgeCategories = [
-  BadgeCategory('days', BadgeGroup.logging, ('Logbook', 'Logboek'), [1, 30, 100, 250, 500], (
-    'Log your food on time on # days.',
-    'Log op # dagen op tijd je eten.',
-  )),
+  BadgeCategory(
+    'days',
+    BadgeGroup.logging,
+    ('Logbook', 'Logboek'),
+    [1, 30, 100, 250, 500],
+    ('Log your food on time on # days.', 'Log op # dagen op tijd je eten.'),
+    ('Log your food on time on # day.', 'Log op # dag op tijd je eten.'),
+  ),
   BadgeCategory('streak', BadgeGroup.logging, ('On fire', 'In vuur en vlam'), [7, 30, 100, 200, 365], (
     'Log # days in a row.',
     'Log # dagen op rij.',
   )),
-  BadgeCategory('perfect', BadgeGroup.nutrition, ('Perfect days', 'Perfecte dagen'), [1, 10, 25, 50, 100], (
-    'Reach a Nutrient score of 95+ on # days.',
-    'Haal op # dagen een Voedingsscore van 95+.',
-  )),
+  BadgeCategory(
+    'perfect',
+    BadgeGroup.nutrition,
+    ('Perfect days', 'Perfecte dagen'),
+    [1, 10, 25, 50, 100],
+    ('Reach a Nutrient score of 95+ on # days.', 'Haal op # dagen een Voedingsscore van 95+.'),
+    ('Reach a Nutrient score of 95+ on # day.', 'Haal op # dag een Voedingsscore van 95+.'),
+  ),
   BadgeCategory('vitd', BadgeGroup.nutrition, ('Sunshine', 'Zonnetje'), [7, 30, 90, 180, 365], (
     'Get vitamin D on target on # days.',
     'Haal op # dagen je doel voor vitamine D.',
@@ -104,36 +118,79 @@ const badgeCategories = [
     'Log # different foods.',
     'Log # verschillende producten.',
   )),
-  BadgeCategory('perfectweek', BadgeGroup.nutrition, ('Perfect weeks', 'Perfecte weken'), [1, 4, 12, 26, 52], (
-    'Have # weeks with an average Nutrient score of 90+ (at least 5 days logged).',
-    'Haal # weken een gemiddelde Voedingsscore van 90+ (minstens 5 dagen gelogd).',
-  )),
-  BadgeCategory('scanner', BadgeGroup.logging, ('Scanner', 'Scanner'), [1, 10, 50, 100, 250], (
-    'Scan # products in the Scan tab.',
-    'Scan # producten in de Scan-tab.',
-  )),
-  BadgeCategory('social', BadgeGroup.battle, ('Social', 'Sociaal'), [1, 3, 5, 10, 20], ('Have # friends.', 'Heb # vrienden.')),
+  BadgeCategory(
+    'perfectweek',
+    BadgeGroup.nutrition,
+    ('Perfect weeks', 'Perfecte weken'),
+    [1, 4, 12, 26, 52],
+    (
+      'Have # weeks with an average Nutrient score of 90+ (at least 5 days logged).',
+      'Haal # weken een gemiddelde Voedingsscore van 90+ (minstens 5 dagen gelogd).',
+    ),
+    (
+      'Have # week with an average Nutrient score of 90+ (at least 5 days logged).',
+      'Haal # week een gemiddelde Voedingsscore van 90+ (minstens 5 dagen gelogd).',
+    ),
+  ),
+  BadgeCategory(
+    'scanner',
+    BadgeGroup.logging,
+    ('Scanner', 'Scanner'),
+    [1, 10, 50, 100, 250],
+    ('Scan # products in the Scan tab.', 'Scan # producten in de Scan-tab.'),
+    ('Scan # product in the Scan tab.', 'Scan # product in de Scan-tab.'),
+  ),
+  BadgeCategory(
+    'social',
+    BadgeGroup.battle,
+    ('Social', 'Sociaal'),
+    [1, 3, 5, 10, 20],
+    ('Have # friends.', 'Heb # vrienden.'),
+    ('Have # friend.', 'Heb # vriend.'),
+  ),
   BadgeCategory('level', BadgeGroup.level, ('Level up', 'Level up'), [10, 25, 50, 75, 100], ('Reach level #.', 'Haal level #.')),
-  BadgeCategory('battles', BadgeGroup.battle, ('Challenger', 'Uitdager'), [1, 5, 10, 25, 50], ('Finish # battles.', 'Speel # battles uit.')),
-  BadgeCategory('wins', BadgeGroup.battle, ('Victories', 'Overwinningen'), [1, 5, 10, 25, 50], ('Win # battles.', 'Win # battles.')),
+  BadgeCategory(
+    'battles',
+    BadgeGroup.battle,
+    ('Challenger', 'Uitdager'),
+    [1, 5, 10, 25, 50],
+    ('Finish # battles.', 'Speel # battles uit.'),
+    ('Finish # battle.', 'Speel # battle uit.'),
+  ),
+  BadgeCategory(
+    'wins',
+    BadgeGroup.battle,
+    ('Victories', 'Overwinningen'),
+    [1, 5, 10, 25, 50],
+    ('Win # battles.', 'Win # battles.'),
+    ('Win # battle.', 'Win # battle.'),
+  ),
   BadgeCategory('winstreak', BadgeGroup.battle, ('Unbeatable', 'Onverslaanbaar'), [2, 3, 5, 8, 12], (
     'Win # battles in a row.',
     'Win # battles op rij.',
   )),
-  BadgeCategory('comeback', BadgeGroup.battle, ('Comeback', 'Comeback'), [1, 3, 5, 10, 20], (
-    'Win # battles you were losing after Wednesday.',
-    'Win # battles waarin je na woensdag achterstond.',
-  )),
+  BadgeCategory(
+    'comeback',
+    BadgeGroup.battle,
+    ('Comeback', 'Comeback'),
+    [1, 3, 5, 10, 20],
+    ('Win # battles you were losing after Wednesday.', 'Win # battles waarin je na woensdag achterstond.'),
+    ('Win # battle you were losing after Wednesday.', 'Win # battle waarin je na woensdag achterstond.'),
+  ),
   // Supporterbadges (alleen met Pro). Het badgesysteem heeft vijf niveaus; het vijfde (diamant) is er telkens bij
   // gekomen bovenop de vier afgesproken drempels.
   BadgeCategory('labels', BadgeGroup.supporter, ('Label hunter', 'Etiketjager'), [10, 50, 100, 250, 500], (
     'Add # products of your own.',
     'Voeg # eigen producten toe.',
   )),
-  BadgeCategory('offshare', BadgeGroup.supporter, ('World improver', 'Wereldverbeteraar'), [1, 10, 25, 50, 100], (
-    'Share # products with Open Food Facts.',
-    'Deel # producten met Open Food Facts.',
-  )),
+  BadgeCategory(
+    'offshare',
+    BadgeGroup.supporter,
+    ('World improver', 'Wereldverbeteraar'),
+    [1, 10, 25, 50, 100],
+    ('Share # products with Open Food Facts.', 'Deel # producten met Open Food Facts.'),
+    ('Share # product with Open Food Facts.', 'Deel # product met Open Food Facts.'),
+  ),
   BadgeCategory('chef', BadgeGroup.supporter, ('Chef', 'Chef'), [5, 10, 25, 50, 100], (
     'Create or import # recipes.',
     'Maak of importeer # recepten.',
@@ -167,6 +224,8 @@ enum TitleNeed { none, supporter, founder }
 
 const titles = [
   ProfileTitle('rookie', ('Rookie', 'Beginner')),
+  // Een titel die je in de eerste dagen al haalt: je eerste vriend
+  ProfileTitle('team_player', ('Team player', 'Teamspeler'), 'social', 1),
   ProfileTitle('streak_keeper', ('Streak keeper', 'Reekshouder'), 'streak', 2),
   ProfileTitle('perfectionist', ('Perfectionist', 'Perfectionist'), 'perfect', 2),
   ProfileTitle('sun_seeker', ('Sun seeker', 'Zonaanbidder'), 'vitd', 3),
@@ -257,8 +316,9 @@ List<ProfileTitle> availableTitles(Map<String, int> tiers, {bool supporter = fal
       t,
 ];
 
-/// Showcase: de gekozen categorieën die je verdiend hebt, aangevuld met je hoogste niveaus tot 3.
-List<String> showcaseOf(List<String> chosen, Map<String, int> tiers) {
+/// Showcase: de gekozen categorieën die je verdiend hebt. Met [fill] (nog nooit zelf gekozen) aangevuld met je
+/// hoogste niveaus tot 3; een eigen keuze van minder dan 3 blijft zoals ze is.
+List<String> showcaseOf(List<String> chosen, Map<String, int> tiers, {bool fill = true}) {
   final earned = [
     for (final c in badgeCategories)
       if ((tiers[c.id] ?? 0) > 0) c.id,
@@ -267,6 +327,7 @@ List<String> showcaseOf(List<String> chosen, Map<String, int> tiers) {
     for (final id in chosen)
       if (earned.contains(id)) id,
   ];
+  if (!fill) return out.take(3).toList();
   final rest = earned.where((id) => !out.contains(id)).toList()..sort((a, b) => tiers[b]!.compareTo(tiers[a]!));
   return [...out, ...rest].take(3).toList();
 }

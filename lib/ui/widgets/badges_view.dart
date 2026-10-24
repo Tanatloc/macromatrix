@@ -284,8 +284,18 @@ Future<void> pickTitle(BuildContext context) async {
                           ? Icon(t.pro ? Icons.favorite_rounded : Icons.person_rounded)
                           : BadgeIcon(category: c.id, tier: open ? t.tier : 0, size: 34),
                       title: Text(t.name),
-                      subtitle: open || c == null ? null : Text('${c.name} · ${tierName(t.tier)}: ${c.goal(c.thresholds[t.tier - 1])}'),
-                      trailing: s.title == t.id ? Icon(Icons.check_circle_rounded, color: pal.brand) : null,
+                      // Op slot: zeggen hoe je de titel vrijspeelt, met het doel als zin
+                      subtitle: open || c == null
+                          ? null
+                          : Text(
+                              tr(
+                                'Unlock it: ${c.goal(c.thresholds[t.tier - 1])} (${c.name}, ${tierName(t.tier)})',
+                                'Zo speel je ze vrij: ${c.goal(c.thresholds[t.tier - 1])} (${c.name}, ${tierName(t.tier)})',
+                              ),
+                            ),
+                      trailing: s.title == t.id
+                          ? Icon(Icons.check_circle_rounded, color: pal.brand)
+                          : (open ? null : Icon(Icons.lock_outline_rounded, size: 18, color: pal.ink3)),
                       onTap: () => Navigator.pop(ctx, t.id),
                     );
                   },
@@ -403,6 +413,7 @@ class _BadgesCardState extends State<BadgesCard> {
     final values = f.badgeValuesNow;
     final tiers = badgeTiers(values);
     final showcase = f.showcase;
+    final anyEarned = tiers.values.any((t) => t > 0);
     final total = tiers.values.fold(0, (a, b) => a + b);
     final isPro = f.proActive;
     // Supporterbadges tellen pas mee in het totaal als je Pro hebt of er al een verdiende
@@ -429,12 +440,15 @@ class _BadgesCardState extends State<BadgesCard> {
               Expanded(
                 child: showcase.isEmpty
                     ? Text(
-                        tr('Log your food to earn your first badge.', 'Log je eten om je eerste badge te verdienen.'),
+                        anyEarned
+                            ? tr('Your showcase is empty: friends see no badges.', 'Je showcase is leeg: vrienden zien geen badges.')
+                            : tr('Log your food to earn your first badge.', 'Log je eten om je eerste badge te verdienen.'),
                         style: TextStyle(fontSize: 13, color: pal.ink3),
                       )
                     : ShowcaseRow(items: [for (final id in showcase) (id, tiers[id]!)], size: 44, spacing: 12),
               ),
-              if (showcase.isNotEmpty) OutlinedButton(onPressed: () => pickShowcase(context), child: const Text('Showcase')),
+              // Ook met een lege showcase (zelf alles uitgevinkt) kun je ze weer vullen
+              if (anyEarned) OutlinedButton(onPressed: () => pickShowcase(context), child: const Text('Showcase')),
             ],
           ),
           Align(

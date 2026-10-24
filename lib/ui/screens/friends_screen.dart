@@ -32,16 +32,25 @@ class FriendsScreen extends StatefulWidget {
 
 class _FriendsScreenState extends State<FriendsScreen> {
   final _code = TextEditingController();
+  final _codeFocus = FocusNode();
   final _name = TextEditingController();
   bool _editingName = false;
   _Rank _rank = _Rank.week;
   Timer? _poll;
 
-  Friends get _f => context.read<Friends>();
+  /// Bezig met toevoegen (los van het laden van de lijst, zodat de knop niet grijs blijft hangen: S04).
+  bool _adding = false;
+
+  /// Uitleg onder het codeveld bij een foute of eigen code (geen melding over "Jouw code" heen: S12).
+  String? _codeError;
+
+  late final Friends _friends = context.read<Friends>();
+  Friends get _f => _friends;
 
   @override
   void initState() {
     super.initState();
+    _friends.addListener(_onFriends);
     if (widget.active) _start();
   }
 
@@ -50,6 +59,21 @@ class _FriendsScreenState extends State<FriendsScreen> {
     super.didUpdateWidget(old);
     if (widget.active && !old.active) _start();
     if (!widget.active && old.active) _poll?.cancel();
+  }
+
+  /// Nieuwe meldingen van Friends (bv. een geweigerde battle) tonen zolang het tabblad zichtbaar is.
+  void _onFriends() {
+    if (mounted && widget.active && _f.notices.isNotEmpty) _flushNotices();
+  }
+
+  void _flushNotices() {
+    // Na de frame: een melding kan binnenkomen terwijl een ander scherm aan het opbouwen is
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.active) return;
+      for (final m in _f.takeNotices()) {
+        _say(m);
+      }
+    });
   }
 
   void _start() {
@@ -65,6 +89,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     _poll = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted && !_f.loading) _f.load();
     });
+    _flushNotices();
     _f.load().then((_) {
       if (mounted && _f.code != null && _f.name.isEmpty) setState(() => _editingName = true);
     });
@@ -73,7 +98,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   void dispose() {
     _poll?.cancel();
+    _friends.removeListener(_onFriends);
     _code.dispose();
+    _codeFocus.dispose();
     _name.dispose();
     super.dispose();
   }
@@ -83,10 +110,26 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Future<void> _add(Friends f) async {
-    if (_code.text.trim().isEmpty) return;
-    final m = await f.add(_code.text);
-    if (f.error == null) _code.clear();
-    _say(m);
+    if (_code.text.trim().isEmpty || _adding) return;
+    setState(() {
+      _adding = true;
+      _codeError = null;
+    });
+    try {
+      final r = await f.add(_code.text);
+      if (!mounted) return;
+      if (r.clearField) {
+        _code.clear();
+        _say(r.message);
+      } else {
+        // Tikfout of eigen code: de code blijft staan en is geselecteerd, zodat je één teken kan verbeteren
+        setState(() => _codeError = r.result == null ? f.error : r.message);
+        _code.selection = TextSelection(baseOffset: 0, extentOffset: _code.text.length);
+        _codeFocus.requestFocus();
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
   }
 
   Future<void> _saveName(Friends f) async {
@@ -120,7 +163,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
     // Op een pc in twee kolommen ([right] naast [left]), op een gsm onder elkaar
     final List<Widget> body;
     var right = const <Widget>[];
-    if (!Account.configured || !a.signedIn) {
+    // Ingelogd kan alleen met een geconfigureerde server
+    if (!a.signedIn) {
       body = [
         Panel(
           shadow: false,
@@ -159,7 +203,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       // Ranglijst: jij en je vrienden samen
       final rows = <RankRow>[
         RankRow(
-          name: f.name.isEmpty ? tr('You', 'Jij') : f.name,
+          name: f.name,
           avatar: s.avatar,
           level: lvl.level,
           score: mine?.score,
@@ -307,18 +351,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 for (final x in incoming)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        LevelAvatar(avatar: x.avatar, level: x.level, size: 40),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            x.name.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : x.name,
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
-                          ),
+                        Row(
+                          children: [
+                            LevelAvatar(avatar: x.avatar, level: x.level, size: 40),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                x.name.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : x.name,
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
+                              ),
+                            ),
+                          ],
                         ),
-                        TextButton(onPressed: () => f.respond(x, false), child: Text(tr('Decline', 'Weigeren'))),
-                        FilledButton(onPressed: () => f.respond(x, true), child: Text(tr('Accept', 'Aanvaarden'))),
+                        const SizedBox(height: 6),
+                        // Grote, gescheiden knoppen: Weigeren is geen klein tekstlinkje naast Aanvaarden (S14)
+                        AnswerButtons(onDecline: () => f.respond(x, false), onAccept: () => f.respond(x, true)),
                       ],
                     ),
                   ),
@@ -337,7 +387,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               PanelTitle(tr('Leaderboard', 'Ranglijst')),
               const SizedBox(height: 8),
               Segmented<_Rank>(
-                height: 32,
+                height: 44,
                 items: [(_Rank.week, tr('This week', 'Deze week')), (_Rank.level, 'Level')],
                 selected: _rank,
                 onChanged: (v) => setState(() => _rank = v),
@@ -366,7 +416,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   tr(
-                    'Week score: average Voedingsscore of the days you logged this week. Friends never see what you eat.',
+                    'Week score: average Nutrient score of the days you logged this week. Friends never see what you eat.',
                     'Weekscore: gemiddelde Voedingsscore van de dagen die je deze week logde. Vrienden zien nooit wat je eet.',
                   ),
                   style: TextStyle(fontSize: 11.5, color: pal.ink3),
@@ -389,7 +439,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     leading: AvatarImage(avatar: x.avatar, size: 40),
                     title: Text(x.name.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : x.name),
                     subtitle: Text(tr('waiting for acceptance', 'wacht op aanvaarding')),
-                    trailing: TextButton(onPressed: () => f.remove(x), child: Text(tr('Withdraw', 'Intrekken'))),
+                    trailing: TextButton(
+                      style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                      onPressed: () => f.remove(x),
+                      child: Text(tr('Withdraw', 'Intrekken')),
+                    ),
                   ),
               ],
             ),
@@ -432,17 +486,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
               const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextField(
+                      key: const Key('friend-code'),
                       controller: _code,
+                      focusNode: _codeFocus,
                       textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(hintText: tr('Your friend\'s code', 'Code van je vriend')),
+                      decoration: InputDecoration(hintText: tr('Your friend\'s code', 'Code van je vriend'), errorText: _codeError, errorMaxLines: 3),
+                      onChanged: (_) {
+                        if (_codeError != null) setState(() => _codeError = null);
+                      },
                       onSubmitted: (_) => _add(f),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(onPressed: f.loading ? null : () => _add(f), child: Text(tr('Add', 'Toevoegen'))),
+                  // Luistert naar het veld zelf: zodra er een code staat, kan je tikken (S04)
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _code,
+                    builder: (context, v, _) => FilledButton(
+                      key: const Key('friend-add'),
+                      style: FilledButton.styleFrom(minimumSize: const Size(64, 48)),
+                      onPressed: _adding || v.text.trim().isEmpty ? null : () => _add(f),
+                      child: Text(tr('Add', 'Toevoegen')),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -526,6 +595,9 @@ class RankRow {
 
 class RankTile extends StatelessWidget {
   const RankTile({super.key, required this.row, required this.place, required this.byLevel, this.onRemove, this.onTap});
+
+  // Beker alleen voor wie iets haalde: niet bij '–' of 0 (S10). Op level heeft iedereen een stand.
+  bool get medal => place <= 3 && (byLevel || (row.score ?? 0) > 0);
   final RankRow row;
   final VoidCallback? onTap;
   final int place;
@@ -560,7 +632,7 @@ class RankTile extends StatelessWidget {
             children: [
               SizedBox(
                 width: 30,
-                child: place <= 3
+                child: medal
                     ? Icon(Icons.emoji_events_rounded, color: medals[place - 1], size: 22)
                     : Text(
                         '$place',
@@ -579,7 +651,8 @@ class RankTile extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            r.me ? tr('${r.name} (you)', '${r.name} (jij)') : r.name,
+                            // Nog geen naam: gewoon "Jij", niet "Jij (jij)"
+                            r.me ? (r.name.isEmpty ? tr('You', 'Jij') : tr('${r.name} (you)', '${r.name} (jij)')) : r.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
@@ -616,6 +689,8 @@ class RankTile extends StatelessWidget {
               if (onRemove != null)
                 PopupMenuButton<int>(
                   icon: Icon(Icons.more_vert_rounded, color: pal.ink3),
+                  // Groot genoeg voor een dikke vinger, ook met de compacte dichtheid op een pc (S14)
+                  style: IconButton.styleFrom(minimumSize: const Size(48, 48), visualDensity: VisualDensity.standard),
                   itemBuilder: (_) => [PopupMenuItem(value: 0, child: Text(tr('Remove friend', 'Vriend verwijderen')))],
                   onSelected: (_) => onRemove!(),
                 )

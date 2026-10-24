@@ -30,6 +30,8 @@ enum ChallengeRule {
 const challengeNutrients = [
   'fiber',
   'protein',
+  // Koolhydraten (hoogstens of minstens), bv. bij diabetes (S07)
+  'carbs',
   vegKey,
   'free_sugars',
   'sugars',
@@ -90,7 +92,8 @@ class ChallengeTemplate {
 
   /// De regel van één dag ("at least 30 g fiber").
   String get dailyRule {
-    final n = challengeNutrientName(nutrient).toLowerCase();
+    // Groenten: "5 porties groenten", niet "5 porties porties groenten" (S13)
+    final n = nutrient == vegKey && rule != ChallengeRule.goal ? tr('of vegetables', 'groenten') : challengeNutrientName(nutrient).toLowerCase();
     return switch (rule) {
       ChallengeRule.min => tr('at least ${fmtChallengeAmount(nutrient, amount)} $n', 'minstens ${fmtChallengeAmount(nutrient, amount)} $n'),
       ChallengeRule.max => tr('no more than ${fmtChallengeAmount(nutrient, amount)} $n', 'hoogstens ${fmtChallengeAmount(nutrient, amount)} $n'),

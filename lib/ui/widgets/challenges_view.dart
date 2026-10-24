@@ -245,14 +245,7 @@ class _InviteCard extends StatelessWidget {
             style: TextStyle(fontSize: 12.5, color: pal.ink3),
           ),
           const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(onPressed: () => c.respond(invite, false), child: Text(tr('Decline', 'Weigeren'))),
-              const SizedBox(width: 6),
-              FilledButton(onPressed: () => c.respond(invite, true), child: Text(tr('Join', 'Meedoen'))),
-            ],
-          ),
+          AnswerButtons(onDecline: () => c.respond(invite, false), onAccept: () => c.respond(invite, true), acceptLabel: tr('Join', 'Meedoen')),
         ],
       ),
     );
@@ -274,7 +267,7 @@ class _ChallengeCard extends StatelessWidget {
     final t = challenge.template;
     final status = p.statusOn(today);
     final (icon, color) = _statusLook(context, status);
-    final board = challenge.group ? c.board(challenge, myName: f.name.isEmpty ? tr('You', 'Jij') : f.name) : const <(int, ChallengeEntry)>[];
+    final board = challenge.group ? c.board(challenge, myName: f.name) : const <(int, ChallengeEntry)>[];
     final waiting = c.waitingFor(challenge);
     final friends = [
       for (final x in f.list)
@@ -408,7 +401,8 @@ class _BoardRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 24,
-            child: place <= 3
+            // Een beker alleen bij minstens één gehaalde dag, niet bij 0 van 30 (S10)
+            child: place <= 3 && entry.met > 0
                 ? Icon(Icons.emoji_events_rounded, size: 18, color: medals[place - 1])
                 : Text(
                     '$place',
@@ -424,7 +418,7 @@ class _BoardRow extends StatelessWidget {
               children: [
                 Flexible(
                   child: Text(
-                    entry.me ? tr('${entry.name} (you)', '${entry.name} (jij)') : _name(entry.name),
+                    entry.me ? (entry.name.isEmpty ? tr('You', 'Jij') : tr('${entry.name} (you)', '${entry.name} (jij)')) : _name(entry.name),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 13.5, fontWeight: entry.me ? FontWeight.w600 : FontWeight.w500, color: pal.ink),
@@ -528,6 +522,40 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
   final _invite = <String>{};
   bool _busy = false;
 
+  /// Gestart: dan mag het blad dicht zonder te vragen.
+  bool _done = false;
+
+  /// Iets ingevuld of gekozen dat verloren gaat bij sluiten?
+  bool get _dirty =>
+      _invite.isNotEmpty ||
+      (_pick == 'custom' &&
+          (_nutrient != 'fiber' ||
+              _rule != ChallengeRule.min ||
+              _amount.text != '25' ||
+              _days.text != '14' ||
+              _need.text.isNotEmpty ||
+              _title.text.isNotEmpty));
+
+  /// Escape, de terugknop of naast het blad tikken met ingevulde velden: eerst vragen (S07).
+  Future<void> _confirmClose() async {
+    final nav = Navigator.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(tr('Discard this challenge?', 'Deze uitdaging weggooien?')),
+        content: Text(tr('What you filled in will be lost.', 'Wat je invulde, gaat verloren.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: Text(tr('Keep editing', 'Verder invullen'))),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: Text(tr('Discard', 'Weggooien'))),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      setState(() => _done = true);
+      nav.pop();
+    }
+  }
+
   @override
   void dispose() {
     _amount.dispose();
@@ -570,13 +598,14 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
     String? msg;
     if (_invite.isEmpty) {
       c.startSolo(t, start);
-      msg = tr('Challenge started. Good luck!', 'Uitdaging gestart. Succes!');
+      msg = Challenges.startedText(start);
     } else {
       msg = await c.startGroup(t, start, _invite.toList());
     }
     if (!mounted) return;
     setState(() => _busy = false);
     if (msg != null) {
+      _done = true;
       nav.pop();
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     }
@@ -604,169 +633,178 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
       subtitle: Text(sub, style: TextStyle(fontSize: 12.5, color: pal.ink3)),
     );
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.9),
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-            children: [
-              Text(
-                tr('New challenge', 'Nieuwe uitdaging'),
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: pal.ink),
-              ),
-              const SizedBox(height: 8),
-              RadioGroup<String>(
-                groupValue: _pick,
-                onChanged: (v) => setState(() => _pick = v ?? _pick),
-                child: Column(
-                  children: [
-                    for (final b in builtinChallenges) option(b.id, b.name, '${tr('Every day', 'Elke dag')} ${b.dailyRule} · ${b.durationText}'),
-                    option(
-                      'custom',
-                      tr('Your own challenge', 'Eigen uitdaging'),
-                      tr('Pick a nutrient, a daily rule and how long', 'Kies een voedingsstof, een regel per dag en hoe lang'),
+    return PopScope(
+      canPop: _done || !_dirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmClose();
+      },
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.9),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+              children: [
+                Text(
+                  tr('New challenge', 'Nieuwe uitdaging'),
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: pal.ink),
+                ),
+                const SizedBox(height: 8),
+                RadioGroup<String>(
+                  groupValue: _pick,
+                  onChanged: (v) => setState(() => _pick = v ?? _pick),
+                  child: Column(
+                    children: [
+                      for (final b in builtinChallenges) option(b.id, b.name, '${tr('Every day', 'Elke dag')} ${b.dailyRule} · ${b.durationText}'),
+                      option(
+                        'custom',
+                        tr('Your own challenge', 'Eigen uitdaging'),
+                        tr('Pick a nutrient, a daily rule and how long', 'Kies een voedingsstof, een regel per dag en hoe lang'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_pick == 'custom') ...[
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: _nutrient,
+                    decoration: InputDecoration(labelText: tr('Nutrient', 'Voedingsstof'), isDense: true),
+                    items: [for (final k in challengeNutrients) DropdownMenuItem(value: k, child: Text(challengeNutrientName(k)))],
+                    onChanged: (v) => setState(() => _nutrient = v ?? _nutrient),
+                  ),
+                  const SizedBox(height: 10),
+                  Segmented<ChallengeRule>(
+                    height: 44,
+                    items: [
+                      (ChallengeRule.min, tr('At least', 'Minstens')),
+                      (ChallengeRule.max, tr('At most', 'Hoogstens')),
+                      (ChallengeRule.goal, tr('My goal', 'Mijn doel')),
+                    ],
+                    selected: _rule,
+                    onChanged: (v) => setState(() => _rule = v),
+                  ),
+                  const SizedBox(height: 10),
+                  // De hoeveelheid op een eigen regel, zodat geen enkel label afgekapt wordt ("Amount a d…": S07)
+                  if (_rule != ChallengeRule.goal) ...[
+                    TextField(
+                      key: const Key('challenge-amount'),
+                      controller: _amount,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: tr('Per day', 'Per dag'),
+                        suffixText: _nutrient == vegKey ? tr('portions', 'porties') : challengeNutrientUnit(_nutrient),
+                        isDense: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
                     ),
+                    const SizedBox(height: 10),
                   ],
-                ),
-              ),
-              if (_pick == 'custom') ...[
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  initialValue: _nutrient,
-                  decoration: InputDecoration(labelText: tr('Nutrient', 'Voedingsstof'), isDense: true),
-                  items: [for (final k in challengeNutrients) DropdownMenuItem(value: k, child: Text(challengeNutrientName(k)))],
-                  onChanged: (v) => setState(() => _nutrient = v ?? _nutrient),
-                ),
-                const SizedBox(height: 10),
-                Segmented<ChallengeRule>(
-                  height: 32,
-                  items: [
-                    (ChallengeRule.min, tr('At least', 'Minstens')),
-                    (ChallengeRule.max, tr('At most', 'Hoogstens')),
-                    (ChallengeRule.goal, tr('My goal', 'Mijn doel')),
-                  ],
-                  selected: _rule,
-                  onChanged: (v) => setState(() => _rule = v),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    if (_rule != ChallengeRule.goal) ...[
+                  Row(
+                    children: [
                       Expanded(
                         child: TextField(
-                          controller: _amount,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            labelText: tr('Amount a day', 'Hoeveelheid per dag'),
-                            suffixText: _nutrient == vegKey ? tr('portions', 'porties') : challengeNutrientUnit(_nutrient),
-                            isDense: true,
-                          ),
+                          controller: _days,
+                          keyboardType: TextInputType.number,
+                          key: const Key('challenge-days'),
+                          decoration: InputDecoration(labelText: tr('Days', 'Dagen'), isDense: true),
                           onChanged: (_) => setState(() {}),
                         ),
                       ),
                       const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _need,
+                          keyboardType: TextInputType.number,
+                          key: const Key('challenge-need'),
+                          decoration: InputDecoration(labelText: tr('Needed', 'Nodig'), hintText: _days.text, isDense: true),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
                     ],
-                    Expanded(
-                      child: TextField(
-                        controller: _days,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(labelText: tr('Days', 'Dagen'), isDense: true),
-                        onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _title,
+                    maxLength: 60,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(labelText: tr('Name (optional)', 'Naam (mag leeg)'), counterText: '', isDense: true),
+                  ),
+                  if (t != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '${tr('Every day', 'Elke dag')} ${t.dailyRule} · ${t.durationText}',
+                        style: TextStyle(fontSize: 12.5, color: pal.ink2),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        tr('Fill in an amount and 1 to 90 days.', 'Vul een hoeveelheid en 1 tot 90 dagen in.'),
+                        style: TextStyle(fontSize: 12.5, color: pal.high),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _need,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(labelText: tr('Days needed', 'Dagen nodig'), hintText: _days.text, isDense: true),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                  ],
+                ],
+                const SizedBox(height: 14),
+                Text(
+                  tr('Start', 'Begin'),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.ink2),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _title,
-                  maxLength: 60,
-                  decoration: InputDecoration(labelText: tr('Name (optional)', 'Naam (mag leeg)'), counterText: '', isDense: true),
+                const SizedBox(height: 6),
+                Segmented<bool>(
+                  height: 44,
+                  items: [(false, tr('Today', 'Vandaag')), (true, tr('Tomorrow', 'Morgen'))],
+                  selected: _tomorrow,
+                  onChanged: (v) => setState(() => _tomorrow = v),
                 ),
-                if (t != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      '${tr('Every day', 'Elke dag')} ${t.dailyRule} · ${t.durationText}',
-                      style: TextStyle(fontSize: 12.5, color: pal.ink2),
+                const SizedBox(height: 14),
+                Text(
+                  tr('Invite friends', 'Vrienden uitnodigen'),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.ink2),
+                ),
+                const SizedBox(height: 6),
+                if (!signedIn)
+                  Text(
+                    tr(
+                      'Log in to do challenges with friends. On your own works without an account.',
+                      'Log in om uitdagingen met vrienden te doen. Alleen voor jezelf kan zonder account.',
                     ),
+                    style: TextStyle(fontSize: 12.5, color: pal.ink3),
+                  )
+                else if (!f.challenges.groupAvailable)
+                  Text(
+                    tr('Challenges with friends are not available yet.', 'Uitdagingen met vrienden zijn nog niet beschikbaar.'),
+                    style: TextStyle(fontSize: 12.5, color: pal.ink3),
+                  )
+                else if (friends.isEmpty)
+                  Text(
+                    tr('No friends yet. Add friends with their code first.', 'Nog geen vrienden. Voeg eerst vrienden toe met hun code.'),
+                    style: TextStyle(fontSize: 12.5, color: pal.ink3),
                   )
                 else
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      tr('Fill in an amount and 1 to 90 days.', 'Vul een hoeveelheid en 1 tot 90 dagen in.'),
-                      style: TextStyle(fontSize: 12.5, color: pal.high),
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final x in friends)
+                        PillChip(
+                          label: _name(x.name),
+                          check: true,
+                          selected: _invite.contains(x.id),
+                          onTap: () => setState(() => _invite.contains(x.id) ? _invite.remove(x.id) : _invite.add(x.id)),
+                        ),
+                    ],
                   ),
-              ],
-              const SizedBox(height: 14),
-              Text(
-                tr('Start', 'Begin'),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.ink2),
-              ),
-              const SizedBox(height: 6),
-              Segmented<bool>(
-                height: 32,
-                items: [(false, tr('Today', 'Vandaag')), (true, tr('Tomorrow', 'Morgen'))],
-                selected: _tomorrow,
-                onChanged: (v) => setState(() => _tomorrow = v),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                tr('Invite friends', 'Vrienden uitnodigen'),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.ink2),
-              ),
-              const SizedBox(height: 6),
-              if (!signedIn)
-                Text(
-                  tr(
-                    'Log in to do challenges with friends. On your own works without an account.',
-                    'Log in om uitdagingen met vrienden te doen. Alleen voor jezelf kan zonder account.',
-                  ),
-                  style: TextStyle(fontSize: 12.5, color: pal.ink3),
-                )
-              else if (!f.challenges.groupAvailable)
-                Text(
-                  tr('Challenges with friends are not available yet.', 'Uitdagingen met vrienden zijn nog niet beschikbaar.'),
-                  style: TextStyle(fontSize: 12.5, color: pal.ink3),
-                )
-              else if (friends.isEmpty)
-                Text(
-                  tr('No friends yet. Add friends with their code first.', 'Nog geen vrienden. Voeg eerst vrienden toe met hun code.'),
-                  style: TextStyle(fontSize: 12.5, color: pal.ink3),
-                )
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final x in friends)
-                      PillChip(
-                        label: _name(x.name),
-                        check: true,
-                        selected: _invite.contains(x.id),
-                        onTap: () => setState(() => _invite.contains(x.id) ? _invite.remove(x.id) : _invite.add(x.id)),
-                      ),
-                  ],
+                const SizedBox(height: 18),
+                FilledButton(
+                  onPressed: t == null || _busy ? null : _start,
+                  child: Text(_invite.isEmpty ? tr('Start challenge', 'Uitdaging starten') : tr('Start and invite', 'Starten en uitnodigen')),
                 ),
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: t == null || _busy ? null : _start,
-                child: Text(_invite.isEmpty ? tr('Start challenge', 'Uitdaging starten') : tr('Start and invite', 'Starten en uitnodigen')),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

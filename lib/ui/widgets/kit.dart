@@ -23,8 +23,7 @@ String fmtDec(num v, [int d = 1]) => fmtGrouped(v, d);
 
 /// Korte weekdagnamen, maandag eerst, altijd twee letters zodat geen twee dagen hetzelfde lijken
 /// ("Z" voor zaterdag en zondag): ma di wo do vr za zo, of Mo Tu We Th Fr Sa Su.
-List<String> get weekdayShort =>
-    isNl ? const ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'] : const ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+List<String> get weekdayShort => isNl ? const ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'] : const ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 /// Verschil met teken ("+250", "−1,022"), en gewoon "0" als het afgerond niets is (geen "−0").
 String fmtSigned(num v) {
@@ -942,4 +941,31 @@ class SectionHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Weigeren en Aanvaarden onder een uitnodiging: twee knoppen van minstens 48 px hoog, Weigeren omlijnd (S14).
+class AnswerButtons extends StatelessWidget {
+  const AnswerButtons({super.key, required this.onDecline, required this.onAccept, this.acceptLabel});
+  final VoidCallback onDecline, onAccept;
+
+  /// Tekst op de hoofdknop (standaard Aanvaarden).
+  final String? acceptLabel;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      OutlinedButton(
+        style: OutlinedButton.styleFrom(minimumSize: const Size(96, 48)),
+        onPressed: onDecline,
+        child: Text(tr('Decline', 'Weigeren')),
+      ),
+      const SizedBox(width: 12),
+      FilledButton(
+        style: FilledButton.styleFrom(minimumSize: const Size(96, 48)),
+        onPressed: onAccept,
+        child: Text(acceptLabel ?? tr('Accept', 'Aanvaarden')),
+      ),
+    ],
+  );
 }

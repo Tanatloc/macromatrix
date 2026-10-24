@@ -2313,6 +2313,9 @@ class AppState extends ChangeNotifier {
   /// Gekozen showcase-badges (categorieën), bewaard bij je account.
   List<String> get showcase => [for (final x in (user.setting('showcase')?['ids'] as List?) ?? const []) x as String];
 
+  /// Heb je je showcase zelf gekozen? Dan blijft ze zoals je ze bewaarde, ook met minder dan 3 badges.
+  bool get showcaseChosen => user.setting('showcase') != null;
+
   void setShowcase(List<String> ids) {
     user.setSetting('showcase', {'ids': ids.take(3).toList()});
     notifyListeners();
@@ -2644,8 +2647,7 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  NutrientMap _withSugars(NutrientMap per100g, String ref, String name, double grams) =>
-      withDerived(scale(_freeSugars(per100g, ref, name), grams));
+  NutrientMap _withSugars(NutrientMap per100g, String ref, String name, double grams) => withDerived(scale(_freeSugars(per100g, ref, name), grams));
 
   /// Voedingswaarden per 100 g van een product zoals ze in de totalen tellen: met afgeleide waarden en vrije suikers.
   NutrientMap per100gWithSugars(Food f) => withDerived(_freeSugars(f.per100g, f.ref, f.name));

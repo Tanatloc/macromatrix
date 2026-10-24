@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -417,42 +418,64 @@ class _ShellState extends State<Shell> {
       ),
     );
 
+    // Meldingen op een pc of met de rail: zwevend boven de inhoud, niet over de zijbalk heen, en hoogstens 560 px
+    // breed (S15)
+    Widget besideSide(double side, Widget child) {
+      final content = width - side;
+      final w = math.min(560.0, content - 32);
+      final inset = theme.snackBarTheme.insetPadding ?? EdgeInsets.zero;
+      return Theme(
+        data: theme.copyWith(
+          snackBarTheme: theme.snackBarTheme.copyWith(
+            insetPadding: EdgeInsets.fromLTRB(side + (content - w) / 2, inset.top, (content - w) / 2, inset.bottom),
+          ),
+        ),
+        child: child,
+      );
+    }
+
     if (desktop) {
-      return Scaffold(
-        body: Row(
-          children: [
-            _SideBar(
-              items: _items,
-              index: _index == 4 && _shortcut != null ? -1 : _index,
-              shortcut: _index == 4 ? _shortcut : null,
-              icon: icon,
-              onSelect: _go,
-              shortcuts: shortcuts,
-            ),
-            Expanded(child: tabs),
-          ],
+      return besideSide(
+        _sideBarWidth,
+        Scaffold(
+          body: Row(
+            children: [
+              _SideBar(
+                items: _items,
+                index: _index == 4 && _shortcut != null ? -1 : _index,
+                shortcut: _index == 4 ? _shortcut : null,
+                icon: icon,
+                onSelect: _go,
+                shortcuts: shortcuts,
+              ),
+              Expanded(child: tabs),
+            ],
+          ),
         ),
       );
     }
 
     if (width >= _railWidth) {
-      return Scaffold(
-        body: Row(
-          children: [
-            NavigationRail(
-              // Een scherm uit Meer staat open: dan is Meer gemarkeerd, niet Profiel
-              selectedIndex: _index == 4 && _shortcut != null ? _items.length : _index,
-              onDestinationSelected: (i) => i < _items.length ? _go(i) : _showMore(shortcuts),
-              labelType: NavigationRailLabelType.all,
-              destinations: [
-                for (final (i, (o, s, l)) in _items.indexed) NavigationRailDestination(icon: icon(i, o), selectedIcon: icon(i, s), label: Text(l)),
-                // De rail heeft geen plaats voor alle snelkoppelingen van de zijbalk (N81)
-                NavigationRailDestination(icon: const Icon(Icons.more_horiz_rounded), label: Text(tr('More', 'Meer'))),
-              ],
-            ),
-            VerticalDivider(width: 1, color: p.line),
-            Expanded(child: tabs),
-          ],
+      return besideSide(
+        81,
+        Scaffold(
+          body: Row(
+            children: [
+              NavigationRail(
+                // Een scherm uit Meer staat open: dan is Meer gemarkeerd, niet Profiel
+                selectedIndex: _index == 4 && _shortcut != null ? _items.length : _index,
+                onDestinationSelected: (i) => i < _items.length ? _go(i) : _showMore(shortcuts),
+                labelType: NavigationRailLabelType.all,
+                destinations: [
+                  for (final (i, (o, s, l)) in _items.indexed) NavigationRailDestination(icon: icon(i, o), selectedIcon: icon(i, s), label: Text(l)),
+                  // De rail heeft geen plaats voor alle snelkoppelingen van de zijbalk (N81)
+                  NavigationRailDestination(icon: const Icon(Icons.more_horiz_rounded), label: Text(tr('More', 'Meer'))),
+                ],
+              ),
+              VerticalDivider(width: 1, color: p.line),
+              Expanded(child: tabs),
+            ],
+          ),
         ),
       );
     }
@@ -487,6 +510,9 @@ class _TabObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => onChange();
 }
+
+/// Breedte van de zijbalk op een pc.
+const _sideBarWidth = 236.0;
 
 /// Navigatie onderaan op een gsm: twee tabbladen, de +-knop, twee tabbladen.
 class _PhoneBar extends StatelessWidget {
@@ -587,7 +613,7 @@ class _SideBar extends StatelessWidget {
     // Laag venster (bv. een laptop met de browserbalken): alles iets compacter
     final low = MediaQuery.sizeOf(context).height < 760;
     return Container(
-      width: 236,
+      width: _sideBarWidth,
       decoration: BoxDecoration(
         color: p.surface,
         border: Border(right: BorderSide(color: p.line)),

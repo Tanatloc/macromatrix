@@ -279,6 +279,20 @@ class Challenges extends ChangeNotifier {
     return c;
   }
 
+  /// Korte bevestiging na het starten: een uitdaging die pas later begint, is nog niet "gestart" (S13).
+  static String startedText(DateTime start, {bool invited = false}) {
+    final n = logicalNow();
+    final later = start.isAfter(DateTime(n.year, n.month, n.day));
+    if (!later) {
+      return invited
+          ? tr('Challenge started. Your friends get an invitation.', 'Uitdaging gestart. Je vrienden krijgen een uitnodiging.')
+          : tr('Challenge started. Good luck!', 'Uitdaging gestart. Succes!');
+    }
+    return invited
+        ? tr('Challenge set for tomorrow. Your friends get an invitation.', 'Uitdaging staat klaar voor morgen. Je vrienden krijgen een uitnodiging.')
+        : tr('Challenge set for tomorrow. Good luck!', 'Uitdaging staat klaar voor morgen. Succes!');
+  }
+
   /// Met vrienden: op de server aanmaken en meteen uitnodigen. Kent de server geen uitdagingen, dan wordt het een
   /// uitdaging voor jezelf. Geeft een korte uitleg terug.
   Future<String?> startGroup(ChallengeTemplate t, DateTime start, List<String> friends) async {
@@ -297,9 +311,7 @@ class Challenges extends ChangeNotifier {
     }
     state.addChallenge(t, start, remoteId: id);
     await load();
-    return friends.isEmpty
-        ? tr('Challenge started.', 'Uitdaging gestart.')
-        : tr('Challenge started. Your friends get an invitation.', 'Uitdaging gestart. Je vrienden krijgen een uitnodiging.');
+    return startedText(start, invited: friends.isNotEmpty);
   }
 
   /// Vrienden uitnodigen. Een uitdaging voor jezelf wordt dan een groepsuitdaging (zelfde start en regel).
