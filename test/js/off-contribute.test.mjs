@@ -75,7 +75,7 @@ test('delen: product en foto met de User-Agent van de app, wachtwoord alleen in 
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { ok: true, images: 1, url: 'https://world.openfoodfacts.org/product/5449000000996' });
   assert.equal(sent.length, 2);
-  assert.match(USER_AGENT, /^MacroMatrix\/\d+\.\d+\.\d+ \(app\.divinenet\.online\)$/);
+  assert.match(USER_AGENT, /^MacroMatrix\/\d+\.\d+\.\d+ \(macromatrix\.eu\)$/);
   for (const s of sent) assert.equal(s.headers['User-Agent'], USER_AGENT);
   const product = sent[0].body;
   assert.equal(product.get('user_id'), 'macromatrix-app');
