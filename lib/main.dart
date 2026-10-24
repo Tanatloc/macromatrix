@@ -40,6 +40,9 @@ Future<void> main() async {
   final state = AppState(foods: foods, user: user)
     ..refreshBuiltinSnapshots()
     ..upgradeSavedProducts();
+  // Allereerste start (nog geen taal gekozen en nog geen profiel): de taal van het toestel, en die onthouden. Wie de
+  // app al gebruikte zonder ooit een taal te kiezen, houdt Engels (N01).
+  if (user.setting('ui')?['lang'] == null && !state.hasProfile) state.setLanguage(deviceLang);
   final account = Account(user, onRemoteChanges: state.reloadFromDisk);
   unawaited(account.init());
   final reminders = Reminders(state);

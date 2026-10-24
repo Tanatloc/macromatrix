@@ -73,7 +73,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [const AccountCard(), const SizedBox(height: 10), const MacroScheduleCard(), const SizedBox(height: 10), _settings(s, pal)],
+                children: [
+                  _language(s, pal),
+                  const SizedBox(height: 10),
+                  const AccountCard(),
+                  const SizedBox(height: 10),
+                  const MacroScheduleCard(),
+                  const SizedBox(height: 10),
+                  _settings(s, pal),
+                ],
               ),
             ),
           ),
@@ -81,6 +89,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
+  /// Taal helemaal bovenaan: wie de app in de verkeerde taal krijgt, moet ze vinden zonder te scrollen (N01). De
+  /// titel staat in beide talen, want je leest misschien de andere.
+  Widget _language(AppState s, Palette pal) => Panel(
+    shadow: false,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          isNl ? 'Taal · Language' : 'Language · Taal',
+          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: pal.ink),
+        ),
+        const SizedBox(height: 6),
+        Segmented<AppLang>(height: 30, items: [for (final l in AppLang.values) (l, l.label)], selected: appLang.value, onChanged: s.setLanguage),
+      ],
+    ),
+  );
 
   Widget _settings(AppState s, Palette pal) {
     Widget title(String t) => Padding(
@@ -160,8 +185,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ],
-          title(tr('Language', 'Taal')),
-          Segmented<AppLang>(height: 30, items: [for (final l in AppLang.values) (l, l.label)], selected: appLang.value, onChanged: s.setLanguage),
           title(tr('Appearance', 'Weergave')),
           Segmented<String>(
             height: 30,

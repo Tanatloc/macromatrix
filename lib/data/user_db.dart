@@ -471,30 +471,44 @@ class UserDb {
 
   void restoreEntry(String id) => _db.execute('UPDATE diary SET deleted = 0, updated_at = ? WHERE id = ?', [_now(), id]);
 
-  /// Een maaltijd van een andere dag kopiëren (bv. "ontbijt van gisteren").
-  int copyMeal({required String fromDay, required Meal meal, required String toDay}) {
-    final rows = _db.select('SELECT * FROM diary WHERE day = ? AND meal = ? AND deleted = 0 AND food_ref NOT LIKE \'supp:%\'', [fromDay, meal.index]);
+  /// Een maaltijd van een andere dag kopiëren (bv. "ontbijt van gisteren"). Hetzelfde product (zelfde portie en
+  /// voedingswaarden) dat er al staat, krijgt de hoeveelheid erbij in plaats van een tweede regel, zoals bij
+  /// gewoon toevoegen (N57). Geeft het aantal gekopieerde regels terug.
+  int copyMeal({required String fromDay, required Meal meal, required String toDay}) =>
+      copyMealMerged(fromDay: fromDay, meal: meal, toDay: toDay).length;
+
+  /// Zoals [copyMeal], maar met per gekopieerde regel wat er gebeurde: een nieuwe regel (prevGrams null) of de
+  /// hoeveelheid erbij in een bestaande regel (met de hoeveelheid van daarvoor), om het ongedaan te maken.
+  List<({String id, double? prevGrams, double? prevQuantity})> copyMealMerged({required String fromDay, required Meal meal, required String toDay}) {
+    final rows = _db.select('SELECT * FROM diary WHERE day = ? AND meal = ? AND deleted = 0 AND food_ref NOT LIKE \'supp:%\' ORDER BY created_at', [
+      fromDay,
+      meal.index,
+    ]);
     final now = _now();
+    final done = <({String id, double? prevGrams, double? prevQuantity})>[];
     for (final r in rows) {
+      final grams = (r['grams'] as num).toDouble();
+      final quantity = (r['quantity'] as num).toDouble();
+      final into = _db.select(
+        'SELECT id, grams, quantity FROM diary WHERE day = ? AND meal = ? AND food_ref = ? AND deleted = 0 AND repeat_id IS NULL '
+        'AND portion_label IS ? AND time IS NULL AND nutrients = ? ORDER BY created_at LIMIT 1',
+        [toDay, meal.index, r['food_ref'], r['portion_label'], r['nutrients']],
+      );
+      if (into.isNotEmpty) {
+        final t = into.first;
+        final g = (t['grams'] as num).toDouble(), q = (t['quantity'] as num).toDouble();
+        updateEntryAmount(t['id'] as String, g + grams, q + quantity);
+        done.add((id: t['id'] as String, prevGrams: g, prevQuantity: q));
+        continue;
+      }
+      final id = _uuid.v4();
       _db.execute(
         'INSERT INTO diary (id, day, meal, food_ref, name, brand, grams, portion_label, quantity, nutrients, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-        [
-          _uuid.v4(),
-          toDay,
-          meal.index,
-          r['food_ref'],
-          r['name'],
-          r['brand'],
-          r['grams'],
-          r['portion_label'],
-          r['quantity'],
-          r['nutrients'],
-          now,
-          now,
-        ],
+        [id, toDay, meal.index, r['food_ref'], r['name'], r['brand'], grams, r['portion_label'], quantity, r['nutrients'], now, now],
       );
+      done.add((id: id, prevGrams: null, prevQuantity: null));
     }
-    return rows.length;
+    return done;
   }
 
   /// Hoe vaak elk product de laatste [days] dagen gelogd werd (voor "vaak gegeten" bovenaan).

@@ -79,7 +79,13 @@ class _OracleScreenState extends State<OracleScreen> {
     final s = context.watch<AppState>();
     final p = context.pal;
     final n = nutrientByKey[_key]!;
-    final results = s.oracle(_key, rank: _rank, limit: _limit, groups: _groups, everyday: _everyday);
+    // Groepen waar "alleen gewone voedingsmiddelen" niets overliet: daar staan toch de rijkste producten (N12)
+    final relaxed = <String>{};
+    final results = s.oracle(_key, rank: _rank, limit: _limit, groups: _groups, everyday: _everyday, relaxed: relaxed);
+    final relaxedNames = [
+      for (final g in relaxed)
+        if (g.isNotEmpty) oracleGroups.where((x) => x.$1 == g).map((x) => tr(x.$2, x.$3).toLowerCase()).firstOrNull ?? g,
+    ];
     final goal = s.targets[_key]?.goal;
     final top = results.isEmpty ? 1.0 : results.first.$2;
 
@@ -111,10 +117,13 @@ class _OracleScreenState extends State<OracleScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         PanelTitle(
-                          tr(
-                            'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
-                            'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
-                          ),
+                          // Nooit "Top 0": zonder resultaten gewoon de stof
+                          results.isEmpty
+                              ? '${n.name} ${_rank.label}'
+                              : tr(
+                                  'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
+                                  'Top ${results.length}: ${n.name.toLowerCase()} ${_rank.label}',
+                                ),
                           subtitle: goal == null || goal <= 0
                               ? null
                               : tr(
@@ -123,6 +132,22 @@ class _OracleScreenState extends State<OracleScreen> {
                                 ),
                         ),
                         const SizedBox(height: 6),
+                        if (relaxed.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              relaxedNames.isEmpty
+                                  ? tr(
+                                      'No everyday foods for this nutrient, so all products are shown.',
+                                      'Geen gewone voedingsmiddelen voor deze stof, daarom staan hier alle producten.',
+                                    )
+                                  : tr(
+                                      'No everyday foods in ${relaxedNames.join(', ')} for this nutrient, so all products are shown there.',
+                                      'Geen gewone voedingsmiddelen in ${relaxedNames.join(', ')} voor deze stof, daarom staan daar alle producten.',
+                                    ),
+                              style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2),
+                            ),
+                          ),
                         if (results.isEmpty)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 14),

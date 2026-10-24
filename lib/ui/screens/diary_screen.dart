@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -228,10 +229,87 @@ Future<void> pickDay(BuildContext context) async {
     firstDate: DateTime(2000),
     // Niet in de toekomst loggen: tot en met vandaag
     lastDate: now,
-    // De app toont de week vanaf maandag; forceer dat ook in de kalender (ook in het Engels, dat standaard op zondag begint)
-    builder: (ctx, child) => Localizations.override(context: ctx, locale: const Locale('en', 'GB'), child: child!),
+    // In de taal van de app, met de week vanaf maandag (N46)
+    builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),
   );
   if (picked != null) s.setDate(picked);
+}
+
+/// Taal voor de kalender: die van de app, en altijd met de week vanaf maandag. Gewoon 'en' begint op zondag
+/// (Amerikaans), dus Brits Engels; in het Nederlands nl_BE in plaats van de Engelse kalender van vroeger (N46).
+Locale get pickerLocale => isNl ? const Locale('nl', 'BE') : const Locale('en', 'GB');
+
+/// Gisteren kopiëren naar de gekozen dag: [meal], of zonder maaltijd de hele dag. Staat er al iets, dan eerst
+/// vragen; hetzelfde product wordt één regel, en de melding heeft "Ongedaan maken" (N57).
+Future<void> copyFromYesterday(BuildContext context, {Meal? meal}) async {
+  final s = context.read<AppState>();
+  final already = meal == null ? s.entries.where((e) => !e.foodRef.startsWith('supp:')).length : s.entriesFor(meal).length;
+  if (already > 0) {
+    final where = meal == null ? tr('this day', 'deze dag') : meal.label.toLowerCase();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          meal == null
+              ? tr(
+                  'This day already has $already ${already == 1 ? 'item' : 'items'}',
+                  'Deze dag heeft al $already ${already == 1 ? 'item' : 'items'}',
+                )
+              : tr(
+                  '${meal.label} already has $already ${already == 1 ? 'item' : 'items'}',
+                  '${meal.label} heeft al $already ${already == 1 ? 'item' : 'items'}',
+                ),
+        ),
+        content: Text(
+          tr(
+            'Yesterday\'s items are added to $where. A product that is already there gets the amount added, not a second line.',
+            'De items van gisteren komen erbij in $where. Een product dat er al staat, krijgt de hoeveelheid erbij, geen tweede regel.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Add anyway', 'Toch toevoegen'))),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+  }
+  final added = meal == null ? s.copyDayFromYesterday() : s.copyMealFromYesterday(meal);
+  if (!context.mounted) return;
+  final m = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+  if (added.isEmpty) {
+    m.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        content: Text(
+          meal == null
+              ? tr('You logged nothing yesterday.', 'Gisteren logde je niets.')
+              : tr('You had no ${meal.label.toLowerCase()} yesterday.', 'Gisteren had je geen ${meal.label.toLowerCase()}.'),
+        ),
+      ),
+    );
+    return;
+  }
+  final n = added.length;
+  var armed = false;
+  Timer(const Duration(milliseconds: 500), () => armed = true);
+  // Korter dan de gewone melding (4-5 s): ze bedekte anders lang een regel van de maaltijd die je net kopieerde
+  m.showSnackBar(
+    SnackBar(
+      persist: false,
+      duration: const Duration(milliseconds: 4500),
+      behavior: SnackBarBehavior.floating,
+      content: Text(tr('Copied $n ${n == 1 ? 'item' : 'items'} from yesterday', '$n ${n == 1 ? 'item' : 'items'} van gisteren gekopieerd')),
+      action: SnackBarAction(
+        label: tr('Undo', 'Ongedaan maken'),
+        onPressed: () {
+          // Een snelle tweede tik op het menu is geen bewuste keuze (zie showUndo)
+          if (!armed) return;
+          s.undoAdds(added);
+        },
+      ),
+    ),
+  );
 }
 
 /// Vandaag op een pc: links wat je logt (maaltijden, supplementen, beweging), rechts hoe je dag ervoor staat
@@ -1214,7 +1292,7 @@ class _StartCard extends StatelessWidget {
                 '${yesterday.length} ${yesterday.length == 1 ? 'item' : 'items'} kopiëren',
               ),
               meta: '${fmtInt(yesterday.fold<double>(0, (a, e) => a + e.kcal))} kcal',
-              onTap: () => s.copyMealFromYesterday(meal),
+              onTap: () => copyFromYesterday(context, meal: meal),
             ),
           if (yesterdayAll.map((e) => e.meal).toSet().length > 1)
             action(
@@ -1222,11 +1300,7 @@ class _StartCard extends StatelessWidget {
               title: tr('Same as yesterday', 'Zoals gisteren'),
               sub: tr('Copy all ${yesterdayAll.length} items of yesterday', 'Alle ${yesterdayAll.length} items van gisteren kopiëren'),
               meta: '${fmtInt(yesterdayAll.fold<double>(0, (a, e) => a + e.kcal))} kcal',
-              onTap: () {
-                final n = s.copyDayFromYesterday();
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(tr('Copied $n items from yesterday', '$n items van gisteren gekopieerd'))));
-              },
+              onTap: () => copyFromYesterday(context),
             ),
           if (canScanBarcodes)
             action(
@@ -1297,18 +1371,7 @@ class _MealCardState extends State<_MealCard> {
     if (v == 'select') {
       _selection.value = {..._selection.value, for (final e in s.entriesFor(meal)) e.id};
     }
-    if (v == 'copy' && mounted) {
-      final n = s.copyMealFromYesterday(meal);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            n == 0
-                ? tr('You had no ${meal.label.toLowerCase()} yesterday.', 'Gisteren had je geen ${meal.label.toLowerCase()}.')
-                : tr('Copied $n ${n == 1 ? 'item' : 'items'} from yesterday.', '$n ${n == 1 ? 'item' : 'items'} gekopieerd van gisteren.'),
-          ),
-        ),
-      );
-    }
+    if (v == 'copy' && mounted) await copyFromYesterday(context, meal: meal);
   }
 
   @override
@@ -2635,7 +2698,9 @@ Future<void> _copyToDay(BuildContext context, List<DiaryEntry> entries) async {
     initialDate: s.date,
     firstDate: DateTime(today.year - 2),
     lastDate: DateTime(today.year, today.month, today.day + 30),
-    helpText: tr('Copy to which day?', 'Naar welke dag kopiëren?'),
+    // Kort, zodat de titel niet afgekapt wordt; taal van de app en week vanaf maandag (N46)
+    helpText: tr('Copy to', 'Kopiëren naar'),
+    builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),
   );
   if (day == null || !context.mounted) return;
   final n = s.copyEntriesTo(entries, day);

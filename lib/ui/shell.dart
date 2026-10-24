@@ -24,6 +24,7 @@ import 'screens/settings_screen.dart';
 import 'screens/supplements_screen.dart';
 import 'theme.dart';
 import 'widgets/add_menu.dart';
+import 'widgets/tap_guard.dart';
 import 'widgets/avatar.dart';
 import 'widgets/kit.dart';
 import 'widgets/logo.dart';
@@ -161,6 +162,9 @@ class _ShellState extends State<Shell> {
 
   /// Houden bij of een tabblad een scherm open heeft, voor de terugknop (zie [_routesChanged]).
   late final _observers = [for (var i = 0; i < 5; i++) _TabObserver(_routesChanged)];
+
+  /// Ook in een tabblad na het sluiten van een scherm heel even geen tikken (N03, zie tap_guard.dart).
+  late final _guards = [for (var i = 0; i < 5; i++) tapGuard.observer()];
   bool _routesDirty = false;
 
   /// Een scherm geopend of gesloten in een tabblad: na dit beeld opnieuw bouwen, zodat de terugknop van het
@@ -310,7 +314,7 @@ class _ShellState extends State<Shell> {
                 enabled: i == _index,
                 child: Navigator(
                   key: _navigators[i],
-                  observers: [_observers[i]],
+                  observers: [_observers[i], _guards[i]],
                   onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _tabRoot(i)),
                 ),
               ),

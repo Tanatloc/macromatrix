@@ -61,6 +61,7 @@ class AddFoodScreen extends StatefulWidget {
 class _AddFoodScreenState extends State<AddFoodScreen> {
   final _query = TextEditingController();
   final _focus = FocusNode();
+  final _clearFocus = FocusNode(canRequestFocus: false, skipTraversal: true);
   Timer? _debounce;
   List<Food> _local = const [];
   List<Food>? _online;
@@ -89,7 +90,26 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     _debounce?.cancel();
     _query.dispose();
     _focus.dispose();
+    _clearFocus.dispose();
     super.dispose();
+  }
+
+  /// Het zoekveld leegmaken met het kruisje: tekst, selectie en lopende invoer (composing) weg, meteen opnieuw
+  /// tekenen (niet pas na de vertraging van het zoeken) en de focus in het veld houden (N14).
+  void _clear() {
+    _debounce?.cancel();
+    _query.value = TextEditingValue.empty;
+    setState(() {
+      _local = const [];
+      _online = null;
+      _error = null;
+    });
+    // Focus terug (als ze weg was) en het toetsenbord opnieuw aan het veld koppelen: in de browser kon de tik op het
+    // kruisje het invoerveld laten vallen terwijl het scherm nog dacht dat het de focus had
+    if (!_focus.hasFocus) _focus.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.context?.findAncestorStateOfType<EditableTextState>()?.requestKeyboard();
+    });
   }
 
   void _onChanged(String q) {
@@ -413,11 +433,11 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                                     IconButton(
                                       icon: const Icon(Icons.close_rounded, size: 18),
                                       tooltip: tr('Clear', 'Wissen'),
-                                      onPressed: () {
-                                        _query.clear();
-                                        _onChanged('');
-                                        _focus.requestFocus();
-                                      },
+                                      // De knop neemt de focus niet over: anders sloot het veld even zijn verbinding met
+                                      // het toetsenbord, en bleef wat je daarna typte onzichtbaar of kwam het er dubbel
+                                      // in ("breadbread"), of was de focus weg (N14)
+                                      focusNode: _clearFocus,
+                                      onPressed: _clear,
                                     ),
                                   ],
                                 ),
