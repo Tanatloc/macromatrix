@@ -9,6 +9,7 @@ import '../theme.dart';
 import 'avatar.dart';
 import 'badges_view.dart';
 import 'kit.dart';
+import 'pro_widgets.dart';
 
 String _name(String n) => n.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : n;
 
@@ -138,17 +139,26 @@ class _LiveBattle extends StatelessWidget {
     final mine = s.battlePoints(b.week).points;
     final total = (mine + b.otherPoints).clamp(1, 1 << 30);
     final ahead = mine > b.otherPoints, tied = mine == b.otherPoints;
-    Widget side(String? avatar, int level, String name, int points, CrossAxisAlignment align) => Expanded(
+    final supporters = context.watch<Friends?>()?.supporters ?? const <String>{};
+    Widget side(String? avatar, int level, String name, int points, CrossAxisAlignment align, {bool supporter = false}) => Expanded(
       child: Column(
         crossAxisAlignment: align,
         children: [
           LevelAvatar(avatar: avatar, level: level, size: 40),
           const SizedBox(height: 4),
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.ink),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.ink),
+                ),
+              ),
+              if (supporter) ...[const SizedBox(width: 4), const SupporterBadge(compact: true)],
+            ],
           ),
           Text('$points', style: numStyle(22, color: pal.ink)),
         ],
@@ -165,12 +175,12 @@ class _LiveBattle extends StatelessWidget {
         children: [
           Row(
             children: [
-              side(s.avatar, s.level.level, tr('You', 'Jij'), mine, CrossAxisAlignment.start),
+              side(s.avatar, s.level.level, tr('You', 'Jij'), mine, CrossAxisAlignment.start, supporter: proOf(context)?.supporter ?? false),
               Text(
                 'VS',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: pal.ink3),
               ),
-              side(b.otherAvatar, b.otherLevel, _name(b.otherName), b.otherPoints, CrossAxisAlignment.end),
+              side(b.otherAvatar, b.otherLevel, _name(b.otherName), b.otherPoints, CrossAxisAlignment.end, supporter: supporters.contains(b.other)),
             ],
           ),
           const SizedBox(height: 8),
@@ -281,6 +291,11 @@ class _FriendSheet extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: pal.ink),
             ),
+            if (x.supporter)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Center(child: SupporterBadge()),
+              ),
             Text(
               ['Level ${x.level}', ?title].join(' · '),
               textAlign: TextAlign.center,

@@ -12,6 +12,7 @@ import '../../sync/friends.dart';
 import '../theme.dart';
 import 'avatar.dart';
 import 'kit.dart';
+import 'pro_widgets.dart';
 
 String _name(String n) => n.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : n;
 
@@ -419,11 +420,22 @@ class _BoardRow extends StatelessWidget {
           AvatarImage(avatar: entry.avatar, size: 26),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              entry.me ? tr('${entry.name} (you)', '${entry.name} (jij)') : _name(entry.name),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13.5, fontWeight: entry.me ? FontWeight.w600 : FontWeight.w500, color: pal.ink),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    entry.me ? tr('${entry.name} (you)', '${entry.name} (jij)') : _name(entry.name),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13.5, fontWeight: entry.me ? FontWeight.w600 : FontWeight.w500, color: pal.ink),
+                  ),
+                ),
+                // Supporter: jijzelf (Pro), of een vriend met het badge (deelnemers die geen vriend zijn, zien we niet)
+                if (entry.me ? (proOf(context)?.supporter ?? false) : (context.watch<Friends?>()?.supporters.contains(entry.id) ?? false)) ...[
+                  const SizedBox(width: 4),
+                  const SupporterBadge(compact: true),
+                ],
+              ],
             ),
           ),
           Text(tr('${entry.met} of $days days', '${entry.met} van $days dagen'), style: TextStyle(fontSize: 12.5, color: pal.ink2)),

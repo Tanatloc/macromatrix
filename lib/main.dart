@@ -14,6 +14,7 @@ import 'state/app_state.dart';
 import 'sync/account.dart';
 import 'i18n.dart';
 import 'sync/friends.dart';
+import 'sync/pro.dart';
 import 'ui/screens/auth_screens.dart';
 import 'ui/theme.dart';
 import 'ui/widgets/tap_guard.dart';
@@ -55,6 +56,8 @@ Future<void> main() async {
         Provider.value(value: reminders),
         // Niet lui: moet vanaf de start je level en score doorsturen, ook als je het vriendenscherm niet opent
         ChangeNotifierProvider(lazy: false, create: (_) => Friends(state, account)),
+        // Pro-status en fototeller: niet lui, zodat de status na het inloggen meteen opgehaald wordt
+        ChangeNotifierProvider(lazy: false, create: (_) => Pro(account)),
       ],
       child: const MacroMatrixApp(),
     ),
@@ -68,6 +71,10 @@ class MacroMatrixApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mode = context.select<AppState, String>((s) => s.themeMode);
+    // Een extra kleur alleen zolang Pro loopt; anders de standaard (de keuze zelf blijft bewaard)
+    final chosen = context.select<AppState, String>((s) => s.accent);
+    final pro = context.select<Pro?, bool>((p) => p?.isPro ?? false);
+    final accent = effectiveAccent(chosen, pro: pro);
     // Andere taal: nieuwe locale, en _LanguageRebuild bouwt alle schermen opnieuw op. Geen nieuwe sleutel meer op
     // MaterialApp: dat gooide alles weg (terug naar het eerste tabblad, open schermen dicht, dag bleef staan) (P15).
     return ValueListenableBuilder<AppLang>(
@@ -78,8 +85,8 @@ class MacroMatrixApp extends StatelessWidget {
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         title: 'MacroMatrix',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
+        theme: buildTheme(Brightness.light, accent: accent),
+        darkTheme: buildTheme(Brightness.dark, accent: accent),
         themeMode: switch (mode) {
           'light' => ThemeMode.light,
           'dark' => ThemeMode.dark,

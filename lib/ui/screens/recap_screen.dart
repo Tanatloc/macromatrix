@@ -3,11 +3,13 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../i18n.dart';
+import '../../nutrition/nutrients.dart';
 import '../../nutrition/report.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/kit.dart';
+import '../widgets/pro_widgets.dart';
 import '../widgets/share_actions.dart';
 
 /// Maand- of jaaroverzicht, in dezelfde rustige stijl als het weekrapport.
@@ -36,6 +38,8 @@ class RecapScreen extends StatelessWidget {
     final s = context.watch<AppState>();
     final p = context.pal;
     final r = s.recap(from, to, year: year);
+    // Uitgebreid jaaroverzicht alleen met Pro; zonder Pro blijft alles precies zoals het was
+    final extras = year && r != null && (proOf(context)?.isPro ?? false) ? s.recapExtras(from.year) : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -85,9 +89,14 @@ class RecapScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       _Energy(r: r),
                       if (r.split != null) ...[const SizedBox(height: 12), _Macros(r: r)],
-                      if (r.topFoods.isNotEmpty) ...[const SizedBox(height: 12), _TopFoods(r: r)],
+                      if (r.topFoods.isNotEmpty) ...[const SizedBox(height: 12), _TopFoods(r: r, foods: extras?.topFoods)],
                       const SizedBox(height: 12),
                       _Highlights(r: r),
+                      if (extras != null) ...[
+                        const SizedBox(height: 12),
+                        _NutrientHeatmap(x: extras),
+                        if (extras.records.isNotEmpty) ...[const SizedBox(height: 12), _Records(x: extras)],
+                      ],
                       const SizedBox(height: 16),
                       Center(
                         child: FilledButton.tonalIcon(
@@ -575,23 +584,31 @@ class _Macros extends StatelessWidget {
 
 /// Wat je het meest at, met een balkje naar verhouding.
 class _TopFoods extends StatelessWidget {
-  const _TopFoods({required this.r});
+  const _TopFoods({required this.r, this.foods});
   final Recap r;
+
+  /// Met Pro de top 10 van het jaar in plaats van de top 5.
+  final List<(String, int)>? foods;
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    final most = r.topFoods.first.$2;
+    final list = foods != null && foods!.isNotEmpty ? foods! : r.topFoods;
+    final most = list.first.$2;
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(
-            tr('Your top 5', 'Jouw top 5'),
-            subtitle: tr('${fmtInt(r.distinctFoods)} different foods in ${fmtInt(r.entries)} entries', '${fmtInt(r.distinctFoods)} verschillende producten in ${fmtInt(r.entries)} regels'),
+            list.length > 5 ? tr('Your top ${list.length}', 'Jouw top ${list.length}') : tr('Your top 5', 'Jouw top 5'),
+            trailing: list.length > 5 ? const ProTag() : null,
+            subtitle: tr(
+              '${fmtInt(r.distinctFoods)} different foods in ${fmtInt(r.entries)} entries',
+              '${fmtInt(r.distinctFoods)} verschillende producten in ${fmtInt(r.entries)} regels',
+            ),
           ),
           const SizedBox(height: 8),
-          for (final (i, (name, n)) in r.topFoods.indexed)
+          for (final (i, (name, n)) in list.indexed)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
@@ -637,6 +654,152 @@ class _TopFoods extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Pro: per voedingsstof en per maand hoe dicht je bij je doel zat, als een raster van vakjes.
+class _NutrientHeatmap extends StatelessWidget {
+  const _NutrientHeatmap({required this.x});
+  final RecapExtras x;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final months = [for (var m = 1; m <= 12; m++) DateFormat('MMMMM', appLocale).format(DateTime(2026, m))];
+    Color cell(double? f) => f == null ? p.track : Color.lerp(p.brandSoft, p.brand, f.clamp(0.08, 1.0))!;
+    return Panel(
+      key: const ValueKey('recap-heatmap'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Nutrients month by month', 'Voedingsstoffen per maand'),
+            subtitle: tr('Darker means closer to your goal · tap a square', 'Hoe donkerder, hoe dichter bij je doel · tik op een vakje'),
+            trailing: const ProTag(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const SizedBox(width: 92),
+              for (final m in months)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      m,
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: p.ink3),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final e in x.monthNutrients.entries)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1.5),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 92,
+                    child: Text(
+                      nutrientByKey[e.key]?.name ?? e.key,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: p.ink2),
+                    ),
+                  ),
+                  for (final (m, f) in e.value.indexed)
+                    Expanded(
+                      child: Tooltip(
+                        triggerMode: TooltipTriggerMode.tap,
+                        message: f == null
+                            ? tr('${months[m]}: nothing logged', '${months[m]}: niets gelogd')
+                            : '${DateFormat('MMMM', appLocale).format(DateTime(2026, m + 1))} · ${nutrientByKey[e.key]?.name ?? e.key} · '
+                                  '${f >= 1.5 ? '150%+' : fmtPct(f)}',
+                        child: Container(
+                          height: 18,
+                          margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                          decoration: BoxDecoration(color: cell(f), borderRadius: BorderRadius.circular(4)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pro: je records van het jaar.
+class _Records extends StatelessWidget {
+  const _Records({required this.x});
+  final RecapExtras x;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    String day(DateTime d) => DateFormat('d MMMM', appLocale).format(d);
+    (IconData, String, String, String) info(RecapRecord r) => switch (r.kind) {
+      RecapRecordKind.bestScore => (
+        Icons.emoji_events_outlined,
+        tr('Best day', 'Beste dag'),
+        tr('score ${fmtInt(r.value)}', 'score ${fmtInt(r.value)}'),
+        day(r.day),
+      ),
+      RecapRecordKind.mostProtein => (Icons.fitness_center_rounded, tr('Most protein', 'Meeste eiwit'), '${fmtInt(r.value)} g', day(r.day)),
+      RecapRecordKind.mostFiber => (Icons.grass_rounded, tr('Most fibre', 'Meeste vezels'), '${fmtInt(r.value)} g', day(r.day)),
+      RecapRecordKind.mostFoods => (
+        Icons.restaurant_rounded,
+        tr('Most variety in a day', 'Meest gevarieerde dag'),
+        tr('${fmtInt(r.value)} different foods', '${fmtInt(r.value)} verschillende producten'),
+        day(r.day),
+      ),
+      RecapRecordKind.busiestMonth => (
+        Icons.calendar_month_outlined,
+        tr('Most days logged', 'Meeste dagen gelogd'),
+        tr('${fmtInt(r.value)} days', '${fmtInt(r.value)} dagen'),
+        DateFormat('MMMM', appLocale).format(r.day),
+      ),
+    };
+    return Panel(
+      key: const ValueKey('recap-records'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(tr('Your records', 'Jouw records'), trailing: const ProTag()),
+          const SizedBox(height: 6),
+          for (final r in x.records)
+            Builder(
+              builder: (context) {
+                final (icon, label, value, date) = info(r);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Icon(icon, size: 20, color: p.brand),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              label,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
+                            ),
+                            Text(date, style: TextStyle(fontSize: 12, color: p.ink3)),
+                          ],
+                        ),
+                      ),
+                      Text(value, style: numStyle(14, color: p.ink)),
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );

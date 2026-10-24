@@ -14,6 +14,7 @@ import '../widgets/account_card.dart';
 import '../widgets/allergen_picker.dart';
 import '../widgets/kit.dart';
 import '../widgets/macro_schedule.dart';
+import '../widgets/pro_widgets.dart';
 import 'import_screen.dart';
 import 'supplements_screen.dart';
 import '../../i18n.dart';
@@ -215,6 +216,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 10),
                   const AccountCard(),
                   const SizedBox(height: 10),
+                  const ProTile(),
+                  const SizedBox(height: 10),
                   const MacroScheduleCard(),
                   const SizedBox(height: 10),
                   _settings(s, pal),
@@ -326,6 +329,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             selected: s.themeMode,
             onChanged: s.setThemeMode,
           ),
+          const SizedBox(height: 12),
+          const AccentPicker(),
           title(tr('Diary', 'Dagboek')),
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -582,6 +587,79 @@ class _HealthConnectTileState extends State<_HealthConnectTile> {
               TextButton(onPressed: _busy ? null : () => _syncNow(h), child: Text(tr('Import now', 'Nu overnemen'))),
             ],
           ),
+      ],
+    );
+  }
+}
+
+/// Kleur van de app: petrol (standaard, gratis) of een extra kleur met Pro. Zonder Pro staan de extra kleuren er
+/// met een slotje; een tik opent het Pro-scherm.
+class AccentPicker extends StatelessWidget {
+  const AccentPicker({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final pal = context.pal;
+    final isPro = proOf(context)?.isPro ?? false;
+    final current = effectiveAccent(s.accent, pro: isPro);
+    final b = Theme.of(context).brightness;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(tr('Colour', 'Kleur'), style: TextStyle(fontSize: 13, color: pal.ink2)),
+            const SizedBox(width: 8),
+            const ProTag(),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            for (final a in accents)
+              Builder(
+                builder: (context) {
+                  final locked = a.pro && !isPro;
+                  final on = a.id == current;
+                  return Semantics(
+                    button: true,
+                    selected: on,
+                    label: locked ? tr('${a.name} (Pro)', '${a.name} (Pro)') : a.name,
+                    child: Tooltip(
+                      message: locked ? tr('${a.name} · with Pro', '${a.name} · met Pro') : a.name,
+                      child: InkResponse(
+                        key: ValueKey('accent-${a.id}'),
+                        radius: 24,
+                        onTap: () => locked ? openProScreen(context) : s.setAccent(a.id),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: a.brandFor(b),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: on ? pal.ink : Colors.transparent, width: 2.5),
+                          ),
+                          alignment: Alignment.center,
+                          child: on
+                              ? Icon(Icons.check_rounded, size: 18, color: b == Brightness.dark ? a.darkOn : Colors.white)
+                              : locked
+                              ? Icon(
+                                  Icons.lock_outline_rounded,
+                                  size: 15,
+                                  color: (b == Brightness.dark ? a.darkOn : Colors.white).withValues(alpha: 0.9),
+                                )
+                              : null,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
       ],
     );
   }

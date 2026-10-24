@@ -15,6 +15,7 @@ import '../widgets/badges_view.dart';
 import '../widgets/battles_view.dart';
 import '../widgets/challenges_view.dart';
 import '../widgets/kit.dart';
+import '../widgets/pro_widgets.dart';
 import '../../i18n.dart';
 
 enum _Rank { week, level }
@@ -158,6 +159,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           me: true,
           title: s.title,
           showcase: [for (final id in f.showcase) (id, f.tiers[id] ?? 1)],
+          supporter: proOf(context)?.supporter ?? false,
         ),
         for (final x in friends)
           RankRow(
@@ -170,6 +172,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             friend: x,
             title: x.title,
             showcase: x.badges,
+            supporter: x.supporter,
           ),
       ];
       rows.sort(
@@ -231,6 +234,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: pal.ink),
                                 ),
                               ),
+                              if (proOf(context)?.supporter ?? false) ...[const SizedBox(width: 6), const SupporterBadge()],
                               IconButton(
                                 tooltip: tr('Change name', 'Naam wijzigen'),
                                 visualDensity: VisualDensity.compact,
@@ -497,8 +501,12 @@ class RankRow {
     this.friend,
     this.title,
     this.showcase = const [],
+    this.supporter = false,
   });
   final String? title;
+
+  /// Supporter-badge naast de naam.
+  final bool supporter;
   final List<(String, int)> showcase;
   final String name;
   final String? avatar;
@@ -569,6 +577,7 @@ class RankTile extends StatelessWidget {
                             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
                           ),
                         ),
+                        if (r.supporter) const Padding(padding: EdgeInsets.only(left: 4, bottom: 2), child: SupporterBadge(compact: true)),
                         for (final (id, tier) in r.showcase)
                           Padding(
                             padding: const EdgeInsets.only(left: 4, bottom: 2),
