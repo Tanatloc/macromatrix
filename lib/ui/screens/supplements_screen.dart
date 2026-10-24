@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../labs/supplement_advice.dart';
 import '../../nutrition/nutrients.dart';
 import '../../nutrition/supplements.dart';
 import '../../state/app_state.dart';
@@ -243,6 +244,30 @@ double? fromIu(String key, double iu) => switch (iuPerUnit[key]) {
   null => null,
 };
 
+/// Naam die de dosis volgt: "Vitamine D3 25 µg (1000 IE)" wordt bij 50 µg "Vitamine D3 50 µg (2000 IE)" (N71).
+/// Alleen een hoeveelheid die precies één keer in de naam staat, wordt aangepast; een eigen naam zonder
+/// hoeveelheid blijft zoals ze is.
+String renameForDose(String name, Map<String, double> before, Map<String, double> after) {
+  var out = name;
+  String swap(String s, double old, double now, String unit, int decimals) {
+    final number = RegExp.escape(fmtNum(old, decimals)).replaceAll(RegExp(r'[.,]'), '[.,]');
+    final re = RegExp('(?<![\\d.,])$number(?![\\d])(\\s*)($unit)');
+    final hits = re.allMatches(s).toList();
+    if (hits.length != 1) return s;
+    final m = hits.single;
+    return s.replaceRange(m.start, m.end, '${fmtNum(now, decimals)}${m.group(1)}${m.group(2)}');
+  }
+
+  for (final e in before.entries) {
+    final unit = nutrientByKey[e.key]?.unit;
+    final now = after[e.key];
+    if (unit == null || e.key == 'energy' || now == null || now <= 0 || now == e.value) continue;
+    out = swap(out, e.value, now, RegExp.escape(unit), 3);
+    if (iuPerUnit[e.key] case final f?) out = swap(out, e.value * f, now * f, 'IE|IU', 0);
+  }
+  return out;
+}
+
 /// Een ruime maar realistische bovengrens voor wat een supplement per dosis kan bevatten (in de eigen eenheid).
 double supplementCap(String key) {
   const high = {'vit_a', 'vit_d', 'vit_k', 'b9', 'b12', 'biotin', 'b7', 'iodine', 'selenium', 'chromium', 'molybdenum'};
@@ -275,6 +300,30 @@ class _CustomScreenState extends State<_CustomScreen> {
 
   /// Na een poging om te bewaren: bij het veld zelf tonen wat er ontbreekt.
   bool _tried = false;
+
+  /// Zelf aan de naam getypt: dan volgt ze de dosis niet meer.
+  bool _nameTouched = false;
+
+  /// Naam zoals ze was, die de nieuwe dosis volgt zolang je ze zelf niet aanpast.
+  void _followDose() {
+    final old = widget.existing;
+    if (old == null || _nameTouched) return;
+    final now = {for (final k in _amounts.keys) k: ?_value(k)};
+    final name = renameForDose(old.name, old.nutrients, now);
+    if (name != _name.text) _name.text = name;
+  }
+
+  /// Andere eenheid gekozen (µg/mg of IU): het getal omrekenen, zodat de hoeveelheid dezelfde blijft (N71).
+  void _setIu(String key, bool iu) {
+    if (iu == _iu.contains(key)) return;
+    final c = _amounts[key]!;
+    final v = parseNum(c.text);
+    final f = iuPerUnit[key]!;
+    setState(() {
+      iu ? _iu.add(key) : _iu.remove(key);
+      if (v != null) c.text = _fmt(iu ? v * f : v / f);
+    });
+  }
 
   static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : fmtNum(v, 3);
 
@@ -356,13 +405,36 @@ class _CustomScreenState extends State<_CustomScreen> {
   bool get _noName => _name.text.trim().isEmpty;
   bool get _noAmount => !_amounts.keys.any((k) => (_value(k) ?? 0) > 0);
 
-  void _save() {
+  Future<void> _save() async {
     setState(() => _tried = true);
     if (_noName || _noAmount || _amounts.keys.any((k) => _capError(k) != null)) return;
     final values = <String, double>{'energy': 0};
     for (final k in _amounts.keys) {
       final v = _value(k);
       if (v != null && v > 0) values[k] = v;
+    }
+    // Boven de veilige bovengrens per dag: eerst vragen, zoals bij eten (40.000 IE vitamine D is meestal een tikfout
+    // of de verkeerde eenheid)
+    final over = [
+      for (final e in values.entries)
+        if (supplementUpperLimits[e.key] case final limit? when e.value > limit) (e.key, e.value, limit),
+    ];
+    if (over.isNotEmpty) {
+      String line(String k, double v, double limit) {
+        final n = nutrientByKey[k]!;
+        final iu = iuPerUnit[k] == null ? '' : ' (${fmtNum(v * iuPerUnit[k]!, 0)} ${tr('IU', 'IE')})';
+        return tr(
+          '${n.name}: ${fmtNum(v, 3)} ${n.unit}$iu per dose is above the safe upper limit of ${fmtNum(limit)} ${n.unit} a day.',
+          '${n.name}: ${fmtNum(v, 3)} ${n.unit}$iu per dosis is meer dan de veilige bovengrens van ${fmtNum(limit)} ${n.unit} per dag.',
+        );
+      }
+
+      final lines = [for (final (k, v, limit) in over) line(k, v, limit)];
+      final ok = await confirmUnusual(
+        context,
+        '${lines.join('\n')}\n\n${tr('Check the amount and the unit on the label.', 'Kijk de hoeveelheid en de eenheid op het etiket na.')}',
+      );
+      if (!ok || !mounted) return;
     }
     final old = widget.existing;
     Navigator.pop(
@@ -384,7 +456,19 @@ class _CustomScreenState extends State<_CustomScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.existing == null ? tr('Custom supplement', 'Eigen supplement') : tr('Edit supplement', 'Supplement aanpassen')),
-        actions: [TextButton(onPressed: _save, child: Text(tr('Save', 'Bewaren')))],
+      ),
+      // Grote knop onderaan, zoals bij een recept of eigen product (N71)
+      bottomNavigationBar: SafeArea(
+        child: Narrow(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              onPressed: _save,
+              child: Text(tr('Save', 'Opslaan')),
+            ),
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -396,7 +480,7 @@ class _CustomScreenState extends State<_CustomScreen> {
                 TextField(
                   controller: _name,
                   textCapitalization: TextCapitalization.sentences,
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) => setState(() => _nameTouched = true),
                   decoration: InputDecoration(
                     labelText: tr('Name', 'Naam'),
                     hintText: tr('E.g. Magnesium + B6', 'Bv. Magnesium + B6'),
@@ -463,7 +547,7 @@ class _CustomScreenState extends State<_CustomScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: decimalInput,
               onTap: selectAllOnTap(c),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) => setState(_followDose),
               decoration: InputDecoration(
                 isDense: true,
                 // Eenheid als icoon: altijd zichtbaar, ook in een leeg veld. Bij A, D en E kies je µg/mg of IU.
@@ -471,14 +555,17 @@ class _CustomScreenState extends State<_CustomScreen> {
                     ? PopupMenuButton<bool>(
                         tooltip: tr('Unit', 'Eenheid'),
                         initialValue: iu,
-                        onSelected: (v) => setState(() => v ? _iu.add(key) : _iu.remove(key)),
-                        itemBuilder: (_) => [PopupMenuItem(value: false, child: Text(n.unit)), const PopupMenuItem(value: true, child: Text('IU'))],
+                        onSelected: (v) => _setIu(key, v),
+                        itemBuilder: (_) => [
+                          PopupMenuItem(value: false, child: Text(n.unit)),
+                          PopupMenuItem(value: true, child: Text(tr('IU', 'IE'))),
+                        ],
                         child: Padding(
                           padding: const EdgeInsetsDirectional.only(start: 4, end: 4),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(iu ? 'IU' : n.unit, style: unitStyle),
+                              Text(iu ? tr('IU', 'IE') : n.unit, style: unitStyle),
                               const Icon(Icons.arrow_drop_down_rounded, size: 20),
                             ],
                           ),

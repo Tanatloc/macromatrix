@@ -6,6 +6,7 @@ import '../i18n.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/supplements.dart';
 import 'lab_report.dart';
+import 'markers.dart';
 
 enum AdviceKind {
   /// Je neemt te veel of iets wat je niet nodig hebt.
@@ -19,7 +20,7 @@ enum AdviceKind {
 }
 
 class SupplementAdvice {
-  const SupplementAdvice(this.kind, this.title, this.text, {this.catalogId, this.labDay});
+  const SupplementAdvice(this.kind, this.title, this.text, {this.catalogId, this.labDay, this.nutrient, this.bloodValue, this.bloodLow = false});
   final AdviceKind kind;
   final String title, text;
 
@@ -28,7 +29,20 @@ class SupplementAdvice {
 
   /// Dag van de bloedafname waarop het advies steunt (null bij de bovengrenzen).
   final String? labDay;
+
+  /// Voedingsstof waarover het advies gaat (bv. 'vit_d'), om advies uit je bloed en "te veel" samen te nemen.
+  final String? nutrient;
+
+  /// Je bloedwaarde zoals getoond (bv. "49 nmol/L"), en of ze aan de lage kant was.
+  final String? bloodValue;
+  final bool bloodLow;
 }
+
+/// Naam van een voedingsstof midden in een zin: "Vitamine D" wordt "vitamine D", "B6 (pyridoxine)" blijft "B6 …".
+String _inSentence(String name) => name
+    .split(' ')
+    .map((w) => w.contains(RegExp(r'\d')) || (w.length == 1 && w == w.toUpperCase()) || w == w.toUpperCase() ? w : w.toLowerCase())
+    .join(' ');
 
 /// Veilige bovengrenzen per dag voor wat uit supplementen komt (EFSA; magnesium: alleen supplementen, 250 mg).
 const supplementUpperLimits = <String, double>{
@@ -68,51 +82,61 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
   double? value(String key) => labs[key]?.value.standard;
   String? day(String key) => labs[key]?.day;
 
-  // ── Vitamine D (ng/mL): < 20 tekort, 20–30 te weinig, 30–100 goed, > 100 te veel ──
-  if (value('vit_d') case final d?) {
+  // ── Vitamine D: grenzen in nmol/L (< 25 tekort, 25–50 onvoldoende, 50–75 aan de lage kant, > 250 te veel),
+  // getoond in de eenheid van je verslag. Een tekort is pas onder 25 nmol/L (10 ng/mL), zoals bij de Britse en
+  // Europese gezondheidsraden; 25–50 heet onvoldoende, geen "tekort" (N22). Labo's mikken vaak op 75 of meer.
+  if (labs['vit_d'] case final r? when r.value.standard != null) {
     final taking = totals['vit_d'] ?? 0;
-    final shown = '${fmtNum(d, 0)} ng/mL';
-    if (d > 100) {
+    final nmol = r.value.standard! / 0.4;
+    final inNmol = normalizeUnit(r.value.unit ?? '') == 'nmol/l';
+    String vd(double n) => inNmol ? fmtNum(n, 0) : fmtNum(n * 0.4, 0);
+    final u = inNmol ? 'nmol/L' : 'ng/mL';
+    final shown = '${inNmol ? fmtNum(r.value.value, 0) : fmtNum(r.value.standard!, 0)} $u';
+    final bands = tr(
+      'Below ${vd(25)} $u counts as a deficiency, ${vd(25)}–${vd(50)} as insufficient; most labs aim for ${vd(75)} $u or more.',
+      'Onder ${vd(25)} $u heet een tekort, ${vd(25)}–${vd(50)} onvoldoende; de meeste labo\'s mikken op ${vd(75)} $u of meer.',
+    );
+    SupplementAdvice add(AdviceKind kind, String title, String text, {String? catalogId}) =>
+        SupplementAdvice(kind, title, text, catalogId: catalogId, labDay: r.day, nutrient: 'vit_d', bloodValue: shown, bloodLow: nmol < 75);
+    if (nmol > 250) {
       out.add(
-        SupplementAdvice(
+        add(
           AdviceKind.warning,
           tr('Vitamin D: stop supplements', 'Vitamine D: stop met supplementen'),
           tr(
             'Your vitamin D is very high ($shown). Stop vitamin D supplements and discuss this with your doctor.',
             'Je vitamine D is zeer hoog ($shown). Stop met vitamine D-supplementen en bespreek dit met je arts.',
           ),
-          labDay: day('vit_d'),
         ),
       );
-    } else if (d < 20) {
+    } else if (nmol < 50) {
+      final deficient = nmol < 25;
       out.add(
-        SupplementAdvice(
+        add(
           AdviceKind.suggest,
-          tr('Vitamin D: deficiency', 'Vitamine D: tekort'),
+          deficient ? tr('Vitamin D: deficiency', 'Vitamine D: tekort') : tr('Vitamin D: too low', 'Vitamine D: onvoldoende'),
           tr(
-            'Your vitamin D is low ($shown). Usually 25 µg (1000 IU) a day is advised${taking > 0 ? '; you now take ${amount('vit_d')}' : ''}. Ask your doctor whether a higher starting dose is needed and retest after 3 months.',
-            'Je vitamine D is laag ($shown). Meestal is 25 µg (1000 IE) per dag aangeraden${taking > 0 ? '; je neemt nu ${amount('vit_d')}' : ''}. Vraag je arts of een hogere startdosis nodig is en laat na 3 maanden opnieuw meten.',
+            'Your vitamin D is ${deficient ? 'very low' : 'too low'} ($shown). $bands Usually 25 µg (1000 IU) a day is advised${taking > 0 ? '; you now take ${amount('vit_d')}' : ''}. ${deficient ? 'Ask your doctor whether a higher starting dose is needed and retest' : 'Retest'} after 3 months.',
+            'Je vitamine D is ${deficient ? 'erg laag' : 'te laag'} ($shown). $bands Meestal is 25 µg (1000 IE) per dag aangeraden${taking > 0 ? '; je neemt nu ${amount('vit_d')}' : ''}. ${deficient ? 'Vraag je arts of een hogere startdosis nodig is en laat' : 'Laat'} na 3 maanden opnieuw meten.',
           ),
           catalogId: taking >= 25 ? null : 'vitd25',
-          labDay: day('vit_d'),
         ),
       );
-    } else if (d < 30) {
+    } else if (nmol < 75) {
       out.add(
-        SupplementAdvice(
+        add(
           AdviceKind.suggest,
           tr('Vitamin D: on the low side', 'Vitamine D: aan de lage kant'),
           tr(
-            'Your vitamin D is somewhat low ($shown). 10–25 µg (400–1000 IU) a day, especially from October to March, usually brings it above 30.${taking >= 10 ? ' You already take ${amount('vit_d')}.' : ''}',
-            'Je vitamine D is wat laag ($shown). 10–25 µg (400–1000 IE) per dag, zeker van oktober tot maart, brengt het meestal boven 30.${taking >= 10 ? ' Je neemt al ${amount('vit_d')}.' : ''}',
+            'Your vitamin D is somewhat low ($shown). 10–25 µg (400–1000 IU) a day, especially from October to March, usually brings it above ${vd(75)} $u.${taking >= 10 ? ' You already take ${amount('vit_d')}.' : ''}',
+            'Je vitamine D is wat laag ($shown). 10–25 µg (400–1000 IE) per dag, zeker van oktober tot maart, brengt het meestal boven ${vd(75)} $u.${taking >= 10 ? ' Je neemt al ${amount('vit_d')}.' : ''}',
           ),
           catalogId: taking >= 10 ? null : 'vitd10',
-          labDay: day('vit_d'),
         ),
       );
     } else {
       out.add(
-        SupplementAdvice(
+        add(
           taking > 50 ? AdviceKind.warning : AdviceKind.fine,
           tr('Vitamin D: fine', 'Vitamine D: in orde'),
           taking > 50
@@ -124,7 +148,6 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
                   'Your vitamin D is fine ($shown): no high dose needed. In winter, 10 µg (400 IU) a day helps to keep it there.',
                   'Je vitamine D is in orde ($shown): geen hoge dosis nodig. In de winter helpt 10 µg (400 IE) per dag om het zo te houden.',
                 ),
-          labDay: day('vit_d'),
         ),
       );
     }
@@ -145,6 +168,9 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
           ),
           catalogId: taking > 0 ? null : 'fe14',
           labDay: day('ferritin'),
+          nutrient: 'iron',
+          bloodValue: shown,
+          bloodLow: f < 30,
         ),
       );
     } else if (taking > 0) {
@@ -162,6 +188,9 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
                   'Je ijzervoorraad is in orde ($shown). De ${amount('iron')} ijzer uit je supplementen heb je waarschijnlijk niet nodig.',
                 ),
           labDay: day('ferritin'),
+          nutrient: 'iron',
+          bloodValue: shown,
+          bloodLow: f < 30,
         ),
       );
     }
@@ -211,6 +240,9 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
         ),
         catalogId: (totals['b9'] ?? 0) >= 400 ? null : 'folic',
         labDay: day('folate'),
+        nutrient: 'b9',
+        bloodValue: '${fmtNum(v)} µg/L',
+        bloodLow: true,
       ),
     );
   }
@@ -227,11 +259,15 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
         ),
         catalogId: (totals['magnesium'] ?? 0) >= 200 ? null : 'mg200',
         labDay: day('magnesium'),
+        nutrient: 'magnesium',
+        bloodValue: '${fmtNum(v, 2)} mmol/L',
+        bloodLow: true,
       ),
     );
   }
 
-  // ── Alles samen: boven de veilige bovengrens? ──
+  // ── Alles samen: boven de veilige bovengrens? Advies uit je bloed over dezelfde stof gaat erin op: geen
+  // "Vitamine D: tekort" naast "Vitamine D: te veel", wel "je bloedwaarde was laag, maar dit is te veel" (N71) ──
   for (final e in supplementUpperLimits.entries) {
     final total = totals[e.key] ?? 0;
     if (total <= e.value) continue;
@@ -241,14 +277,27 @@ List<SupplementAdvice> supplementAdvice({required Map<String, LabResult> labs, r
       for (final s in supplements)
         if ((s.nutrients[e.key] ?? 0) > 0) s.name,
     ];
+    final blood = out.where((a) => a.nutrient == e.key && a.kind != AdviceKind.warning).firstOrNull;
+    if (blood != null) out.remove(blood);
+    final context = switch (blood) {
+      SupplementAdvice(bloodValue: final v?, bloodLow: true) => tr(
+        ' Your blood value was low ($v), but this is too much: a lower dose is enough to raise it.',
+        ' Je bloedwaarde was laag ($v), maar dit is te veel: een lagere dosis volstaat om ze op te trekken.',
+      ),
+      SupplementAdvice(bloodValue: final v?) => tr(' Your blood value is $v.', ' Je bloedwaarde is $v.'),
+      _ => '',
+    };
+    final name = _inSentence(n.name);
     out.add(
       SupplementAdvice(
         AdviceKind.warning,
         tr('${n.name}: too much', '${n.name}: te veel'),
         tr(
-          'Your supplements together give ${amount(e.key)} ${n.name.toLowerCase()} a day, above the safe upper limit of ${fmtNum(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Leave one out or take a lower dose.',
-          'Je supplementen samen geven ${amount(e.key)} ${n.name.toLowerCase()} per dag, boven de veilige bovengrens van ${fmtNum(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Laat er één weg of neem een lagere dosis.',
+          'Your supplements together give ${amount(e.key)} $name a day, above the safe upper limit of ${fmtNum(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Leave one out or take a lower dose.$context',
+          'Je supplementen samen geven ${amount(e.key)} $name per dag, boven de veilige bovengrens van ${fmtNum(e.value)} ${n.unit}${from.length > 1 ? ' (${from.join(', ')})' : ''}. Laat er één weg of neem een lagere dosis.$context',
         ),
+        labDay: blood?.labDay,
+        nutrient: e.key,
       ),
     );
   }
