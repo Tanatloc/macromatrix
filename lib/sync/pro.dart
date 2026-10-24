@@ -1,6 +1,6 @@
 /// Pro: een abonnement bovenop de gratis app, en de dagteller voor loggen met een foto.
 ///
-/// Bijna alles blijft gratis, voor altijd. Pro geeft onbeperkt loggen met een foto (met een rem van 50 per dag),
+/// Bijna alles blijft gratis, voor altijd. Pro geeft tot 50 foto's per dag,
 /// later AI-functies, en extra's voor wie de app steunt: extra kleuren, een Supporter-badge bij vrienden en een
 /// uitgebreid jaaroverzicht. Spraak, sync, vrienden en uitdagingen blijven gratis.
 ///

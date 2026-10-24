@@ -14,6 +14,7 @@ import '../nutrition/supporter.dart';
 import '../state/app_state.dart';
 import 'account.dart';
 import 'challenges.dart';
+import 'name_filter.dart';
 import 'pro.dart';
 import 'supporter_tracker.dart';
 import '../i18n.dart';
@@ -473,7 +474,10 @@ class Friends extends ChangeNotifier {
     try {
       return await f();
     } catch (e) {
-      error = tr('That did not work. Check your connection and try again.', 'Dat lukte niet. Controleer je verbinding en probeer opnieuw.');
+      // Een geweigerde naam (woordfilter op de server) krijgt een eigen, vriendelijke uitleg
+      error =
+          moderationMessage(e) ??
+          tr('That did not work. Check your connection and try again.', 'Dat lukte niet. Controleer je verbinding en probeer opnieuw.');
       debugPrint('vrienden: $e');
       return null;
     } finally {
@@ -568,7 +572,17 @@ class Friends extends ChangeNotifier {
     }
   }
 
-  Future<void> setName(String n) => load(newName: n);
+  /// Je naam voor vrienden wijzigen. Een naam met een geweigerd woord gaat niet naar de server: dan staat de
+  /// uitleg meteen in [error] (de server weigert hetzelfde, zie name_filter.dart).
+  Future<void> setName(String n) async {
+    final t = n.trim();
+    if (textBlocked(t.length > 40 ? t.substring(0, 40) : t)) {
+      error = nameNotAllowedText;
+      notifyListeners();
+      return;
+    }
+    await load(newName: n);
+  }
 
   /// Korte meldingen voor het vriendenscherm (bv. een geweigerde battle). Het scherm toont ze één keer.
   final List<String> notices = [];

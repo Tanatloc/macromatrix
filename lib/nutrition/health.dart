@@ -679,8 +679,8 @@ HealthCheck? healthCheck(
       bloodTips: [
         if (labs['ldl']?.value.status == 1 || labs['non_hdl']?.value.status == 1)
           tr(
-            'Your cholesterol was high: soluble fibre (oats, barley, legumes, apples) lowers LDL by itself.',
-            'Je cholesterol was hoog: oplosbare vezels (havermout, gerst, peulvruchten, appels) verlagen je LDL op zich al.',
+            'Your cholesterol was above the reference range. Soluble fibre (oats, barley, legumes, apples) is part of general healthy eating advice for cholesterol; talk to your doctor about what suits you.',
+            'Je cholesterol lag boven de normaalwaarden. Oplosbare vezels (havermout, gerst, peulvruchten, appels) horen bij de algemene richtlijnen voor gezond eten bij cholesterol; bespreek met je arts wat bij je past.',
           ),
       ],
       good: tr(

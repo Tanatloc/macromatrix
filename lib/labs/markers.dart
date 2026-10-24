@@ -1,7 +1,8 @@
 /// Bloedwaarden die met voeding te maken hebben: namen zoals labo's ze schrijven (Nederlands, Frans, Engels),
-/// de eenheid waarin de app ze bewaart, omrekeningen, en wat een te lage of te hoge waarde betekent voor je eten.
+/// de eenheid waarin de app ze bewaart, omrekeningen, en korte algemene uitleg bij een waarde buiten de normaal.
 ///
-/// Dit is uitleg, geen diagnose: de teksten verwijzen bij afwijkingen altijd naar je arts.
+/// Dit is uitleg, geen diagnose: geen dosissen en geen mogelijke ziektes of oorzaken (Google Play, gezondheidsapps).
+/// Bij een afwijking verwijzen de teksten altijd naar je arts.
 library;
 
 import '../i18n.dart';
@@ -52,7 +53,7 @@ class LabMarker {
   /// Grenzen als het labo er geen geeft (in [unit]).
   final double? low, high;
 
-  /// (Engels, Nederlands): wat het betekent en wat je eten kan doen.
+  /// (Engels, Nederlands): algemene uitleg en waar de stof in eten zit, met een verwijzing naar je arts.
   final (String, String)? lowText, highText;
   final int decimals;
 }
@@ -116,12 +117,12 @@ const labMarkers = <LabMarker>[
     low: 30,
     high: 100,
     lowText: (
-      'Low vitamin D (aim for 30–100 ng/mL, which is 75–250 nmol/L). Food alone rarely fixes this: oily fish helps, but usually a supplement of 10–25 µg (400–1000 IU) a day is needed, especially from October to March. Discuss the dose with your doctor.',
-      'Weinig vitamine D (streefwaarde 30–100 ng/mL, dat is 75–250 nmol/L). Met eten alleen lukt dat zelden: vette vis helpt, maar meestal is een supplement van 10–25 µg (400–1000 IE) per dag nodig, zeker van oktober tot maart. Bespreek de dosis met je arts.',
+      'Your vitamin D is below the reference range. Vitamin D comes mostly from sunlight; in food it is in oily fish, eggs and fortified products. A low value can have several causes. Talk to your doctor about what it means for you and whether a supplement makes sense.',
+      'Je vitamine D ligt onder de normaalwaarden. Vitamine D komt vooral van zonlicht; in eten zit het in vette vis, eieren en verrijkte producten. Een lage waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent en of een supplement zinvol is.',
     ),
     highText: (
-      'Very high vitamin D, usually from too many supplements. Check what you take and talk to your doctor.',
-      'Zeer veel vitamine D, meestal door te veel supplementen. Kijk na wat je neemt en spreek met je arts.',
+      'Your vitamin D is above the reference range. Talk to your doctor about what it means for you, and mention the supplements you take.',
+      'Je vitamine D ligt boven de normaalwaarden. Bespreek met je arts wat ze voor jou betekent, en vertel welke supplementen je neemt.',
     ),
     decimals: 0,
   ),
@@ -135,12 +136,12 @@ const labMarkers = <LabMarker>[
     convert: {'ng/ml': 1},
     low: 30,
     lowText: (
-      'Your iron stores are low. Eat iron-rich foods (red meat, legumes, wholegrains, dark green vegetables) together with vitamin C (fruit, peppers), and drink tea or coffee between meals rather than with them.',
-      'Je ijzervoorraad is laag. Eet ijzerrijk (rood vlees, peulvruchten, volkoren, donkergroene groenten) samen met vitamine C (fruit, paprika), en drink thee of koffie tussen de maaltijden in plaats van erbij.',
+      'Ferritin shows how much iron your body has stored, and yours is below the reference range. Iron is in foods such as meat, legumes, wholegrains and dark green vegetables; vitamin C in the same meal helps your body take it up. A low value can have several causes. Talk to your doctor about what it means for you and whether a supplement makes sense.',
+      'Ferritine toont hoeveel ijzer je lichaam heeft opgeslagen, en de jouwe ligt onder de normaalwaarden. IJzer zit in onder meer vlees, peulvruchten, volkoren en donkergroene groenten; vitamine C in dezelfde maaltijd helpt je lichaam het op te nemen. Een lage waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent en of een supplement zinvol is.',
     ),
     highText: (
-      'High ferritin can come from inflammation, alcohol, a fatty liver or too much iron. Avoid iron supplements and talk to your doctor.',
-      'Hoge ferritine kan komen door een ontsteking, alcohol, een vette lever of te veel ijzer. Neem geen ijzersupplementen en spreek met je arts.',
+      'Your ferritin is above the reference range. A high value can have several causes. Talk to your doctor about what it means for you. Mention any supplements with iron that you take.',
+      'Je ferritine ligt boven de normaalwaarden. Een hoge waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent. Vertel of je supplementen met ijzer neemt.',
     ),
     decimals: 0,
   ),
@@ -170,8 +171,8 @@ const labMarkers = <LabMarker>[
     ],
     low: 20,
     lowText: (
-      'Little iron available in your blood. See the advice for ferritin.',
-      'Weinig ijzer beschikbaar in je bloed. Zie het advies bij ferritine.',
+      'Your transferrin saturation is below the reference range; see also your ferritin. A low value can have several causes. Talk to your doctor about what it means for you.',
+      'Je transferrineverzadiging ligt onder de normaalwaarden; kijk ook naar je ferritine. Een lage waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent.',
     ),
     decimals: 0,
   ),
@@ -185,8 +186,8 @@ const labMarkers = <LabMarker>[
     convert: {'pg/ml': 1, 'pmol/l': 1.355},
     low: 200,
     lowText: (
-      'Low vitamin B12. It is only in animal foods (fish, meat, eggs, dairy) and fortified products. Eating plant-based or over 50? Then a supplement is often needed.',
-      'Weinig vitamine B12. Die zit alleen in dierlijke producten (vis, vlees, eieren, zuivel) en verrijkte producten. Eet je plantaardig of ben je ouder dan 50? Dan is een supplement vaak nodig.',
+      'Your vitamin B12 is below the reference range. B12 is found in animal foods (fish, meat, eggs, dairy) and in fortified products. A low value can have several causes. Talk to your doctor about what it means for you and whether a supplement makes sense.',
+      'Je vitamine B12 ligt onder de normaalwaarden. B12 zit in dierlijke producten (vis, vlees, eieren, zuivel) en in verrijkte producten. Een lage waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent en of een supplement zinvol is.',
     ),
     decimals: 0,
   ),
@@ -200,8 +201,8 @@ const labMarkers = <LabMarker>[
     convert: {'ng/ml': 1, 'nmol/l': 0.441},
     low: 3.9,
     lowText: (
-      'Low folate. Eat more green leafy vegetables, legumes, oranges and wholegrains. Trying for a baby? Then 400 µg folic acid a day is advised.',
-      'Weinig foliumzuur. Eet meer groene bladgroenten, peulvruchten, sinaasappels en volkoren. Wil je zwanger worden? Dan is 400 µg foliumzuur per dag aangeraden.',
+      'Your folate is below the reference range. Folate is in green leafy vegetables, legumes, oranges and wholegrains. A low value can have several causes. Talk to your doctor about what it means for you and whether a supplement makes sense.',
+      'Je foliumzuur ligt onder de normaalwaarden. Foliumzuur zit in groene bladgroenten, peulvruchten, sinaasappels en volkoren. Een lage waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent en of een supplement zinvol is.',
     ),
   ),
   // ── Vetten ──
@@ -215,8 +216,8 @@ const labMarkers = <LabMarker>[
     convert: {'mmol/l': 38.67},
     high: 115,
     highText: (
-      'High LDL cholesterol raises the risk of heart and vascular disease. Food helps most by: less saturated fat (butter, fatty meat, cheese, pastries), more fibre (oats, legumes) and more unsaturated fats (olive oil, nuts, fish).',
-      'Hoge LDL-cholesterol verhoogt je kans op hart- en vaatziekten. Eten helpt het meest met: minder verzadigd vet (boter, vet vlees, kaas, koeken), meer vezels (havermout, peulvruchten) en meer onverzadigd vet (olijfolie, noten, vis).',
+      'Your LDL cholesterol is above the reference range. Talk to your doctor about what it means for you. In general, healthy eating guidelines advise less saturated fat (butter, fatty meat, cheese, pastries), more fibre (oats, legumes) and more unsaturated fats (olive oil, nuts, fish).',
+      'Je LDL-cholesterol ligt boven de normaalwaarden. Bespreek met je arts wat ze voor jou betekent. Algemene richtlijnen voor gezond eten raden minder verzadigd vet aan (boter, vet vlees, kaas, koeken), meer vezels (havermout, peulvruchten) en meer onverzadigd vet (olijfolie, noten, vis).',
     ),
     decimals: 0,
   ),
@@ -230,8 +231,8 @@ const labMarkers = <LabMarker>[
     convert: {'mmol/l': 38.67},
     low: 40,
     lowText: (
-      'Low HDL ("good") cholesterol. What raises it most: exercise, losing excess weight, not smoking, fewer sugars and refined starches, and unsaturated fats (olive oil, nuts, oily fish) instead of saturated fat.',
-      'Lage HDL-cholesterol (de "goede"). Wat het meest helpt: bewegen, overgewicht verliezen, niet roken, minder suiker en witte bloem, en onverzadigd vet (olijfolie, noten, vette vis) in plaats van verzadigd vet.',
+      'Your HDL cholesterol is below the reference range. Talk to your doctor about what it means for you. In general, healthy living guidelines advise moving regularly, not smoking and choosing unsaturated fats (olive oil, nuts, oily fish) over saturated fat.',
+      'Je HDL-cholesterol ligt onder de normaalwaarden. Bespreek met je arts wat ze voor jou betekent. Algemene richtlijnen voor gezond leven raden aan om regelmatig te bewegen, niet te roken en onverzadigd vet (olijfolie, noten, vette vis) te kiezen boven verzadigd vet.',
     ),
     decimals: 0,
   ),
@@ -264,8 +265,8 @@ const labMarkers = <LabMarker>[
     convert: {'mmol/l': 38.67},
     high: 130,
     highText: (
-      'High non-HDL cholesterol. The same food advice as for LDL helps: less saturated fat, more fibre and unsaturated fats.',
-      'Hoge non-HDL-cholesterol. Hetzelfde voedingsadvies als bij LDL helpt: minder verzadigd vet, meer vezels en onverzadigd vet.',
+      'Your non-HDL cholesterol is above the reference range. Talk to your doctor about what it means for you. The general eating guidelines are the same as for LDL: less saturated fat, more fibre and unsaturated fats.',
+      'Je non-HDL-cholesterol ligt boven de normaalwaarden. Bespreek met je arts wat ze voor jou betekent. De algemene richtlijnen voor eten zijn dezelfde als bij LDL: minder verzadigd vet, meer vezels en onverzadigd vet.',
     ),
     decimals: 0,
   ),
@@ -279,8 +280,8 @@ const labMarkers = <LabMarker>[
     convert: {'mmol/l': 88.57},
     high: 150,
     highText: (
-      'High triglycerides. They drop fastest with less sugar, soft drinks, juice, white bread and alcohol, more exercise and oily fish.',
-      'Hoge triglyceriden. Die dalen het snelst met minder suiker, frisdrank, sap, wit brood en alcohol, meer bewegen en vette vis.',
+      'Your triglycerides are above the reference range. Talk to your doctor about what it means for you. In general, healthy eating guidelines advise limiting sugar, soft drinks, juice and alcohol, and moving more.',
+      'Je triglyceriden liggen boven de normaalwaarden. Bespreek met je arts wat ze voor jou betekent. Algemene richtlijnen voor gezond eten raden aan om suiker, frisdrank, sap en alcohol te beperken en meer te bewegen.',
     ),
     decimals: 0,
   ),
@@ -304,8 +305,8 @@ const labMarkers = <LabMarker>[
     convert: {'mmol/l': 18.016},
     high: 100,
     highText: (
-      'Raised fasting blood sugar. Fewer sugars and refined starches, more fibre and wholegrains, exercise and losing excess weight help. Talk to your doctor about follow-up.',
-      'Verhoogde nuchtere bloedsuiker. Minder suiker en witte bloem, meer vezels en volkoren, bewegen en overgewicht verliezen helpen. Spreek met je arts over opvolging.',
+      'Your fasting glucose is above the reference range. Talk to your doctor about what it means for you and about follow-up. In general, healthy eating guidelines advise fewer sugars and refined starches and more fibre and wholegrains.',
+      'Je nuchtere glucose ligt boven de normaalwaarden. Bespreek met je arts wat ze voor jou betekent en of opvolging nodig is. Algemene richtlijnen voor gezond eten raden minder suiker en witte bloem aan, en meer vezels en volkoren.',
     ),
     decimals: 0,
   ),
@@ -318,8 +319,8 @@ const labMarkers = <LabMarker>[
     aliases: ['hb a1c', 'hba1c', 'hemoglobine a1c', 'geglyceerd hemoglobine', 'hemoglobine glyquee', 'hba1c ngsp', 'hb a1c ngsp'],
     high: 5.7,
     highText: (
-      'Your average blood sugar of the past months is raised. Fewer sugars and refined starches, more fibre, exercise and losing excess weight bring it down. Talk to your doctor.',
-      'Je gemiddelde bloedsuiker van de voorbije maanden is verhoogd. Minder suiker en witte bloem, meer vezels, bewegen en overgewicht verliezen brengen dat omlaag. Spreek met je arts.',
+      'Your HbA1c is above the reference range. Talk to your doctor about what it means for you and about follow-up. In general, healthy eating guidelines advise fewer sugars and refined starches and more fibre.',
+      'Je HbA1c ligt boven de normaalwaarden. Bespreek met je arts wat ze voor jou betekent en of opvolging nodig is. Algemene richtlijnen voor gezond eten raden minder suiker en witte bloem aan, en meer vezels.',
     ),
   ),
   LabMarker(
@@ -342,8 +343,8 @@ const labMarkers = <LabMarker>[
     aliases: ['sgpt', 'alt', 'alat', 'gpt', 'alt sgpt', 'sgpt alt', 'alanine aminotransferase', 'alanine aminotransferase alt', 'transaminase alt'],
     high: 41,
     highText: (
-      'A raised liver value. Often from a fatty liver (excess weight, sugar, alcohol) or hard training the days before. Less alcohol and sugar and losing excess weight help; ask your doctor whether to retest.',
-      'Een verhoogde leverwaarde. Vaak door een vette lever (overgewicht, suiker, alcohol) of zwaar sporten de dagen ervoor. Minder alcohol en suiker en overgewicht verliezen helpen; vraag je arts of je opnieuw moet laten meten.',
+      'This liver value is above the reference range. A high value can have several causes. Talk to your doctor about what it means for you. Ask whether to retest.',
+      'Deze leverwaarde ligt boven de normaalwaarden. Een hoge waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent. Vraag of je opnieuw moet laten meten.',
     ),
     decimals: 0,
   ),
@@ -356,8 +357,8 @@ const labMarkers = <LabMarker>[
     aliases: ['y gt', 'gamma gt', 'ggt', 'g gt', 'gamma glutamyltransferase', 'gamma glutamyl transferase', 'gammagt', 'ygt'],
     high: 60,
     highText: (
-      'Raised gamma-GT, often from alcohol. Drinking less is the first step; talk to your doctor.',
-      'Verhoogde gamma-GT, vaak door alcohol. Minder drinken is de eerste stap; spreek met je arts.',
+      'Your gamma-GT is above the reference range. A high value can have several causes. Talk to your doctor about what it means for you.',
+      'Je gamma-GT ligt boven de normaalwaarden. Een hoge waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent.',
     ),
     decimals: 0,
   ),
@@ -371,8 +372,8 @@ const labMarkers = <LabMarker>[
     convert: {'umol/l': 0.0168, 'mmol/l': 16.8},
     high: 7.2,
     highText: (
-      'High uric acid can cause gout. Less alcohol (beer especially), sugary drinks, organ meat and shellfish help; drink plenty of water.',
-      'Hoog urinezuur kan jicht geven. Minder alcohol (vooral bier), suikerhoudende dranken, orgaanvlees en schaaldieren helpen; drink voldoende water.',
+      'Your uric acid is above the reference range. Talk to your doctor about what it means for you. Uric acid comes partly from purines in food, for example in organ meat, shellfish and beer.',
+      'Je urinezuur ligt boven de normaalwaarden. Bespreek met je arts wat ze voor jou betekent. Urinezuur komt deels van purines in eten, bijvoorbeeld in orgaanvlees, schaaldieren en bier.',
     ),
   ),
   LabMarker(
@@ -384,8 +385,8 @@ const labMarkers = <LabMarker>[
     aliases: ['egfr ckd epi', 'egfr', 'gfr', 'egfr ckd epi 2021', 'dfg', 'egfr mdrd', 'geschatte gfr'],
     low: 60,
     lowText: (
-      'Your kidney function is reduced. Do not eat extra protein or take protein shakes without talking to your doctor, and keep salt low.',
-      'Je nierfunctie is verminderd. Eet geen extra eiwit en neem geen eiwitshakes zonder overleg met je arts, en houd zout laag.',
+      'Your kidney function value (eGFR) is below the reference range. Talk to your doctor about what it means for you, also before you eat extra protein or take protein shakes.',
+      'Je nierfunctiewaarde (eGFR) ligt onder de normaalwaarden. Bespreek met je arts wat ze voor jou betekent, ook voor je extra eiwit eet of eiwitshakes neemt.',
     ),
     decimals: 0,
   ),
@@ -422,8 +423,8 @@ const labMarkers = <LabMarker>[
     convert: {'mg/dl': 0.4114},
     low: 0.7,
     lowText: (
-      'Low magnesium. Eat more nuts, seeds, wholegrains, legumes and green vegetables.',
-      'Weinig magnesium. Eet meer noten, zaden, volkoren, peulvruchten en groene groenten.',
+      'Your magnesium is below the reference range. Magnesium is in nuts, seeds, wholegrains, legumes and green vegetables. A low value can have several causes. Talk to your doctor about what it means for you and whether a supplement makes sense.',
+      'Je magnesium ligt onder de normaalwaarden. Magnesium zit in noten, zaden, volkoren, peulvruchten en groene groenten. Een lage waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent en of een supplement zinvol is.',
     ),
     decimals: 2,
   ),
@@ -449,8 +450,8 @@ const labMarkers = <LabMarker>[
     aliases: ['hemoglobine', 'haemoglobine', 'hemoglobin', 'haemoglobin', 'hb'],
     convert: {'g/l': 0.1, 'mmol/l': 1.611},
     lowText: (
-      'Low haemoglobin (anaemia). Often from too little iron, B12 or folate: look at those values and talk to your doctor.',
-      'Lage hemoglobine (bloedarmoede). Vaak door te weinig ijzer, B12 of foliumzuur: kijk naar die waarden en spreek met je arts.',
+      'Your haemoglobin is below the reference range. A low value can have several causes. Talk to your doctor about what it means for you.',
+      'Je hemoglobine ligt onder de normaalwaarden. Een lage waarde kan verschillende oorzaken hebben. Bespreek met je arts wat ze voor jou betekent.',
     ),
   ),
   LabMarker('mcv', 'MCV (red cell size)', 'MCV (grootte rode bloedcellen)', 'fL', LabGroup.blood, aliases: ['mcv', 'vgm'], decimals: 0),

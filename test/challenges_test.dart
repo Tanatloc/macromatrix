@@ -33,6 +33,17 @@ class FakeChallengeServer implements ChallengeRemote {
     if (missing) throw const ChallengesMissing();
   }
 
+  /// Meldingen van een uitdaging (id → notitie); [reportMissing] = server zonder moderation.sql.
+  final reported = <String, String?>{};
+  bool reportMissing = false;
+
+  @override
+  Future<String> report(String id, String? note) async {
+    if (reportMissing) throw const ChallengeReportMissing();
+    reported[id] = note;
+    return 'reported';
+  }
+
   @override
   Future<String> create(ChallengeTemplate t, DateTime start, List<String> invite) async {
     _check();

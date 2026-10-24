@@ -235,7 +235,8 @@ void main() {
       );
 
       await note(quota(1), false);
-      expect(find.text('2 of 3 free photos left today'), findsOneWidget);
+      expect(find.textContaining('2 of 3 free photos left today'), findsOneWidget);
+      expect(find.textContaining('Read by AI, not stored'), findsOneWidget);
 
       await note(quota(3), false);
       expect(find.byKey(const ValueKey('photo-quota-out')), findsOneWidget);
@@ -311,10 +312,10 @@ void main() {
         ),
       );
       await openSheet(tester, s, pro);
-      expect(find.text('3 of 3 free photos left today'), findsOneWidget);
+      expect(find.textContaining('3 of 3 free photos left today'), findsOneWidget);
       await tester.tap(find.byTooltip('Photo of your meal'));
       await tester.pumpAndSettle();
-      expect(find.text('2 of 3 free photos left today'), findsOneWidget);
+      expect(find.textContaining('2 of 3 free photos left today'), findsOneWidget);
     });
 
     testWidgets('op voor vandaag: geen foto gevraagd, vriendelijke uitleg met Pro-knop', (tester) async {
@@ -342,7 +343,7 @@ void main() {
       pickPlatePhoto = (_) async => Uint8List.fromList(List.filled(2000, 7));
       photoLog = PhotoLog(MockClient((_) async => http.Response(jsonEncode({'error': 'quota', 'used': 3, 'limit': 3, 'pro': false}), 429)));
       await openSheet(tester, s, pro);
-      expect(find.text('1 of 3 free photos left today'), findsOneWidget);
+      expect(find.textContaining('1 of 3 free photos left today'), findsOneWidget);
       await tester.tap(find.byTooltip('Photo of your meal'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('photo-quota-out')), findsOneWidget);
@@ -377,19 +378,20 @@ void main() {
       expect(find.text('Friends, battles and challenges'), findsOneWidget);
       expect(find.text('Quick log by typing or with your voice'), findsOneWidget);
       expect(find.text('What Pro adds'), findsOneWidget);
-      expect(find.textContaining('up to 50 a day'), findsOneWidget);
+      expect(find.text('Logging with a photo: up to 50 photos a day'), findsOneWidget);
+      expect(find.textContaining('Unlimited'), findsNothing);
       expect(find.text('Why Pro?'), findsOneWidget);
       expect(find.textContaining('costs real computing'), findsOneWidget);
       expect(find.text('€2.99'), findsOneWidget);
       expect(find.text('€19.99'), findsOneWidget);
       expect(find.text('Photos today: 1 of 3'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('pro-plan-monthly')));
-      await tester.pump();
-      expect(find.text('Subscribe · €2.99 / month'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('pro-subscribe')));
-      await tester.pumpAndSettle();
+      // Zonder winkel (NoPurchaseProvider): geen actieve abonneerknop, wel meteen "Binnenkort" op die plek (GP-2)
+      expect(find.byKey(const ValueKey('pro-subscribe')), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.byKey(const ValueKey('pro-coming-soon')), findsOneWidget);
       expect(find.textContaining('Coming soon'), findsOneWidget);
+      expect(find.byKey(const ValueKey('pro-renews')), findsNothing);
 
       // Herstellen vraagt de server: niets gevonden
       await tester.tap(find.byKey(const ValueKey('pro-restore')));
@@ -420,8 +422,7 @@ void main() {
       final s = newState();
       await pump(tester, s, null, const ProScreen());
       expect(find.text('Always free'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('pro-subscribe')));
-      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('pro-subscribe')), findsNothing);
       expect(find.textContaining('Coming soon'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('pro-restore')));
       await tester.pumpAndSettle();

@@ -116,6 +116,8 @@ class _AccountCardState extends State<AccountCard> {
   }
 
   Future<void> _delete(Account a) async {
+    // De melding via de bovenste ScaffoldMessenger: na het verwijderen verdwijnt dit scherm (naar welkom)
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final confirm = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -128,8 +130,12 @@ class _AccountCardState extends State<AccountCard> {
             children: [
               Text(
                 tr(
-                  'Your account and all your data will be permanently deleted, also on your other devices. This cannot be undone.',
-                  'Je account en al je gegevens worden definitief gewist, ook op je andere toestellen. Dit kan niet ongedaan worden.',
+                  'Your account and all your data on our server will be permanently deleted, and this device is wiped right away. '
+                      'On other devices where you used MacroMatrix, a copy stays on that device until you uninstall the app or clear '
+                      'its site data. A Google Play subscription does not stop by itself: cancel it in Google Play. This cannot be undone.',
+                  'Je account en al je gegevens op onze server worden definitief gewist, en dit toestel wordt meteen leeggemaakt. '
+                      'Op andere toestellen waar je MacroMatrix gebruikte, blijft een kopie op dat toestel tot je de app verwijdert of '
+                      'de sitegegevens wist. Een abonnement via Google Play stopt niet vanzelf: zeg het op in Google Play. Dit kan niet ongedaan worden.',
                 ),
               ),
               const SizedBox(height: 12),
@@ -152,7 +158,11 @@ class _AccountCardState extends State<AccountCard> {
       ),
     );
     confirm.dispose();
-    if (ok == true) await _run(a.deleteAccount);
+    if (ok != true) return;
+    await _run(a.deleteAccount);
+    if (!a.signedIn) {
+      messenger?.showSnackBar(SnackBar(content: Text(tr('Your account has been deleted.', 'Je account is verwijderd.'))));
+    }
   }
 
   @override

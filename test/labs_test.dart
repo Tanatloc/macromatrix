@@ -252,7 +252,7 @@ void main() {
       expect(find.text('Ferritine'), findsOneWidget);
       await tester.tap(find.text('Ferritine'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('ijzervoorraad is laag'), findsOneWidget);
+      expect(find.textContaining('hoeveel ijzer je lichaam heeft opgeslagen'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

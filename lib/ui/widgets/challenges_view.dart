@@ -9,6 +9,8 @@ import '../../state/challenge_days.dart';
 import '../../sync/account.dart';
 import '../../sync/challenges.dart';
 import '../../sync/friends.dart';
+import '../../sync/name_filter.dart';
+import '../screens/friends_screen.dart' show SafetyMenu;
 import '../theme.dart';
 import 'avatar.dart';
 import 'kit.dart';
@@ -235,9 +237,24 @@ class _InviteCard extends StatelessWidget {
             style: TextStyle(fontSize: 12.5, color: pal.ink2),
           ),
           const SizedBox(height: 2),
-          Text(
-            t.name,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  t.name,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
+                ),
+              ),
+              // De titel is vrije tekst van iemand anders: melden kan meteen hier (GP-7)
+              if (c.reportAvailable)
+                IconButton(
+                  key: Key('challenge-report-invite-${invite.id}'),
+                  tooltip: tr('Report this challenge', 'Deze uitdaging melden'),
+                  icon: Icon(Icons.flag_outlined, size: 20, color: pal.ink3),
+                  style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+                  onPressed: () => showChallengeReportDialog(context, invite.id, t.name),
+                ),
+            ],
           ),
           Text(
             '${tr('Every day', 'Elke dag')} ${t.dailyRule} · ${t.durationText} · '
@@ -267,8 +284,14 @@ class _ChallengeCard extends StatelessWidget {
     final t = challenge.template;
     final status = p.statusOn(today);
     final (icon, color) = _statusLook(context, status);
-    final board = challenge.group ? c.board(challenge, myName: f.name) : const <(int, ChallengeEntry)>[];
-    final waiting = c.waitingFor(challenge);
+    final hide = {for (final b in f.blocked) b.id};
+    final board = challenge.group ? c.board(challenge, myName: f.name, hide: hide) : const <(int, ChallengeEntry)>[];
+    final waiting = [
+      for (final m in c.waitingFor(challenge))
+        if (!hide.contains(m.id)) m,
+    ];
+    // Melden kan bij een groepsuitdaging van iemand anders (jouw eigen titel meld je niet)
+    final canReport = challenge.group && !challenge.owner && challenge.remoteId != null && c.reportAvailable;
     final friends = [
       for (final x in f.list)
         if (x.state == FriendState.friend) x,
@@ -323,14 +346,20 @@ class _ChallengeCard extends StatelessWidget {
                 ),
               ),
               PopupMenuButton<int>(
+                key: Key('challenge-menu-${challenge.id}'),
                 icon: Icon(Icons.more_vert_rounded, color: pal.ink3),
                 itemBuilder: (_) => [
                   if (canInvite) PopupMenuItem(value: 0, child: Text(tr('Invite friends', 'Vrienden uitnodigen'))),
                   PopupMenuItem(value: 1, child: Text(tr('Stop challenge', 'Uitdaging stoppen'))),
+                  if (canReport) PopupMenuItem(value: 2, child: Text(tr('Report challenge', 'Uitdaging melden'))),
                 ],
                 onSelected: (v) async {
                   if (v == 0) {
                     await showInviteSheet(context, challenge);
+                    return;
+                  }
+                  if (v == 2) {
+                    await showChallengeReportDialog(context, challenge.remoteId!, t.name);
                     return;
                   }
                   final ok = await showDialog<bool>(
@@ -433,6 +462,11 @@ class _BoardRow extends StatelessWidget {
             ),
           ),
           Text(tr('${entry.met} of $days days', '${entry.met} van $days dagen'), style: TextStyle(fontSize: 12.5, color: pal.ink2)),
+          // Blokkeren of melden, ook bij medespelers die geen vriend zijn (GP-7)
+          if (!entry.me && (context.watch<Friends?>()?.blockAvailable ?? false))
+            SafetyMenu(id: entry.id, name: entry.name, avatar: entry.avatar)
+          else if (!entry.me)
+            const SizedBox(width: 8),
         ],
       ),
     );
@@ -522,6 +556,9 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
   final _invite = <String>{};
   bool _busy = false;
 
+  /// Wat misliep bij het starten (bv. een titel die de server weigert), onder de knop.
+  String? _error;
+
   /// Gestart: dan mag het blad dicht zonder te vragen.
   bool _done = false;
 
@@ -576,6 +613,8 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
     final need = _need.text.trim().isEmpty ? days : _num(_need)?.round();
     if (need == null || need < 1 || need > days) return null;
     final title = _title.text.trim();
+    // Een titel met een geweigerd woord: niet starten (de server weigert hetzelfde, GP-8)
+    if (textBlocked(title)) return null;
     return ChallengeTemplate(
       id: 'custom',
       nutrient: _nutrient,
@@ -603,7 +642,10 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
       msg = await c.startGroup(t, start, _invite.toList());
     }
     if (!mounted) return;
-    setState(() => _busy = false);
+    setState(() {
+      _busy = false;
+      _error = msg == null ? c.error : null;
+    });
     if (msg != null) {
       _done = true;
       nav.pop();
@@ -729,9 +771,17 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
                     controller: _title,
                     maxLength: 60,
                     onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(labelText: tr('Name (optional)', 'Naam (mag leeg)'), counterText: '', isDense: true),
+                    decoration: InputDecoration(
+                      labelText: tr('Name (optional)', 'Naam (mag leeg)'),
+                      counterText: '',
+                      isDense: true,
+                      errorText: textBlocked(_title.text) ? titleNotAllowedText : null,
+                      errorMaxLines: 3,
+                    ),
                   ),
-                  if (t != null)
+                  if (textBlocked(_title.text))
+                    const SizedBox.shrink()
+                  else if (t != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
@@ -803,6 +853,15 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
                   onPressed: t == null || _busy ? null : _start,
                   child: Text(_invite.isEmpty ? tr('Start challenge', 'Uitdaging starten') : tr('Start and invite', 'Starten en uitnodigen')),
                 ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      _error!,
+                      key: const Key('challenge-start-error'),
+                      style: TextStyle(fontSize: 13, color: pal.high),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -962,6 +1021,85 @@ class ChallengeTodayStrip extends StatelessWidget {
             }(),
         ],
       ),
+    );
+  }
+}
+
+/// Een uitdaging melden om haar titel: bevestigen, eventueel een korte notitie, en de uitkomst als melding (GP-7).
+Future<void> showChallengeReportDialog(BuildContext context, String remoteId, String title) async {
+  final c = context.read<Friends>().challenges;
+  final messenger = ScaffoldMessenger.of(context);
+  final note = await showDialog<String>(
+    context: context,
+    builder: (_) => _ChallengeReportDialog(title: title),
+  );
+  if (note == null) return;
+  final res = await c.report(remoteId, note: note);
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(switch (res) {
+        null => c.error ?? tr('That did not work.', 'Dat lukte niet.'),
+        'not_found' => tr('This challenge no longer exists.', 'Deze uitdaging bestaat niet meer.'),
+        final r => reportMessage(r),
+      }),
+    ),
+  );
+}
+
+class _ChallengeReportDialog extends StatefulWidget {
+  const _ChallengeReportDialog({required this.title});
+  final String title;
+
+  @override
+  State<_ChallengeReportDialog> createState() => _ChallengeReportDialogState();
+}
+
+class _ChallengeReportDialogState extends State<_ChallengeReportDialog> {
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = context.pal;
+    return AlertDialog(
+      title: Text(tr('Report this challenge?', 'Deze uitdaging melden?')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              tr(
+                'Report "${widget.title}" for an inappropriate name. We look at every report; the creator is not told who reported it.',
+                'Meld "${widget.title}" om een ongepaste naam. We bekijken elke melding; wie de uitdaging maakte, hoort niet wie meldde.',
+              ),
+              style: TextStyle(fontSize: 13.5, color: pal.ink2),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: const Key('challenge-report-note'),
+              controller: _note,
+              maxLength: 500,
+              maxLines: 3,
+              minLines: 1,
+              decoration: InputDecoration(hintText: tr('Anything else we should know? (optional)', 'Nog iets dat we moeten weten? (optioneel)')),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel', 'Annuleren'))),
+        FilledButton(
+          key: const Key('challenge-report-send'),
+          onPressed: () => Navigator.pop(context, _note.text),
+          child: Text(tr('Report', 'Melden')),
+        ),
+      ],
     );
   }
 }

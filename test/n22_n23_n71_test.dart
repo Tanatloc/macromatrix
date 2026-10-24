@@ -52,9 +52,9 @@ void main() {
         ]),
         supplements: [],
       ).single;
-      expect(a.title, 'Vitamine D: onvoldoende');
-      expect(a.text, allOf(contains('49 nmol/L'), contains('Onder 25 nmol/L heet een tekort'), isNot(contains('ng/mL'))));
-      expect(a.catalogId, 'vitd25');
+      expect(a.title, 'Vitamine D: laag');
+      expect(a.text, allOf(contains('49 nmol/L'), contains('onder 25 nmol/L geldt als erg laag'), isNot(contains('ng/mL'))));
+      expect(a.catalogId, isNull);
     });
 
     test('een tekort pas onder 25 nmol/L; grenzen in ng/mL als je verslag ng/mL gebruikt', () {
@@ -64,8 +64,8 @@ void main() {
         ]),
         supplements: [],
       ).single;
-      expect(a.title, 'Vitamine D: tekort');
-      expect(a.text, allOf(contains('8 ng/mL'), contains('Onder 10 ng/mL'), isNot(contains('nmol'))));
+      expect(a.title, 'Vitamine D: erg laag');
+      expect(a.text, allOf(contains('8 ng/mL'), contains('onder 10 ng/mL'), isNot(contains('nmol'))));
       final fine = supplementAdvice(
         labs: labs([
           ['Vitamine D', '80', 'nmol/L'],
@@ -89,7 +89,7 @@ void main() {
       final d = a.where((x) => x.title.startsWith('Vitamine D')).toList();
       expect(d, hasLength(1));
       expect(d.single.title, 'Vitamine D: te veel');
-      expect(d.single.text, allOf(contains('vitamine D per dag'), contains('Je bloedwaarde was laag (49 nmol/L), maar dit is te veel')));
+      expect(d.single.text, allOf(contains('vitamine D per dag'), contains('Je bloedwaarde was laag (49 nmol/L). Toch is dit boven de veilige bovengrens')));
       expect(d.single.labDay, '2026-02-03');
     });
 

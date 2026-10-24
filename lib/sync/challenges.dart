@@ -18,6 +18,7 @@ import '../nutrition/challenges.dart';
 import '../state/app_state.dart';
 import '../state/challenge_days.dart';
 import 'account.dart';
+import 'name_filter.dart';
 
 /// De tabellen of functies voor uitdagingen bestaan (nog) niet op de server.
 class ChallengesMissing implements Exception {
@@ -30,6 +31,14 @@ class ChallengesMissing implements Exception {
 const _missingCodes = {'PGRST202', 'PGRST205', '42P01', '42883'};
 
 bool isMissingTable(Object e) => e is PostgrestException && _missingCodes.contains(e.code);
+
+/// De server kent challenge_report nog niet (migratie moderation.sql niet uitgevoerd). Apart van
+/// [ChallengesMissing]: uitdagingen zelf werken dan gewoon.
+class ChallengeReportMissing implements Exception {
+  const ChallengeReportMissing();
+  @override
+  String toString() => 'ChallengeReportMissing';
+}
 
 /// Een deelnemer zoals de server hem kent.
 class RemoteMember {
@@ -118,6 +127,10 @@ abstract class ChallengeRemote {
 
   /// Per dag gehaald of niet (dag als "jjjj-mm-dd").
   Future<void> pushDays(String id, Map<String, bool> days);
+
+  /// Een uitdaging melden om haar titel. Geeft reported, limit of not_found; gooit [ChallengeReportMissing] als de
+  /// server de functie niet kent.
+  Future<String> report(String id, String? note);
 }
 
 String _rule(ChallengeRule r) => r.name;
@@ -171,6 +184,16 @@ class SupabaseChallengeRemote implements ChallengeRemote {
   });
 
   @override
+  Future<String> report(String id, String? note) async {
+    try {
+      return await client.rpc('challenge_report', params: {'p_id': id, 'p_note': note}) as String;
+    } on PostgrestException catch (e) {
+      if (isMissingTable(e)) throw const ChallengeReportMissing();
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> pushDays(String id, Map<String, bool> days) => _guard(() async {
     if (days.isEmpty) return;
     final now = DateTime.now().toUtc().toIso8601String();
@@ -201,6 +224,9 @@ class Challenges extends ChangeNotifier {
   /// false zodra blijkt dat de server geen uitdagingen kent (migratie nog niet uitgevoerd).
   bool groupAvailable = true;
 
+  /// false zodra blijkt dat de server challenge_report niet kent: dan verdwijnt "Uitdaging melden".
+  bool reportAvailable = true;
+
   /// Samen met vrienden kan: ingelogd en de server kent uitdagingen.
   bool get canGroup => remote != null && groupAvailable;
 
@@ -229,6 +255,7 @@ class Challenges extends ChangeNotifier {
       _pushed.clear();
       remoteById = const {};
       groupAvailable = true;
+      reportAvailable = true;
     }
     if (remote == null || !groupAvailable) return;
     _debounce?.cancel();
@@ -244,7 +271,10 @@ class Challenges extends ChangeNotifier {
       groupAvailable = false;
       return null;
     } catch (e) {
-      error = tr('That did not work. Check your connection and try again.', 'Dat lukte niet. Controleer je verbinding en probeer opnieuw.');
+      // Een geweigerde titel (woordfilter op de server) krijgt een eigen, vriendelijke uitleg
+      error =
+          moderationMessage(e) ??
+          tr('That did not work. Check your connection and try again.', 'Dat lukte niet. Controleer je verbinding en probeer opnieuw.');
       debugPrint('uitdagingen: $e');
       return null;
     } finally {
@@ -255,15 +285,37 @@ class Challenges extends ChangeNotifier {
   /// Stand van een uitdaging (uit je eigen dagboek).
   ChallengeProgress progressOf(Challenge c) => state.challengeProgressOf(c);
 
-  /// Ranglijst: jij (met je stand van nu) en de andere deelnemers zoals de server ze kent.
-  List<(int, ChallengeEntry)> board(Challenge c, {String myName = ''}) {
+  /// Ranglijst: jij (met je stand van nu) en de andere deelnemers zoals de server ze kent. [hide]: wie je
+  /// geblokkeerd hebt (de server laat ze ook weg, maar zo verdwijnen ze meteen).
+  List<(int, ChallengeEntry)> board(Challenge c, {String myName = '', Set<String> hide = const {}}) {
     final mine = progressOf(c).met;
     final r = c.remoteId == null ? null : remoteById[c.remoteId];
     return rankChallenge([
       ChallengeEntry(id: 'me', name: myName, avatar: state.avatar, level: state.level.level, met: mine, me: true),
       for (final m in r?.members ?? const <RemoteMember>[])
-        if (!m.me) ChallengeEntry(id: m.id, name: m.name, avatar: m.avatar, level: m.level, met: m.met, accepted: m.accepted),
+        if (!m.me && !hide.contains(m.id)) ChallengeEntry(id: m.id, name: m.name, avatar: m.avatar, level: m.level, met: m.met, accepted: m.accepted),
     ]);
+  }
+
+  /// Een groepsuitdaging (of uitnodiging) melden om haar titel, met een optionele notitie (max. 500 tekens).
+  /// Geeft de uitkomst van de server (reported, limit, not_found), of null bij een fout of zonder de functie.
+  Future<String?> report(String remoteId, {String? note}) async {
+    final r = remote;
+    if (r == null || !reportAvailable) return null;
+    final n = note?.trim() ?? '';
+    error = null;
+    try {
+      return await r.report(remoteId, n.isEmpty ? null : (n.length > 500 ? n.substring(0, 500) : n));
+    } on ChallengeReportMissing {
+      reportAvailable = false;
+      return null;
+    } catch (e) {
+      error = tr('That did not work. Check your connection and try again.', 'Dat lukte niet. Controleer je verbinding en probeer opnieuw.');
+      debugPrint('uitdaging melden: $e');
+      return null;
+    } finally {
+      notifyListeners();
+    }
   }
 
   /// Uitgenodigd maar nog niet aanvaard.

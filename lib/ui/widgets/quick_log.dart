@@ -68,6 +68,15 @@ Future<Uint8List?> _pickPlatePhoto(BuildContext context) async {
               title: Text(tr('Choose a photo', 'Foto kiezen')),
               onTap: () => Navigator.pop(ctx, false),
             ),
+            // Eerlijk zeggen dat een AI de foto leest (GP-12)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Text(
+                photoAiNote,
+                key: const ValueKey('photo-ai-note'),
+                style: TextStyle(fontSize: 12, height: 1.4, color: ctx.pal.ink3),
+              ),
+            ),
             const SizedBox(height: 8),
           ],
         ),

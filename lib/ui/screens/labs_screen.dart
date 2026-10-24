@@ -122,6 +122,27 @@ class LabsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Vaste uitleg bovenaan: dit is geen medische functie (GP-9)
+                  Padding(
+                    key: const ValueKey('labs-disclaimer'),
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline_rounded, size: 16, color: p.ink3),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            tr(
+                              'General information, not medical advice or a diagnosis. Your doctor explains what your results mean for you.',
+                              'Algemene uitleg, geen medisch advies of diagnose. Je arts legt uit wat je uitslagen voor jou betekenen.',
+                            ),
+                            style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   if (all.isEmpty)
                     Panel(
                       child: Column(
@@ -136,8 +157,8 @@ class LabsScreen extends StatelessWidget {
                           const SizedBox(height: 6),
                           Text(
                             tr(
-                              'Read the PDF of your lab report (for example from Helena or your hospital app) or enter values yourself. MacroMatrix then shows what they mean for your eating, and your weekly report gives advice that fits your blood.',
-                              'Lees de PDF van je labo-verslag in (bijvoorbeeld uit Helena of je ziekenhuis-app) of vul waarden zelf in. MacroMatrix toont dan wat ze betekenen voor je eten, en je weekrapport geeft advies dat bij je bloed past.',
+                              'Read the PDF of your lab report (for example from Helena or your hospital app) or enter values yourself. MacroMatrix then shows them next to the reference range, with general information about the nutrients in your food.',
+                              'Lees de PDF van je labo-verslag in (bijvoorbeeld uit Helena of je ziekenhuis-app) of vul waarden zelf in. MacroMatrix toont ze dan naast de normaalwaarden, met algemene uitleg over de voedingsstoffen in je eten.',
                             ),
                             style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
                           ),
@@ -168,8 +189,8 @@ class LabsScreen extends StatelessWidget {
                             off.isEmpty
                                 ? tr('All values the app knows are within range.', 'Alle waarden die de app kent, zijn in orde.')
                                 : tr(
-                                    '${off.length} ${off.length == 1 ? 'value' : 'values'} outside the range: ${off.map((r) => '${r.value.marker!.name} ${r.value.status < 0 ? 'low' : 'high'}').join(', ')}. Tap a value for what it means for your eating.',
-                                    '${off.length} ${off.length == 1 ? 'waarde' : 'waarden'} buiten de normaal: ${off.map((r) => '${r.value.marker!.name} ${r.value.status < 0 ? 'laag' : 'hoog'}').join(', ')}. Tik op een waarde voor wat ze betekent voor je eten.',
+                                    '${off.length} ${off.length == 1 ? 'value' : 'values'} outside the range: ${off.map((r) => '${r.value.marker!.name} ${r.value.status < 0 ? 'low' : 'high'}').join(', ')}. Tap a value for more information.',
+                                    '${off.length} ${off.length == 1 ? 'waarde' : 'waarden'} buiten de normaal: ${off.map((r) => '${r.value.marker!.name} ${r.value.status < 0 ? 'laag' : 'hoog'}').join(', ')}. Tik op een waarde voor meer uitleg.',
                                   ),
                             style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink),
                           ),

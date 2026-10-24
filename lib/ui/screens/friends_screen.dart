@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
 import '../../sync/friends.dart';
+import '../../sync/name_filter.dart';
 import '../theme.dart';
 import '../widgets/account_card.dart';
 import '../../nutrition/badges.dart';
@@ -36,6 +37,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
   final _codeFocus = FocusNode();
   final _name = TextEditingController();
   bool _editingName = false;
+
+  /// Uitleg onder het naamveld als de naam geweigerd werd (woordfilter, GP-8).
+  String? _nameError;
   _Rank _rank = _Rank.week;
   Timer? _poll;
 
@@ -135,8 +139,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   Future<void> _saveName(Friends f) async {
     if (_name.text.trim().isEmpty) return;
+    // Meteen feedback, zonder op de server te wachten (die weigert hetzelfde)
+    if (textBlocked(_name.text)) {
+      setState(() => _nameError = nameNotAllowedText);
+      return;
+    }
     await f.setName(_name.text);
-    if (f.error == null) setState(() => _editingName = false);
+    if (!mounted) return;
+    setState(() {
+      _nameError = f.error == nameNotAllowedText ? f.error : null;
+      if (f.error == null) _editingName = false;
+    });
   }
 
   Future<void> _remove(Friends f, Friend x) async {
@@ -273,7 +286,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
                                     hintText: tr('Your name for friends', 'Je naam voor vrienden'),
                                     counterText: '',
                                     isDense: true,
+                                    errorText: _nameError,
+                                    errorMaxLines: 3,
                                   ),
+                                  onChanged: (_) {
+                                    if (_nameError != null) setState(() => _nameError = null);
+                                  },
                                   onSubmitted: (_) => _saveName(f),
                                 ),
                               ),

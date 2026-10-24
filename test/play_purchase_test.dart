@@ -370,6 +370,16 @@ void main() {
       expect(find.text('£2.49'), findsOneWidget);
       expect(find.text('£16.99'), findsOneWidget);
       expect(find.text('Subscribe · £16.99 / year'), findsOneWidget);
+      // Google-regel voor abonnementen: prijs, plan en automatische verlenging bij de knop (GP-2)
+      expect(find.byKey(const ValueKey('pro-coming-soon')), findsNothing);
+      expect(find.textContaining('MacroMatrix Pro, yearly: £16.99 per year. Renews automatically every year'), findsOneWidget);
+      expect(find.textContaining('Cancel anytime in Google Play'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('pro-plan-monthly')));
+      await tester.pump();
+      expect(find.text('Subscribe · £2.49 / month'), findsOneWidget);
+      expect(find.textContaining('Renews automatically every month'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('pro-plan-yearly')));
+      await tester.pump();
 
       store.onBuy = (prod) => [bought('tok-w1', status: StorePurchaseStatus.pending)];
       await tester.tap(find.byKey(const ValueKey('pro-subscribe')));
@@ -445,9 +455,8 @@ void main() {
       final pro = Pro(_Signed(s.user), remote: () => FakeProRemote(), purchases: p);
       await pump(tester, s, pro, const ProScreen());
       expect(find.text('€19.99'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('pro-subscribe')));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Coming soon'), findsOneWidget);
+      expect(find.byKey(const ValueKey('pro-subscribe')), findsNothing);
+      expect(find.byKey(const ValueKey('pro-coming-soon')), findsOneWidget);
     });
   });
 }

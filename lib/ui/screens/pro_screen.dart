@@ -201,10 +201,7 @@ class _ProScreenState extends State<ProScreen> {
                       const SizedBox(height: 8),
                       bullet(
                         Icons.photo_camera_outlined,
-                        tr(
-                          'Unlimited logging with a photo (fair use: up to $proPhotosPerDay a day)',
-                          "Onbeperkt loggen met een foto (redelijk gebruik: tot $proPhotosPerDay per dag)",
-                        ),
+                        tr('Logging with a photo: up to $proPhotosPerDay photos a day', "Loggen met een foto: tot $proPhotosPerDay foto's per dag"),
                         color: p.brand,
                       ),
                       bullet(
@@ -386,17 +383,23 @@ class _ProScreenState extends State<ProScreen> {
     );
   }
 
+  /// Kan je hier echt abonneren? Alleen als de winkel (Google Play) klaarstaat met onze producten en de server Pro
+  /// kent. Anders geen actieve knop, maar meteen op die plek "Binnenkort" (Google-regel: geen knop die niets doet).
+  static bool canBuy(Pro? pro) => pro != null && pro.available && pro.purchases.available;
+
   Widget _prices(BuildContext context, Pro? pro) {
     final p = context.pal;
+    final buy = canBuy(pro);
     // De prijs van de winkel (in je eigen munt) als die er is, anders de vaste prijs in euro
     String priceOf(ProPlan plan) => pro?.purchases.priceOf(plan) ?? plan.price;
     Widget option(ProPlan plan, String sub) {
-      final on = _plan == plan;
+      final on = buy && _plan == plan;
       return Expanded(
         child: Panel(
           key: ValueKey('pro-plan-${plan.name}'),
           shadow: false,
-          onTap: () => setState(() => _plan = plan),
+          // Zonder winkel valt er niets te kiezen: de kaartjes tonen alleen de prijs
+          onTap: buy ? () => setState(() => _plan = plan) : null,
           color: on ? p.brandSoft : null,
           borderColor: on ? p.brand : null,
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -408,7 +411,11 @@ class _ProScreenState extends State<ProScreen> {
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.ink2),
               ),
               const SizedBox(height: 4),
-              Text(priceOf(plan), key: ValueKey('pro-price-${plan.name}'), style: numStyle(22, color: p.ink)),
+              Text(
+                priceOf(plan),
+                key: ValueKey('pro-price-${plan.name}'),
+                style: numStyle(22, color: p.ink),
+              ),
               Text(sub, style: TextStyle(fontSize: 12, color: p.ink3)),
             ],
           ),
@@ -416,13 +423,29 @@ class _ProScreenState extends State<ProScreen> {
       );
     }
 
+    final price = priceOf(_plan);
+    final renews = _plan == ProPlan.monthly
+        ? tr(
+            'MacroMatrix Pro, monthly: $price per month. Renews automatically every month until you cancel. '
+                'Cancel anytime in Google Play under Payments & subscriptions.',
+            'MacroMatrix Pro, per maand: $price per maand. Verlengt automatisch elke maand tot je opzegt. '
+                'Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
+          )
+        : tr(
+            'MacroMatrix Pro, yearly: $price per year. Renews automatically every year until you cancel. '
+                'Cancel anytime in Google Play under Payments & subscriptions.',
+            'MacroMatrix Pro, per jaar: $price per jaar. Verlengt automatisch elk jaar tot je opzegt. '
+                'Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
+          );
+    final android = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
     return Panel(
       key: const ValueKey('pro-prices'),
       shadow: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PanelTitle(tr('Prices', 'Prijzen'), subtitle: tr('Including VAT. Cancel any time.', 'Btw inbegrepen. Altijd opzegbaar.')),
+          PanelTitle(tr('Prices', 'Prijzen'), subtitle: tr('Including VAT.', 'Btw inbegrepen.')),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -432,11 +455,49 @@ class _ProScreenState extends State<ProScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          FilledButton(
-            key: const ValueKey('pro-subscribe'),
-            onPressed: _busy ? null : () => _subscribe(pro),
-            child: Text(tr('Subscribe · ${_plan.labelFor(priceOf(_plan))}', 'Abonneren · ${_plan.labelFor(priceOf(_plan))}')),
-          ),
+          if (buy) ...[
+            FilledButton(
+              key: const ValueKey('pro-subscribe'),
+              onPressed: _busy ? null : () => _subscribe(pro),
+              child: Text(tr('Subscribe · ${_plan.labelFor(price)}', 'Abonneren · ${_plan.labelFor(price)}')),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              renews,
+              key: const ValueKey('pro-renews'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2),
+            ),
+          ] else
+            // Op de plek van de knop: duidelijk dat kopen nog niet kan
+            Container(
+              key: const ValueKey('pro-coming-soon'),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: BoxDecoration(color: p.sunken, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.schedule_rounded, size: 20, color: p.ink2),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      android
+                          ? tr(
+                              "Coming soon: you'll be able to support MacroMatrix through Google Play. "
+                                  "You can't subscribe in the app yet. Everything that's free stays free.",
+                              'Binnenkort: je kunt MacroMatrix dan steunen via Google Play. Abonneren kan nog niet in '
+                                  'de app. Alles wat gratis is, blijft gratis.',
+                            )
+                          : tr(
+                              "Coming soon: you can't subscribe here yet. Everything that's free stays free.",
+                              'Binnenkort: abonneren kan hier nog niet. Alles wat gratis is, blijft gratis.',
+                            ),
+                      style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (pro?.purchases.pending ?? false)
             Padding(
               padding: const EdgeInsets.only(top: 8),

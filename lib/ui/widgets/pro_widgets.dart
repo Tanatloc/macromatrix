@@ -87,6 +87,12 @@ class ProTag extends StatelessWidget {
   }
 }
 
+/// Uitleg bij loggen met een foto: een AI-model op onze server leest de foto (GP-12).
+String get photoAiNote => tr(
+  'Your photo is read by an AI model on our server and not stored. Check the result before it is added.',
+  'Je foto wordt gelezen door een AI-model op onze server en niet bewaard. Kijk het resultaat na voor het toegevoegd wordt.',
+);
+
 /// Onder de fotoknop in Snel loggen: hoeveel gratis foto's je vandaag nog hebt, of een vriendelijke uitleg als ze op
 /// zijn (met een knop naar Pro). Toont niets als de stand onbekend is (geen account, offline of geen migratie).
 class PhotoQuotaNote extends StatelessWidget {
@@ -106,7 +112,8 @@ class PhotoQuotaNote extends StatelessWidget {
         padding: const EdgeInsets.only(top: 6),
         child: Text(
           key: const ValueKey('photo-quota-left'),
-          tr('${q.left} of ${q.limit} free ${q.limit == 1 ? 'photo' : 'photos'} left today', "Nog ${q.left} van ${q.limit} gratis foto's vandaag"),
+          '${tr('${q.left} of ${q.limit} free ${q.limit == 1 ? 'photo' : 'photos'} left today', "Nog ${q.left} van ${q.limit} gratis foto's vandaag")}. '
+          '${tr('Read by AI, not stored.', 'Gelezen door AI, niet bewaard.')}',
           textAlign: TextAlign.right,
           style: TextStyle(fontSize: 12, color: p.ink3),
         ),
@@ -119,9 +126,9 @@ class PhotoQuotaNote extends StatelessWidget {
           )
         : tr(
             "You've used your ${q.limit} free photos for today. They're back tomorrow. You can still type or say what you ate, "
-                'or get unlimited photos with Pro.',
+                'or get up to $proPhotosPerDay photos a day with Pro.',
             "Je ${q.limit} gratis foto's van vandaag zijn op. Morgen heb je er weer ${q.limit}. Je kunt nog altijd typen of zeggen wat je at, "
-                "of onbeperkt foto's gebruiken met Pro.",
+                "of tot $proPhotosPerDay foto's per dag gebruiken met Pro.",
           );
     return Container(
       key: const ValueKey('photo-quota-out'),
@@ -176,8 +183,8 @@ class ProTile extends StatelessWidget {
                   isPro
                       ? tr('Thank you for supporting MacroMatrix', 'Bedankt om MacroMatrix te steunen')
                       : tr(
-                          'Unlimited photo logging and supporter extras. Everything else stays free.',
-                          "Onbeperkt loggen met foto's en extra's voor supporters. Al de rest blijft gratis.",
+                          'Up to $proPhotosPerDay photos a day and supporter extras. Everything else stays free.',
+                          "Tot $proPhotosPerDay foto's per dag en extra's voor supporters. Al de rest blijft gratis.",
                         ),
                   style: TextStyle(fontSize: 12.5, color: pal.ink2),
                 ),

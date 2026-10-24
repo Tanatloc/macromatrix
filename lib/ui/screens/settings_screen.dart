@@ -10,6 +10,7 @@ import '../../platform/platform.dart';
 import '../../platform/reminders.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/about_links.dart';
 import '../widgets/account_card.dart';
 import '../widgets/allergen_picker.dart';
 import '../widgets/kit.dart';
@@ -21,7 +22,7 @@ import 'supplements_screen.dart';
 import '../../i18n.dart';
 import '../../platform/health_sync.dart';
 
-/// Instellingen: account, weergave, beweging, terugkerende items, gegevens (export en overstappen) en bronnen.
+/// Instellingen: account, weergave, beweging, terugkerende items, gegevens (export en overstappen), bronnen en "Over".
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -508,6 +509,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             style: TextStyle(fontSize: 12, height: 1.5, color: pal.ink2),
           ),
+          // Privacybeleid, voorwaarden, contact en versie: ook na inloggen te vinden (GP-5)
+          title(tr('About', 'Over')),
+          const AboutLinks(),
         ],
       ),
     );
