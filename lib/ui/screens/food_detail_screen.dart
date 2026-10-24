@@ -112,9 +112,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     if (discard == true && mounted) Navigator.of(context).pop();
   }
 
+  /// Voorbij de titel gescrold: de vaste kop toont dan naam en hoeveelheid (N87).
+  final _scrolled = ValueNotifier(false);
+
   @override
   void dispose() {
     _qty.dispose();
+    _scrolled.dispose();
     super.dispose();
   }
 
@@ -500,7 +504,23 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                 child: Row(
                   children: [
                     IconButton(onPressed: () => Navigator.of(context).maybePop(), icon: Icon(Icons.arrow_back_rounded), tooltip: tr('Back', 'Terug')),
-                    const Spacer(),
+                    // Naam en hoeveelheid zodra de titel weggescrold is, zodat je onderaan weet waar de cijfers over gaan
+                    Expanded(
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: _scrolled,
+                        builder: (_, scrolled, _) => AnimatedOpacity(
+                          opacity: scrolled ? 1 : 0,
+                          duration: const Duration(milliseconds: 150),
+                          child: Text(
+                            '${_food.name} · ${_fmt(_grams)} g',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     SquareButton(
                       icon: s.isFavorite(_food.ref) ? Icons.star_rounded : Icons.star_outline_rounded,
                       tooltip: s.isFavorite(_food.ref)
@@ -545,7 +565,12 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
               ),
             ),
             Expanded(
-              child: ListView(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  if (n.depth == 0 && n.metrics.axis == Axis.vertical) _scrolled.value = n.metrics.pixels > 56;
+                  return false;
+                },
+                child: ListView(
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
                   Narrow(
@@ -636,6 +661,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                     ),
                   ),
                 ],
+              ),
               ),
             ),
           ],

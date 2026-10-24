@@ -17,8 +17,11 @@ enum _Period { day, week, month }
 /// Telkens [showDay] afgaat (bv. "Alle voedingsstoffen" in het dagboek), springt het terug naar de dagweergave:
 /// die volgt de dag die in het dagboek gekozen is.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, this.showDay});
+  const DashboardScreen({super.key, this.showDay, this.active = true});
   final Listenable? showDay;
+
+  /// Is dit tabblad zichtbaar? Kom je terug naar het dashboard, dan begint het weer bovenaan (N83).
+  final bool active;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -27,6 +30,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   _Period _period = _Period.day;
   DateTime _anchor = _today();
+  final _scroll = ScrollController();
 
   @override
   void initState() {
@@ -41,10 +45,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       old.showDay?.removeListener(_toDay);
       widget.showDay?.addListener(_toDay);
     }
+    // Terug naar dit tabblad: bovenaan beginnen, anders tik je op wat toevallig onder de vinger staat
+    if (widget.active && !old.active && _scroll.hasClients) _scroll.jumpTo(0);
   }
 
   @override
   void dispose() {
+    _scroll.dispose();
     widget.showDay?.removeListener(_toDay);
     super.dispose();
   }
@@ -139,6 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final wide = c.maxWidth >= twoColumnWidth;
             final mw = wide ? wideMaxWidth : 760.0;
             return ListView(
+              controller: _scroll,
               padding: const EdgeInsets.only(bottom: 32),
               children: [
                 Narrow(

@@ -36,7 +36,11 @@ void showProfileGoals() => profileGoalsRequest.value++;
 /// Profiel en doelen: energie (doel, tempo, formule of adaptief), macro's, voorkeuren, eigen doelen per
 /// voedingsstof en het weekschema. De overige instellingen staan achter het tandwiel.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.goalsOnly = false});
+
+  /// Alleen de doelen, als apart scherm met terugpijl (via "Doelen" op Vandaag). Vroeger landde je halverwege
+  /// het Profiel, zonder titel of weg terug (N83).
+  final bool goalsOnly;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -52,6 +56,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.goalsOnly) return;
     profileGoalsRequest.addListener(_toGoals);
     if (profileGoalsRequest.value > _goalsHandled) _toGoals();
   }
@@ -209,6 +214,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final pal = context.pal;
     final p = s.profile;
 
+    if (widget.goalsOnly) {
+      return Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 32),
+            children: [
+              Narrow(
+                maxWidth: 760,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 6, left: 4),
+                        child: IconButton(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          tooltip: tr('Back', 'Terug'),
+                        ),
+                      ),
+                    ),
+                    PageHeader(eyebrow: tr('Profile', 'Profiel'), title: tr('Goals', 'Doelen')),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _energyCard(s, pal, p),
+                          const SizedBox(height: 10),
+                          _macroCard(s, pal, p),
+                          const SizedBox(height: 10),
+                          _preferencesCard(s, pal),
+                          const SizedBox(height: 10),
+                          _customTargetsCard(s, pal),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -241,6 +294,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   leftFlex: 4,
                   rightFlex: 5,
                   left: [
+                    // Je gegevens bovenaan in plaats van diep in de energiekaart: daar zoekt een nieuwkomer ze (N37)
+                    Panel(
+                      key: const ValueKey('about-you'),
+                      shadow: false,
+                      radius: 16,
+                      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                      onTap: _editBody,
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_outline_rounded, color: pal.brand),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  tr('About you', 'Over jou'),
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: pal.ink),
+                                ),
+                                Text(
+                                  [
+                                    p.sex.label,
+                                    tr('${p.ageIn(DateTime.now().year)} years', '${p.ageIn(DateTime.now().year)} jaar'),
+                                    '${_num(p.heightCm)} cm',
+                                    '${fmtDec(s.currentWeight)} kg',
+                                  ].join(' · '),
+                                  style: TextStyle(fontSize: 12.5, color: pal.ink2),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded, color: pal.ink3),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     const LevelCard(),
                     const SizedBox(height: 10),
                     const BadgesCard(),

@@ -49,9 +49,14 @@ class DiaryScreen extends StatelessWidget {
     final s = context.watch<AppState>();
     final empty = !s.entries.any((e) => !e.foodRef.startsWith('supp:'));
     // 'Profiel invullen' en 'Doelen' horen bij de doelen, niet bovenaan het Profiel bij je level (P03)
+    // Op een gsm een apart Doelen-scherm met terugpijl, in plaats van halverwege het Profiel te landen (N83)
     final onOpenProfile = this.onOpenProfile == null
         ? null
         : () {
+            if (!isDesktop(context)) {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen(goalsOnly: true)));
+              return;
+            }
             this.onOpenProfile!();
             showProfileGoals();
           };
@@ -1740,7 +1745,19 @@ Future<void> addExercise(BuildContext context) async {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Add', 'Toevoegen'))),
+          FilledButton(
+            onPressed: () async {
+              // Ongewone duur of verbranding: vragen terwijl het venster open blijft; "Aanpassen" laat je het
+              // getal verbeteren in plaats van alles te sluiten (N41)
+              final m = parse(minutes), b = parse(kcal) ?? estimate();
+              if (b > 0 && !await confirmExercise(ctx, m, b)) {
+                if (ctx.mounted) selectAllOnTap((m ?? 0) > 300 ? minutes : kcal)();
+                return;
+              }
+              if (ctx.mounted) Navigator.pop(ctx, true);
+            },
+            child: Text(tr('Add', 'Toevoegen')),
+          ),
         ],
       ),
     ),
@@ -1759,7 +1776,6 @@ Future<void> addExercise(BuildContext context) async {
     }
     return;
   }
-  if (!context.mounted || !await confirmExercise(context, parse(minutes), burned)) return;
   s.addExercise(label, burned, minutes: parse(minutes));
 }
 

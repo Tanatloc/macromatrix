@@ -46,7 +46,7 @@ Future<void> showAddMenu(BuildContext context) {
     (Icons.qr_code_scanner_rounded, p.ink, tr('Scan barcode', 'Barcode scannen'), () => push(AddFoodScreen(meal: meal, scan: true))),
     (Icons.bolt_rounded, p.carbs, tr('Quick log', 'Snel loggen'), () => showQuickLog(context, meal: meal)),
     (Icons.directions_run_rounded, p.brand, tr('Exercise', 'Beweging'), () => addExercise(context)),
-    (Icons.monitor_weight_outlined, p.fat, tr('Weight', 'Gewicht'), () => push(const BodyScreen())),
+    (Icons.monitor_weight_outlined, p.fat, tr('Weight', 'Gewicht'), () => push(const BodyScreen(addWeight: true))),
     (Icons.sticky_note_2_outlined, p.fiber, tr('Note', 'Notitie'), () => editNote(context)),
     (Icons.medication_outlined, p.ok, tr('Supplements', 'Supplementen'), () => push(const SupplementsScreen())),
     (Icons.event_note_outlined, p.low, tr('Plan meals', 'Maaltijden plannen'), () => push(const PlannerScreen())),

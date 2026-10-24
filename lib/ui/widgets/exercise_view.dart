@@ -231,7 +231,18 @@ class _ExerciseSheet extends StatelessWidget {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Save', 'Opslaan'))),
+          FilledButton(
+            onPressed: () async {
+              // Ongewone waarde: vragen terwijl het venster open blijft, zodat "Aanpassen" niet alles sluit (N41)
+              final m = parse(minutes), b = parse(kcal);
+              if (b != null && b > 0 && !await confirmExercise(ctx, m, b)) {
+                if (ctx.mounted) selectAllOnTap((m ?? 0) > 300 ? minutes : kcal)();
+                return;
+              }
+              if (ctx.mounted) Navigator.pop(ctx, true);
+            },
+            child: Text(tr('Save', 'Opslaan')),
+          ),
         ],
       ),
     );
@@ -239,7 +250,6 @@ class _ExerciseSheet extends StatelessWidget {
     final burned = parse(kcal);
     final label = name.text.trim();
     if (burned == null || burned <= 0 || label.isEmpty) return;
-    if (!context.mounted || !await confirmExercise(context, parse(minutes), burned)) return;
     s.updateExercise(e, name: label, kcal: burned, minutes: parse(minutes));
   }
 
