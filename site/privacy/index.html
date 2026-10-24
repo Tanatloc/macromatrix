@@ -20,7 +20,7 @@
   <article class="doc">
     <span class="eyebrow">Privacy</span>
     <h1>Privacy policy</h1>
-    <p class="meta">Version of 24 October 2026</p>
+    <p class="meta">Version of 27 October 2026</p>
 
     <div class="box">
       <p style="margin:0"><b style="color:var(--ink)">In short.</b> We only store what is needed to make the app work: your account, your profile and what you log. Your data is stored in the EU, other users cannot access it (except friends you add yourself: they only see your name and your weekly score), we sell nothing and show no ads. You can export or permanently delete everything at any time.</p>
@@ -40,6 +40,7 @@
       <tr><td>Measurements: weight, blood pressure, glucose and other measurements you enter yourself, exercise and fasting</td><td>Showing your progress and estimating your energy use</td></tr>
       <tr><td>Only if you use the friends feature: a name of your choice, your profile photo or avatar, your level, your chosen title and your showcase badges, your friend code, your friends, your battles and, per week, your average Nutrient Score (0–100) with the number of days logged and your battle points</td><td>Adding friends and showing each other's weekly score</td></tr>
       <tr><td>Only if you log with a photo: a counter of how many photos you used per day (one number per day, kept for at most a week). No photos and no description of your meal are stored</td><td>Giving everyone 3 free photos per day, and limiting Pro to a fair 50 per day</td></tr>
+      <tr><td>Only if you scan a label or import a recipe: a counter per kind of how many times you did that per day (one number per day, kept for at most a week). No photos, links or recipes are stored</td><td>Giving everyone 1 free label scan per day, limiting Pro to a fair 30 label scans and 20 recipe imports per day</td></tr>
       <tr><td>Only if you have Pro: until when it runs, where it came from (for example a gift or a store) and whether friends may see your Supporter badge</td><td>Turning on the Pro extras on all your devices</td></tr>
       <tr><td>The moment you accepted the terms and this policy</td><td>Showing that you gave consent</td></tr>
     </table>
@@ -50,6 +51,15 @@
 
     <h2>Logging with a photo</h2>
     <p>If you take or choose a photo of your meal in "Quick log", the app first makes it smaller on your device (at most 1024 pixels) and sends it, with your login, to our server on Cloudflare. There an image model (Cloudflare Workers AI) describes the food it sees, and only that text comes back to the app; you check everything before it is added. The photo is not stored. To share the cost of the image model fairly, we count per account how many photos you used that day (UTC): 3 per day are free, and with Pro up to 50. Only that number is stored, in our database in the EU, and old days are removed after a week.</p>
+
+    <h2>Scanning a label</h2>
+    <p>If a barcode is not found, you can take a photo of the nutrition table (and, if you like, of the front of the pack). The app makes the photos smaller on your device and sends them, with your login, to our server on Cloudflare. There an image model (Cloudflare Workers AI) reads the values, and only those values come back to fill in the form for your own product; you check everything before you save it. The photos are not stored. The product is saved as your own product in your account, like any product you enter yourself. We count per account how many labels you scanned that day (UTC): 1 per day is free, and with Pro up to 30. Only that number is stored.</p>
+
+    <h2>Sharing a product with Open Food Facts (optional)</h2>
+    <p>After you save a scanned product, the app asks whether you want to share it with Open Food Facts, a free public food database, so others can find it too. Only if you tap Share, our server sends Open Food Facts the barcode, the product name, the brand, the nutrition values per 100 g and your photo of the label (and of the front, if you added one), using the MacroMatrix account at Open Food Facts. Nothing about you is sent: not your name, email address or account. What you share becomes public and is published by Open Food Facts under the Open Database Licence (ODbL), with the photos under Creative Commons BY-SA; it can be edited by others and cannot be withdrawn through us. If you tap No, nothing is sent.</p>
+
+    <h2>Importing a recipe (Pro)</h2>
+    <p>With Pro you can import a recipe from a link or from a photo of a cookbook page. For a link, our server on Cloudflare fetches that web page itself (the website sees our server, not you) and reads the recipe from it; if the page has no structured recipe, an AI model (Cloudflare Workers AI) reads the text of the page. A photo is made smaller on your device, sent with your login and read by the image model. Only the recipe name, the number of servings and the ingredient lines come back to the app, and you check everything before the recipe is saved. The link, the page and the photo are not stored. We count per account how many recipes you imported that day (up to 20 with Pro); only that number is stored.</p>
 
     <h2>Pro</h2>
     <p>MacroMatrix is free; Pro is an optional subscription for unlimited photo logging and a few extras for supporters. For Pro we store until when it runs, where it came from and whether your Supporter badge is shown to friends. Paying in the app is not possible yet. When it is, the payment itself is handled by the store or payment provider, and we only receive whether your subscription is active, never your card details.</p>
@@ -76,8 +86,8 @@
       <tr><th>Service</th><th>What</th><th>Where</th></tr>
       <tr><td>Supabase</td><td>Account, database and sync</td><td>Ireland (EU)</td></tr>
       <tr><td>Brevo</td><td>Sending the emails with your code</td><td>France (EU)</td></tr>
-      <tr><td>Cloudflare</td><td>Hosting the website and the web version of the app; passing on barcode lookups to USDA. Cloudflare does not store your account data</td><td>Worldwide network, company in the US (EU standard contractual clauses)</td></tr>
-      <tr><td>Open Food Facts</td><td>Searching branded products: only your search term or barcode, without your account</td><td>France (EU)</td></tr>
+      <tr><td>Cloudflare</td><td>Hosting the website and the web version of the app; passing on barcode lookups to USDA; reading meal photos, label photos, recipe pages and recipe photos with Workers AI (not stored). Cloudflare does not store your account data</td><td>Worldwide network, company in the US (EU standard contractual clauses)</td></tr>
+      <tr><td>Open Food Facts</td><td>Searching branded products: only your search term or barcode, without your account. Only if you choose to share a scanned product: the barcode, name, brand, nutrition values and label photo, without your account (published openly under the ODbL)</td><td>France (EU)</td></tr>
       <tr><td>USDA FoodData Central</td><td>Only if Open Food Facts does not know a product: the barcode, through our own server, so without your account or IP address</td><td>United States</td></tr>
     </table>
     <p>These services only process your data on our behalf, under their data processing agreement (DPA), and may not use it for anything else. A copy of your data is kept on your own device, so the app also works without internet.</p>

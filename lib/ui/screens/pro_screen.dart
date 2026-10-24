@@ -130,6 +130,13 @@ class _ProScreenState extends State<ProScreen> {
                         Icons.check_rounded,
                         tr('Logging with a photo: $freePhotosPerDay photos per day', "Loggen met een foto: $freePhotosPerDay foto's per dag"),
                       ),
+                      bullet(
+                        Icons.check_rounded,
+                        tr(
+                          'Scanning the label of a product that is not found: ${AiKind.label.free} per day',
+                          'Het etiket scannen van een product dat niet gevonden wordt: ${AiKind.label.free} per dag',
+                        ),
+                      ),
                       bullet(Icons.check_rounded, tr('Sync between your devices', 'Synchroniseren tussen je toestellen')),
                       bullet(Icons.check_rounded, tr('Friends, battles and challenges', 'Vrienden, battles en uitdagingen')),
                       bullet(
@@ -165,6 +172,19 @@ class _ProScreenState extends State<ProScreen> {
                           'Unlimited logging with a photo (fair use: up to $proPhotosPerDay a day)',
                           "Onbeperkt loggen met een foto (redelijk gebruik: tot $proPhotosPerDay per dag)",
                         ),
+                        color: p.brand,
+                      ),
+                      bullet(
+                        Icons.menu_book_outlined,
+                        tr(
+                          'Import recipes from a link or a photo of a cookbook page (up to ${AiKind.recipe.pro} a day)',
+                          'Recepten importeren uit een link of een foto van een kookboekpagina (tot ${AiKind.recipe.pro} per dag)',
+                        ),
+                        color: p.brand,
+                      ),
+                      bullet(
+                        Icons.document_scanner_outlined,
+                        tr('Up to ${AiKind.label.pro} label scans a day', 'Tot ${AiKind.label.pro} etiketscans per dag'),
                         color: p.brand,
                       ),
                       bullet(

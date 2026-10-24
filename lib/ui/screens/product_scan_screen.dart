@@ -14,6 +14,7 @@ import '../widgets/allergen_banner.dart';
 import '../widgets/info_tip.dart';
 import '../widgets/kit.dart';
 import 'food_detail_screen.dart';
+import 'label_scan_screen.dart';
 import 'scan_screen.dart';
 import '../widgets/number_input.dart';
 
@@ -301,6 +302,12 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
     return (info, results[1] as AdditiveCatalog);
   }
 
+  /// Niet gevonden: het etiket scannen en daarna meteen toevoegen aan het dagboek (als het bewaard werd).
+  Future<void> _scanLabel() async {
+    final food = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => LabelScanScreen(barcode: widget.code)));
+    if (food != null && mounted) await _addToDiary(food);
+  }
+
   Future<void> _addToDiary(Food food) async {
     final s = context.read<AppState>();
     final full = await s.completeOff(food);
@@ -338,8 +345,14 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
             return _Message(
               icon: Icons.search_off_rounded,
               text: tr(
-                'Barcode ${widget.code} is not in Open Food Facts or the USDA database yet.',
-                'Barcode ${widget.code} staat nog niet in Open Food Facts of de USDA-databank.',
+                'Barcode ${widget.code} is not in Open Food Facts or the USDA database yet. Scan the nutrition label to add it as your own product.',
+                'Barcode ${widget.code} staat nog niet in Open Food Facts of de USDA-databank. Scan het etiket om het als eigen product toe te voegen.',
+              ),
+              action: FilledButton.icon(
+                key: const ValueKey('product-scan-label'),
+                onPressed: _scanLabel,
+                icon: const Icon(Icons.document_scanner_outlined),
+                label: Text(tr('Scan the label', 'Etiket scannen')),
               ),
             );
           }

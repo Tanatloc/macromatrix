@@ -20,6 +20,8 @@ import '../widgets/allergen_banner.dart';
 import '../widgets/kit.dart';
 import 'custom_food_screen.dart';
 import 'food_detail_screen.dart';
+import 'label_scan_screen.dart';
+import 'recipe_import_screen.dart';
 import 'recipe_screen.dart';
 import 'scan_screen.dart';
 import '../widgets/quick_log.dart';
@@ -181,6 +183,16 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     }
   }
 
+  Future<void> _scanLabel(String code) async {
+    final food = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => LabelScanScreen(barcode: code)));
+    if (food != null && mounted) _open(food);
+  }
+
+  Future<void> _importRecipe() async {
+    final food = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => const RecipeImportScreen()));
+    if (food != null && mounted) _open(food);
+  }
+
   void _notFound(String code) {
     showDialog<void>(
       context: context,
@@ -188,18 +200,27 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
         title: Text(tr('Product not found', 'Product niet gevonden')),
         content: Text(
           tr(
-            'Barcode $code is not in Open Food Facts, or has no nutrition values. You can enter it yourself from the packaging.',
-            'Barcode $code staat niet in Open Food Facts, of zonder voedingswaarden. Je kunt het zelf invullen met de gegevens van de verpakking.',
+            'Barcode $code is not in Open Food Facts, or has no nutrition values. Scan the nutrition label, or enter it yourself from the packaging.',
+            'Barcode $code staat niet in Open Food Facts, of zonder voedingswaarden. Scan het etiket met de voedingswaarden, of vul het zelf in met de gegevens van de verpakking.',
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(
+          TextButton(
+            key: const ValueKey('not-found-enter'),
             onPressed: () {
               Navigator.pop(ctx);
               _createCustom(barcode: code);
             },
             child: Text(tr('Enter it yourself', 'Zelf invullen')),
+          ),
+          FilledButton(
+            key: const ValueKey('not-found-scan-label'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _scanLabel(code);
+            },
+            child: Text(tr('Scan the label', 'Etiket scannen')),
           ),
         ],
       ),
@@ -420,10 +441,15 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                     PopupMenuButton<String>(
                       tooltip: tr('New product or recipe', 'Nieuw product of recept'),
                       icon: Icon(Icons.add_box_outlined, color: p.ink),
-                      onSelected: (v) => v == 'recipe' ? _newRecipe() : _createCustom(),
+                      onSelected: (v) => switch (v) {
+                        'recipe' => _newRecipe(),
+                        'import' => _importRecipe(),
+                        _ => _createCustom(),
+                      },
                       itemBuilder: (_) => [
                         PopupMenuItem(value: 'custom', child: Text(tr('Own product (from the label)', 'Eigen product (van het etiket)'))),
                         if (!widget.pickOnly) PopupMenuItem(value: 'recipe', child: Text(tr('New recipe', 'Nieuw recept'))),
+                        if (!widget.pickOnly) PopupMenuItem(value: 'import', child: Text(tr('Import recipe', 'Recept importeren'))),
                       ],
                     ),
                   ],
@@ -561,6 +587,32 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                         _mealsPanel(mealHits, p),
                         const SizedBox(height: 12),
                       ],
+                      // Bij de recepten: ook importeren uit een link of foto (Pro)
+                      if (_scope == _Scope.recipes && !widget.pickOnly)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  key: const ValueKey('recipes-new'),
+                                  onPressed: _newRecipe,
+                                  icon: const Icon(Icons.add_rounded, size: 18),
+                                  label: Text(tr('New recipe', 'Nieuw recept')),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  key: const ValueKey('recipes-import'),
+                                  onPressed: _importRecipe,
+                                  icon: const Icon(Icons.download_rounded, size: 18),
+                                  label: Text(tr('Import recipe', 'Recept importeren')),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       if (grouped && split) ...[
                         SectionHeader(tr('Recent and favourites', 'Recent en favorieten')),
                         for (final g in mine) group(g, 'mine'),

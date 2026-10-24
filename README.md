@@ -69,7 +69,7 @@ More (in Dutch): [docs/ONTWIKKELEN.md](docs/ONTWIKKELEN.md).
 - `lib/data/`: built-in food database, Open Food Facts and USDA clients, local user database
 - `lib/sync/`: accounts, sync and friends (Supabase)
 - `lib/ui/`: screens and widgets
-- `functions/api/`: Cloudflare Pages Functions (search proxy, USDA lookup, speech to text)
+- `functions/api/`: Cloudflare Pages Functions (search proxy, USDA lookup, speech to text, photo logging, label scan, recipe import, sharing with Open Food Facts); shared helpers in `functions/_lib/`. Sharing needs the secrets `OFF_USER` and `OFF_PASSWORD`
 - `supabase/migrations/`: database schema with row level security
 - `tool/`: build scripts for the food database, the site and releases
 

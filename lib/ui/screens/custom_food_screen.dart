@@ -8,13 +8,20 @@ import '../../nutrition/processing.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../../i18n.dart';
+import '../theme.dart';
 import '../widgets/number_input.dart';
 
 /// Eigen product invullen, met de waarden van het etiket (per 100 g).
 class CustomFoodScreen extends StatefulWidget {
-  const CustomFoodScreen({super.key, this.barcode, this.existing});
+  const CustomFoodScreen({super.key, this.barcode, this.existing, this.prefill, this.notice});
   final String? barcode;
   final Food? existing;
+
+  /// Een nieuw product, al ingevuld (bv. van een gelezen etiket). Wordt bij Opslaan een nieuw eigen product.
+  final Food? prefill;
+
+  /// Uitleg bovenaan (bv. "gelezen van je foto, kijk alles na").
+  final String? notice;
 
   @override
   State<CustomFoodScreen> createState() => _CustomFoodScreenState();
@@ -25,14 +32,17 @@ const _labelKeys = ['energy', 'fat', 'sfa', 'carbs', 'sugars', 'fiber', 'protein
 
 class _CustomFoodScreenState extends State<CustomFoodScreen> {
   final _form = GlobalKey<FormState>();
-  late final _name = TextEditingController(text: widget.existing?.name ?? '');
-  late final _brand = TextEditingController(text: widget.existing?.brand ?? '');
-  late final _barcode = TextEditingController(text: widget.existing?.barcode ?? widget.barcode ?? '');
-  late final _portionGrams = TextEditingController(text: _fmt(widget.existing?.portions.firstOrNull?.grams));
+
+  /// Waar de velden mee beginnen: het bestaande product, of het ingevulde ontwerp.
+  Food? get _src => widget.existing ?? widget.prefill;
+  late final _name = TextEditingController(text: _src?.name ?? '');
+  late final _brand = TextEditingController(text: _src?.brand ?? '');
+  late final _barcode = TextEditingController(text: _src?.barcode ?? widget.barcode ?? '');
+  late final _portionGrams = TextEditingController(text: _fmt(_src?.portions.firstOrNull?.grams));
 
   /// Naam van die portie ("1 pot", "1 reep"); leeg = "1 portie".
   late final _portionName = TextEditingController(
-    text: switch (widget.existing?.portions.firstOrNull?.label) {
+    text: switch (_src?.portions.firstOrNull?.label) {
       final l? when !_defaultPortionNames.contains(l) => l,
       _ => '',
     },
@@ -40,16 +50,16 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
   static const _defaultPortionNames = {'1 serving', '1 portie'};
 
   /// Verwerkingsgraad die je zelf kiest; null = weet ik niet (dan raden we niets uit de naam, N72).
-  late Nova? _nova = Nova.of(widget.existing?.nova);
+  late Nova? _nova = Nova.of(_src?.nova);
   late final _salt = TextEditingController(
-    text: _fmt(widget.existing?.per100g['sodium'] == null ? null : widget.existing!.per100g['sodium']! * 2.5 / 1000),
+    text: _fmt(_src?.per100g['sodium'] == null ? null : _src!.per100g['sodium']! * 2.5 / 1000),
   );
   late final Map<String, TextEditingController> _values = {
-    for (final n in nutrients.where((n) => !n.derived)) n.key: TextEditingController(text: _fmt(widget.existing?.per100g[n.key])),
+    for (final n in nutrients.where((n) => !n.derived)) n.key: TextEditingController(text: _fmt(_src?.per100g[n.key])),
   };
 
   /// Vrije of toegevoegde suikers, als je het weet (staat soms op het etiket). Leeg = schatten uit de naam.
-  late final _freeSugars = TextEditingController(text: _fmt(widget.existing?.per100g['free_sugars']));
+  late final _freeSugars = TextEditingController(text: _fmt(_src?.per100g['free_sugars']));
   bool _showAll = false;
 
   static String _fmt(double? v) => v == null ? '' : (v == v.roundToDouble() ? '${v.round()}' : double.parse(v.toStringAsFixed(3)).toString().dec);
@@ -59,7 +69,7 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
   void initState() {
     super.initState();
     // Toon meteen alle velden als het bestaande product meer heeft dan het etiket
-    _showAll = widget.existing?.per100g.keys.any((k) => !_labelKeys.contains(k) && k != 'sodium' && !(nutrientByKey[k]?.derived ?? true)) ?? false;
+    _showAll = _src?.per100g.keys.any((k) => !_labelKeys.contains(k) && k != 'sodium' && !(nutrientByKey[k]?.derived ?? true)) ?? false;
   }
 
   @override
@@ -230,6 +240,23 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               children: [
+                if (widget.notice != null)
+                  Container(
+                    key: const ValueKey('custom-food-notice'),
+                    margin: const EdgeInsets.only(bottom: 12, top: 4),
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    decoration: BoxDecoration(color: context.pal.sunken, borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline_rounded, size: 18, color: context.pal.ink2),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(widget.notice!, style: TextStyle(fontSize: 12.5, color: context.pal.ink2, height: 1.3)),
+                        ),
+                      ],
+                    ),
+                  ),
                 TextFormField(
                   controller: _name,
                   decoration: InputDecoration(labelText: tr('Name', 'Naam')),

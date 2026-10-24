@@ -9,8 +9,10 @@ import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
 import '../widgets/kit.dart';
 import '../widgets/nutrient_row.dart';
+import '../../data/food.dart';
 import 'add_food_screen.dart';
 import 'food_detail_screen.dart';
+import 'recipe_import_screen.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
 import '../widgets/tap_guard.dart';
@@ -19,18 +21,23 @@ import '../widgets/undo.dart';
 /// Recept maken of bewerken: ingrediënten met hun hoeveelheid, aantal porties en (optioneel) het gewicht na
 /// bereiding. Het recept wordt een voedingsmiddel dat je zoals elk product kunt toevoegen.
 class RecipeScreen extends StatefulWidget {
-  const RecipeScreen({super.key, this.existing});
+  const RecipeScreen({super.key, this.existing, this.draft});
   final Recipe? existing;
+
+  /// Een nieuw recept, al ingevuld (bv. geïmporteerd uit een link of foto). Wordt bij Opslaan een nieuw recept.
+  final Recipe? draft;
 
   @override
   State<RecipeScreen> createState() => _RecipeScreenState();
 }
 
 class _RecipeScreenState extends State<RecipeScreen> {
-  late final _name = TextEditingController(text: widget.existing?.name ?? '');
-  late final _servings = TextEditingController(text: _fmt(widget.existing?.servings ?? 1));
-  late final _cooked = TextEditingController(text: widget.existing?.cookedGrams == null ? '' : _fmt(widget.existing!.cookedGrams!));
-  late final List<ItemTemplate> _items = [...?widget.existing?.ingredients];
+  /// Waar de velden mee beginnen: het bestaande recept, of het ingevulde ontwerp.
+  Recipe? get _src => widget.existing ?? widget.draft;
+  late final _name = TextEditingController(text: _src?.name ?? '');
+  late final _servings = TextEditingController(text: _fmt(_src?.servings ?? 1));
+  late final _cooked = TextEditingController(text: _src?.cookedGrams == null ? '' : _fmt(_src!.cookedGrams!));
+  late final List<ItemTemplate> _items = [...?_src?.ingredients];
   final _removeGuard = RemoveGuard();
 
   static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : '$v'.dec;
@@ -112,6 +119,11 @@ class _RecipeScreenState extends State<RecipeScreen> {
     if (t != null && mounted && i < _items.length) setState(() => _items[i] = t);
   }
 
+  Future<void> _import() async {
+    final food = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => const RecipeImportScreen()));
+    if (food != null && mounted) Navigator.of(context).pop(food);
+  }
+
   Future<void> _save() async {
     if (_name.text.trim().isEmpty || _items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -159,7 +171,19 @@ class _RecipeScreenState extends State<RecipeScreen> {
     final perServing = withDerived({for (final e in s.recipeTotalsWithSugars(recipe).entries) e.key: e.value / recipe.servings});
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.existing == null ? tr('New recipe', 'Nieuw recept') : tr('Edit recipe', 'Recept bewerken'))),
+      appBar: AppBar(
+        title: Text(widget.existing == null ? tr('New recipe', 'Nieuw recept') : tr('Edit recipe', 'Recept bewerken')),
+        actions: [
+          // Een nieuw, leeg recept: ook importeren uit een link of foto (Pro)
+          if (widget.existing == null && widget.draft == null && _items.isEmpty)
+            TextButton.icon(
+              key: const ValueKey('recipe-import'),
+              onPressed: _import,
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: Text(tr('Import', 'Importeren')),
+            ),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         child: Center(
           heightFactor: 1,

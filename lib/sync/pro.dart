@@ -23,6 +23,38 @@ import 'purchase.dart';
 const freePhotosPerDay = 3;
 const proPhotosPerDay = 50;
 
+/// De andere AI-functies met een dagteller op de server (ai_quota_use, migratie 20261027000000_ai_quota.sql).
+enum AiKind {
+  /// Een etiket lezen als een barcode nergens gevonden werd: 1 per dag gratis, 30 met Pro.
+  label(free: 1, pro: 30),
+
+  /// Een recept importeren uit een link of foto: alleen met Pro, 20 per dag.
+  recipe(free: 0, pro: 20);
+
+  const AiKind({required this.free, required this.pro});
+
+  /// Moeten gelijk zijn aan ai_limit() op de server.
+  final int free, pro;
+
+  int limitFor(bool isPro) => isPro ? pro : free;
+
+  /// Alleen met Pro (gratis 0 per dag).
+  bool get proOnly => free == 0;
+}
+
+/// De dagteller voor de AI-functies bestaat (nog) niet op de server.
+class AiQuotaMissing implements Exception {
+  const AiQuotaMissing();
+  @override
+  String toString() => 'AiQuotaMissing';
+}
+
+/// Voor de AI-tellers: los van [ProRemote], zodat een server (of een nabootsing) zonder die tellers gewoon werkt.
+abstract class AiQuotaRemote {
+  /// Gooit [AiQuotaMissing] als de migratie er nog niet staat.
+  Future<PhotoQuota?> aiQuota(AiKind kind);
+}
+
 /// De functies voor Pro bestaan (nog) niet op de server.
 class ProMissing implements Exception {
   const ProMissing();
@@ -101,7 +133,7 @@ abstract class ProRemote {
   Future<void> showBadge(bool show);
 }
 
-class SupabaseProRemote implements ProRemote {
+class SupabaseProRemote implements ProRemote, AiQuotaRemote {
   SupabaseProRemote(this.client);
   final SupabaseClient client;
 
@@ -125,6 +157,16 @@ class SupabaseProRemote implements ProRemote {
 
   @override
   Future<void> showBadge(bool show) => _guard(() => client.rpc('pro_show_badge', params: {'p_show': show}));
+
+  @override
+  Future<PhotoQuota?> aiQuota(AiKind kind) async {
+    try {
+      return PhotoQuota.fromJson(await client.rpc('ai_quota', params: {'p_kind': kind.name}));
+    } on PostgrestException catch (e) {
+      if (isMissingTable(e)) throw const AiQuotaMissing();
+      rethrow;
+    }
+  }
 }
 
 class Pro extends ChangeNotifier {
@@ -198,7 +240,9 @@ class Pro extends ChangeNotifier {
     // Ander account: niets van het vorige onthouden
     _uid = uid;
     _quota = null;
+    _ai.clear();
     available = true;
+    aiAvailable = true;
     _loadCache();
     notifyListeners();
     if (uid != null) unawaited(refresh());
@@ -253,6 +297,59 @@ class Pro extends ChangeNotifier {
     _quota = q;
     available = true;
     // De server zegt iets anders over Pro dan wat we bewaarden: status opnieuw ophalen
+    if (q.pro != status.activeAt(_clock())) unawaited(refresh());
+    notifyListeners();
+  }
+
+  // --- De AI-tellers (etiket lezen, recept importeren)
+
+  final Map<AiKind, PhotoQuota> _ai = {};
+
+  /// false zodra blijkt dat de server de AI-tellers niet kent (migratie 20261027000000 nog niet uitgevoerd). Een
+  /// etiket lezen werkt dan zonder teller; een recept importeren kan dan niet (Pro is niet na te kijken).
+  bool aiAvailable = true;
+
+  /// Stand van de teller voor [kind] vandaag (null = onbekend). In een debug-build met Pro nagebootst: de grens die
+  /// je met (of zonder) Pro zou zien.
+  PhotoQuota? aiQuota(AiKind kind) {
+    final q = _ai[kind]?.on(_clock());
+    if (q == null) return null;
+    final dbg = debugPro;
+    if (dbg == null || q.pro == dbg) return q;
+    return PhotoQuota(used: q.used, limit: kind.limitFor(dbg), pro: dbg, day: q.day);
+  }
+
+  /// Mag je [kind] nu gebruiken, volgens wat de app weet? De server beslist altijd zelf; dit is voor de knoppen.
+  /// Een recept importeren alleen met Pro (of met Pro nagebootst in een debug-build).
+  bool canUse(AiKind kind) {
+    if (kind.proOnly && !isPro) return false;
+    return aiQuota(kind)?.allowed ?? true;
+  }
+
+  /// De AI-teller van [kind] ophalen (bij het openen van het etiket- of receptscherm).
+  Future<void> refreshAiQuota(AiKind kind) async {
+    final ai = switch (remote) {
+      final AiQuotaRemote a => a,
+      _ => null,
+    };
+    if (ai == null || !aiAvailable) return;
+    try {
+      final q = await ai.aiQuota(kind);
+      if (q != null) _ai[kind] = q;
+    } on AiQuotaMissing {
+      aiAvailable = false;
+    } on ProMissing {
+      aiAvailable = false;
+    } catch (e) {
+      debugPrint('pro ai: $e');
+    }
+    notifyListeners();
+  }
+
+  /// Stand die /api/label of /api/recipe meestuurde (na gebruik, of bij "op" met een 429).
+  void noteAiQuota(AiKind kind, PhotoQuota q) {
+    _ai[kind] = q;
+    aiAvailable = true;
     if (q.pro != status.activeAt(_clock())) unawaited(refresh());
     notifyListeners();
   }
