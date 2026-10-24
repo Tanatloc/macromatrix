@@ -128,10 +128,16 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   /// Plus en min: per portie (per halve onder 2), in gram per 10 tot 100 g en daarboven per 25 (P19).
   void _stepBy({required bool up}) => _setQuantity(stepQuantity(_quantity, up: up, portion: _portion != null));
 
-  void _choose(Portion? p, {double? quantity}) => setState(() {
-    _portion = p;
-    _qty.text = _fmt(quantity ?? (p == null ? 100 : 1));
-  });
+  /// Andere eenheid kiezen (N43): naar gram rekent de hoeveelheid om (3 kommen skyr = 450 g, niet 100 g); een portie
+  /// begint op 1. Nog eens op de gekozen eenheid tikken verandert niets.
+  void _choose(Portion? p) {
+    if (p?.label == _portion?.label) return;
+    setState(() {
+      final grams = _grams;
+      _portion = p;
+      _qty.text = _fmt(p == null ? (grams > 0 ? grams.roundToDouble() : 100) : 1);
+    });
+  }
 
   /// Al aan het bewaren: een dubbele tik op Toevoegen voegt niets dubbel toe.
   bool _saving = false;
@@ -178,11 +184,57 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     }
     final e = widget.entry;
     if (e == null) {
-      s.addFood(_food, meal: _meal, grams: _grams, quantity: quantity, portionLabel: _portion?.label, time: _time);
+      _add(s, quantity);
+      return;
+    }
+    s.updateEntry(e, meal: _meal, grams: _grams, quantity: quantity, portionLabel: _portion?.label, time: _time);
+    Navigator.of(context).pop(true);
+  }
+
+  /// Nieuw toevoegen, met dezelfde korte melding en Ongedaan maken als bij Recent en Snel loggen (N62). Staat het
+  /// product al in deze maaltijd, dan wordt het bijgeteld; in een andere eenheid (250 g naast 1 kom) in gram.
+  /// Ongedaan maken draait alleen deze toevoeging terug.
+  void _add(AppState s, double quantity) {
+    final grams = _grams;
+    final label = _portion?.label;
+    final meal = _meal.label.toLowerCase();
+    final unit = switch (_portion) {
+      final EverydayPortion x => x.short,
+      final x? => x.label,
+      null => '',
+    };
+    final amount = _portion == null ? '${_fmt(grams)} g' : (quantity == 1 ? unit : '${_fmt(quantity)} × $unit');
+    final messenger = ScaffoldMessenger.of(context);
+    final String message;
+    final VoidCallback undo;
+
+    final same = s.user.mergeTarget(day: s.day, meal: _meal, food: _food, portionLabel: label, time: _time);
+    final other = same == null
+        ? s.user.mergeTarget(day: s.day, meal: _meal, food: _food, portionLabel: label, time: _time, otherUnit: true)
+        : null;
+    final row = other == null ? null : s.entries.where((x) => x.id == other.id).firstOrNull;
+    if (row != null) {
+      // Zelfde product in een andere eenheid: samen in één regel, in gram
+      final total = row.grams + grams;
+      s.updateEntry(row, meal: row.meal, grams: total, quantity: total, portionLabel: null, time: row.time);
+      undo = () =>
+          s.updateEntry(row, meal: row.meal, grams: row.grams, quantity: row.quantity, portionLabel: row.portionLabel, time: row.time);
+      message = tr(
+        '${_food.name}: $amount added to $meal (now ${_fmt(total)} g in one line)',
+        '${_food.name}: $amount bijgeteld bij $meal (nu ${_fmt(total)} g in één regel)',
+      );
     } else {
-      s.updateEntry(e, meal: _meal, grams: _grams, quantity: quantity, portionLabel: _portion?.label, time: _time);
+      final added = s.addFood(_food, meal: _meal, grams: grams, quantity: quantity, portionLabel: label, time: _time);
+      undo = () => s.undoAdds([added]);
+      if (added.merged) {
+        final now = _portion == null ? '${_fmt(added.prevGrams! + grams)} g' : _fmt(added.prevQuantity! + quantity);
+        message = tr('${_food.name}: $amount added to $meal (now $now)', '${_food.name}: $amount bijgeteld bij $meal (nu $now)');
+      } else {
+        message = tr('${_food.name} ($amount) added to $meal', '${_food.name} ($amount) toegevoegd aan $meal');
+      }
     }
     Navigator.of(context).pop(true);
+    showUndo(null, message, undo, messenger: messenger);
   }
 
   Future<void> _pickTime() async {
@@ -313,13 +365,31 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final recipe = context.read<AppState>().user.recipe(_food.ref);
     if (recipe == null) return;
     final updated = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => RecipeScreen(existing: recipe)));
-    if (updated != null) setState(() => _food = updated);
+    if (updated != null && mounted) _replaceFood(updated);
   }
 
   Future<void> _editCustom() async {
     final updated = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => CustomFoodScreen(existing: _food)));
-    if (updated != null) setState(() => _food = updated);
+    if (updated != null && mounted) _replaceFood(updated);
   }
+
+  /// Na het bewerken van een recept of eigen product: de oude portie (bv. "1/4 van het recept = 240 g") hoort niet
+  /// meer bij het nieuwe product (N59). Het scherm begint opnieuw op 1 verse portie; bij het wijzigen van een
+  /// dagboekregel blijft het aantal porties staan, in de nieuwe portie.
+  void _replaceFood(Food updated) => setState(() {
+    final hadPortion = _portion != null;
+    _food = updated;
+    final fresh = updated.portions.firstOrNull ?? everydayPortions(updated).firstOrNull;
+    if (hadPortion && fresh != null) {
+      _qty.text = _fmt(widget.entry != null ? _quantity : 1);
+      _portion = fresh;
+    } else if (hadPortion) {
+      // Geen portie meer: de grammen van wat er stond
+      _qty.text = _fmt(_grams > 0 ? _grams : 100);
+      _portion = null;
+    }
+    // In gram: die grammen blijven gelden
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -575,14 +645,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   }
 
   Widget _amountPanel(Palette p) {
-    final options = <(Portion?, double, String, String)>[
-      (null, 100, '100 g', ''),
+    final options = <(Portion?, String, String)>[
+      (null, tr('Grams', 'Gram'), ''),
       // Porties uit de databank, aangevuld met gewone porties (sneetje, glas, kom ...) als geschatting (P19)
-      for (final x in portionOptions(_food))
-        x is EverydayPortion ? (x, 1, x.short, '≈${_fmt(x.grams)} g') : (x, 1, x.label, '${_fmt(x.grams)} g'),
+      for (final x in portionOptions(_food)) x is EverydayPortion ? (x, x.short, '≈${_fmt(x.grams)} g') : (x, x.label, '${_fmt(x.grams)} g'),
     ];
     // Op label: geschatte porties worden bij elke opbouw opnieuw gemaakt
-    bool selected(Portion? x, double q) => x == null ? _portion == null : _portion?.label == x.label;
+    bool selected(Portion? x) => x == null ? _portion == null : _portion?.label == x.label;
     return Panel(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -646,13 +715,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                for (final (i, (x, q, label, sub)) in options.indexed) ...[
+                for (final (i, (x, label, sub)) in options.indexed) ...[
                   if (i > 0) const SizedBox(width: 6),
                   _PortionButton(
                     label: label,
                     sub: sub,
-                    selected: selected(x, q),
-                    onTap: () => _choose(x, quantity: q),
+                    selected: selected(x),
+                    onTap: () => _choose(x),
                   ),
                 ],
               ],
@@ -716,7 +785,8 @@ class _PortionButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: selected ? p.bg : p.ink),
                 ),
-                if (sub.isNotEmpty) Text(sub, style: TextStyle(fontSize: 11, color: (selected ? p.bg : p.ink).withValues(alpha: 0.8))),
+                // Ook zonder tweede regel even hoog, zodat de knoppen niet verspringen (N43)
+                Text(sub.isEmpty ? ' ' : sub, style: TextStyle(fontSize: 11, color: (selected ? p.bg : p.ink).withValues(alpha: 0.8))),
               ],
             ),
           ),

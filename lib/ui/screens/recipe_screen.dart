@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../data/user_db.dart';
 import '../../nutrition/values.dart';
 import '../../state/app_state.dart';
+import '../widgets/kit.dart';
 import '../widgets/nutrient_row.dart';
 import 'add_food_screen.dart';
 import 'food_detail_screen.dart';
@@ -31,6 +32,31 @@ class _RecipeScreenState extends State<RecipeScreen> {
   static String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : '$v'.dec;
   static double? _parse(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
 
+  /// Aantal porties: minstens 1 (0 of leeg werd vroeger stil 1 portie, N59).
+  String? get _servingsError {
+    final v = _parse(_servings.text);
+    if (v == null || v < 1) return tr('At least 1 portion', 'Minstens 1 portie');
+    if (v > 1000) return tr('At most 1000 portions', 'Hoogstens 1000 porties');
+    return null;
+  }
+
+  /// Gewicht na bereiding: leeg mag (dan het rauwe gewicht), anders meer dan 0 en niet absurd hoog. Koken kan het
+  /// gewicht ruim verdubbelen (pasta, peulvruchten), maar 100 kg pot voor 690 g ingrediënten kan niet (N59).
+  String? get _cookedError {
+    if (_cooked.text.trim().isEmpty) return null;
+    final v = _parse(_cooked.text);
+    if (v == null || v <= 0) return tr('Enter a weight above 0 g', 'Vul een gewicht boven 0 g in');
+    final raw = _recipe.rawGrams;
+    if (raw > 0 && v > raw * _maxCookedFactor) {
+      final max = fmtInt(raw * _maxCookedFactor);
+      return tr('At most $max g for these ingredients', 'Hoogstens $max g voor deze ingrediënten');
+    }
+    return null;
+  }
+
+  /// Gewicht na bereiding als veelvoud van het rauwe gewicht: daarbuiten weigeren, en buiten 0,3–3× eerst vragen.
+  static const _maxCookedFactor = 20.0;
+
   @override
   void dispose() {
     _name.dispose();
@@ -43,7 +69,10 @@ class _RecipeScreenState extends State<RecipeScreen> {
     ref: widget.existing?.ref ?? 'recipe:nieuw',
     name: _name.text.trim(),
     servings: (_parse(_servings.text) ?? 1).clamp(1, 1000).toDouble(),
-    cookedGrams: _parse(_cooked.text),
+    cookedGrams: switch (_parse(_cooked.text)) {
+      final c? when c > 0 => c,
+      _ => null,
+    },
     ingredients: _items,
   );
 
@@ -70,12 +99,33 @@ class _RecipeScreenState extends State<RecipeScreen> {
     if (t != null && mounted && i < _items.length) setState(() => _items[i] = t);
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (_name.text.trim().isEmpty || _items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(tr('Give the recipe a name and at least one ingredient.', 'Geef het recept een naam en minstens één ingrediënt.'))),
       );
       return;
+    }
+    final error = _servingsError ?? _cookedError;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    // Ongewoon gewicht na bereiding (minder dan 0,3× of meer dan 3× rauw): eerst vragen
+    final cooked = _parse(_cooked.text);
+    final raw = _recipe.rawGrams;
+    if (cooked != null && raw > 0 && (cooked < raw * 0.3 || cooked > raw * 3)) {
+      final portion = cooked / (_parse(_servings.text) ?? 1);
+      final ok = await confirmUnusual(
+        context,
+        tr(
+          'Weight after cooking ${fmtInt(cooked)} g for ${fmtInt(raw)} g of ingredients, so one portion is ${fmtInt(portion)} g. '
+              'Is that right?',
+          'Gewicht na bereiding ${fmtInt(cooked)} g voor ${fmtInt(raw)} g ingrediënten, dus één portie is ${fmtInt(portion)} g. '
+              'Klopt dat?',
+        ),
+      );
+      if (!ok || !mounted) return;
     }
     final r = Recipe(
       ref: widget.existing?.ref ?? UserDb.newRecipeRef(),
@@ -134,7 +184,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: decimalInput,
                       onTap: selectAllOnTap(_servings),
-                      decoration: InputDecoration(labelText: tr('Number of servings', 'Aantal porties')),
+                      decoration: InputDecoration(labelText: tr('Number of servings', 'Aantal porties'), errorText: _servingsError),
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
@@ -152,6 +202,8 @@ class _RecipeScreenState extends State<RecipeScreen> {
                         suffixIcon: const Padding(padding: EdgeInsetsDirectional.only(end: 12), child: Text('g')),
                         suffixIconConstraints: const BoxConstraints(),
                         helperText: tr('Optional (raw: ${recipe.rawGrams.round()} g)', 'Optioneel (rauw: ${recipe.rawGrams.round()} g)'),
+                        errorText: _cookedError,
+                        errorMaxLines: 2,
                       ),
                       onChanged: (_) => setState(() {}),
                     ),

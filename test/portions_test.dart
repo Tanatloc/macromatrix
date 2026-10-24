@@ -69,6 +69,25 @@ void main() {
       expect(options.skip(3).every((p) => p is EverydayPortion), isTrue);
     });
 
+    test('chips en andere snacks: een zakje, nooit een stuk van 150 g (N11)', () {
+      expect(_labels(_food('Potato crisps', group: 'snack')), ['1 small bag (≈25 g)', '1 bag (≈32 g)']);
+      expect(everydayPortions(_food('Tortilla chips fried in sunflower oil', group: 'snack')).first.grams, 25);
+      expect(everydayPortions(_food('Popcorn, salted, retail', group: 'snack')).first.short, '1 small bag');
+      expect(everydayPortions(_food('Ready salted crisps')).first.grams, 25);
+      // Rijstwafels en crackers blijven per stuk; Britse "chips" zijn friet, geen zakje
+      expect(everydayPortions(_food('Rice cake', group: 'snack')).first.short, isNot(contains('bag')));
+      expect(_labels(_food('Chips, oven, frozen')), isEmpty);
+    });
+
+    test('soep een kom, taart een stuk, havermout een kom en een eetlepel (N33, N43)', () {
+      expect(_labels(_food('Soup, lentil, homemade', group: 'soup')), ['1 bowl (≈250 g)']);
+      expect(_labels(_food('Soup, tomato, dried', group: 'soup', part: 'powder')), isEmpty);
+      expect(_labels(_food('Cake, carrot, iced, retail', group: 'bakery')), ['1 slice (≈75 g)']);
+      expect(_labels(_food('Pancakes', group: 'bakery')), isNot(contains('1 slice (≈75 g)')));
+      expect(_labels(_food('Oats, rolled, average values', group: 'cereal')), ['1 bowl (≈40 g)', '1 tablespoon (≈10 g)']);
+      expect(_labels(_food('Oat flakes, boiled/cooked in water', group: 'cereal')), ['1 bowl (≈250 g)']);
+    });
+
     test('stukgewicht blijft hetzelfde voor Snel loggen', () {
       expect(typicalPieceGrams('apple'), 150);
       expect(typicalPieceGrams('protein powder'), 30);

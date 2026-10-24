@@ -391,21 +391,30 @@ class UserDb {
 
   /// Bestaande regel waar een nieuwe toevoeging bij opgeteld mag worden: zelfde dag, maaltijd, product,
   /// portie en voedingswaarden, geen eigen tijd (of dezelfde) en niet uit een herhaling. Null als er geen is.
-  ({String id, double grams, double quantity})? mergeTarget({
+  /// Met [otherUnit]: juist een regel van hetzelfde product in een andere eenheid (skyr 250 g naast 1 kom), om in
+  /// gram samen te voegen (N62).
+  ({String id, double grams, double quantity, String? portionLabel})? mergeTarget({
     required String day,
     required Meal meal,
     required Food food,
     String? portionLabel,
     String? time,
+    bool otherUnit = false,
   }) {
     final rows = _db.select(
-      'SELECT id, grams, quantity FROM diary WHERE day = ? AND meal = ? AND food_ref = ? AND deleted = 0 AND repeat_id IS NULL '
-      'AND portion_label IS ? AND (time IS NULL OR time IS ?) AND nutrients = ? ORDER BY created_at LIMIT 1',
+      'SELECT id, grams, quantity, portion_label FROM diary WHERE day = ? AND meal = ? AND food_ref = ? AND deleted = 0 '
+      'AND repeat_id IS NULL AND portion_label IS ${otherUnit ? 'NOT ' : ''}? AND (time IS NULL OR time IS ?) AND nutrients = ? '
+      'ORDER BY created_at LIMIT 1',
       [day, meal.index, food.ref, portionLabel, time, encodeNutrients(food.per100g)],
     );
     if (rows.isEmpty) return null;
     final r = rows.first;
-    return (id: r['id'] as String, grams: (r['grams'] as num).toDouble(), quantity: (r['quantity'] as num).toDouble());
+    return (
+      id: r['id'] as String,
+      grams: (r['grams'] as num).toDouble(),
+      quantity: (r['quantity'] as num).toDouble(),
+      portionLabel: r['portion_label'] as String?,
+    );
   }
 
   /// Alleen de hoeveelheid van een regel aanpassen (samenvoegen en ongedaan maken daarvan).
