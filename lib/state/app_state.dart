@@ -227,8 +227,7 @@ class AppState extends ChangeNotifier {
   /// dus we tellen alleen de verbranding daarboven erbij. Zo telt een training niet dubbel.
   double _extraKcal(double burned, Profile p, int year, [TargetSettings? settings]) {
     if (!(settings ?? _settings).addExercise || adaptiveTdee != null) return 0;
-    final alreadyInFactor = bmr(p, p.ageIn(year)) * (p.activity.factor - Activity.sedentary.factor);
-    return math.max(0, burned - alreadyInFactor);
+    return math.max(0, burned - exerciseInActivity(p, year));
   }
 
   /// Hoeveel kcal beweging vandaag echt bij je doel komt (de verbranding boven wat je activiteitsniveau al inrekent).
@@ -270,6 +269,9 @@ class AppState extends ChangeNotifier {
 
   /// Hoeveel kcal beweging vandaag bij je doel komt (zoals [exerciseKcalInGoal], maar altijd voor vandaag).
   double get todayExerciseKcalInGoal => _extraKcal(_burnedOn(_today), profileFor(_today), _today.year);
+
+  /// Alle beweging van vandaag in kcal, ook het deel dat al in je activiteitsniveau zit.
+  double get todayBurnedKcal => _burnedOn(_today);
 
   /// Onderhoudsenergie waarop het eiwitdoel van vandaag rust (zie maintenanceKcal).
   double get todayMaintenanceKcal => maintenanceKcal(profileFor(_today), _today.year, extraKcal: todayExerciseKcalInGoal, tdee: adaptiveTdee);

@@ -634,10 +634,30 @@ class _EnergyCard extends StatelessWidget {
               child: Column(
                 children: [
                   ledger(tr('Goal', 'Doel'), fmtInt(budget - burned)),
-                  if (burned > 0)
+                  // Ook beweging die niet bij het doel komt, met waarom: anders lijkt een training te verdwijnen (N17)
+                  if (burned > 0 || s.burnedKcal >= 1)
                     InkWell(
                       onTap: () => openDayExercise(context),
-                      child: ledger(tr('Exercise', 'Beweging'), '+${fmtInt(burned)}', dot: p.brand, color: p.brand),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ledger(tr('Exercise', 'Beweging'), '+${fmtInt(burned)}', dot: p.brand, color: p.brand),
+                          if (s.burnedKcal - burned >= 1)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12, bottom: 2),
+                              child: Text(
+                                !s.settings.addExercise || s.adaptiveTdee != null
+                                    ? tr('${fmtInt(s.burnedKcal)} kcal, not added', '${fmtInt(s.burnedKcal)} kcal, telt niet mee')
+                                    : tr(
+                                        '${fmtInt(s.burnedKcal - burned)} of ${fmtInt(s.burnedKcal)} kcal is in your activity level',
+                                        '${fmtInt(s.burnedKcal - burned)} van ${fmtInt(s.burnedKcal)} kcal zit in je activiteitsniveau',
+                                      ),
+                                key: const ValueKey('exercise-in-activity'),
+                                style: TextStyle(fontSize: 11, height: 1.3, color: p.ink3),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ledger(tr('Eaten', 'Gegeten'), '−${fmtInt(eaten)}', dot: p.ink),
                   Divider(height: 10, color: p.line),

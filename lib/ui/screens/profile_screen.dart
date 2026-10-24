@@ -212,7 +212,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
+        // Een open toetsenbord (bv. van het energieveld) sluit al bij het scrollen, niet pas bij een tik verderop: zo
+        // verspringt de pagina niet onder je vinger en raakt een tik niet het blok erboven (N25)
         child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.only(bottom: 32),
           children: [
             Narrow(
@@ -623,17 +626,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: pal.ink),
                     ),
                     Text(
-                      [
-                        p.energyOverride != null
-                            ? tr('custom goal', 'eigen doel')
-                            : (s.adaptiveTdee != null
-                                  ? tr('your usual activity is already included', 'je gewone beweging zit al in je verbruik')
-                                  : (s.settings.addExercise
-                                        ? tr('exercise is added automatically', 'beweging komt er automatisch bij')
-                                        : tr('without exercise', 'zonder beweging'))),
-                        if (exercise >= 1) tr('today +${fmtInt(exercise)} kcal exercise', 'vandaag +${fmtInt(exercise)} kcal beweging'),
-                      ].join(' · '),
-                      style: TextStyle(fontSize: 11.5, color: pal.ink3),
+                      _dailyGoalNote(s, p, exercise),
+                      key: const ValueKey('daily-goal-note'),
+                      style: TextStyle(fontSize: 11.5, height: 1.4, color: pal.ink3),
                     ),
                   ],
                 ),
@@ -664,8 +659,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _update(_p.copyWith(energyOverride: () => (v != null && v >= 1000 && v <= 6000) ? v : null));
             },
           ),
+          if (_overrideVsPlan(s, p) case (final text, final clash))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                text,
+                key: const ValueKey('override-plan-note'),
+                style: TextStyle(fontSize: 12, height: 1.4, color: clash ? pal.high : pal.ink2),
+              ),
+            ),
+          // Beweging bij het doel: de schakelaar staat bij het dagdoel, zodat uitleg en instelling samen staan. Met een
+          // geschat verbruik heeft hij geen effect (daar zit je beweging al in).
+          if (s.adaptiveTdee == null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(
+                tr('Add exercise to your goal', 'Beweging bij je doel optellen'),
+                style: TextStyle(fontSize: 13.5, color: pal.ink),
+              ),
+              subtitle: Text(
+                tr(
+                  'Only what you burn above your activity level (${p.activity.label}: about ${fmtInt(exerciseInActivity(p, year))} kcal a day), '
+                      'so nothing counts twice. Also with a custom goal.',
+                  'Alleen wat je verbrandt boven je activiteitsniveau (${p.activity.label}: ongeveer ${fmtInt(exerciseInActivity(p, year))} kcal per dag), '
+                      'zodat niets dubbel telt. Ook bij een eigen doel.',
+                ),
+                style: TextStyle(fontSize: 11.5, height: 1.4, color: pal.ink3),
+              ),
+              trailing: Switch(
+                key: const ValueKey('add-exercise-switch'),
+                value: s.settings.addExercise,
+                onChanged: (v) => s.saveSettings(s.settings.copyWith(addExercise: v)),
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  /// Uitleg onder het dagdoel die klopt met wat er echt gebeurt: telt beweging mee, en wat kwam er vandaag bij of
+  /// zat al in je activiteitsniveau (N17).
+  String _dailyGoalNote(AppState s, Profile p, double added) {
+    final burned = s.todayBurnedKcal;
+    final String rule;
+    if (s.adaptiveTdee != null) {
+      rule = tr(
+        'exercise is not added: your estimated expenditure already includes it',
+        'beweging komt er niet bij: die zit al in je geschatte verbruik',
+      );
+    } else if (!s.settings.addExercise) {
+      rule = tr('exercise is not added', 'beweging telt niet mee');
+    } else if (burned < 1) {
+      rule = tr('exercise above your activity level is added', 'beweging boven je activiteitsniveau komt erbij');
+    } else if (added >= 1) {
+      rule = tr(
+        'today +${fmtInt(added)} kcal exercise (of ${fmtInt(burned)}; the rest is in your activity level)',
+        'vandaag +${fmtInt(added)} kcal beweging (van ${fmtInt(burned)}; de rest zit in je activiteitsniveau)',
+      );
+    } else {
+      rule = tr(
+        'today ${fmtInt(burned)} kcal exercise, already in your activity level',
+        'vandaag ${fmtInt(burned)} kcal beweging, zit al in je activiteitsniveau',
+      );
+    }
+    return p.energyOverride != null ? '${tr('custom goal', 'eigen doel')} · $rule' : rule;
+  }
+
+  /// Een eigen energiedoel naast afvallen of aankomen: wat dat doel in kg per week betekent, en of het je plan of
+  /// tempo tegenspreekt (N68). Het tweede veld zegt of het tegen je doel ingaat. null = niets te melden.
+  (String, bool)? _overrideVsPlan(AppState s, Profile p) {
+    final own = p.energyOverride;
+    if (own == null || p.goal == Goal.maintain) return null;
+    final rate = impliedRate(own, s.adaptiveTdee ?? formulaTdee(p, DateTime.now().year));
+    final want = p.rate;
+    final lose = p.goal == Goal.lose;
+    String kg(double r) => '${r < 0 ? '−' : '+'}${fmtDec(r.abs(), 2)} kg';
+    final what = p.hasPlan ? tr('your plan', 'je plan') : tr('your pace', 'je tempo');
+    // Tegen het doel in: afvallen en evenveel of meer eten dan je verbruikt, of aankomen en minder eten
+    if (lose ? rate > -0.05 : rate < 0.05) {
+      return (
+        tr(
+          'At ${fmtInt(own)} kcal you ${lose ? 'will not lose weight' : 'will not gain weight'}: that is about your maintenance or '
+              '${lose ? 'more' : 'less'}. Your custom goal counts, not $what (${kg(want)} per week). Empty the field to follow $what again.',
+          'Met ${fmtInt(own)} kcal ${lose ? 'val je niet af' : 'kom je niet aan'}: dat is ongeveer je onderhoud of '
+              '${lose ? 'meer' : 'minder'}. Je eigen doel telt, niet $what (${kg(want)} per week). Maak het veld leeg om $what weer te volgen.',
+        ),
+        true,
+      );
+    }
+    if ((rate - want).abs() < 0.05) return null;
+    final slower = rate.abs() < want.abs();
+    final later = p.hasPlan && slower;
+    return (
+      tr(
+        'At ${fmtInt(own)} kcal you ${lose ? 'lose' : 'gain'} about ${kg(rate)} per week, ${slower ? 'slower' : 'faster'} than $what '
+            '(${kg(want)})${later ? ', so you reach your goal weight later' : ''}.',
+        'Met ${fmtInt(own)} kcal ${lose ? 'val je' : 'kom je'} ongeveer ${kg(rate)} per week ${lose ? 'af' : 'aan'}, ${slower ? 'trager' : 'sneller'} '
+            'dan $what (${kg(want)})${later ? ', dus je haalt je doelgewicht later' : ''}.',
+      ),
+      false,
     );
   }
 
@@ -701,40 +794,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// Een macro in grammen instellen (bv. 180 g eiwit); de app rekent dat om naar een percentage van je energie.
+  /// Koolhydraten en vet kunnen ook "hoogstens" zijn: dan wordt het getypte getal een eigen maximum (N24).
   Future<void> _editMacroGrams(String key, String label, AppState s) async {
     final today = s.todayTargets;
     final kcal = today['energy']?.goal ?? 2000;
     final own = s.settings.overrides[key];
+    final canMax = key != 'protein';
+    var atMost = own != null && own.goal == null && own.upper != null;
     final c = TextEditingController(text: fmtInt(_gramsOf(today[key]) ?? 0));
-    final grams = await showDialog<double>(
+    final result = await showDialog<(double?, bool)>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('$label in grams', '$label in grammen')),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: decimalInput,
-          onTap: selectAllOnTap(c),
-          decoration: InputDecoration(
-            suffixText: 'g',
-            helperMaxLines: 3,
-            helperText: own == null
-                ? tr('For today, at ${fmtInt(kcal)} kcal', 'Voor vandaag, bij ${fmtInt(kcal)} kcal')
-                : (own.goal == null
-                      ? tr('This changes your custom maximum.', 'Dit past je eigen maximum aan.')
-                      : tr('This changes your custom goal.', 'Dit past je eigen doel aan.')),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text(tr('$label in grams', '$label in grammen')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: c,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: decimalInput,
+                onTap: selectAllOnTap(c),
+                decoration: InputDecoration(
+                  suffixText: 'g',
+                  helperMaxLines: 3,
+                  helperText: atMost
+                      ? tr('A maximum: less is fine, the rest of your split stays.', 'Een maximum: minder mag, de rest van je verdeling blijft.')
+                      : own == null
+                      ? tr('For today, at ${fmtInt(kcal)} kcal', 'Voor vandaag, bij ${fmtInt(kcal)} kcal')
+                      : tr('This changes your custom goal.', 'Dit past je eigen doel aan.'),
+                ),
+                onSubmitted: (_) => Navigator.pop(ctx, (parseNum(c.text), atMost)),
+              ),
+              if (canMax)
+                CheckboxListTile(
+                  key: const ValueKey('macro-at-most'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: atMost,
+                  onChanged: (v) => setD(() => atMost = v ?? false),
+                  title: Text(tr('At most (a maximum)', 'Hoogstens (een maximum)'), style: const TextStyle(fontSize: 14)),
+                ),
+            ],
           ),
-          onSubmitted: (_) => Navigator.pop(ctx, parseNum(c.text)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, (parseNum(c.text), atMost)), child: Text(tr('Set', 'Instellen'))),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, parseNum(c.text)), child: Text(tr('Set', 'Instellen'))),
-        ],
       ),
     );
-    if (grams == null || !mounted) return;
-    _setGrams(key, grams);
+    final grams = result?.$1;
+    if (result == null || grams == null || grams <= 0 || !mounted) return;
+    final wasMax = own != null && own.goal == null && own.upper != null;
+    if (result.$2) {
+      // Hoogstens: precies het getypte getal als eigen maximum
+      s.setOverride(key, Target(upper: grams));
+    } else if (wasMax) {
+      // Van maximum terug naar een gewoon doel: het getypte getal wordt het eigen doel
+      s.setOverride(key, Target(goal: grams));
+    } else {
+      _setGrams(key, grams);
+    }
   }
 
   Widget _macroCard(AppState s, Palette pal, Profile p) {
@@ -918,10 +1041,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 check: true,
                 height: 30,
                 selected: s.preferences.contains(d),
+                // Met Ongedaan maken: een voorkeur die per ongeluk aangaat, verandert stil je suggesties (N25)
                 onTap: () {
-                  final next = Set.of(s.preferences);
-                  next.contains(d) ? next.remove(d) : next.add(d);
-                  s.setPreferences(next);
+                  final before = Set.of(s.preferences);
+                  final on = !before.contains(d);
+                  s.setPreferences(on ? {...before, d} : ({...before}..remove(d)));
+                  showUndo(context, on ? tr('"${d.label}" on', '"${d.label}" aan') : tr('"${d.label}" off', '"${d.label}" uit'), () => s.setPreferences(before));
                 },
               ),
           ],

@@ -229,8 +229,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(tr('Add burned energy to your goal', 'Verbrande energie bij je doel optellen')),
             subtitle: Text(
               tr(
-                'Then set your activity to "Sedentary" or "Lightly active", otherwise your training counts twice.',
-                'Zet dan je activiteit op "Zittend" of "Licht actief", anders tel je je training dubbel.',
+                'Only what you burn above your activity level is added (that level already includes some exercise), so training never counts twice. Also with a custom energy goal.',
+                'Alleen wat je verbrandt boven je activiteitsniveau komt erbij (dat niveau rekent al wat beweging in), zodat een training nooit dubbel telt. Ook bij een eigen energiedoel.',
               ),
             ),
             trailing: Switch(

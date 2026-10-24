@@ -212,6 +212,13 @@ double bmr(Profile p, int age) => 10 * p.weightKg + 6.25 * p.heightCm - 5 * age 
 /// Verbruik volgens de formule: ruststofwisseling × activiteit.
 double formulaTdee(Profile p, int year) => bmr(p, p.ageIn(year)) * p.activity.factor;
 
+/// Beweging die je activiteitsniveau al inrekent (de factor boven zittend), in kcal per dag. Alleen verbranding
+/// daarboven komt bij je doel, zodat een training niet dubbel telt.
+double exerciseInActivity(Profile p, int year) => bmr(p, p.ageIn(year)) * (p.activity.factor - Activity.sedentary.factor);
+
+/// Hoeveel kg per week je ongeveer verandert als je [kcal] per dag eet bij een verbruik van [tdee] (negatief = afvallen).
+double impliedRate(double kcal, double tdee) => (kcal - tdee) * 7 / kcalPerKg;
+
 /// Energiebehoefte per dag inclusief activiteit en doel. [tdee] = verbruik uit een andere bron (adaptief).
 double energyTarget(Profile p, int year, {double? tdee}) => p.energyOverride ?? ((tdee ?? formulaTdee(p, year)) + p.goalKcal).roundToDouble();
 
