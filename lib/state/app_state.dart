@@ -301,7 +301,10 @@ class AppState extends ChangeNotifier {
       changed = true;
     }
     if (!changed) return;
-    user.setSetting('frozenTargets', {'plans': [for (final p in plans) jsonDecode(p)], 'days': days});
+    user.setSetting('frozenTargets', {
+      'plans': [for (final p in plans) jsonDecode(p)],
+      'days': days,
+    });
     _frozenCache = null;
   }
 
@@ -373,15 +376,51 @@ class AppState extends ChangeNotifier {
   /// Rijkste bronnen van een voedingsstof die bij je voorkeuren passen.
   /// Supplementen en (mineraal)zout horen niet thuis tussen de rijkste bronnen, behalve zout voor natrium en chloride.
   /// [advice]: alleen gewone voedingsmiddelen die je kunt aanraden (zie [isAdviceFood]); dan wordt dieper gezocht.
-  List<(Food, double)> richestFor(String key, {bool perKcal = false, int limit = 40, bool advice = false}) => [
-    for (final r in foods.richestIn(key, perKcal: perKcal, limit: advice ? math.max(300, limit * 15) : limit * 3))
-      if ((!advice || isAdviceFood(r.$1)) &&
-          fitsPreferences(r.$1, _preferences) &&
-          !containsAllergen(r.$1, allergies) &&
-          !(r.$1.category ?? '').toLowerCase().contains('supplement') &&
-          (key == 'sodium' || key == 'chloride' || !_salt.hasMatch(r.$1.name)))
-        r,
-  ].take(limit).toList();
+  List<(Food, double)> richestFor(String key, {bool perKcal = false, int limit = 40, bool advice = false}) {
+    final candidates = foods.richestIn(key, perKcal: perKcal, limit: advice ? math.max(300, limit * 15) : limit * 3);
+    final outlier = _outlierCheck(key, candidates.take(math.min(candidates.length, limit * 6)).map((r) => r.$1));
+    return [
+      for (final r in candidates)
+        if (!outlier(r.$1) &&
+            (!advice || isAdviceFood(r.$1)) &&
+            fitsPreferences(r.$1, _preferences) &&
+            !containsAllergen(r.$1, allergies) &&
+            !(r.$1.category ?? '').toLowerCase().contains('supplement') &&
+            (key == 'sodium' || key == 'chloride' || !_salt.hasMatch(r.$1.name)))
+          r,
+    ].take(limit).toList();
+  }
+
+  /// Uitschieters tussen databanken: een waarde die veel hoger ligt dan hetzelfde voedingsmiddel (zelfde soort, groep
+  /// en bereiding) in minstens twee andere databanken is bijna altijd een fout of een uitzonderlijk product (gebraden
+  /// gans met 3600 mg kalium, eend zonder vel met 46,7 g eiwit tegenover 23–27 g elders). Voor hoofdbestanddelen
+  /// (eiwit, vet, koolhydraten…) kan hetzelfde product geen 1,6× verschillen; vitaminen en mineralen wel meer, daar
+  /// geldt 3×. Alleen nagaan voor [head] (de kop van de lijst): dat is wat bovenaan zou komen.
+  bool Function(Food) _outlierCheck(String key, Iterable<Food> head) {
+    final list = head.toList();
+    final siblings = foods.siblingValues(key, {for (final f in list) ?f.label?.food});
+    // Eiwit, koolhydraten en vezels liggen voor hetzelfde product dicht bij elkaar; vet en energie verschillen meer
+    // (mager tegenover doorregen), vitaminen en mineralen het meest
+    final factor = const {'protein', 'carbs', 'fiber', 'sugars', 'starch'}.contains(key)
+        ? 1.4
+        : const {'fat', 'energy', 'water', 'sfa', 'mufa', 'pufa'}.contains(key)
+        ? 1.6
+        : 3.0;
+    return (Food f) {
+      final l = f.label;
+      if (l == null) return false;
+      final own = withDerived(f.per100g)[key];
+      // Vergelijk met dezelfde soort: verrijkt met verrijkt, met vel met met vel
+      bool same(List<String> flags) => const ['fortified', 'with skin', 'without skin'].every((x) => flags.contains(x) == l.flags.contains(x));
+      final others = [
+        for (final (ref, v, flags) in siblings['${l.food}|${l.group}|${l.state}'] ?? const <(String, double, List<String>)>[])
+          if (ref != f.ref && same(flags)) v,
+      ]..sort();
+      if (own == null || others.length < 2) return false;
+      final median = others[others.length ~/ 2];
+      return median > 0 && own > factor * median;
+    };
+  }
 
   /// "Orakel": de [limit] rijkste voedingsmiddelen voor een stof, gerangschikt per 100 g, per 100 kcal of per
   /// portie, eventueel alleen uit bepaalde voedingsgroepen ([groups], leeg = alles) en alleen gewone producten
@@ -395,26 +434,11 @@ class AppState extends ChangeNotifier {
   }) {
     final candidates = foods.richestIn(key, perKcal: rank == OracleRank.per100kcal, limit: math.max(1500, limit * 30));
     final kept = <Food, double>{};
-    // Uitschieters: een waarde die meer dan 3× hoger ligt dan hetzelfde voedingsmiddel in minstens twee andere
-    // databanken is bijna altijd een tikfout (bv. gebraden gans met 3600 mg kalium). Alleen nagaan voor de kop.
-    final head = candidates.take(math.min(candidates.length, limit * 6)).toList();
-    final siblings = foods.siblingValues(key, {for (final (f, _) in head) ?f.label?.food});
-    bool outlier(Food f) {
-      final l = f.label;
-      if (l == null) return false;
-      final own = withDerived(f.per100g)[key];
-      final fortified = l.flags.contains('fortified');
-      final others = [
-        for (final (ref, v, flags) in siblings['${l.food}|${l.group}|${l.state}'] ?? const <(String, double, List<String>)>[])
-          if (ref != f.ref && flags.contains('fortified') == fortified) v,
-      ]..sort();
-      if (own == null || others.length < 2) return false;
-      final median = others[others.length ~/ 2];
-      return median > 0 && own > 3 * median;
-    }
+    // Uitschieters tussen databanken overslaan (zie [_outlierCheck])
+    final outlier = _outlierCheck(key, candidates.take(math.min(candidates.length, limit * 6)).map((r) => r.$1));
 
     for (final (f, v) in candidates) {
-      if (outlier(f)) continue;
+      if (outlier(f) || _regional.hasMatch(f.name)) continue;
       if (groups.isNotEmpty && !groups.contains(f.label?.group)) continue;
       if (everyday && !isAdviceFood(f)) continue;
       if (!fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) continue;
@@ -429,6 +453,9 @@ class AppState extends ChangeNotifier {
 
   /// Portie voor de rangschikking "per portie": de eerste herkenbare portie (5–400 g), anders 100 g.
   static double oraclePortion(Food f) => f.portions.where((p) => p.grams >= 5 && p.grams <= 400).firstOrNull?.grams ?? 100;
+
+  /// Producten van één bevolkingsgroep in de Amerikaanse tabel (gedroogde walrus, Navajo-pijnboompitten): hier niet te koop.
+  static final _regional = RegExp(r'Alaska Native|Navajo|Shoshone|Hopi|Apache|Northern Plains|Oogruk', caseSensitive: false);
 
   static final _salt = RegExp(r'^(mineral salt|salt, (mineral|table|iodized|sea))|\btable salt\b', caseSensitive: false);
 
@@ -827,7 +854,10 @@ class AppState extends ChangeNotifier {
       for (final w in q.split(' '))
         if (_wordAliases[w] case final a?)
           a
-        else if (w.length > 4 && w.endsWith('e') && searchTokens(w).join() == w && searchTokens(w.substring(0, w.length - 1)).join() != w.substring(0, w.length - 1))
+        else if (w.length > 4 &&
+            w.endsWith('e') &&
+            searchTokens(w).join() == w &&
+            searchTokens(w.substring(0, w.length - 1)).join() != w.substring(0, w.length - 1))
           w.substring(0, w.length - 1)
         else
           w,
@@ -1021,9 +1051,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Totalen van een plan, met de doelen van die dag.
-  NutrientTotals planTotals(String day) => NutrientTotals.sumOf([
-    for (final i in planFor(day)) _withSugars(i.item.per100g, i.item.foodRef, i.item.name, i.item.grams),
-  ]);
+  NutrientTotals planTotals(String day) =>
+      NutrientTotals.sumOf([for (final i in planFor(day)) _withSugars(i.item.per100g, i.item.foodRef, i.item.name, i.item.grams)]);
 
   // ── Boodschappenlijst ──
 

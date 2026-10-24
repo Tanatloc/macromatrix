@@ -125,11 +125,13 @@ final _unhealthyAdvice = RegExp(
   caseSensitive: false,
 );
 
+final _oddVariant = RegExp(r'\b(low[- ]sodium|sodium[- ]free|topping|imitation)\b', caseSensitive: false);
+
 /// Staat wel in een paar tabellen, maar ligt hier zelden in de winkel.
 final _exotic = RegExp(
   r'\b(amaranth|rose ?hip|acerola|fenugreek|dock|sorrel|jute|taro|cassava|moringa|purslane|epazote|kantola|bitter gourd|balsam|jujube|sea lion|seal|whale|walrus|caribou|tunicate)\b',
 );
-final _unusual = RegExp(r'Alaska Native|ultraviolet', caseSensitive: false);
+final _unusual = RegExp(r'Alaska Native|Navajo|Shoshone|Hopi|Apache|Northern Plains|ultraviolet', caseSensitive: false);
 
 /// Wat je niet rauw eet (of droog, zoals ongekookte peulvruchten en pasta).
 const _cookFirst = {'meat', 'poultry', 'fish', 'shellfish', 'egg', 'legume', 'cereal', 'rice', 'pasta', 'potato/tuber'};
@@ -141,6 +143,8 @@ bool isAdviceFood(Food f) {
   // Nooit aanraden: gefrituurd, gepaneerd, fastfood, chips, gezoet of ultrabewerkt. Ook als het een tekort aanvult
   // (frieten 'voor vitamine K' komt uit het frituurvet).
   if (_unhealthyAdvice.hasMatch(f.name) || novaOf(f) == Nova.ultra) return false;
+  // Fabrieksvarianten die hier zelden in de winkel liggen ("Parmesan cheese topping, fat free", "low sodium")
+  if (_oddVariant.hasMatch(f.name)) return false;
   final l = f.label;
   if (l == null) return isEverydayFood(f);
   if (l.state == 'deep-fried' || (l.state == 'fried' && l.group == 'potato/tuber')) return false;

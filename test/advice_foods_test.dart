@@ -51,4 +51,16 @@ void main() {
       }
     }
   });
+
+  test('Orakel: geen uitschieters tussen databanken (eend zonder vel 46,7 g eiwit) of stamspecifieke producten', () {
+    final s = AppState(foods: FoodDb(sqlite3.open('assets/db/foods.db', mode: OpenMode.readOnly)), user: UserDb(sqlite3.openInMemory()));
+    for (final every in [true, false]) {
+      final protein = s.oracle('protein', limit: 40, everyday: every);
+      expect(protein.map((r) => r.$1.ref), isNot(contains('mvt:03.232')), reason: 'eend zonder vel, gebraden');
+      expect(protein.map((r) => r.$1.ref), isNot(contains('mvt:03.234')), reason: 'gans met vel, gebraden');
+      for (final (f, _) in [...protein, ...s.oracle('fiber', limit: 40, everyday: every)]) {
+        expect(f.name, isNot(matches(RegExp('Alaska Native|Navajo|Shoshone'))), reason: f.name);
+      }
+    }
+  });
 }
