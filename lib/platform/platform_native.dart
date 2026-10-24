@@ -72,3 +72,23 @@ Future<String?> saveTextFile(String name, String content, {String subject = '', 
   await file.writeAsString(content);
   return tr('Saved to ${file.path}', 'Opgeslagen in ${file.path}');
 }
+
+/// Afbeelding (PNG) delen: op de gsm via "Delen" (Instagram, WhatsApp, ...), op de pc in de map Downloads.
+/// Geeft een melding terug als er niet gedeeld werd maar bewaard.
+Future<String?> saveImageFile(String name, Uint8List bytes, {String text = ''}) async {
+  if (Platform.isAndroid || Platform.isIOS) {
+    final file = File(p.join((await getTemporaryDirectory()).path, name));
+    await file.writeAsBytes(bytes);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'image/png')],
+        text: text.isEmpty ? null : text,
+      ),
+    );
+    return null;
+  }
+  final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+  final file = File(p.join(dir.path, name));
+  await file.writeAsBytes(bytes);
+  return tr('Saved to ${file.path}', 'Opgeslagen in ${file.path}');
+}

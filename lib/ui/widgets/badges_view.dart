@@ -7,6 +7,7 @@ import '../../state/app_state.dart';
 import '../../sync/friends.dart';
 import '../theme.dart';
 import 'kit.dart';
+import 'share_actions.dart';
 
 /// Icoon per categorie: blijft hetzelfde over alle niveaus.
 const _icons = <String, IconData>{
@@ -181,7 +182,20 @@ void showBadgeCategory(BuildContext context, String id, {int? value, int? tier})
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Close', 'Sluiten')))],
+        actions: [
+          // Alleen je eigen badges (met een waarde) kun je delen
+          if (value != null && t > 0)
+            TextButton.icon(
+              key: const Key('badge-share'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                shareBadge(context, category: id, tier: t, value: value);
+              },
+              icon: const Icon(Icons.ios_share_rounded, size: 18),
+              label: Text(tr('Share', 'Delen')),
+            ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Close', 'Sluiten'))),
+        ],
       );
     },
   );
