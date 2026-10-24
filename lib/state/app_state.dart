@@ -709,11 +709,30 @@ class AppState extends ChangeNotifier {
   /// vandaag, want die dag loopt nog.
   WeeklyReport? weeklyReport(DateTime monday) {
     final today = dayKey(logicalNow());
-    ({int score, int days, int partial, Map<String, double> avg, double kcal, double kcalGoal, HealthCheck? health})? week(DateTime m) {
+    final sunday = dayKey(DateTime(monday.year, monday.month, monday.day + 6));
+    // Gewichtstrend over deze en de vorige week: bij een stabiel gewicht ligt een groot energietekort eerder aan je
+    // doel of aan wat je niet logt dan aan te weinig eten
+    final trend = WeightTrend.of([
+      for (final b in user.biometricHistory('weight', from: dayKey(DateTime(monday.year, monday.month, monday.day - 7))))
+        if (b.day.compareTo(sunday) <= 0) (DateTime.parse(b.day), b.value),
+    ]);
+    ({
+      int score,
+      int days,
+      int partial,
+      Map<String, double> avg,
+      Map<String, double> goals,
+      Set<String> overUpper,
+      List<(NutrientTotals, Map<String, Target>)> full,
+      double kcal,
+      double kcalGoal,
+      HealthCheck? health,
+    })?
+    week(DateTime m) {
       final end = DateTime(m.year, m.month, m.day + 6);
       final daily = dailyTotals(m, end);
       final scores = <int>[];
-      final sums = <String, double>{};
+      final sums = <String, double>{}, goalSums = <String, double>{}, valueSums = <String, double>{}, upperSums = <String, double>{};
       final withTargets = <(NutrientTotals, Map<String, Target>)>[];
       var kcal = 0.0, kcalGoal = 0.0, partial = 0;
       for (final e in daily.entries) {
@@ -728,7 +747,14 @@ class AppState extends ChangeNotifier {
         kcalGoal += t['energy']?.goal ?? 0;
         for (final k in [...stripKeys, 'energy', 'protein']) {
           final g = t[k]?.goal;
-          if (g != null && g > 0) sums[k] = (sums[k] ?? 0) + (e.value.values[k] ?? 0) / g;
+          if (g != null && g > 0) {
+            sums[k] = (sums[k] ?? 0) + (e.value.values[k] ?? 0) / g;
+            goalSums[k] = (goalSums[k] ?? 0) + g;
+          }
+          if (t[k]?.upper case final u?) {
+            valueSums[k] = (valueSums[k] ?? 0) + (e.value.values[k] ?? 0);
+            upperSums[k] = (upperSums[k] ?? 0) + u;
+          }
         }
       }
       if (scores.isEmpty) return null;
@@ -738,6 +764,13 @@ class AppState extends ChangeNotifier {
         days: n,
         partial: partial,
         avg: {for (final e in sums.entries) e.key: e.value / n},
+        goals: {for (final e in goalSums.entries) e.key: e.value / n},
+        // Gemiddeld boven de veilige bovengrens: dat hoort niet bij "je sterkste"
+        overUpper: {
+          for (final e in valueSums.entries)
+            if (e.value > upperSums[e.key]!) e.key,
+        },
+        full: withTargets,
         kcal: kcal / n,
         kcalGoal: kcalGoal / n,
         health: healthCheck(
@@ -748,6 +781,9 @@ class AppState extends ChangeNotifier {
           trains: _trainsIn(m),
           labs: latestLabs(at: end),
           activity: _activityIn(m),
+          // De trend hoort bij deze week; de vorige week (alleen voor de vergelijking) krijgt ze niet
+          weightTrend: m == monday ? trend : null,
+          plan: _profile.goal,
         ),
       );
     }
@@ -779,13 +815,45 @@ class AppState extends ChangeNotifier {
         if (frac < 0.25 || frac > 1.5 || (upper != null && per100 * grams / 100 > upper)) continue;
         // Nooit een zout product (gezouten makreel, ansjovis) aanraden, en zeker niet als je al genoeg zout eet
         if (tooSaltyForTip((withDerived(f.per100g)['sodium'] ?? 0) * grams / 100, now.avg['sodium'])) continue;
-        tip = WeeklyTip(nutrientByKey[w.key]!, f, grams, portion == null ? '100 g' : '${portion.label} (${grams.round()} g)', frac);
+        // Een "cup" zegt een Europeaan weinig: dan gewoon de grammen
+        final cup = portion != null && RegExp(r'\bcups?\b', caseSensitive: false).hasMatch(portion.label);
+        tip = WeeklyTip(
+          nutrientByKey[w.key]!,
+          f,
+          grams,
+          portion == null || cup ? '${grams.round()} g' : '${portion.label} (${grams.round()} g)',
+          frac,
+        );
         break;
       }
       if (tip != null) break;
     }
+    // "Let op suiker": koolhydraten, suiker en bloedsuiker bovenaan het rapport
+    SugarWeek? sugar;
+    if (sugarFocus) {
+      final full = now.full;
+      double mean(double Function((NutrientTotals, Map<String, Target>) d) f) => full.fold(0.0, (s, d) => s + f(d)) / full.length;
+      final hasFree = full.any((d) => d.$1.values.containsKey('free_sugars'));
+      final glucose = [
+        for (final b in user.biometricHistory('glucose', from: dayKey(monday)))
+          if (b.day.compareTo(sunday) <= 0 && b.value > 0) b.value,
+      ];
+      final carbGoals = [for (final d in full) ?d.$2['carbs']?.goal];
+      final freeMax = [for (final d in full) ?d.$2['free_sugars']?.upper];
+      sugar = SugarWeek(
+        days: full.length,
+        carbs: mean((d) => d.$1['carbs']),
+        carbsGoal: carbGoals.isEmpty ? null : carbGoals.reduce((a, b) => a + b) / carbGoals.length,
+        carbDaysOver: full.where((d) => d.$1['carbs'] > (d.$2['carbs']?.goal ?? double.infinity) * 1.1).length,
+        sugars: mean((d) => d.$1['sugars']),
+        freeSugars: hasFree ? mean((d) => d.$1['free_sugars']) : null,
+        freeSugarsMax: hasFree && freeMax.isNotEmpty ? freeMax.reduce((a, b) => a + b) / freeMax.length : null,
+        freeSugarDaysOver: hasFree ? full.where((d) => d.$1['free_sugars'] > (d.$2['free_sugars']?.upper ?? double.infinity)).length : 0,
+        glucose: glucose.isEmpty ? null : glucose.reduce((a, b) => a + b) / glucose.length,
+        glucoseCount: glucose.length,
+      );
+    }
     // Gewicht, beweging en notities van die week
-    final sunday = dayKey(DateTime(monday.year, monday.month, monday.day + 6));
     final weights = [
       for (final b in user.biometricHistory('weight', from: dayKey(monday)))
         if (b.day.compareTo(sunday) <= 0) b.value,
@@ -809,7 +877,7 @@ class AppState extends ChangeNotifier {
       days: now.days,
       partialDays: now.partial,
       prevScore: prev?.score,
-      best: [for (final e in micros.take(3)) (nutrientByKey[e.key]!, e.value)],
+      best: [for (final e in micros.where((e) => !now.overUpper.contains(e.key)).take(3)) (nutrientByKey[e.key]!, e.value)],
       worst: [for (final e in worst) (nutrientByKey[e.key]!, e.value)],
       tip: tip,
       health: now.health,
@@ -823,6 +891,10 @@ class AppState extends ChangeNotifier {
       weightEnd: weights.isEmpty ? null : weights.last,
       exercise: WeeklyExercise(sessions: sessions, minutes: minutes, kcal: burned),
       notes: notes,
+      goals: now.goals,
+      weightTrend: trend,
+      plan: _profile.goal,
+      sugar: sugar,
     );
   }
 

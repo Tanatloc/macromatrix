@@ -74,9 +74,73 @@ void main() {
     expect(factor(healthCheck(week(day({'alcohol': 30}), 4), weightKg: 75)!, 'alcohol').rating, HealthRating.poor);
   });
 
-  test('alcohol: meer dan 7 glazen per week = slecht', () {
-    final c = healthCheck(week(day({'alcohol': 12})), weightKg: 75)!;
-    expect(factor(c, 'alcohol').rating, HealthRating.poor);
+  test('alcohol: oordeel en uitleg volgen dezelfde grens van 10 glazen', () {
+    // 8,4 glazen: onder de grens, dus "oké", en de uitleg zegt ook dat dat binnen de grens is
+    final some = factor(healthCheck(week(day({'alcohol': 12})), weightKg: 75)!, 'alcohol');
+    expect(some.rating, HealthRating.ok);
+    expect(some.effect, contains('binnen de grens'));
+    expect(some.impact, contains('Tot 10 glazen'));
+    // 14 glazen: erboven, "kan beter"
+    final many = factor(healthCheck(week(day({'alcohol': 20})), weightKg: 75)!, 'alcohol');
+    expect(many.rating, HealthRating.poor);
+    expect(many.rating.label, 'Kan beter');
+    expect(many.effect, contains('Meer dan 10 glazen'));
+  });
+
+  test('eerst wat goed gaat, hooguit drie werkpunten, nooit "Slecht"', () {
+    final c = healthCheck(
+      week(day({'sodium': 4000, 'sfa': kcal * 0.16 / 9, 'fiber': 12, 'sugars': kcal * 0.25 / 4, 'potassium': 2000, 'epa_dha': 0})),
+      weightKg: 75,
+    )!;
+    expect(c.summary, startsWith('Goed bezig: '));
+    expect(c.summary, isNot(contains('diabetes')));
+    expect(c.toWorkOn.length, greaterThan(maxWorkPoints)); // de rest staat onder "Meer punten"
+    expect(c.factors.map((f) => f.rating.label), isNot(contains('Slecht')));
+    expect(factor(c, 'sodium').aim, 'doel ≤ 5 g');
+  });
+
+  group('energie en gewicht', () {
+    final low = day({'energy': kcal * 0.6}); // ver onder het doel
+    const stable = WeightTrend(change: -0.1, days: 13, count: 6);
+
+    test('stabiel gewicht: je doel ligt te hoog of je logt niet alles, geen "eet meer"', () {
+      final f = factor(healthCheck(week(low), weightKg: 75, weightTrend: stable)!, 'energy');
+      expect(f.rating, HealthRating.ok);
+      expect(f.effect, contains('stabiel bij ongeveer'));
+      expect(f.advice, isNot(contains('Voeg')));
+    });
+
+    test('afvallen terwijl je wil behouden: energie is het eerste punt en de kop past zich aan', () {
+      const down = WeightTrend(change: -1.2, days: 13, count: 6);
+      final c = healthCheck(week(low), weightKg: 75, weightTrend: down)!;
+      expect(c.energyFirst, isTrue);
+      expect(c.toWorkOn.first.key, 'energy');
+      expect(c.rating, isNot(HealthRating.good));
+      expect(c.summary, contains('energie'));
+      expect(c.summary, isNot(contains('gezonde week')));
+    });
+
+    test('ver onder je doel zonder gewichten: nooit "een gezonde week"', () {
+      final c = healthCheck(week(low), weightKg: 75)!;
+      expect(factor(c, 'energy').rating, HealthRating.poor);
+      expect(c.rating, isNot(HealthRating.good));
+      expect(c.summary, isNot(contains('gezonde week')));
+    });
+
+    test('trend uit wegingen: een rechte lijn, niet de eerste en laatste weging', () {
+      final t = WeightTrend.of([for (var i = 0; i < 14; i++) (DateTime(2026, 10, 5 + i), 80 + (i.isEven ? 0.4 : -0.4))])!;
+      expect(t.days, 13);
+      expect(t.stable, isTrue);
+      expect(WeightTrend.of([(DateTime(2026, 10, 5), 80.0)]), isNull);
+      // Een week wegen is te kort om "stabiel" te zeggen
+      expect(WeightTrend.of([for (var i = 0; i < 7; i++) (DateTime(2026, 10, 5 + i), 80.0)])!.stable, isFalse);
+    });
+
+    test('stabiel en boven je doel bij een afvalplan: dan klopt het doel wel', () {
+      expect(energyCase(eaten: 2600, goal: 2000, trend: stable, plan: Goal.lose), EnergyCase.againstPlan);
+      expect(energyCase(eaten: 2600, goal: 2000, trend: stable), EnergyCase.goalOff);
+      expect(energyCase(eaten: 1200, goal: 2000, trend: const WeightTrend(change: 0.8, days: 10, count: 4)), EnergyCase.missingLogs);
+    });
   });
 
   test('te weinig volledige dagen = geen oordeel', () {
@@ -139,7 +203,7 @@ void main() {
     final high = day({'vit_d': targets['vit_d']!.goal! * 2});
     final low = day({'vit_d': 0});
     final c = healthCheck([...week(high, 3), ...week(low, 3)], weightKg: 75)!;
-    expect(factor(c, 'micro').value, 'Nutrient score 100');
+    expect(factor(c, 'micro').value, '100% van je doelen gehaald');
   });
 
   test('vitamine C plas je uit: een overschot telt per dag hooguit dubbel', () {
@@ -150,7 +214,7 @@ void main() {
       ...week(day({'vit_c': 0}), 5),
     ], weightKg: 75)!;
     final m = factor(c, 'micro');
-    expect(m.value, isNot('Nutrient score 100'));
+    expect(m.value, isNot('100% van je doelen gehaald'));
     expect(m.tips, isEmpty); // geen bovengrens voor vitamine C: onschadelijk
   });
 
@@ -174,10 +238,10 @@ void main() {
 
     test('intensief telt dubbel, licht telt niet', () {
       final run = check(ActivityWeek(exercises: [ex('a', 9, 40), ex('b', 9, 40)]));
-      expect(factor(run, 'exercise').value, '160 min per week');
+      expect(factor(run, 'exercise').value, '80 min gelogd, telt als 160 min per week');
       expect(factor(run, 'exercise').rating, HealthRating.good);
       final walk = check(ActivityWeek(exercises: [ex('a', 4, 30), ex('b', 4, 30), ex('c', 2, 60)]));
-      expect(factor(walk, 'exercise').value, '60 min per week');
+      expect(factor(walk, 'exercise').value, '120 min gelogd, telt als 60 min per week');
       expect(factor(walk, 'exercise').rating, HealthRating.poor);
     });
 
@@ -189,7 +253,7 @@ void main() {
 
     test('lopende week wordt omgerekend naar 7 dagen', () {
       final c = check(ActivityWeek(exercises: [ex('a', 4, 60)], days: 2));
-      expect(factor(c, 'exercise').value, '210 min per week');
+      expect(factor(c, 'exercise').value, '60 min gelogd, telt als 210 min per week');
       expect(factor(c, 'exercise').note, contains('loopt nog'));
     });
 
@@ -261,18 +325,26 @@ void main() {
     );
     expect(find.text('Gezondheid'), findsOneWidget);
     expect(find.textContaining('Zout  ', findRichText: true), findsOneWidget);
-    expect(find.textContaining('▼ 4'), findsOneWidget);
-    // Dicht: geen uitleg, impact of advies; open: alles; nog eens tikken sluit weer
-    expect(find.textContaining('kruid met kruiden'), findsNothing);
-    expect(find.textContaining('beroerte', findRichText: true), findsOneWidget); // alleen de grootste winst bovenaan
+    expect(find.textContaining('doel ≤ 5 g', findRichText: true), findsOneWidget);
+    // Geen tweede score: het verschil met vorige week in woorden
+    expect(find.text('Ongeveer zoals vorige week'), findsOneWidget);
+    expect(find.textContaining('/ 100'), findsNothing);
+    expect(find.text('Goed bezig'), findsOneWidget);
+    expect(find.text('Werkpunten'), findsOneWidget);
+    // Werkpunt: wat je kunt doen staat er meteen; uitleg en cijfers pas na aantikken, sterftecijfers nooit standaard
+    expect(find.textContaining('kruid met kruiden'), findsOneWidget);
+    expect(find.textContaining('beroerte', findRichText: true), findsNothing);
+    expect(find.textContaining('overlijden', findRichText: true), findsNothing);
     expect(find.text('Geen medisch advies.', findRichText: true), findsNothing);
     await tester.tap(find.textContaining('Zout  ', findRichText: true));
     await tester.pump();
-    expect(find.textContaining('kruid met kruiden'), findsOneWidget);
-    expect(find.textContaining('beroerte', findRichText: true), findsNWidgets(3)); // + uitleg en impact bij het punt
+    expect(find.textContaining('beroerte', findRichText: true), findsOneWidget); // de uitleg bij het punt
+    await tester.tap(find.text('Waarom het telt'));
+    await tester.pump();
+    expect(find.textContaining('beroerte', findRichText: true), findsNWidgets(2)); // + de cijfers
     await tester.tap(find.textContaining('Zout  ', findRichText: true));
     await tester.pump();
-    expect(find.textContaining('kruid met kruiden'), findsNothing);
+    expect(find.textContaining('beroerte', findRichText: true), findsNothing);
     await tester.tap(find.text('Over deze cijfers'));
     await tester.pump();
     expect(find.textContaining('Geen medisch advies'), findsOneWidget);

@@ -4,7 +4,9 @@ library;
 
 import '../data/food.dart';
 import 'health.dart';
+import 'health.dart' as h show energyCase;
 import 'nutrients.dart';
+import 'targets.dart';
 
 class WeeklyTip {
   const WeeklyTip(this.nutrient, this.food, this.grams, this.amountLabel, this.fraction);
@@ -48,6 +50,35 @@ List<MapEntry<String, double>> attentionOrder(Map<String, double> avg, List<MapE
   ].take(take).toList();
 }
 
+/// Koolhydraten, suiker en bloedsuiker van de week, voor wie "Let op suiker" aan heeft. Gemiddelden over de
+/// volledig gelogde dagen ([days]).
+class SugarWeek {
+  const SugarWeek({
+    required this.days,
+    required this.carbs,
+    this.carbsGoal,
+    this.carbDaysOver = 0,
+    required this.sugars,
+    this.freeSugars,
+    this.freeSugarsMax,
+    this.freeSugarDaysOver = 0,
+    this.glucose,
+    this.glucoseCount = 0,
+  });
+  final int days;
+
+  /// Gemiddeld per dag (g); [carbsGoal] = je gemiddelde koolhydratendoel.
+  final double carbs, sugars;
+  final double? carbsGoal, freeSugars, freeSugarsMax;
+
+  /// Dagen boven je koolhydratendoel (+10%) en boven je maximum vrije suiker.
+  final int carbDaysOver, freeSugarDaysOver;
+
+  /// Gemiddelde bloedsuiker (mmol/L) over [glucoseCount] metingen in de week.
+  final double? glucose;
+  final int glucoseCount;
+}
+
 /// Beweging in de week van het rapport.
 class WeeklyExercise {
   const WeeklyExercise({this.sessions = 0, this.minutes = 0, this.kcal = 0});
@@ -76,7 +107,26 @@ class WeeklyReport {
     this.weightEnd,
     this.exercise = const WeeklyExercise(),
     this.notes = const {},
+    this.goals = const {},
+    this.weightTrend,
+    this.plan = Goal.maintain,
+    this.sugar,
   });
+
+  /// Gemiddeld dagdoel per stof (in de eenheid van de stof), om bij elke stof het doel te tonen.
+  final Map<String, double> goals;
+
+  /// Gewichtsverloop over deze en de vorige week (zie [WeightTrend]), en of je wil afvallen, behouden of aankomen.
+  final WeightTrend? weightTrend;
+  final Goal plan;
+
+  /// Alleen bij "Let op suiker".
+  final SugarWeek? sugar;
+
+  /// Energie samen gelezen met je gewicht, met dezelfde marge als [energyOff].
+  EnergyCase get energyCase => kcalAvg == null || kcalGoal == null
+      ? EnergyCase.onTarget
+      : h.energyCase(eaten: kcalAvg!, goal: kcalGoal!, trend: weightTrend, plan: plan, margin: 1 - reportEnergyLow);
 
   final DateTime monday;
 
