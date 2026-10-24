@@ -50,6 +50,28 @@ Lokaal eerst: de app werkt altijd met de lokale database; met een account gaan w
 andere toestellen. Instellen en bouwen: zie [supabase/README.md](supabase/README.md). Zonder `supabase.json` werkt
 de app zonder account.
 
+## Pro en de fototeller
+
+Bijna alles is gratis. Loggen met een foto: 3 per dag gratis, onbeperkt met Pro (rem: 50 per dag, UTC). Pro geeft
+ook extra kleuren, een Supporter-badge bij vrienden en een uitgebreid jaaroverzicht.
+
+- Migratie `supabase/migrations/20261026000000_pro.sql` (met de hand in de SQL-editor): `pro_status`, `photo_usage`,
+  `photo_quota_use()`, `photo_quota()`, `my_pro()`, `pro_show_badge()` en `friend_list_v2()` (met kolom `supporter`).
+  Zonder die migratie werkt alles zoals vroeger.
+- `functions/api/photo.js` verhoogt de teller met het token van de gebruiker voor het beeldmodel draait (429
+  `{error:'quota', used, limit, pro}`); ontbreekt de functie, dan alleen de rem per uur. Test: `node --test test/js/`.
+- App: `lib/sync/pro.dart` (status en teller), `lib/sync/purchase.dart` (`PurchaseProvider`: voorlopig
+  `NoPurchaseProvider`, later Google Play Billing in de Play-build en een betaalpagina op het web; geen
+  in_app_purchase in de F-Droid-build), `lib/ui/screens/pro_screen.dart`. In een debug-build staat onderaan het
+  Pro-scherm een schakelaar om Pro na te bootsen.
+- Pro met de hand toekennen (een jaar):
+
+```sql
+insert into public.pro_status (user_id, until, source)
+select id, now() + interval '1 year', 'manual' from auth.users where email = 'iemand@example.com'
+on conflict (user_id) do update set until = excluded.until, source = excluded.source, updated_at = now();
+```
+
 ## Cloudflare Pages (webversie in de cloud)
 
 - `site/_headers`: beveiligings- en cacheheaders (op de eigen server doet nginx dit).

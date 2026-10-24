@@ -402,6 +402,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Gekozen merkkleur (zie accents in theme.dart). Alleen met Pro wordt een andere dan petrol ook gebruikt; loopt
+  /// Pro af, dan blijft de keuze bewaard en krijg je ze terug als je opnieuw Pro neemt.
+  String get accent => (user.setting('ui')?['accent'] as String?) ?? 'petrol';
+
+  void setAccent(String id) {
+    user.setSetting('ui', {...?user.setting('ui'), 'accent': id});
+    notifyListeners();
+  }
+
   // ── Voorkeuren en suggesties ──
 
   late Set<DietPref> _preferences;
@@ -861,6 +870,66 @@ class AppState extends ChangeNotifier {
       split: macroKcal <= 0 ? null : (protein * 4 / macroKcal, carbs * 4 / macroKcal, fat * 9 / macroKcal),
       avgProtein: daily.isEmpty ? 0 : (protein / daily.length).round(),
       previous: previous,
+    );
+  }
+
+  /// Uitgebreid jaaroverzicht (Pro): voedingsstoffen per maand, je top 10 en je records. Null als je dat jaar niets logde.
+  RecapExtras? recapExtras(int year) {
+    final from = DateTime(year);
+    final today = _dateOnly(logicalNow());
+    final last = DateTime(year, 12, 31);
+    final end = last.isAfter(today) ? today : last;
+    if (end.isBefore(from)) return null;
+    final entries = [
+      for (final e in user.entriesBetween(dayKey(from), dayKey(end)))
+        if (!e.foodRef.startsWith('supp:')) e,
+    ];
+    if (entries.isEmpty) return null;
+    final daily = dailyTotals(from, end);
+    final sums = {for (final k in recapHeatmapKeys) k: List<double>.filled(12, 0)};
+    final days = List<int>.filled(12, 0);
+    (DateTime, double)? bestScore, mostProtein, mostFiber;
+    for (final e in daily.entries) {
+      final d = DateTime.parse(e.key);
+      final m = d.month - 1;
+      final t = targetsForDate(d);
+      final v = e.value.values;
+      days[m]++;
+      for (final k in recapHeatmapKeys) {
+        final g = t[k]?.goal;
+        if (g != null && g > 0) sums[k]![m] += math.min(1.5, (v[k] ?? 0) / g);
+      }
+      final score = completenessScore(v, t).toDouble();
+      if (bestScore == null || score > bestScore.$2) bestScore = (d, score);
+      final p = v['protein'] ?? 0, f = v['fiber'] ?? 0;
+      if (p > 0 && (mostProtein == null || p > mostProtein.$2)) mostProtein = (d, p);
+      if (f > 0 && (mostFiber == null || f > mostFiber.$2)) mostFiber = (d, f);
+    }
+    final counts = <String, int>{}, names = <String, String>{};
+    final perDay = <String, Set<String>>{};
+    for (final e in entries) {
+      counts[e.foodRef] = (counts[e.foodRef] ?? 0) + 1;
+      names[e.foodRef] = e.name;
+      perDay.putIfAbsent(e.day, () => {}).add(e.foodRef);
+    }
+    final top = counts.entries.toList()..sort((a, b) => b.value != a.value ? b.value.compareTo(a.value) : names[a.key]!.compareTo(names[b.key]!));
+    final mostFoods = perDay.entries.isEmpty ? null : perDay.entries.reduce((a, b) => b.value.length > a.value.length ? b : a);
+    var busiest = 0;
+    for (var m = 1; m < 12; m++) {
+      if (days[m] > days[busiest]) busiest = m;
+    }
+    return RecapExtras(
+      monthNutrients: {
+        for (final k in recapHeatmapKeys) k: [for (var m = 0; m < 12; m++) days[m] == 0 ? null : sums[k]![m] / days[m]],
+      },
+      topFoods: [for (final e in top.take(10)) (names[e.key]!, e.value)],
+      records: [
+        if (bestScore != null) RecapRecord(RecapRecordKind.bestScore, bestScore.$2, bestScore.$1),
+        if (mostProtein != null) RecapRecord(RecapRecordKind.mostProtein, mostProtein.$2, mostProtein.$1),
+        if (mostFiber != null) RecapRecord(RecapRecordKind.mostFiber, mostFiber.$2, mostFiber.$1),
+        if (mostFoods != null) RecapRecord(RecapRecordKind.mostFoods, mostFoods.value.length.toDouble(), DateTime.parse(mostFoods.key)),
+        if (days[busiest] > 0) RecapRecord(RecapRecordKind.busiestMonth, days[busiest].toDouble(), DateTime(year, busiest + 1)),
+      ],
     );
   }
 

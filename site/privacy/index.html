@@ -20,7 +20,7 @@
   <article class="doc">
     <span class="eyebrow">Privacy</span>
     <h1>Privacy policy</h1>
-    <p class="meta">Version of 17 October 2026</p>
+    <p class="meta">Version of 24 October 2026</p>
 
     <div class="box">
       <p style="margin:0"><b style="color:var(--ink)">In short.</b> We only store what is needed to make the app work: your account, your profile and what you log. Your data is stored in the EU, other users cannot access it (except friends you add yourself: they only see your name and your weekly score), we sell nothing and show no ads. You can export or permanently delete everything at any time.</p>
@@ -39,12 +39,20 @@
       <tr><td>Diary: what and how much you ate, time, notes, recipes, your own products and your supplements</td><td>Showing your day, your trends and your history</td></tr>
       <tr><td>Measurements: weight, blood pressure, glucose and other measurements you enter yourself, exercise and fasting</td><td>Showing your progress and estimating your energy use</td></tr>
       <tr><td>Only if you use the friends feature: a name of your choice, your profile photo or avatar, your level, your chosen title and your showcase badges, your friend code, your friends, your battles and, per week, your average Nutrient Score (0–100) with the number of days logged and your battle points</td><td>Adding friends and showing each other's weekly score</td></tr>
+      <tr><td>Only if you log with a photo: a counter of how many photos you used per day (one number per day, kept for at most a week). No photos and no description of your meal are stored</td><td>Giving everyone 3 free photos per day, and limiting Pro to a fair 50 per day</td></tr>
+      <tr><td>Only if you have Pro: until when it runs, where it came from (for example a gift or a store) and whether friends may see your Supporter badge</td><td>Turning on the Pro extras on all your devices</td></tr>
       <tr><td>The moment you accepted the terms and this policy</td><td>Showing that you gave consent</td></tr>
     </table>
     <p>Some of this is health data. We only process it because you explicitly consent to it when you create your account (Article 9(2)(a) GDPR), and only to make the app work for you. You can withdraw that consent at any time by deleting your account.</p>
 
     <h2>Friends</h2>
-    <p>The friends feature is off until you open it yourself. After that, people you accept (or people you add who accept you) can see your name, your profile photo or avatar, your level, your title, your showcase badges and your average Nutrient Score per week, plus the number of days you logged that week. If you start a battle, your opponent also sees your battle points for that week (the sum of your daily scores). A photo is resized to 192 by 192 pixels before it leaves your device. They never see your email address, your diary, your weight or any other data. You can remove a friend at any time; from then on they see nothing.</p>
+    <p>The friends feature is off until you open it yourself. After that, people you accept (or people you add who accept you) can see your name, your profile photo or avatar, your level, your title, your showcase badges and your average Nutrient Score per week, plus the number of days you logged that week. If you start a battle, your opponent also sees your battle points for that week (the sum of your daily scores). A photo is resized to 192 by 192 pixels before it leaves your device. If you have Pro, they also see a Supporter badge next to your name, unless you turn it off on the Pro screen. They never see your email address, your diary, your weight or any other data. You can remove a friend at any time; from then on they see nothing.</p>
+
+    <h2>Logging with a photo</h2>
+    <p>If you take or choose a photo of your meal in "Quick log", the app first makes it smaller on your device (at most 1024 pixels) and sends it, with your login, to our server on Cloudflare. There an image model (Cloudflare Workers AI) describes the food it sees, and only that text comes back to the app; you check everything before it is added. The photo is not stored. To share the cost of the image model fairly, we count per account how many photos you used that day (UTC): 3 per day are free, and with Pro up to 50. Only that number is stored, in our database in the EU, and old days are removed after a week.</p>
+
+    <h2>Pro</h2>
+    <p>MacroMatrix is free; Pro is an optional subscription for unlimited photo logging and a few extras for supporters. For Pro we store until when it runs, where it came from and whether your Supporter badge is shown to friends. Paying in the app is not possible yet. When it is, the payment itself is handled by the store or payment provider, and we only receive whether your subscription is active, never your card details.</p>
 
     <h2>Health Connect (Android)</h2>
     <p>Only if you turn it on in the settings, MacroMatrix reads your steps, workouts (with the energy burned and distance) and weight from Health Connect on your phone, for the last 7 days. They become measurements and exercise in your diary, just as if you had entered them yourself, and are stored and synced like the rest of your data. MacroMatrix never writes to Health Connect and does not use this data for anything else. You can turn it off at any time in the settings or in Health Connect.</p>

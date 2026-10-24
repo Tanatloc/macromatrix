@@ -22,6 +22,7 @@ import '../screens/photo_capture_screen.dart';
 import '../theme.dart';
 import 'kit.dart';
 import 'number_input.dart';
+import 'pro_widgets.dart';
 import 'undo.dart';
 
 /// Spraak werkt in de Android-app en in Chrome/Edge; op Linux typ je de zin.
@@ -189,7 +190,21 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
   @override
   void initState() {
     super.initState();
-    if (widget.photo) WidgetsBinding.instance.addPostFrameCallback((_) => _photo());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // De fototeller verversen (een nieuwe dag, of een foto op een ander toestel)
+      final pro = proOf(context, listen: false);
+      final refreshed = pro?.refreshQuota();
+      if (widget.photo) {
+        // Vanuit het +-menu meteen een foto vragen, maar pas als de teller bekend is (anders neem je voor niets een foto)
+        if (refreshed == null) {
+          _photo();
+        } else {
+          // Hoogstens 3 s wachten: bij een trage verbinding beslist de server toch zelf
+          unawaited(refreshed.timeout(const Duration(seconds: 3), onTimeout: () {}).whenComplete(() => mounted ? _photo() : null));
+        }
+      }
+    });
   }
 
   /// Foto nemen of kiezen, naar de server sturen en de zin die terugkomt opzoeken zoals een getypte zin. Je ziet
@@ -202,6 +217,9 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
       return;
     }
     setState(() => _photoError = null);
+    // Gratis foto's van vandaag op: de uitleg met de Pro-knop staat al onder de knop, geen foto vragen
+    final pro = proOf(context, listen: false);
+    if (pro?.quota?.allowed == false) return;
     final Uint8List? jpeg;
     try {
       jpeg = await pickPlatePhoto(context);
@@ -213,6 +231,8 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
     setState(() => _looking = true);
     try {
       final text = await photoLog.describe(jpeg, token: token);
+      final q = photoLog.lastQuota;
+      if (q != null) pro?.noteQuota(q);
       if (!mounted) return;
       setState(() => _looking = false);
       if (text.isEmpty) {
@@ -223,10 +243,14 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
       _fromPhoto = true;
       _parse();
     } on PhotoLogException catch (e) {
+      // Op voor vandaag: de stand onthouden, dan toont PhotoQuotaNote de uitleg met de Pro-knop
+      final q = e.quota;
+      if (q != null) pro?.noteQuota(q);
       if (!mounted) return;
       setState(() {
         _looking = false;
-        _photoError = _photoErrorText(e.code);
+        // Toont PhotoQuotaNote de uitleg al (met de Pro-knop), dan geen tweede melding
+        _photoError = e.code == 'quota' && pro?.quota?.allowed == false ? null : _photoErrorText(e.code);
       });
     }
   }
@@ -239,6 +263,10 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
     'not_configured' => tr(
       'Logging with a photo is not available yet. Type or say what you ate.',
       'Loggen met een foto is nog niet beschikbaar. Typ of zeg wat je at.',
+    ),
+    'quota' => tr(
+      "You've used your free photos for today. They're back tomorrow; you can still type or say what you ate.",
+      "Je gratis foto's van vandaag zijn op. Morgen kan het weer; je kunt nog altijd typen of zeggen wat je at.",
     ),
     'too_many' => tr(
       'You have used a lot of photos this hour. Try again later, or type what you ate.',
@@ -556,6 +584,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
     final found = ready.length;
     final totalKcal = ready.fold(0.0, (a, l) => a + l.kcal);
     final totalProtein = ready.fold(0.0, (a, l) => a + l.protein);
+    final pro = proOf(context);
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
@@ -619,6 +648,8 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                   ),
                 ],
               ),
+              // Hoeveel gratis foto's je vandaag nog hebt, of de uitleg als ze op zijn
+              if (pro != null) PhotoQuotaNote(quota: pro.quota, pro: pro.isPro),
               if (_looking) ...[
                 const SizedBox(height: 8),
                 Row(

@@ -4,6 +4,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
+
 const kSans = 'Geist';
 const kMono = 'GeistMono';
 
@@ -131,12 +133,131 @@ class Palette extends ThemeExtension<Palette> {
     _ => ink,
   };
 
+  /// Dezelfde kleuren met een andere merkkleur (een accent voor supporters, zie [accents]).
+  Palette withBrand(Color brand, Color brandSoft, Color onBrand) => Palette(
+    bg: bg,
+    surface: surface,
+    surface2: surface2,
+    sunken: sunken,
+    line: line,
+    lineStrong: lineStrong,
+    ink: ink,
+    ink2: ink2,
+    ink3: ink3,
+    brand: brand,
+    brandSoft: brandSoft,
+    onBrand: onBrand,
+    protein: protein,
+    carbs: carbs,
+    fat: fat,
+    fiber: fiber,
+    low: low,
+    lowFill: lowFill,
+    lowSoft: lowSoft,
+    ok: ok,
+    okFill: okFill,
+    okSoft: okSoft,
+    high: high,
+    highFill: highFill,
+    highSoft: highSoft,
+    track: track,
+    shadow: shadow,
+  );
+
   @override
   Palette copyWith() => this;
 
   @override
   Palette lerp(Palette? other, double t) => other == null || t < 0.5 ? this : other;
 }
+
+/// Een merkkleur om uit te kiezen bij Instellingen → Weergave. Petrol is de standaard en altijd gratis; de andere
+/// zijn een extraatje voor wie Pro heeft. Elke kleur heeft een lichte en een donkere versie met genoeg contrast
+/// voor witte (licht) of donkere (donker) tekst erop.
+@immutable
+class Accent {
+  const Accent(
+    this.id,
+    this.en,
+    this.nl, {
+    required this.light,
+    required this.lightSoft,
+    required this.dark,
+    required this.darkSoft,
+    required this.darkOn,
+  });
+  final String id, en, nl;
+  final Color light, lightSoft, dark, darkSoft, darkOn;
+
+  String get name => tr(en, nl);
+  bool get pro => id != defaultAccent;
+
+  /// De merkkleur voor licht of donker, om een staal te tonen.
+  Color brandFor(Brightness b) => b == Brightness.dark ? dark : light;
+
+  Palette apply(Palette p, Brightness b) =>
+      id == defaultAccent ? p : (b == Brightness.dark ? p.withBrand(dark, darkSoft, darkOn) : p.withBrand(light, lightSoft, const Color(0xFFFFFFFF)));
+}
+
+const defaultAccent = 'petrol';
+
+const accents = <Accent>[
+  Accent(
+    'petrol',
+    'Petrol',
+    'Petrol',
+    light: Color(0xFF0E6B65),
+    lightSoft: Color(0xFFE2EFEC),
+    dark: Color(0xFF5BC3B6),
+    darkSoft: Color(0xFF132B28),
+    darkOn: Color(0xFF06201D),
+  ),
+  Accent(
+    'ocean',
+    'Ocean',
+    'Oceaan',
+    light: Color(0xFF1F5FAE),
+    lightSoft: Color(0xFFE3ECF8),
+    dark: Color(0xFF7FB2F0),
+    darkSoft: Color(0xFF13233A),
+    darkOn: Color(0xFF061A33),
+  ),
+  Accent(
+    'plum',
+    'Plum',
+    'Pruim',
+    light: Color(0xFF7A3E8F),
+    lightSoft: Color(0xFFF1E6F4),
+    dark: Color(0xFFCB9BDC),
+    darkSoft: Color(0xFF2A1A30),
+    darkOn: Color(0xFF22102A),
+  ),
+  Accent(
+    'gold',
+    'Gold',
+    'Goud',
+    light: Color(0xFF835C00),
+    lightSoft: Color(0xFFF6EDD6),
+    dark: Color(0xFFE5B85C),
+    darkSoft: Color(0xFF2E2510),
+    darkOn: Color(0xFF261A00),
+  ),
+  Accent(
+    'slate',
+    'Slate',
+    'Leisteen',
+    light: Color(0xFF46566B),
+    lightSoft: Color(0xFFE7EBF0),
+    dark: Color(0xFFA9B8CC),
+    darkSoft: Color(0xFF1C2229),
+    darkOn: Color(0xFF0E141B),
+  ),
+];
+
+Accent accentById(String? id) => accents.firstWhere((a) => a.id == id, orElse: () => accents.first);
+
+/// De kleur die echt gebruikt wordt: de gekozen met Pro, anders petrol.
+String effectiveAccent(String chosen, {required bool pro}) => pro ? accentById(chosen).id : defaultAccent;
 
 extension PaletteContext on BuildContext {
   Palette get pal => Theme.of(this).extension<Palette>()!;
@@ -159,8 +280,9 @@ TextStyle numStyle(double size, {FontWeight weight = FontWeight.w600, Color? col
 /// Rand van een chip in het donker (zie [buildTheme]).
 const chipEdgeDark = Color(0xFF6B727B);
 
-ThemeData buildTheme(Brightness b) {
-  final p = b == Brightness.dark ? Palette.dark : Palette.light;
+/// Met [accent] een andere merkkleur (alleen voor Pro; de app geeft hier de standaard door als Pro niet loopt).
+ThemeData buildTheme(Brightness b, {String accent = defaultAccent}) {
+  final p = accentById(accent).apply(b == Brightness.dark ? Palette.dark : Palette.light, b);
   final scheme = ColorScheme(
     brightness: b,
     primary: p.brand,

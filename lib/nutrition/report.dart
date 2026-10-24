@@ -244,3 +244,30 @@ class Recap {
   /// Dezelfde cijfers voor de vorige periode (vorige maand of vorig jaar), om te vergelijken.
   final Recap? previous;
 }
+
+/// Voedingsstoffen in de heatmap van het uitgebreide jaaroverzicht (Pro): vezels en de vitaminen en mineralen waar
+/// het vaakst iets aan ontbreekt.
+const recapHeatmapKeys = ['fiber', 'vit_d', 'vit_c', 'b12', 'b9', 'calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'iodine', 'selenium'];
+
+enum RecapRecordKind { bestScore, mostProtein, mostFiber, mostFoods, busiestMonth }
+
+/// Een record uit je jaar: de waarde en de dag (of bij [RecapRecordKind.busiestMonth] de eerste van die maand).
+class RecapRecord {
+  const RecapRecord(this.kind, this.value, this.day);
+  final RecapRecordKind kind;
+  final double value;
+  final DateTime day;
+}
+
+/// Extra's van het jaaroverzicht voor wie Pro heeft. Los van [Recap], zodat het gratis overzicht niet verandert.
+class RecapExtras {
+  const RecapExtras({required this.monthNutrients, required this.topFoods, required this.records});
+
+  /// Per voedingsstof uit [recapHeatmapKeys]: 12 waarden (januari tot december), het gemiddelde deel van je doel
+  /// op de gelogde dagen van die maand (hoogstens 1,5), of null als je die maand niets logde.
+  final Map<String, List<double?>> monthNutrients;
+
+  /// (naam, aantal keer gelogd), hoogstens 10.
+  final List<(String, int)> topFoods;
+  final List<RecapRecord> records;
+}

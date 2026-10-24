@@ -31,6 +31,7 @@ class Friend {
     this.level = 1,
     this.title,
     this.badges = const [],
+    this.supporter = false,
   });
   final String id;
   final String name;
@@ -42,6 +43,9 @@ class Friend {
   final List<(String, int)> badges;
   final FriendState state;
   final int? score, days, prevScore, prevDays;
+
+  /// Heeft Pro en toont het Supporter-badge (alleen bij bevestigde vrienden, uit friend_list_v2).
+  final bool supporter;
 
   factory Friend.fromRow(Map<String, dynamic> r) => Friend(
     id: r['other'] as String,
@@ -55,6 +59,7 @@ class Friend {
     level: (r['level'] as int?) ?? 1,
     title: r['title'] as String?,
     badges: decodeShowcase(r['badges'] as String?),
+    supporter: r['supporter'] == true,
   );
 }
 
@@ -140,6 +145,13 @@ class Friends extends ChangeNotifier {
   String? code;
   String name = '';
   List<Friend> list = const [];
+
+  /// Vrienden met een Supporter-badge (op id), voor de ranglijsten van battles en uitdagingen.
+  Set<String> get supporters => {
+    for (final x in list)
+      if (x.supporter && x.state == FriendState.friend) x.id,
+  };
+
   bool loading = false;
   String? error;
 
@@ -321,7 +333,15 @@ class Friends extends ChangeNotifier {
       name = me['name'] as String;
       if (!enabled) state.user.setSetting('friends', {'enabled': true});
       await pushScores();
-      final rows = await client.rpc('friend_list', params: {'p_week': dayKey(mondayOf(DateTime.now()))}) as List;
+      final week = {'p_week': dayKey(mondayOf(DateTime.now()))};
+      List rows;
+      try {
+        // Met het Supporter-badge; een databank zonder de migratie pro.sql kent alleen friend_list
+        rows = await client.rpc('friend_list_v2', params: week) as List;
+      } on PostgrestException catch (e) {
+        if (!isMissingTable(e)) rethrow;
+        rows = await client.rpc('friend_list', params: week) as List;
+      }
       list = [for (final r in rows) Friend.fromRow((r as Map).cast<String, dynamic>())];
       try {
         final bs = await client.rpc('battle_list') as List;

@@ -13,6 +13,7 @@ import '../theme.dart';
 import '../widgets/badges_view.dart';
 import '../widgets/kit.dart';
 import '../widgets/level_card.dart';
+import '../widgets/pro_widgets.dart';
 import '../widgets/weight_goal.dart';
 import 'nutrient_detail_screen.dart';
 import 'body_screen.dart';
@@ -336,6 +337,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const LevelCard(),
                     const SizedBox(height: 10),
                     const BadgesCard(),
+                    const SizedBox(height: 10),
+                    const ProTile(),
                     const SizedBox(height: 10),
                     Panel(
                       shadow: false,

@@ -9,6 +9,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
+import '../sync/pro.dart' show PhotoQuota;
+
 /// Langste zijde en JPEG-kwaliteit van wat we opsturen: genoeg om eten te herkennen, klein genoeg voor mobiele data.
 const photoMaxSide = 1024;
 const photoQuality = 80;
@@ -32,13 +34,18 @@ class PhotoLog {
   PhotoLog([this._client]);
   final http.Client? _client;
 
+  /// Stand van de dagteller die de server bij de laatste foto meestuurde (null = geen teller op de server).
+  PhotoQuota? lastQuota;
+
   /// In de browser naar de eigen site (zelfde herkomst), in de app naar de vaste server.
   static Uri get endpoint => kIsWeb ? Uri.base.resolve('/api/photo') : Uri.https('app.divinenet.online', '/api/photo');
 
   /// De verkleinde foto opsturen en de zin terugkrijgen (leeg = geen eten gezien). Gooit een [PhotoLogException]
-  /// met een code: login, not_configured, too_many, too_big, bad_image, network of failed.
+  /// met een code: login, not_configured, quota (gratis foto's van vandaag op, met [PhotoLogException.quota]),
+  /// too_many, too_big, bad_image, network of failed.
   Future<String> describe(Uint8List jpeg, {required String token}) async {
     final client = _client ?? http.Client();
+    lastQuota = null;
     try {
       final res = await client
           .post(endpoint, headers: {'Authorization': 'Bearer $token', 'Content-Type': 'image/jpeg'}, body: jpeg)
@@ -49,7 +56,11 @@ class PhotoLog {
       } on FormatException {
         throw PhotoLogException(res.statusCode == 429 ? 'too_many' : 'failed');
       }
-      if (res.statusCode != 200) throw PhotoLogException('${j['error'] ?? 'failed'}');
+      if (res.statusCode != 200) {
+        final code = '${j['error'] ?? 'failed'}';
+        throw PhotoLogException(code, quota: code == 'quota' ? PhotoQuota.fromJson(j) : null);
+      }
+      lastQuota = PhotoQuota.fromJson(j['quota']);
       return ((j['text'] as String?) ?? '').trim();
     } on PhotoLogException {
       rethrow;
@@ -69,8 +80,11 @@ class PhotoLog {
 }
 
 class PhotoLogException implements Exception {
-  PhotoLogException(this.code);
+  PhotoLogException(this.code, {this.quota});
   final String code;
+
+  /// Bij code quota: hoeveel je vandaag gebruikte en hoeveel er mogen.
+  final PhotoQuota? quota;
 
   @override
   String toString() => 'PhotoLogException($code)';

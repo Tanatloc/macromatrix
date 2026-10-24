@@ -8,6 +8,7 @@ import '../../nutrition/badges.dart';
 import 'avatar.dart';
 import 'badges_view.dart';
 import 'kit.dart';
+import 'pro_widgets.dart';
 import '../../i18n.dart';
 
 /// Je avatar, level en XP, met uitleg hoe je XP verdient.
@@ -47,9 +48,19 @@ class _LevelCardState extends State<LevelCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Level ${info.level}',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: pal.ink),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Level ${info.level}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: pal.ink),
+                          ),
+                        ),
+                        // Supporter (Pro): hetzelfde badge dat je vrienden naast je naam zien
+                        if (proOf(context)?.supporter ?? false) ...[const SizedBox(width: 8), const SupporterBadge()],
+                      ],
                     ),
                     InkWell(
                       onTap: () => pickTitle(context),
