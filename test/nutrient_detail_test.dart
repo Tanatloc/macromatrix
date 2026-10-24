@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:provider/provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:macromatrix/data/food_db.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/i18n.dart';
 import 'package:macromatrix/nutrition/nutrients.dart';
+import 'package:macromatrix/nutrition/values.dart';
 import 'package:macromatrix/state/app_state.dart';
 import 'package:macromatrix/ui/screens/dashboard_screen.dart';
 import 'package:macromatrix/ui/screens/nutrient_detail_screen.dart';
 import 'package:macromatrix/ui/theme.dart';
+import 'package:macromatrix/ui/widgets/day_charts.dart';
 
 void main() {
   setUpAll(() async {
@@ -72,6 +75,37 @@ void main() {
     expect(find.text('2 van 7 dagen gelogd'), findsOneWidget);
     expect(find.text('Waar kwam het vandaan in deze periode'), findsOneWidget);
     expect(find.text('2× gelogd'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('30 dagen: gemiddelde boven de grafiek, en een aangetikte staaf toont zijn dag en waarde', (tester) async {
+    final s = newState();
+    final oats = s.foods.search('oats', limit: 1).first;
+    s.shiftDay(-1);
+    s.addFood(oats, meal: Meal.breakfast, grams: 100, quantity: 100);
+    s.shiftDay(-1);
+    s.addFood(oats, meal: Meal.breakfast, grams: 50, quantity: 50);
+    s.goToToday();
+    final n = nutrientByKey['protein']!;
+    final today = DateTime(s.date.year, s.date.month, s.date.day);
+    final yesterday = DateTime(today.year, today.month, today.day - 1);
+    final daily = s.dailyTotals(DateTime(today.year, today.month, today.day - 2), yesterday);
+    final vals = [for (final t in daily.values) t[n.key]];
+    final mean = vals.reduce((a, b) => a + b) / vals.length;
+    final dayValue = daily[dayKey(yesterday)]![n.key];
+
+    await pump(tester, s, NutrientDetailScreen(nutrient: n), height: 2400);
+    expect(find.text('Laatste 30 dagen'), findsOneWidget);
+    expect(find.text('Gemiddeld ${formatAmount(mean, n)} ${n.unit}'), findsOneWidget);
+
+    // Gisteren is de voorlaatste van 30 staven; rechts staat een kolom met waarden
+    final chart = tester.getRect(find.byType(DayBarsChart));
+    final step = (chart.width - DayBarsChart.axisGutter) / 30;
+    await tester.tapAt(Offset(chart.left + step * 28.5, chart.bottom - 4));
+    await tester.pump();
+    expect(find.text(DateFormat('E d MMM', appLocale).format(yesterday)), findsOneWidget);
+    expect(find.text('${formatAmount(dayValue, n)} ${n.unit}'), findsWidgets);
+    expect(find.textContaining('Gemiddeld '), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
