@@ -7,6 +7,7 @@ import '../../state/app_state.dart';
 import '../../sync/friends.dart';
 import '../theme.dart';
 import 'kit.dart';
+import 'pro_widgets.dart';
 import 'share_actions.dart';
 
 /// Icoon per categorie: blijft hetzelfde over alle niveaus.
@@ -28,6 +29,11 @@ const _icons = <String, IconData>{
   'perfectweek': Icons.event_available_rounded,
   'scanner': Icons.qr_code_scanner_rounded,
   'social': Icons.groups_rounded,
+  // Supporterbadges (alleen met Pro)
+  'labels': Icons.sell_rounded,
+  'offshare': Icons.public_rounded,
+  'chef': Icons.restaurant_menu_rounded,
+  'loyal': Icons.favorite_rounded,
 };
 
 /// Kleurverloop per niveau: brons, zilver, goud, platina, diamant.
@@ -115,7 +121,8 @@ class BadgeIcon extends StatelessWidget {
 }
 
 /// Uitleg van een categorie: alle niveaus met je voortgang.
-void showBadgeCategory(BuildContext context, String id, {int? value, int? tier}) {
+/// [paused]: een supporterbadge van iemand zonder Pro (meer): wat verdiend is blijft, maar de voortgang staat stil.
+void showBadgeCategory(BuildContext context, String id, {int? value, int? tier, bool paused = false}) {
   final c = categoryById[id];
   if (c == null) return;
   showDialog<void>(
@@ -138,7 +145,18 @@ void showBadgeCategory(BuildContext context, String id, {int? value, int? tier})
                 textAlign: TextAlign.center,
                 style: TextStyle(fontWeight: FontWeight.w700, color: tierColor(t)),
               ),
-              if (value != null && t < 5) ...[
+              if (value != null && paused) ...[
+                const SizedBox(height: 8),
+                Text(
+                  tr(
+                    'You keep what you earned. Progress continues while you have Pro.',
+                    'Wat je verdiende, blijft. De voortgang loopt verder zolang je Pro hebt.',
+                  ),
+                  key: const Key('badge-paused'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: pal.ink3),
+                ),
+              ] else if (value != null && t < 5) ...[
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
@@ -230,8 +248,7 @@ class ShowcaseRow extends StatelessWidget {
 /// Titel kiezen uit de titels die je vrijspeelde.
 Future<void> pickTitle(BuildContext context) async {
   final s = context.read<AppState>();
-  final tiers = context.read<Friends>().tiers;
-  final available = availableTitles(tiers);
+  final available = context.read<Friends>().availableTitlesNow;
   final picked = await showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
@@ -255,14 +272,17 @@ Future<void> pickTitle(BuildContext context) async {
                   style: TextStyle(fontSize: 13, color: pal.ink2),
                 ),
               ),
-              for (final t in titles)
+              // Supportertitels alleen als je ze hebt: zonder Pro staan ze hier niet als lokmiddel
+              for (final t in titles.where((t) => !t.pro || available.contains(t)))
                 Builder(
                   builder: (ctx) {
                     final open = available.contains(t);
                     final c = t.category == null ? null : categoryById[t.category];
                     return ListTile(
                       enabled: open,
-                      leading: c == null ? const Icon(Icons.person_rounded) : BadgeIcon(category: c.id, tier: open ? t.tier : 0, size: 34),
+                      leading: c == null
+                          ? Icon(t.pro ? Icons.favorite_rounded : Icons.person_rounded)
+                          : BadgeIcon(category: c.id, tier: open ? t.tier : 0, size: 34),
                       title: Text(t.name),
                       subtitle: open || c == null ? null : Text('${c.name} · ${tierName(t.tier)}: ${c.goal(c.thresholds[t.tier - 1])}'),
                       trailing: s.title == t.id ? Icon(Icons.check_circle_rounded, color: pal.brand) : null,
@@ -379,15 +399,20 @@ class _BadgesCardState extends State<BadgesCard> {
     final pal = context.pal;
     final f = context.watch<Friends>();
     context.watch<AppState>();
+    proOf(context);
     final values = f.badgeValuesNow;
     final tiers = badgeTiers(values);
     final showcase = f.showcase;
     final total = tiers.values.fold(0, (a, b) => a + b);
+    final isPro = f.proActive;
+    // Supporterbadges tellen pas mee in het totaal als je Pro hebt of er al een verdiende
+    final counted = badgeCategories.where((c) => !c.pro || isPro || (tiers[c.id] ?? 0) > 0).length;
     final groups = [
       (BadgeGroup.logging, tr('Logging', 'Loggen')),
       (BadgeGroup.nutrition, tr('Nutrition', 'Voeding')),
       (BadgeGroup.level, 'Level'),
       (BadgeGroup.battle, 'Battles'),
+      (BadgeGroup.supporter, tr('Supporter', 'Supporter')),
     ];
     return Panel(
       shadow: false,
@@ -396,10 +421,7 @@ class _BadgesCardState extends State<BadgesCard> {
         children: [
           PanelTitle(
             'Badges',
-            trailing: Text(
-              tr('$total / ${badgeCategories.length * 5} tiers', '$total / ${badgeCategories.length * 5} niveaus'),
-              style: TextStyle(fontSize: 12, color: pal.ink3),
-            ),
+            trailing: Text(tr('$total / ${counted * 5} tiers', '$total / ${counted * 5} niveaus'), style: TextStyle(fontSize: 12, color: pal.ink3)),
           ),
           const SizedBox(height: 8),
           Row(
@@ -436,29 +458,55 @@ class _BadgesCardState extends State<BadgesCard> {
                 runSpacing: 12,
                 children: [
                   for (final c in badgeCategories.where((c) => c.group == g))
-                    InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => showBadgeCategory(context, c.id, value: values[c.id] ?? 0),
-                      child: SizedBox(
-                        width: 72,
-                        child: Column(
-                          children: [
-                            BadgeIcon(category: c.id, tier: tiers[c.id]!, size: 46),
-                            const SizedBox(height: 9),
-                            Text(
-                              c.name,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              style: TextStyle(fontSize: 11, height: 1.2, color: tiers[c.id]! > 0 ? pal.ink : pal.ink3),
-                            ),
-                            Text(
-                              tierName(tiers[c.id]!),
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: tierColor(tiers[c.id]!)),
-                            ),
-                          ],
+                    // Supporterbadge zonder Pro en nog niet verdiend: op slot met een Pro-label; een tik opent Pro
+                    if (c.pro && !isPro && tiers[c.id]! == 0)
+                      InkWell(
+                        key: ValueKey('badge-locked-${c.id}'),
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => openProScreen(context),
+                        child: SizedBox(
+                          width: 72,
+                          child: Column(
+                            children: [
+                              BadgeIcon(category: c.id, tier: 0, size: 46),
+                              const SizedBox(height: 9),
+                              Text(
+                                c.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                style: TextStyle(fontSize: 11, height: 1.2, color: pal.ink3),
+                              ),
+                              const SizedBox(height: 2),
+                              const ProTag(),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      InkWell(
+                        key: ValueKey('badge-${c.id}'),
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => showBadgeCategory(context, c.id, value: values[c.id] ?? 0, paused: c.pro && !isPro),
+                        child: SizedBox(
+                          width: 72,
+                          child: Column(
+                            children: [
+                              BadgeIcon(category: c.id, tier: tiers[c.id]!, size: 46),
+                              const SizedBox(height: 9),
+                              Text(
+                                c.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                style: TextStyle(fontSize: 11, height: 1.2, color: tiers[c.id]! > 0 ? pal.ink : pal.ink3),
+                              ),
+                              Text(
+                                tierName(tiers[c.id]!),
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: tierColor(tiers[c.id]!)),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                 ],
               ),
             ],

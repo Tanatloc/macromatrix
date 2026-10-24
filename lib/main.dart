@@ -47,6 +47,9 @@ Future<void> main() async {
   final account = Account(user, onRemoteChanges: state.reloadFromDisk);
   unawaited(account.init());
   final reminders = Reminders(state);
+  // Pro-status en fototeller: meteen gemaakt, zodat de status na het inloggen meteen opgehaald wordt (en de
+  // vriendenlijst er de supporterbadges uit kan halen)
+  final pro = Pro(account);
 
   runApp(
     MultiProvider(
@@ -55,9 +58,8 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: account),
         Provider.value(value: reminders),
         // Niet lui: moet vanaf de start je level en score doorsturen, ook als je het vriendenscherm niet opent
-        ChangeNotifierProvider(lazy: false, create: (_) => Friends(state, account)),
-        // Pro-status en fototeller: niet lui, zodat de status na het inloggen meteen opgehaald wordt
-        ChangeNotifierProvider(lazy: false, create: (_) => Pro(account)),
+        ChangeNotifierProvider(lazy: false, create: (_) => Friends(state, account, pro: pro)),
+        ChangeNotifierProvider.value(value: pro),
       ],
       child: const MacroMatrixApp(),
     ),

@@ -10,9 +10,12 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase/supabase.dart';
 
 import '../nutrition/badges.dart';
+import '../nutrition/supporter.dart';
 import '../state/app_state.dart';
 import 'account.dart';
 import 'challenges.dart';
+import 'pro.dart';
+import 'supporter_tracker.dart';
 import '../i18n.dart';
 import '../platform/battle_notify.dart';
 
@@ -120,9 +123,13 @@ class Battle {
 DateTime mondayOf(DateTime d) => DateTime(d.year, d.month, d.day - (d.weekday - 1));
 
 class Friends extends ChangeNotifier {
-  Friends(this.state, this.account) {
+  /// [pro]: voor de supporterbadges en -titels (zonder telt alles als geen Pro).
+  Friends(this.state, this.account, {this.pro}) {
     state.addListener(_changed);
     account.addListener(_changed);
+    pro?.addListener(_changed);
+    _supporter = pro == null ? null : SupporterTracker(state.user, account, pro!);
+    _supporter?.update();
     // Verzoeken en levels van vrienden ook ophalen als het tabblad dicht is (voor het bolletje op het tabblad)
     _background = Timer.periodic(const Duration(minutes: 2), (_) => _loadQuietly());
   }
@@ -135,6 +142,21 @@ class Friends extends ChangeNotifier {
 
   final AppState state;
   final Account account;
+  final Pro? pro;
+  SupporterTracker? _supporter;
+
+  /// Loopt Pro nu?
+  bool get proActive => pro?.isPro ?? false;
+
+  /// Je Pro-geschiedenis (eerste Pro-datum, maanden, wat je verdiende).
+  SupporterRecord get supporterRecord => supporterRecordOf(state.user);
+
+  /// Supportertitels: Supporter zodra je Pro hebt of had, Stichter als dat in het eerste jaar was.
+  bool get hadPro => proActive || supporterRecord.hadPro;
+  bool get founder => isFounder(supporterRecord.firstPro ?? (proActive ? DateTime.now() : null));
+
+  /// Titels die je nu mag kiezen.
+  List<ProfileTitle> get availableTitlesNow => availableTitles(tiers, supporter: hadPro, founder: founder);
 
   /// Uitdagingen (alleen of met vrienden); ververst samen met de vriendenlijst.
   late final Challenges challenges = Challenges(state, account);
@@ -165,6 +187,7 @@ class Friends extends ChangeNotifier {
   String? _uid;
 
   void _changed() {
+    _supporter?.update();
     final uid = account.user?.id;
     if (uid != _uid) {
       if (uid != null) Timer(const Duration(seconds: 2), _loadQuietly);
@@ -225,14 +248,24 @@ class Friends extends ChangeNotifier {
     return battles.where((b) => b.other == friendId && b.week == monday && (b.accepted || b.pending)).firstOrNull;
   }
 
-  /// Je waarde en niveau per badgecategorie.
-  Map<String, int> get badgeValuesNow => badgeValues(
-    days: state.dayStats,
-    level: state.level,
-    battles: record,
-    friends: list.where((x) => x.state == FriendState.friend).length,
-    scanned: state.scannedCount,
-  );
+  /// Je waarde en niveau per badgecategorie, met de supporterbadges (alleen met Pro; zie supporter.dart).
+  Map<String, int> get badgeValuesNow => {
+    ...badgeValues(
+      days: state.dayStats,
+      level: state.level,
+      battles: record,
+      friends: list.where((x) => x.state == FriendState.friend).length,
+      scanned: state.scannedCount,
+    ),
+    ...supporterValues(
+      active: proActive,
+      record: supporterRecord,
+      now: DateTime.now(),
+      customFoods: proActive ? state.user.customFoodCount() : 0,
+      offShared: proActive ? offSharedCount(state.user) : 0,
+      recipes: proActive ? state.user.recipeCount() : 0,
+    ),
+  };
   Map<String, int> get tiers => badgeTiers(badgeValuesNow);
 
   /// De 3 badges die vrienden zien.
@@ -437,10 +470,7 @@ class Friends extends ChangeNotifier {
     if (ok == true) {
       list = [
         for (final x in list)
-          if (x.id != f.id)
-            x
-          else if (accept)
-            Friend(id: x.id, name: x.name, state: FriendState.friend, avatar: x.avatar, level: x.level),
+          if (x.id != f.id) x else if (accept) Friend(id: x.id, name: x.name, state: FriendState.friend, avatar: x.avatar, level: x.level),
       ];
       notifyListeners();
     }
@@ -459,6 +489,7 @@ class Friends extends ChangeNotifier {
     challenges.dispose();
     state.removeListener(_changed);
     account.removeListener(_changed);
+    pro?.removeListener(_changed);
     super.dispose();
   }
 }

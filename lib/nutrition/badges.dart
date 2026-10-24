@@ -37,7 +37,8 @@ class BattleRecord {
   final int played, wins, bestWinStreak, comebacks;
 }
 
-enum BadgeGroup { logging, nutrition, level, battle }
+/// [supporter]: badges die alleen met Pro tellen (zie supporter.dart).
+enum BadgeGroup { logging, nutrition, level, battle, supporter }
 
 /// Namen van de niveaus.
 const tierNames = [('Bronze', 'Brons'), ('Silver', 'Zilver'), ('Gold', 'Goud'), ('Platinum', 'Platina'), ('Diamond', 'Diamant')];
@@ -48,6 +49,9 @@ class BadgeCategory {
   const BadgeCategory(this.id, this.group, this._name, this.thresholds, this._goal);
   final String id;
   final BadgeGroup group;
+
+  /// Supporterbadge: telt alleen met Pro (zie supporter.dart).
+  bool get pro => group == BadgeGroup.supporter;
   final (String, String) _name;
 
   /// Waarde nodig voor niveau 1 tot 5.
@@ -120,19 +124,46 @@ const badgeCategories = [
     'Win # battles you were losing after Wednesday.',
     'Win # battles waarin je na woensdag achterstond.',
   )),
+  // Supporterbadges (alleen met Pro). Het badgesysteem heeft vijf niveaus; het vijfde (diamant) is er telkens bij
+  // gekomen bovenop de vier afgesproken drempels.
+  BadgeCategory('labels', BadgeGroup.supporter, ('Label hunter', 'Etiketjager'), [10, 50, 100, 250, 500], (
+    'Add # products of your own.',
+    'Voeg # eigen producten toe.',
+  )),
+  BadgeCategory('offshare', BadgeGroup.supporter, ('World improver', 'Wereldverbeteraar'), [1, 10, 25, 50, 100], (
+    'Share # products with Open Food Facts.',
+    'Deel # producten met Open Food Facts.',
+  )),
+  BadgeCategory('chef', BadgeGroup.supporter, ('Chef', 'Chef'), [5, 10, 25, 50, 100], (
+    'Create or import # recipes.',
+    'Maak of importeer # recepten.',
+  )),
+  BadgeCategory('loyal', BadgeGroup.supporter, ('Loyal supporter', 'Trouwe supporter'), [3, 6, 12, 24, 36], (
+    'Support MacroMatrix with Pro for # months.',
+    'Steun MacroMatrix # maanden met Pro.',
+  )),
 ];
 
 final categoryById = {for (final c in badgeCategories) c.id: c};
 
 /// Titels bij je avatar (voor vrienden), vrijgespeeld door een niveau in een categorie.
 class ProfileTitle {
-  const ProfileTitle(this.id, this._name, [this.category, this.tier = 0]);
+  const ProfileTitle(this.id, this._name, [this.category, this.tier = 0, this.need = TitleNeed.none]);
   final String id;
   final (String, String) _name;
   final String? category;
   final int tier;
+
+  /// Extra voorwaarde buiten de badges (supportertitels).
+  final TitleNeed need;
   String get name => tr(_name.$1, _name.$2);
+
+  /// Supportertitel: alleen te verdienen met Pro. Zonder ooit Pro staat ze nergens (ook niet als slot).
+  bool get pro => need != TitleNeed.none || (category != null && categoryById[category]?.pro == true);
 }
+
+/// [supporter]: ooit Pro gehad; [founder]: Pro geworden in het eerste jaar (zie supporter.dart).
+enum TitleNeed { none, supporter, founder }
 
 const titles = [
   ProfileTitle('rookie', ('Rookie', 'Beginner')),
@@ -149,6 +180,10 @@ const titles = [
   ProfileTitle('explorer', ('Food explorer', 'Ontdekkingsreiziger'), 'variety', 3),
   ProfileTitle('protein_pro', ('Protein pro', 'Eiwitprof'), 'protein', 3),
   ProfileTitle('label_reader', ('Label reader', 'Etiketlezer'), 'scanner', 3),
+  // Supportertitels. Eenmaal verdiend blijven ze, ook als Pro stopt (zie supporter.dart).
+  ProfileTitle('supporter', ('Supporter', 'Supporter'), null, 0, TitleNeed.supporter),
+  ProfileTitle('patron', ('Patron', 'Mecenas'), 'loyal', 3),
+  ProfileTitle('founder', ('Founder', 'Stichter'), null, 0, TitleNeed.founder),
 ];
 
 final titleById = {for (final t in titles) t.id: t};
@@ -210,10 +245,16 @@ Map<String, int> badgeValues({
 /// Niveau per categorie (0 = nog niet verdiend).
 Map<String, int> badgeTiers(Map<String, int> values) => {for (final c in badgeCategories) c.id: c.tierFor(values[c.id] ?? 0)};
 
-/// Titels die je mag kiezen.
-List<ProfileTitle> availableTitles(Map<String, int> tiers) => [
+/// Titels die je mag kiezen. [supporter]: je had ooit Pro (of nu); [founder]: je werd Pro in het eerste jaar.
+List<ProfileTitle> availableTitles(Map<String, int> tiers, {bool supporter = false, bool founder = false}) => [
   for (final t in titles)
-    if (t.category == null || (tiers[t.category] ?? 0) >= t.tier) t,
+    if (switch (t.need) {
+          TitleNeed.none => true,
+          TitleNeed.supporter => supporter,
+          TitleNeed.founder => supporter && founder,
+        } &&
+        (t.category == null || (tiers[t.category] ?? 0) >= t.tier))
+      t,
 ];
 
 /// Showcase: de gekozen categorieën die je verdiend hebt, aangevuld met je hoogste niveaus tot 3.

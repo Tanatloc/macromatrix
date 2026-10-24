@@ -10,6 +10,7 @@ import '../platform/home_widget_sync.dart';
 import 'widgets/quick_log.dart';
 import '../state/app_state.dart';
 import '../sync/friends.dart';
+import '../sync/pro.dart';
 
 import 'screens/oracle_screen.dart';
 import 'screens/planner_screen.dart';
@@ -48,12 +49,16 @@ class _ShellState extends State<Shell> {
   int _index = 0;
   late final AppState _state = context.read<AppState>();
 
+  /// Pro (als het er is): supporterbadges kunnen een niveau stijgen als Pro begint of de maanden tellen.
+  late final Pro? _pro = context.read<Pro?>();
+
   @override
   void initState() {
     super.initState();
     _state.addListener(_checkLevel);
     _state.addListener(_checkStreak);
     _state.addListener(_scheduleBadgeCheck);
+    _pro?.addListener(_scheduleBadgeCheck);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLevel();
       HealthSync(_state).sync();
@@ -87,6 +92,7 @@ class _ShellState extends State<Shell> {
     _state.removeListener(_checkLevel);
     _state.removeListener(_checkStreak);
     _state.removeListener(_scheduleBadgeCheck);
+    _pro?.removeListener(_scheduleBadgeCheck);
     _badgeTimer?.cancel();
     _lifecycle?.dispose();
     _state.removeListener(_updateWidget);

@@ -643,6 +643,10 @@ class UserDb {
     for (final r in _db.select("SELECT * FROM foods WHERE source = 'custom' AND deleted = 0 ORDER BY name COLLATE NOCASE")) _food(r),
   ];
 
+  /// Aantal eigen producten en recepten (voor de supporterbadges Etiketjager en Chef).
+  int customFoodCount() => _db.select("SELECT COUNT(*) AS n FROM foods WHERE source = 'custom' AND deleted = 0").first['n'] as int;
+  int recipeCount() => _db.select("SELECT COUNT(*) AS n FROM foods WHERE source = 'recipe' AND deleted = 0").first['n'] as int;
+
   // ── Recepten (bewaard als voedingsmiddel met de ingrediënten erbij) ──
 
   Recipe _recipe(Row r) => Recipe.fromJson(r['id'] as String, r['name'] as String, (jsonDecode(r['extra'] as String) as Map).cast<String, Object?>());
