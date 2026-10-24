@@ -16,6 +16,7 @@ import '../widgets/kit.dart';
 import '../widgets/macro_schedule.dart';
 import '../widgets/pro_widgets.dart';
 import 'import_screen.dart';
+import 'roadmap_screen.dart';
 import 'supplements_screen.dart';
 import '../../i18n.dart';
 import '../../platform/health_sync.dart';
@@ -217,6 +218,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const AccountCard(),
                   const SizedBox(height: 10),
                   const ProTile(),
+                  const SizedBox(height: 10),
+                  const RoadmapTile(),
                   const SizedBox(height: 10),
                   const MacroScheduleCard(),
                   const SizedBox(height: 10),

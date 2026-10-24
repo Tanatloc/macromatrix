@@ -8,6 +8,7 @@ import '../../sync/purchase.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
 import '../widgets/pro_widgets.dart';
+import 'roadmap_screen.dart';
 
 /// Pro: eerlijk uitgelegd. Wat gratis blijft (bijna alles), wat Pro toevoegt en waarom, de prijzen, je status, en
 /// abonneren (voorlopig "Binnenkort", zie [PurchaseProvider]) of een aankoop herstellen.
@@ -205,6 +206,17 @@ class _ProScreenState extends State<ProScreen> {
                           'Een uitgebreid jaaroverzicht: voedingsstoffen per maand, je top 10 en je records',
                         ),
                         color: p.brand,
+                      ),
+                      // Vroege toegang en meestemmen over de roadmap (sync/features.dart, sync/roadmap.dart)
+                      bullet(Icons.bolt_rounded, tr('Early access to new features', 'Vroege toegang tot nieuwe functies'), color: p.brand),
+                      bullet(Icons.how_to_vote_outlined, tr('Vote on what we build next', 'Mee stemmen over wat we hierna maken'), color: p.brand),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          key: const ValueKey('pro-roadmap'),
+                          onPressed: () => openRoadmapScreen(context),
+                          child: Text(tr("See what's next", 'Bekijk wat er komt')),
+                        ),
                       ),
                     ],
                   ),
