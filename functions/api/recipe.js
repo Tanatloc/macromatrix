@@ -18,7 +18,7 @@ const MAX_REDIRECTS = 3;
 const MAX_TEXT = 12_000;
 const MAX_LINES = 60;
 
-const USER_AGENT = 'MacroMatrix/1.13.0 (app.divinenet.online)';
+const USER_AGENT = 'MacroMatrix/1.13.0 (macromatrix.eu)';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Tegen SSRF: alleen gewone adressen op het internet

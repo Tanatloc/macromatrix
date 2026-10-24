@@ -150,7 +150,7 @@ class WeeklyReportScreen extends StatelessWidget {
         tr('Notes:', 'Notities:'),
         for (final n in r.notes.entries) '- ${day.format(DateTime.parse(n.key))}: ${n.value.replaceAll('\n', ' ')}',
       ],
-      'app.divinenet.online',
+      'macromatrix.eu',
     ].join('\n');
   }
 

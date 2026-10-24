@@ -13,7 +13,7 @@ friends, levels, badges and weekly battles to keep you going. European data firs
   <img src="site/assets/img/levels-dark.webp" width="200" alt="Profile with level and badges">
 </p>
 
-- **Website and web app:** https://app.divinenet.online
+- **Website and web app:** https://macromatrix.eu
 - **Android:** [GitHub releases](https://github.com/Tanatloc/macromatrix-releases/releases/latest), with automatic
   updates through [Obtainium](https://github.com/ImranR98/Obtainium) (add `https://github.com/Tanatloc/macromatrix-releases`)
 

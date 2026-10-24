@@ -9,7 +9,7 @@ en cijfers), bevestigd met een code per e-mail; wachtwoord vergeten gaat ook met
 
 - Project `hvqbqgxpksxmavopngap` (regio eu-west-1, Ierland), gegevens in `supabase.json` (publieke anon-sleutel).
 - Migraties toegepast (tabellen + opruimen van onbevestigde accounts na 30 dagen met pg_cron); Site URL
-  `https://app.divinenet.online`; codes van 6 cijfers, 15 minuten geldig.
+  `https://macromatrix.eu`; codes van 6 cijfers, 15 minuten geldig.
 - Mails (Engels, zie `templates/`, met `{{ .Token }}`): *Confirm signup* (bevestigen), *Reset password* (nieuw wachtwoord),
   melding bij een gewijzigd wachtwoord.
 - Mail via Brevo (smtp-relay.brevo.com:587, afzender `noreply@divinenet.online`, naam MacroMatrix), max. 60
@@ -35,7 +35,7 @@ en cijfers), bevestigd met een code per e-mail; wachtwoord vergeten gaat ook met
 
    Onderwerp, bv.: `Je inlogcode voor MacroMatrix`.
 4. **Adressen**: *Authentication* → *URL Configuration* → *Site URL*: het adres van de webversie
-   (bv. `https://app.divinenet.online`).
+   (bv. `https://macromatrix.eu`).
 5. **Eigen mailserver**: de ingebouwde mail van Supabase stuurt alleen naar leden van het project (max. 2 per
    uur) en laat geen eigen mailtekst toe. Met Brevo (EU, gratis 300 mails/dag):
    - domein `divinenet.online` toevoegen en de DNS-records bij Namecheap zetten. Er mag maar één SPF-record zijn;

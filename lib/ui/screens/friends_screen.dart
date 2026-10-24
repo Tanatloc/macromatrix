@@ -483,8 +483,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       Clipboard.setData(
                         ClipboardData(
                           text: tr(
-                            'Add me on MacroMatrix (app.divinenet.online) with my code ${f.code!.substring(0, 4)}-${f.code!.substring(4)}',
-                            'Voeg me toe in MacroMatrix (app.divinenet.online) met mijn code ${f.code!.substring(0, 4)}-${f.code!.substring(4)}',
+                            'Add me on MacroMatrix (macromatrix.eu) with my code ${f.code!.substring(0, 4)}-${f.code!.substring(4)}',
+                            'Voeg me toe in MacroMatrix (macromatrix.eu) met mijn code ${f.code!.substring(0, 4)}-${f.code!.substring(4)}',
                           ),
                         ),
                       );

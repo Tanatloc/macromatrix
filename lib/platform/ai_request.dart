@@ -11,7 +11,7 @@ import 'package:http/http.dart' as http;
 import '../sync/pro.dart' show PhotoQuota;
 
 /// In de browser naar de eigen site (zelfde herkomst), in de app naar de vaste server.
-Uri apiEndpoint(String path) => kIsWeb ? Uri.base.resolve(path) : Uri.https('app.divinenet.online', path);
+Uri apiEndpoint(String path) => kIsWeb ? Uri.base.resolve(path) : Uri.https('macromatrix.eu', path);
 
 /// Een fout van de server of de verbinding. [code]: login, not_configured, quota, pro_required, too_many, too_big,
 /// bad_image, bad_url, unreadable, no_per100, implausible, no_recipe, timeout, fetch_failed, not_html, network of

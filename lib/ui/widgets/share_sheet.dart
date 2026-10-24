@@ -129,7 +129,7 @@ class _ShareSheetState extends State<ShareSheet> {
   bool _busy = false;
 
   /// Bijschrift bij het delen: kort, met het webadres.
-  String get _caption => tr('Made with MacroMatrix · app.divinenet.online', 'Gemaakt met MacroMatrix · app.divinenet.online');
+  String get _caption => tr('Made with MacroMatrix · macromatrix.eu', 'Gemaakt met MacroMatrix · macromatrix.eu');
 
   Future<void> _share(bool dark) async {
     setState(() => _busy = true);

@@ -1,5 +1,5 @@
 // Cloudflare Pages Function: realtime-meldingen van Google Play (Real-time developer notifications), via een
-// Pub/Sub-pushabonnement op https://app.divinenet.online/api/play-rtdn?secret=<PLAY_RTDN_SECRET>.
+// Pub/Sub-pushabonnement op https://macromatrix.eu/api/play-rtdn?secret=<PLAY_RTDN_SECRET>.
 //
 // Bij elke melding over een abonnement (verlengd, opgezegd, terugbetaald, afgelopen, ...) kijken we dat abonnement
 // opnieuw na bij Google en werken we pro_status bij voor het gekoppelde account, ook als de app niet geopend wordt.

@@ -38,7 +38,7 @@ class CloudVoice {
       final bytes = kIsWeb ? (await http.get(Uri.parse(path))).bodyBytes : await file!.readAsBytes();
       final uri = kIsWeb
           ? Uri.base.resolve('/api/voice').replace(queryParameters: {'lang': lang})
-          : Uri.https('app.divinenet.online', '/api/voice', {'lang': lang});
+          : Uri.https('macromatrix.eu', '/api/voice', {'lang': lang});
       final res = await http
           .post(uri, headers: {'Authorization': 'Bearer $token', 'Content-Type': 'audio/wav'}, body: bytes)
           .timeout(const Duration(seconds: 40));

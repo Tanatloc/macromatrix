@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 API = 'https://dataportal.livsmedelsverket.se/livsmedel/api/v1/livsmedel'
-UA = {'User-Agent': 'MacroMatrix-databuild/0.1 (https://app.divinenet.online)', 'Accept': 'application/json'}
+UA = {'User-Agent': 'MacroMatrix-databuild/0.1 (https://macromatrix.eu)', 'Accept': 'application/json'}
 
 
 def get(url):

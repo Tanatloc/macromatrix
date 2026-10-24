@@ -114,7 +114,7 @@ void main() {
             await pumpCard(tester, e.value(show), dark: dark);
             expect(tester.takeException(), isNull, reason: '${e.key} $lang dark=$dark show=$show');
             expect(tester.getSize(find.byType(ShareCardFrame)), shareCardSize);
-            expect(find.text('app.divinenet.online'), findsOneWidget);
+            expect(find.text('macromatrix.eu'), findsOneWidget);
             expect(find.text('MacroMatrix'), findsOneWidget);
           }
         }

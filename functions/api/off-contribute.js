@@ -13,7 +13,7 @@ import { checkPer100, num } from './label.js';
 
 const PER_HOUR = 10;
 export const APP_VERSION = '1.13.0';
-export const USER_AGENT = `MacroMatrix/${APP_VERSION} (app.divinenet.online)`;
+export const USER_AGENT = `MacroMatrix/${APP_VERSION} (macromatrix.eu)`;
 
 // Onze sleutels → velden van Open Food Facts (nutriment_<naam> met een eenheid)
 const FIELDS = [

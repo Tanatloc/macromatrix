@@ -130,7 +130,7 @@ class FdcClient {
     final params = {'code': barcode};
     final uri = isWeb
         ? Uri.base.resolve('/api/fdc/barcode').replace(queryParameters: params)
-        : Uri.https('app.divinenet.online', '/api/fdc/barcode', params);
+        : Uri.https('macromatrix.eu', '/api/fdc/barcode', params);
     try {
       final res = await _http.get(uri).timeout(const Duration(seconds: 15));
       if (res.statusCode != 200) return null;

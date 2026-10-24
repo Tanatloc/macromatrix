@@ -20,7 +20,7 @@ import '../../i18n.dart';
 import '../../nutrition/allergens.dart';
 import '../widgets/number_input.dart';
 
-const siteUrl = 'https://app.divinenet.online';
+const siteUrl = 'https://macromatrix.eu';
 
 /// Een pagina van de website openen: op het web in een nieuw tabblad (behalve de homepage), anders in de browser.
 Future<void> openPage(String path) => launchUrl(

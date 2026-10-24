@@ -23,6 +23,6 @@ class PermissionsRationaleActivity : Activity() {
     }
 
     companion object {
-        const val PRIVACY_URL = "https://app.divinenet.online/privacy/#health-connect"
+        const val PRIVACY_URL = "https://macromatrix.eu/privacy/#health-connect"
     }
 }

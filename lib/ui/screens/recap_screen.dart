@@ -30,7 +30,7 @@ class RecapScreen extends StatelessWidget {
     tr('Average Nutrient score: ${r.avgScore}', 'Gemiddelde Voedingsscore: ${r.avgScore}'),
     tr('Longest streak: ${r.longestStreak} days · ${fmtInt(r.xp)} XP', 'Langste reeks: ${r.longestStreak} dagen · ${fmtInt(r.xp)} XP'),
     if (r.topFoods.isNotEmpty) tr('Most logged: ${r.topFoods.first.$1}', 'Meest gelogd: ${r.topFoods.first.$1}'),
-    'app.divinenet.online',
+    'macromatrix.eu',
   ].join('\n');
 
   @override

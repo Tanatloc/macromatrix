@@ -123,7 +123,7 @@ class ShareCardFrame extends StatelessWidget {
                 ),
                 const SizedBox(width: 24),
                 Text(
-                  'app.divinenet.online',
+                  'macromatrix.eu',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: p.brand),
                 ),
               ],

@@ -10,4 +10,4 @@ curl -X PATCH -H "Authorization: Bearer <sbp_token>" -H "Content-Type: applicati
 ```
 
 Of met de hand: *Authentication* → *Emails* → *Templates*, per template het onderwerp en de HTML uit het bestand.
-Het logo bovenaan komt van https://app.divinenet.online/assets/img/logo-112.png (site/assets/img).
+Het logo bovenaan komt van https://macromatrix.eu/assets/img/logo-112.png (site/assets/img).

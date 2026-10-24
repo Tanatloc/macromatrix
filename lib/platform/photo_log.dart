@@ -38,7 +38,7 @@ class PhotoLog {
   PhotoQuota? lastQuota;
 
   /// In de browser naar de eigen site (zelfde herkomst), in de app naar de vaste server.
-  static Uri get endpoint => kIsWeb ? Uri.base.resolve('/api/photo') : Uri.https('app.divinenet.online', '/api/photo');
+  static Uri get endpoint => kIsWeb ? Uri.base.resolve('/api/photo') : Uri.https('macromatrix.eu', '/api/photo');
 
   /// De verkleinde foto opsturen en de zin terugkrijgen (leeg = geen eten gezien). Gooit een [PhotoLogException]
   /// met een code: login, not_configured, quota (gratis foto's van vandaag op, met [PhotoLogException.quota]),

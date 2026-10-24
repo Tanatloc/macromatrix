@@ -159,7 +159,7 @@ function sub({ state = 'SUBSCRIPTION_STATE_ACTIVE', product = 'pro_yearly', expi
 }
 
 function req(body, auth = 'Bearer user-a') {
-  return new Request('https://app.divinenet.online/api/play-verify', {
+  return new Request('https://macromatrix.eu/api/play-verify', {
     method: 'POST',
     headers: { Authorization: auth, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -346,7 +346,7 @@ test('Google of Supabase faalt: 502 failed, zonder tokens in het logboek', async
 
 function push(notification, secret = 'rtdn-secret-123') {
   const data = Buffer.from(JSON.stringify(notification)).toString('base64');
-  return new Request(`https://app.divinenet.online/api/play-rtdn?secret=${encodeURIComponent(secret)}`, {
+  return new Request(`https://macromatrix.eu/api/play-rtdn?secret=${encodeURIComponent(secret)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: { data, messageId: '1' }, subscription: 'projects/x/subscriptions/play' }),

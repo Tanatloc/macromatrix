@@ -11,7 +11,7 @@ export async function onRequestGet({ request }) {
   if (!target.searchParams.get('q')) return new Response('{"error":"q ontbreekt"}', { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   const res = await fetch(target, {
-    headers: { 'User-Agent': 'MacroMatrix/0.1 (https://app.divinenet.online)', Accept: 'application/json' },
+    headers: { 'User-Agent': 'MacroMatrix/0.1 (https://macromatrix.eu)', Accept: 'application/json' },
     cf: { cacheTtl: 3600, cacheEverything: true },
   });
   return new Response(res.body, {

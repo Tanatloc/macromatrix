@@ -14,7 +14,7 @@ flutter build linux --release
 
 Een Windows-versie kan alleen op Windows gebouwd worden (later via GitHub Actions).
 
-## Website en webversie (https://app.divinenet.online)
+## Website en webversie (https://macromatrix.eu)
 
 Gehost op **Cloudflare Pages** (project `voedingsapp`, ook https://voedingsapp.pages.dev). Elke push naar `master`
 wordt door GitHub Actions getest, gebouwd (`tool/build_site.sh`) en uitgerold. DNS: CNAME `app` → `voedingsapp.pages.dev`
