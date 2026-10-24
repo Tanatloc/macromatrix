@@ -348,8 +348,13 @@ class _OracleScreenState extends State<OracleScreen> {
   }
 
   Widget _row(Palette p, int rank, Food f, double v, double top, Nutrient n, double? goal, {bool least = false}) {
-    final portion = _rank == OracleRank.perPortion ? AppState.oraclePortion(f) : null;
-    final portionLabel = portion == null ? null : (f.portions.where((x) => x.grams == portion).firstOrNull?.label ?? '100 g');
+    final serving = _rank == OracleRank.perPortion ? AppState.oracleServing(f) : null;
+    // Altijd met het gewicht erbij: "1 cup" zonder grammen zegt niets (N36)
+    final portionLabel = serving == null
+        ? null
+        : RegExp(r'\d\s*(g|ml)\b').hasMatch(serving.label)
+        ? serving.label
+        : '${serving.label} (${fmtInt(serving.grams)} g)';
     final kcal = f.per100g['energy'];
     return InkWell(
       onTap: () => Navigator.of(context).push(

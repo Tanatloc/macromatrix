@@ -573,6 +573,7 @@ class AppState extends ChangeNotifier {
           caseSensitive: false,
         ).hasMatch(f.name);
     final kept = <Food, double>{};
+    final seen = <String>{};
     for (final (f, v) in from) {
       if (outlier(f) || _regional.hasMatch(f.name)) continue;
       if (skip != null && skip(f)) continue;
@@ -581,6 +582,8 @@ class AppState extends ChangeNotifier {
       if (!fitsPreferences(f, _preferences) || containsAllergen(f, allergies)) continue;
       if ((f.category ?? '').toLowerCase().contains('supplement') || f.label?.group == 'supplement') continue;
       if (key != 'sodium' && key != 'chloride' && _salt.hasMatch(f.name)) continue;
+      // Eén resultaat per product: dezelfde guave uit twee databanken staat er maar één keer (N36)
+      if (!seen.add(sameProductKey(f))) continue;
       kept[f] = rank == OracleRank.perPortion ? v * oraclePortion(f) / 100 : v;
     }
     return kept;
@@ -676,7 +679,35 @@ class AppState extends ChangeNotifier {
   (String, List<(Food, double)>, bool)? _oraclePool;
 
   /// Portie voor de rangschikking "per portie": de eerste herkenbare portie (5–400 g), anders 100 g.
-  static double oraclePortion(Food f) => f.portions.where((p) => p.grams >= 5 && p.grams <= 400).firstOrNull?.grams ?? 100;
+  static double oraclePortion(Food f) => oracleServing(f).grams;
+
+  /// Een gewone portie voor "per portie" in het Orakel (N36): eerst de dagelijkse portie (1 kom, 1 sneetje, 1 stuk),
+  /// dan een maat uit de databank, anders een gewone hoeveelheid per groep. Gedroogd fruit is ±30 g, geen 100 g.
+  static Portion oracleServing(Food f) {
+    final every = everydayPortions(f).firstOrNull;
+    if (every != null) return every;
+    final l = f.label;
+    final name = f.name.toLowerCase();
+    final group = l?.group ?? '';
+    final dried = l?.state == 'dried' || RegExp(r'\b(dried|dehydrated)\b').hasMatch(name);
+    final grams = switch (group) {
+      'fruit' when dried => 30.0,
+      'vegetable' when dried => 10.0,
+      'nut/seed' => 30.0,
+      'herb/spice' => 2.0,
+      'oil/fat' || 'oil' => 10.0,
+      'cheese' => 30.0,
+      'fruit' => 120.0,
+      'vegetable' => 80.0,
+      'legume' => dried ? 60.0 : 120.0,
+      'meat' || 'fish' => 120.0,
+      'beverage' => 250.0,
+      _ => null,
+    };
+    final db = f.portions.where((p) => p.grams >= 5 && p.grams <= 400).firstOrNull;
+    if (grams == null && db != null) return db;
+    return Portion(tr('${(grams ?? 100).round()} g serving', 'portie van ${(grams ?? 100).round()} g'), grams ?? 100);
+  }
 
   /// Producten van één bevolkingsgroep in de Amerikaanse tabel (gedroogde walrus, Navajo-pijnboompitten): hier niet te koop.
   static final _regional = RegExp(r'Alaska Native|Navajo|Shoshone|Hopi|Apache|Northern Plains|Oogruk', caseSensitive: false);
