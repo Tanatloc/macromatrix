@@ -80,9 +80,9 @@ Future<IndexedDbFileSystem> _userFileSystem() async {
 }
 
 /// Tekstbestand downloaden via de browser.
-Future<String?> saveTextFile(String name, String content, {String subject = ''}) async {
+Future<String?> saveTextFile(String name, String content, {String subject = '', String mime = 'text/csv'}) async {
   final bytes = utf8.encode(content);
-  final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: 'text/csv;charset=utf-8'));
+  final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: '$mime;charset=utf-8'));
   final url = web.URL.createObjectURL(blob);
   final a = web.HTMLAnchorElement()
     ..href = url

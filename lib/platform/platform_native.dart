@@ -54,11 +54,17 @@ Future<UserDb> openUserDbOnly() async {
 }
 
 /// Tekstbestand bewaren: op de gsm via "Delen", op de pc in de map Downloads. Geeft een melding terug.
-Future<String?> saveTextFile(String name, String content, {String subject = ''}) async {
+/// [mime] is het soort bestand (CSV of JSON), voor de apps waarmee je deelt.
+Future<String?> saveTextFile(String name, String content, {String subject = '', String mime = 'text/csv'}) async {
   if (Platform.isAndroid || Platform.isIOS) {
     final file = File(p.join((await getTemporaryDirectory()).path, name));
     await file.writeAsString(content);
-    await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], subject: subject));
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: mime)],
+        subject: subject,
+      ),
+    );
     return null;
   }
   final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();

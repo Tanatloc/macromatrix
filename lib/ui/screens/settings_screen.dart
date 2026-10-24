@@ -1,7 +1,9 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/backup.dart';
 import '../../data/export.dart';
 import '../../data/user_db.dart';
 import '../../platform/platform.dart';
@@ -57,6 +59,137 @@ class _SettingsScreenState extends State<SettingsScreen> {
       subject: tr('Food diary', 'Voedingsdagboek'),
     );
     if (message != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _snack(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+  /// Alles in één JSON-bestand (zie data/backup.dart), op dezelfde manier bewaard of gedeeld als de CSV.
+  Future<void> _exportAll() async {
+    final s = context.read<AppState>();
+    final message = await saveTextFile(
+      'macromatrix-backup-${dayKey(DateTime.now())}.json',
+      backupJson(s.user),
+      subject: tr('MacroMatrix backup', 'MacroMatrix-back-up'),
+      mime: 'application/json',
+    );
+    if (message != null && mounted) _snack(message);
+  }
+
+  /// Een back-up inlezen: eerst controleren, dan tonen wat erin zit en kiezen tussen samenvoegen en vervangen.
+  Future<void> _restore() async {
+    final s = context.read<AppState>();
+    final Backup backup;
+    try {
+      final picked = await FilePicker.pickFiles(
+        dialogTitle: tr('Choose a MacroMatrix backup', 'Kies een MacroMatrix-back-up'),
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+      );
+      if (picked.isEmpty || !mounted) return;
+      backup = readBackup(s.user, await picked.first.readAsBytes());
+    } on BackupException catch (e) {
+      if (mounted) _problem(e.message);
+      return;
+    } catch (e) {
+      if (mounted) _problem(tr('The file could not be read ($e).', 'Het bestand kon niet gelezen worden ($e).'));
+      return;
+    }
+    if (!mounted) return;
+    final replace = await _askRestore(backup);
+    if (replace == null || !mounted) return;
+    final (restored, skipped) = s.user.restoreRows(backup.tables, replace: replace);
+    s.reloadFromDisk();
+    _snack(
+      replace
+          ? tr('Backup restored: $restored items.', 'Back-up teruggezet: $restored items.')
+          : tr(
+              'Backup merged: $restored items added, $skipped already here.',
+              'Back-up samengevoegd: $restored items toegevoegd, $skipped stonden er al.',
+            ),
+    );
+  }
+
+  void _problem(String message) => showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(tr('Cannot restore this file', 'Dit bestand kan niet teruggezet worden')),
+      content: Text(message),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('OK', 'OK')))],
+    ),
+  );
+
+  /// Vraagt wat er moet gebeuren: true = vervangen, false = samenvoegen, null = niets.
+  Future<bool?> _askRestore(Backup b) async {
+    final at = b.exportedAt;
+    final parts = [
+      if (b.count('diary') > 0) tr('${fmtInt(b.count('diary'))} diary items', '${fmtInt(b.count('diary'))} dagboekregels'),
+      if (b.count('foods') > 0) tr('${fmtInt(b.count('foods'))} own and saved foods', '${fmtInt(b.count('foods'))} eigen en bewaarde producten'),
+      if (b.count('meals') > 0) tr('${fmtInt(b.count('meals'))} saved meals', '${fmtInt(b.count('meals'))} opgeslagen maaltijden'),
+      if (b.count('biometrics') > 0) tr('${fmtInt(b.count('biometrics'))} measurements', '${fmtInt(b.count('biometrics'))} metingen'),
+      if (b.count('exercise') > 0) tr('${fmtInt(b.count('exercise'))} workouts', '${fmtInt(b.count('exercise'))} keer beweging'),
+      if (b.count('labs') > 0) tr('${fmtInt(b.count('labs'))} blood values', '${fmtInt(b.count('labs'))} bloedwaarden'),
+      if (b.count('settings') > 0) tr('your settings, targets, plan and supplements', 'je instellingen, doelen, planning en supplementen'),
+    ];
+    final choice = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Restore from backup?', 'Back-up terugzetten?')),
+        content: Text(
+          [
+            if (at != null)
+              tr(
+                'Backup from ${DateFormat('d MMMM y, HH:mm', appLocale).format(at.toLocal())}.',
+                'Back-up van ${DateFormat('d MMMM y, HH:mm', appLocale).format(at.toLocal())}.',
+              ),
+            parts.isEmpty ? tr('This backup is empty.', 'Deze back-up is leeg.') : '${tr('It contains', 'Erin staan')} ${parts.join(', ')}.',
+            '',
+            tr(
+              'Merge: adds everything from the backup that is missing here. Nothing here is overwritten.',
+              'Samenvoegen: voegt alles uit de back-up toe wat hier ontbreekt. Niets van hier wordt overschreven.',
+            ),
+            tr(
+              'Replace: removes what is here now and puts the backup in its place.',
+              'Vervangen: wist wat hier nu staat en zet de back-up in de plaats.',
+            ),
+            tr('With an account, the result also goes to your other devices.', 'Met een account gaat het resultaat ook naar je andere toestellen.'),
+          ].join('\n'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: ctx.pal.high),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(tr('Replace', 'Vervangen')),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Merge', 'Samenvoegen'))),
+        ],
+      ),
+    );
+    if (choice != true || !mounted) return choice;
+    // Vervangen wist gegevens: nog één keer bevestigen
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Replace all your data?', 'Al je gegevens vervangen?')),
+        content: Text(
+          tr(
+            'Your current diary, foods, measurements and everything else are removed and replaced by the backup. '
+                'Tip: first use "Export everything" to keep a copy of what is here now.',
+            'Je huidige dagboek, producten, metingen en al de rest worden gewist en vervangen door de back-up. '
+                'Tip: gebruik eerst "Alles exporteren" om een kopie te bewaren van wat hier nu staat.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: ctx.pal.high),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(tr('Replace', 'Vervangen')),
+          ),
+        ],
+      ),
+    );
+    return sure == true ? true : null;
   }
 
   @override
@@ -151,10 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               context: context,
                               initialTime: TimeOfDay(hour: rs.hour, minute: rs.minute),
                               // 24-uursnotatie, net als de rest van de app (geen AM/PM)
-                              builder: (ctx, child) => MediaQuery(
-                                data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
-                                child: child!,
-                              ),
+                              builder: (ctx, child) => MediaQuery(data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true), child: child!),
                             );
                             if (picked == null) return;
                             await r.save(rs.copyWith(hour: picked.hour, minute: picked.minute));
@@ -282,7 +412,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SupplementsScreen())),
           ),
           title(tr('Data', 'Gegevens')),
-          // Twee even brede knoppen onder elkaar, met de uitleg over de CSV direct onder Exporteren.
+          // Even brede knoppen onder elkaar, met de uitleg direct onder de knop waar ze bij hoort.
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -298,6 +428,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Alle dagen met datum, tijd, maaltijd, hoeveelheid en elke voedingsstof. Opent in Excel.',
             ),
             style: TextStyle(fontSize: 12, color: pal.ink3),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _exportAll,
+              icon: const Icon(Icons.archive_outlined, size: 18),
+              label: Text(tr('Export everything (backup)', 'Alles exporteren (back-up)')),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            tr(
+              'One file with your diary, own foods, recipes, meals, measurements, supplements, blood values, exercise, '
+                  'plan, shopping list and settings. Keep it somewhere safe.',
+              'Eén bestand met je dagboek, eigen producten, recepten, maaltijden, metingen, supplementen, bloedwaarden, '
+                  'beweging, planning, boodschappenlijst en instellingen. Bewaar het op een veilige plek.',
+            ),
+            style: TextStyle(fontSize: 12, color: pal.ink3),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _restore,
+              icon: const Icon(Icons.settings_backup_restore_rounded, size: 18),
+              label: Text(tr('Restore from backup', 'Back-up terugzetten')),
+            ),
           ),
           const SizedBox(height: 12),
           SizedBox(
