@@ -2603,6 +2603,17 @@ class AppState extends ChangeNotifier {
     user.setSetting('ui', {...?user.setting('ui'), 'sugarFocus': v});
     notifyListeners();
   }
+
+  // ── Uitdagingen (zie state/challenge_days.dart) ──
+
+  /// Label van een voedingsmiddel (voor de porties groenten).
+  FoodLabel? labelFor(String ref) => _labelFor(ref);
+
+  /// Uitdagingen bewaren (bij je account, en ook zonder account op dit toestel).
+  void saveChallengeList(List<Map<String, Object?>> list) {
+    user.setSetting('challenges', {'list': list});
+    notifyListeners();
+  }
 }
 
 /// Gewoon gewicht van één stuk, als de databank geen portie heeft (gedeeld met de porties bij een product).

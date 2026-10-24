@@ -13,6 +13,7 @@ import '../../nutrition/badges.dart';
 import '../widgets/avatar.dart';
 import '../widgets/badges_view.dart';
 import '../widgets/battles_view.dart';
+import '../widgets/challenges_view.dart';
 import '../widgets/kit.dart';
 import '../../i18n.dart';
 
@@ -123,6 +124,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
         ),
         if (Account.configured) ...[const SizedBox(height: 12), const AccountCard()],
+        // Uitdagingen voor jezelf werken zonder account
+        const SizedBox(height: 12),
+        const ChallengesPanel(),
       ];
     } else if (f.code == null) {
       body = [
@@ -271,6 +275,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
         ),
         const SizedBox(height: 10),
         const BattlesPanel(),
+        const SizedBox(height: 10),
+        const ChallengesPanel(),
         // Verzoeken
         if (incoming.isNotEmpty) ...[
           const SizedBox(height: 10),
