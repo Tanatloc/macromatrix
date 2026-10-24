@@ -156,6 +156,9 @@ TextStyle numStyle(double size, {FontWeight weight = FontWeight.w600, Color? col
   fontFeatures: const [FontFeature.tabularFigures()],
 );
 
+/// Rand van een chip in het donker (zie [buildTheme]).
+const chipEdgeDark = Color(0xFF6B727B);
+
 ThemeData buildTheme(Brightness b) {
   final p = b == Brightness.dark ? Palette.dark : Palette.light;
   final scheme = ColorScheme(
@@ -301,7 +304,9 @@ ThemeData buildTheme(Brightness b) {
       backgroundColor: p.surface,
       selectedColor: p.ink,
       disabledColor: p.sunken,
-      side: BorderSide(color: p.line),
+      // In het donker stak de gewone lijnkleur amper af (±1,3:1): niet-gekozen chips waren losse woorden. Deze rand
+      // haalt minstens 3:1 tegen de achtergrond en de kaarten (N93).
+      side: BorderSide(color: b == Brightness.dark ? chipEdgeDark : p.line),
       shape: const StadiumBorder(),
       showCheckmark: false,
       labelStyle: TextStyle(fontFamily: kSans, fontSize: 13, fontWeight: FontWeight.w500, color: p.ink2),

@@ -279,6 +279,33 @@ class _ShellState extends State<Shell> {
     );
   }
 
+  Size? _lastSize;
+
+  /// Meer in de rail: de snelkoppelingen van de zijbalk in een lijst.
+  void _showMore(List<(IconData, String, VoidCallback)> shortcuts) => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    // Zo hoog als nodig: alle zeven passen ook in een laag venster
+    isScrollControlled: true,
+    constraints: const BoxConstraints(maxWidth: 480),
+    builder: (sheet) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final (i, l, go) in shortcuts)
+            ListTile(
+              leading: Icon(i),
+              title: Text(l),
+              onTap: () {
+                Navigator.of(sheet).pop();
+                go();
+              },
+            ),
+        ],
+      ),
+    ),
+  );
+
   /// Vanaf deze breedte (tot [desktopWidth]) een smalle rail links in plaats van de balk onderaan.
   static const _railWidth = 800.0;
 
@@ -287,8 +314,22 @@ class _ShellState extends State<Shell> {
     final p = context.pal;
     final theme = Theme.of(context);
     final icon = _icons(context);
-    final width = MediaQuery.sizeOf(context).width;
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
     final desktop = width >= desktopWidth;
+    // Venster verkleind of vergroot: een uitlegballon (bv. de reeks) bleef anders op de oude plek hangen (N81)
+    if (_lastSize != null && _lastSize != size) WidgetsBinding.instance.addPostFrameCallback((_) => Tooltip.dismissAllToolTips());
+    _lastSize = size;
+    // De schermen die op een pc in de zijbalk onder SNEL NAAR staan; in de rail onder Meer
+    final shortcuts = <(IconData, String, VoidCallback)>[
+      (Icons.event_note_outlined, tr('Meal planner', 'Maaltijdplanner'), () => _open(0, const PlannerScreen())),
+      (Icons.shopping_cart_outlined, tr('Shopping list', 'Boodschappenlijst'), () => _open(1, const ShoppingScreen())),
+      (Icons.travel_explore_rounded, tr('Oracle', 'Orakel'), () => _open(2, const OracleScreen())),
+      (Icons.monitor_weight_outlined, tr('Body', 'Lichaam'), () => _open(3, const BodyScreen())),
+      (Icons.bloodtype_outlined, tr('Blood values', 'Bloedwaarden'), () => _open(4, const LabsScreen())),
+      (Icons.medication_outlined, tr('Supplements', 'Supplementen'), () => _open(5, const SupplementsScreen())),
+      (Icons.settings_outlined, tr('Settings', 'Instellingen'), () => _open(6, const SettingsScreen())),
+    ];
 
     // De tabbladen met hun navigators. Door [_tabsKey] verhuist deze boom mee als de indeling verandert, in plaats
     // van opnieuw gemaakt te worden.
@@ -333,15 +374,7 @@ class _ShellState extends State<Shell> {
               shortcut: _index == 4 ? _shortcut : null,
               icon: icon,
               onSelect: _go,
-              shortcuts: [
-                (Icons.event_note_outlined, tr('Meal planner', 'Maaltijdplanner'), () => _open(0, const PlannerScreen())),
-                (Icons.shopping_cart_outlined, tr('Shopping list', 'Boodschappenlijst'), () => _open(1, const ShoppingScreen())),
-                (Icons.travel_explore_rounded, tr('Oracle', 'Orakel'), () => _open(2, const OracleScreen())),
-                (Icons.monitor_weight_outlined, tr('Body', 'Lichaam'), () => _open(3, const BodyScreen())),
-                (Icons.bloodtype_outlined, tr('Blood values', 'Bloedwaarden'), () => _open(4, const LabsScreen())),
-                (Icons.medication_outlined, tr('Supplements', 'Supplementen'), () => _open(5, const SupplementsScreen())),
-                (Icons.settings_outlined, tr('Settings', 'Instellingen'), () => _open(6, const SettingsScreen())),
-              ],
+              shortcuts: shortcuts,
             ),
             Expanded(child: tabs),
           ],
@@ -354,11 +387,14 @@ class _ShellState extends State<Shell> {
         body: Row(
           children: [
             NavigationRail(
-              selectedIndex: _index,
-              onDestinationSelected: _go,
+              // Een scherm uit Meer staat open: dan is Meer gemarkeerd, niet Profiel
+              selectedIndex: _index == 4 && _shortcut != null ? _items.length : _index,
+              onDestinationSelected: (i) => i < _items.length ? _go(i) : _showMore(shortcuts),
               labelType: NavigationRailLabelType.all,
               destinations: [
                 for (final (i, (o, s, l)) in _items.indexed) NavigationRailDestination(icon: icon(i, o), selectedIcon: icon(i, s), label: Text(l)),
+                // De rail heeft geen plaats voor alle snelkoppelingen van de zijbalk (N81)
+                NavigationRailDestination(icon: const Icon(Icons.more_horiz_rounded), label: Text(tr('More', 'Meer'))),
               ],
             ),
             VerticalDivider(width: 1, color: p.line),

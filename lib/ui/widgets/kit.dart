@@ -621,7 +621,8 @@ class PillChip extends StatelessWidget {
       button: true,
       child: Material(
         color: selected ? p.ink : p.surface,
-        shape: StadiumBorder(side: BorderSide(color: selected ? p.ink : p.line)),
+        // In het donker een rand met genoeg contrast, anders is een niet-gekozen chip onzichtbaar (N93)
+        shape: StadiumBorder(side: BorderSide(color: selected ? p.ink : (Theme.of(context).brightness == Brightness.dark ? chipEdgeDark : p.line))),
         child: InkWell(
           customBorder: const StadiumBorder(),
           onTap: onTap,

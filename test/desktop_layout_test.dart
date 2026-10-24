@@ -113,9 +113,10 @@ void main() {
     expect(find.text('Product checken'), findsOneWidget);
   });
 
-  testWidgets('tablet: rail links en een zwevende knop om toe te voegen', (tester) async {
+  testWidgets('tablet: rail links en Toevoegen in de kop (geen zwevende knop over de kcal, N81)', (tester) async {
     await pumpShell(tester, const Size(900, 1000));
     expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Toevoegen'), findsOneWidget);
   });
 }

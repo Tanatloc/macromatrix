@@ -2126,8 +2126,8 @@ class AppState extends ChangeNotifier {
 
   /// Lokaal zoeken: eigen producten, recepten en de ingebouwde database, gerangschikt zoals Snel loggen (P152):
   /// het gewone, bereide product boven rauwe rijst, kipgehakt of melkpoeder. Favorieten eerst, dan wat je al eens
-  /// at, dan de rest.
-  List<Food> searchLocal(String q) {
+  /// at, dan de rest. Met [personal] uit alleen de gewone volgorde, die niet verschuift na het loggen (N82).
+  List<Food> searchLocal(String q, {bool personal = true}) {
     final norm = _normalQuery(q);
     final seen = <String>{};
     // Met een alias ("oats") ook wat je letterlijk typte, erachter
@@ -2147,6 +2147,7 @@ class AppState extends ChangeNotifier {
         (FoodDb.isDbRef(f.ref) ? 0 : (f.source == FoodSource.recipe ? 40 : 10));
     final ranked = [for (final (i, f) in all.indexed) (score(i, f), f)]..sort((a, b) => b.$1.compareTo(a.$1));
     final top = [for (final (_, f) in ranked.take(80)) f];
+    if (!personal) return top;
     final fav = favoriteRefs.toSet();
     final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
     int group(Food f) => fav.contains(f.ref) ? 0 : (mine.contains(f.ref) ? 1 : 2);
@@ -2156,6 +2157,9 @@ class AppState extends ChangeNotifier {
   }
 
   // ── Favorieten (gesynchroniseerd) ──
+
+  /// Producten die je koos: favorieten en wat je de laatste tijd at (de voorrang in [searchLocal]).
+  Set<String> personalRefs() => {...favoriteRefs, for (final e in user.recent(limit: 300)) e.foodRef};
 
   List<String> get favoriteRefs => [for (final r in (user.setting('favorites')?['list'] as List?) ?? const []) r as String];
 
