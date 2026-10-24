@@ -76,8 +76,14 @@ class _Line {
   String get amountLabel {
     final g = _big(grams);
     if (byWeight) return '$g g';
-    if (portion != null) return '${_count(n)} × ${portion!.label} ($g g)';
-    return '${_count(n)} × ≈${fmtInt(_per)} g ($g g)';
+    // "1 stuk (≈35 g)" draagt zijn grammen al: niet nog eens "(35 g)" erachter; bij meer dan één het totaal
+    if (portion != null) {
+      final label = portion!.label;
+      final hasGrams = RegExp(r'\d\s*(g|ml)\)').hasMatch(label);
+      if (n == 1) return hasGrams ? label : '$label ($g g)';
+      return hasGrams ? '${_count(n)} × $label = $g g' : '${_count(n)} × $label ($g g)';
+    }
+    return n == 1 ? '≈$g g' : '${_count(n)} × ≈${fmtInt(_per)} g = $g g';
   }
 }
 

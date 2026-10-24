@@ -1036,6 +1036,12 @@ class AppState extends ChangeNotifier {
     'pepsi max': 'cola sweetener',
     // Britse chips zijn een zakje chips, geen knäckebröd ("crispbread")
     'crisps': 'potato crisps',
+    // Een boterham is een sneetje brood (het meest getypte woord bij het ontbijt)
+    'boterham': 'bread',
+    'boterhammen': 'bread',
+    'boterhammetje': 'bread',
+    'sneetje brood': 'bread',
+    'sneetjes brood': 'bread',
     // Een merknaam voor gewone cola: de gewone cola uit de databank (merkproducten zoek je via 'Merken')
     'coca cola': 'cola',
     'coca-cola': 'cola',
