@@ -63,7 +63,9 @@ async function exportSnapshot(dir) {
     tables[t] = rows;
   }
   const [{ j: users }] = await pg(`select coalesce(json_agg(x), '[]'::json) j from (
-    select id, email, encrypted_password, email_confirmed_at, created_at, updated_at from auth.users order by id) x`);
+    select id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+      raw_user_meta_data ->> 'terms_version' terms_version, raw_user_meta_data ->> 'terms_accepted_at' terms_accepted_at
+    from auth.users order by id) x`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = join(dir, 'snapshot.json');
   writeFileSync(file, JSON.stringify({ at: new Date().toISOString(), schema, users, tables }));
@@ -126,6 +128,8 @@ export function transform(snap) {
       emailVerified: u.email_confirmed_at ? 1 : 0,
       createdAt: toD1(u.created_at, 'timestamp with time zone'),
       updatedAt: toD1(u.updated_at ?? u.created_at, 'timestamp with time zone'),
+      termsVersion: u.terms_version ?? null,
+      termsAcceptedAt: u.terms_accepted_at ? toD1(u.terms_accepted_at, 'timestamp with time zone') : null,
     },
     // Better Auth: wachtwoord in een "credential"-account; de bcrypt-hash van Supabase blijft (fase 2: verify + rehash)
     account: {
@@ -236,7 +240,7 @@ function compare(dir, opts) {
   const snap = JSON.parse(readFileSync(join(dir, 'snapshot.json'), 'utf8'));
   const d1 = {};
   for (const t of ['user', 'account', ...Object.keys(snap.tables)]) {
-    const cols = t === 'user' ? 'id, name, email, emailVerified, createdAt, updatedAt'
+    const cols = t === 'user' ? 'id, name, email, emailVerified, createdAt, updatedAt, termsVersion, termsAcceptedAt'
       : t === 'account' ? 'id, accountId, providerId, userId, password, createdAt, updatedAt' : '*';
     d1[t] = d1Query(`SELECT ${cols} FROM "${t}"`, opts);
   }

@@ -3,11 +3,23 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "macromatrix-api",
+  "main": "src/index.js",
   "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
   "env": {
     // Testomgeving: kopie van de productiedata (tool/supabase_to_d1.mjs), EU-jurisdictie
     "staging": {
       "name": "macromatrix-api-staging",
+      "workers_dev": false,
+      "routes": [{ "pattern": "api-staging.macromatrix.eu", "custom_domain": true }],
+      "vars": {
+        "BASE_URL": "https://api-staging.macromatrix.eu",
+        // Mails naar dit domein gaan naar de tabel test_outbox (automatische tests); bestaat niet echt
+        "TEST_OUTBOX_DOMAIN": "test.macromatrix.invalid",
+        "EXTRA_ORIGINS": "http://localhost:8931,https://staging.macromatrix.eu"
+      },
+      "ratelimits": [{ "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 300, "period": 60 } }],
       "d1_databases": [
         {
           "binding": "DB",

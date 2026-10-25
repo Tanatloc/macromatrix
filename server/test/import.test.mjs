@@ -28,7 +28,7 @@ test("tekst met ' en ; kan de SQL niet breken", () => {
 function snapshot() {
   const col = (name, type) => ({ name, type });
   return {
-    users: [{ id: 'u1', email: 'a@example.com', encrypted_password: '$2a$10$abc', email_confirmed_at: '2026-10-16T10:00:00+00:00', created_at: '2026-10-16T09:00:00+00:00', updated_at: null }],
+    users: [{ id: 'u1', email: 'a@example.com', encrypted_password: '$2a$10$abc', email_confirmed_at: '2026-10-16T10:00:00+00:00', created_at: '2026-10-16T09:00:00+00:00', updated_at: null, terms_version: '2026-10-17', terms_accepted_at: '2026-10-16T09:00:01.5+00:00' }],
     schema: {
       notes: { key: ['user_id', 'day'], columns: [col('user_id', 'uuid'), col('day', 'text'), col('text', 'text'), col('updated_at', 'bigint'), col('server_ts', T)] },
       settings: { key: ['user_id', 'key'], columns: [col('user_id', 'uuid'), col('key', 'text'), col('value', 'text'), col('updated_at', 'bigint'), col('server_ts', T)] },
@@ -67,6 +67,8 @@ test('de import-SQL laadt in het echte schema, ook lange tekst, en twee keer lad
   assert.equal(d1.notes[0].text, "o'k");
   assert.equal(d1.account[0].password, '$2a$10$abc');
   assert.equal(d1.user[0].emailVerified, 1);
+  assert.equal(d1.user[0].termsVersion, '2026-10-17');
+  assert.equal(d1.user[0].termsAcceptedAt, '2026-10-16T09:00:01.500Z');
   assert.equal(db.prepare('SELECT active FROM import_mode').get().active, 0);
   // Tweede keer: server_seq ligt 2 hoger (achter wat er al was)
   assert.deepEqual(compareRows(snapshot(), d1, { seqBase: 2 }).diffs, []);

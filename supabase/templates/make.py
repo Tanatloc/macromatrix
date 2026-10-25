@@ -71,10 +71,21 @@ T = {
     'password_changed_notification': ('Your MacroMatrix password was changed', 'password-changed.html',
                                       mail('Your password was changed', 'The password of your MacroMatrix account ({{ .Email }}) was just changed.', code=False,
                                            outro="Was this you? Then you don't need to do anything.<br>Wasn't it you? Choose a new password right away in the app via <b>Forgot password</b>, and email us at <a href=\"mailto:privacy@macromatrix.eu\" style=\"color:#0E6B65\">privacy@macromatrix.eu</a>.")),
+    # Alleen voor de Cloudflare-server (Better Auth geeft bij registreren met een bestaand adres geen fout terug)
+    'existing_account': ('You already have a MacroMatrix account', None,
+                         mail('You already have an account', 'Someone (probably you) tried to create a new MacroMatrix account with {{ .Email }}, but this address already has one.', code=False,
+                              outro="Log in with this address in the app. Forgot your password? Choose <b>Forgot password</b> on the login screen.<br>Wasn't it you? Then you can ignore this email.")),
 }
 api = {}
+worker = {}
 for key, (subject, fname, html) in T.items():
+    worker[key] = {'subject': subject, 'html': html}
+    if fname is None:
+        continue
     open(fname, 'w').write(html)
     api[f'mailer_subjects_{key}'] = subject
     api[f'mailer_templates_{key}_content'] = html
 json.dump(api, open('templates.json', 'w'), indent=1)
+# Dezelfde sjablonen voor de Worker (server/src/mail.js vult {{ .Token }} en {{ .Email }} in)
+json.dump({k: worker[k] for k in ('confirmation', 'recovery', 'password_changed_notification', 'existing_account')},
+          open('../../server/src/mail-templates.json', 'w'), indent=1)

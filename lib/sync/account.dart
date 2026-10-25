@@ -13,6 +13,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase/supabase.dart';
 
 import '../data/user_db.dart';
+import 'cloudflare_auth.dart';
 import 'sync_engine.dart';
 import '../i18n.dart';
 
@@ -82,7 +83,11 @@ class Account extends ChangeNotifier {
   /// Wordt opgeroepen als er wijzigingen van een ander toestel binnenkwamen (de app herlaadt dan).
   final VoidCallback onRemoteChanges;
 
-  static bool get configured => supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+  static bool get configured => usesOwnServer || (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty);
+
+  /// Gebouwd met `API_URL`: inloggen bij de eigen server (Cloudflare) in plaats van Supabase. Synchroniseren kan
+  /// daar nog niet (komt in fase 3 van de overstap); tot dan blijft alles op het toestel.
+  static bool get usesOwnServer => apiUrl.isNotEmpty;
 
   /// Bewust zonder account: alles blijft op dit toestel. Maak je later toch een account, dan gaan de lokale
   /// gegevens mee (ze staan nog als "niet verstuurd").
@@ -118,6 +123,7 @@ class Account extends ChangeNotifier {
   }
 
   SupabaseClient? _client;
+  CloudflareAuth? _cf;
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<void>? _dbSub;
   Timer? _debounce;
@@ -166,14 +172,27 @@ class Account extends ChangeNotifier {
   /// De verbonden Supabase-client (null zonder configuratie).
   SupabaseClient? get client => _client;
 
-  User? get user => _client?.auth.currentUser;
+  AccountUser? get user {
+    if (_cf != null) return _cf!.user;
+    final u = _client?.auth.currentUser;
+    return u == null ? null : AccountUser(u.id, u.email);
+  }
+
+  /// Token voor onze eigen API's (AI, foto, Google Play): het Supabase-token of de sessie van de eigen server.
+  String? get accessToken => _cf != null ? _cf!.token : _client?.auth.currentSession?.accessToken;
+
+  /// Kan dit account synchroniseren? Bij de eigen server nog niet (fase 3).
+  bool get canSync => _cf == null;
+
+  /// Bij de eigen server vraagt een nieuw wachtwoord ook het huidige.
+  bool get needsCurrentPassword => _cf != null;
   bool get signedIn => user != null;
   String? get email => user?.email;
 
   /// Laatste geslaagde synchronisatie.
   DateTime? get lastSync {
     final u = user;
-    if (u == null) return null;
+    if (u == null || _client == null) return null;
     final ms = SyncEngine(db, SupabaseRemote(_client!, u.id), userId: u.id).lastSync;
     return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
   }
@@ -181,7 +200,7 @@ class Account extends ChangeNotifier {
   /// Ingelogd, maar voor dit account kwam er nog nooit iets van de server binnen (bv. de eerste synchronisatie
   /// mislukte). Je profiel kan dan nog op de server staan: de app toont geen "Over jou" maar wacht (of laat opnieuw
   /// proberen), zodat je je echte profiel niet overschrijft.
-  bool get needsFirstSync => signedIn && lastSync == null;
+  bool get needsFirstSync => signedIn && canSync && lastSync == null;
 
   // ── Van wie zijn de gegevens op dit toestel? ──
 
@@ -189,7 +208,7 @@ class Account extends ChangeNotifier {
   /// niemand (zonder account gebruikt, of na uitloggen gewist).
   String? get _ownerId => db.setting('_owner')?['id'] as String? ?? db.setting('_sync')?['user'] as String?;
 
-  void _setOwner(User u) => db.setSetting('_owner', {'id': u.id, 'email': u.email});
+  void _setOwner(AccountUser u) => db.setSetting('_owner', {'id': u.id, 'email': u.email});
 
   /// Ingelogd met een ander account dan dat van de gegevens op dit toestel, terwijl er daarvan nog iets niet op de
   /// server staat: eerst kiezen wat ermee gebeurt (zie [discardOtherAccountData] en [switchToOtherAccount]). Tot dan
@@ -218,7 +237,7 @@ class Account extends ChangeNotifier {
   Future<void> switchToOtherAccount() async {
     _stopWatching();
     try {
-      await _client!.auth.signOut();
+      await _authSignOut();
     } catch (_) {}
     db.setSetting('_session', {});
     _otherPending = false;
@@ -227,7 +246,7 @@ class Account extends ChangeNotifier {
 
   /// Na het inloggen (en bij het opstarten): horen de gegevens op dit toestel bij dit account? False: ze zijn van
   /// een ander account en nog niet allemaal verstuurd, dan eerst vragen ([otherAccountData]).
-  bool _claimData(User u, {bool newAccount = false, bool atStart = false}) {
+  bool _claimData(AccountUser u, {bool newAccount = false, bool atStart = false}) {
     final owner = _ownerId;
     if (owner == u.id) return true;
     if (owner != null) {
@@ -263,8 +282,23 @@ class Account extends ChangeNotifier {
   @visibleForTesting
   Future<void> debugAfterLogin({bool newAccount = false}) => _afterLogin(newAccount: newAccount);
 
+  /// Uitloggen bij de server waar je ingelogd bent (Supabase of de eigen server).
+  Future<void> _authSignOut() async {
+    if (_cf != null) return _cf!.signOut();
+    await _client?.auth.signOut();
+  }
+
   Future<void> init() async {
     if (!configured) return;
+    if (usesOwnServer) {
+      final cf = _cf = CloudflareAuth(db);
+      await cf.restore();
+      _ready = true;
+      final u = user;
+      if (u != null) _claimData(u, atStart: true);
+      notifyListeners();
+      return;
+    }
     final client = _client = SupabaseClient(supabaseUrl, supabaseAnonKey, authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit));
     _authSub = client.auth.onAuthStateChange.listen((s) {
       final session = s.session;
@@ -331,6 +365,11 @@ class Account extends ChangeNotifier {
   /// Registreren. Supabase stuurt een code om het e-mailadres te bevestigen. Geeft false als er al een
   /// (bevestigd) account met dit adres bestaat: Supabase verraadt dat niet als fout, maar zonder "identities".
   Future<bool> signUp(String email, String password) async {
+    // De eigen server zegt nooit of een adres al een account heeft: die persoon krijgt een mail
+    if (_cf != null) {
+      await _cf!.signUp(email.trim(), password, termsVersion: termsVersion);
+      return true;
+    }
     final r = await _client!.auth.signUp(
       email: email.trim(),
       password: password,
@@ -341,12 +380,17 @@ class Account extends ChangeNotifier {
 
   /// De bevestigingscode uit de mail controleren; daarna ben je ingelogd en wordt alles gesynchroniseerd.
   Future<void> confirmSignUp(String email, String code) async {
-    await _client!.auth.verifyOTP(type: OtpType.signup, email: email.trim(), token: code.trim());
+    if (_cf != null) {
+      await _cf!.verifyEmail(email.trim(), code.trim());
+    } else {
+      await _client!.auth.verifyOTP(type: OtpType.signup, email: email.trim(), token: code.trim());
+    }
     await _afterLogin(newAccount: true);
   }
 
   /// De bevestigingscode opnieuw sturen.
-  Future<void> resendConfirmation(String email) => _client!.auth.resend(type: OtpType.signup, email: email.trim());
+  Future<void> resendConfirmation(String email) =>
+      _cf?.resendConfirmation(email.trim()) ?? _client!.auth.resend(type: OtpType.signup, email: email.trim());
 
   /// Net ingelogd op een bestaand account en de eerste synchronisatie loopt nog: je profiel kan nog onderweg zijn.
   /// Zolang toont de app nog geen "Over jou" (dat flitste even voor het profiel binnenkwam, GP-11).
@@ -365,18 +409,26 @@ class Account extends ChangeNotifier {
   }
 
   Future<void> signIn(String email, String password) =>
-      _existingLogin(() => _client!.auth.signInWithPassword(email: email.trim(), password: password));
+      _existingLogin(() async {
+        if (_cf != null) return _cf!.signIn(email.trim(), password);
+        await _client!.auth.signInWithPassword(email: email.trim(), password: password);
+      });
 
   /// Wachtwoord vergeten, stap 1: een code mailen.
-  Future<void> requestPasswordReset(String email) => _client!.auth.resetPasswordForEmail(email.trim());
+  Future<void> requestPasswordReset(String email) => _cf?.requestPasswordReset(email.trim()) ?? _client!.auth.resetPasswordForEmail(email.trim());
 
   /// Wachtwoord vergeten, stap 2: code controleren en het nieuwe wachtwoord instellen (je bent dan ingelogd).
   Future<void> resetPassword(String email, String code, String newPassword) => _existingLogin(() async {
+    if (_cf != null) return _cf!.resetPassword(email.trim(), code.trim(), newPassword);
     await _client!.auth.verifyOTP(type: OtpType.recovery, email: email.trim(), token: code.trim());
     await _client!.auth.updateUser(UserAttributes(password: newPassword));
   });
 
-  Future<void> changePassword(String newPassword) => _client!.auth.updateUser(UserAttributes(password: newPassword));
+  /// [currentPassword]: alleen bij de eigen server nodig ([needsCurrentPassword]).
+  Future<void> changePassword(String newPassword, {String? currentPassword}) async {
+    if (_cf != null) return _cf!.changePassword(currentPassword ?? '', newPassword);
+    await _client!.auth.updateUser(UserAttributes(password: newPassword));
+  }
 
   /// Na het inloggen eerst alles ophalen, zodat bv. je profiel er meteen is op een nieuw toestel.
   /// [newAccount]: net geregistreerd en bevestigd; wat op dit toestel staat, is dan van dat account.
@@ -397,7 +449,7 @@ class Account extends ChangeNotifier {
   /// Live meldingen van de server: zodra een ander toestel iets wijzigt, haalt dit toestel het meteen op.
   void _watchRemote() {
     final u = user;
-    if (u == null || _channel != null || _debugRemote != null) return;
+    if (u == null || !canSync || _channel != null || _debugRemote != null) return;
     var channel = _client!.channel('wijzigingen-${u.id}');
     for (final t in UserDb.syncTables) {
       channel = channel.onPostgresChanges(
@@ -425,7 +477,7 @@ class Account extends ChangeNotifier {
 
   /// Na een korte pauze synchroniseren (na wijzigingen), zodat niet elke tik een verzoek wordt.
   void schedule() {
-    if (!signedIn || _paused) return;
+    if (!signedIn || _paused || !canSync) return;
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 3), () {
       if (db.hasDirtyRows) sync();
@@ -436,7 +488,7 @@ class Account extends ChangeNotifier {
   Future<void> sync() {
     final u = user;
     // Nooit gegevens van een ander account versturen (zie [otherAccountData])
-    if (u == null || _paused || _closing || _otherPending || _ownerId != u.id) return Future.value();
+    if (u == null || _paused || !canSync || _closing || _otherPending || _ownerId != u.id) return Future.value();
     if (_running != null) {
       _again = true;
       return _running!;
@@ -526,14 +578,14 @@ class Account extends ChangeNotifier {
     _stopWatching();
     // Geen battle-meldingen meer naar dit toestel
     final notify = db.setting('_notify')?['token'];
-    if (notify != null) {
+    if (notify != null && _client != null) {
       try {
         await _client!.rpc('notify_unregister', params: {'p_token': notify});
       } catch (_) {}
       db.deleteSetting('_notify');
     }
     try {
-      await _client!.auth.signOut();
+      await _authSignOut();
     } catch (_) {
       // Ook zonder internet lokaal uitloggen
     }
@@ -552,11 +604,12 @@ class Account extends ChangeNotifier {
     _generation++;
     try {
       await _settle();
+      if (_client == null) throw const AuthException('Deleting an account is not available on this server yet', code: 'not_available');
       await _client!.rpc('delete_account');
       _stopWatching();
       db.deleteSetting('_notify');
       try {
-        await _client!.auth.signOut();
+        await _authSignOut();
       } catch (_) {}
       db.wipeUserData();
       db.setSetting('_session', {});

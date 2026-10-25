@@ -332,6 +332,7 @@ String authMessage(Object e) {
         'This password is too weak: at least 8 characters, with letters and numbers.',
         'Dit wachtwoord is te zwak: minstens 8 tekens, met letters en cijfers.',
       ),
+      'wrong_current_password' => tr('Your current password is incorrect.', 'Je huidige wachtwoord klopt niet.'),
       'same_password' => tr('Choose a different password from your current one.', 'Kies een ander wachtwoord dan je huidige.'),
       'otp_expired' => tr('That code is wrong or has expired. Request a new one.', 'Die code klopt niet of is verlopen. Vraag een nieuwe aan.'),
       'over_email_send_rate_limit' || 'over_request_rate_limit' => tr(

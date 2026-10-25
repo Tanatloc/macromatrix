@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase/supabase.dart';
 import 'package:macromatrix/i18n.dart';
 import 'package:macromatrix/sync/account.dart';
+import 'package:macromatrix/sync/cloudflare_auth.dart' show AccountUser;
 import 'package:macromatrix/sync/features.dart';
 import 'package:macromatrix/sync/roadmap.dart';
 
@@ -19,7 +20,7 @@ class _Remote extends Account {
   @override
   bool get signedIn => true;
   @override
-  User? get user => const User(id: 'me', appMetadata: {}, userMetadata: {}, aud: 'authenticated', createdAt: '2026-10-01T00:00:00Z');
+  AccountUser? get user => const AccountUser('me', null);
 }
 
 /// Vroege toegang en de roadmap tegen een kleine nagebootste PostgREST-server: met de migratie

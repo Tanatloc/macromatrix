@@ -33,7 +33,7 @@ LabelScan labelScan = LabelScan();
 OffContribute offContribute = OffContribute();
 
 /// Het token van je account, of null als je niet ingelogd bent. Te vervangen in tests.
-String? Function(BuildContext context) aiToken = (context) => context.read<Account?>()?.client?.auth.currentSession?.accessToken;
+String? Function(BuildContext context) aiToken = (context) => context.read<Account?>()?.accessToken;
 
 /// Op gsm en in de browser: kiezen tussen de camera en een bestaande foto. Op een pc meteen een bestand kiezen.
 Future<Uint8List?> _pickAiPhoto(BuildContext context, {required String title}) async {

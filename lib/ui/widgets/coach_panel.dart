@@ -33,7 +33,7 @@ import 'pro_widgets.dart';
 CoachRequest coachRequest = CoachRequest();
 
 /// Het token van je account, of null als je niet ingelogd bent. Te vervangen in tests.
-String? Function(BuildContext context) coachToken = (context) => context.read<Account?>()?.client?.auth.currentSession?.accessToken;
+String? Function(BuildContext context) coachToken = (context) => context.read<Account?>()?.accessToken;
 
 /// Meldingen van een AI-tekst (ai_report). Te vervangen in tests.
 @visibleForTesting

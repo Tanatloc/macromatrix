@@ -7,6 +7,7 @@ import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/i18n.dart';
 import 'package:macromatrix/state/app_state.dart';
 import 'package:macromatrix/sync/account.dart';
+import 'package:macromatrix/sync/cloudflare_auth.dart' show AccountUser;
 import 'package:macromatrix/sync/friends.dart';
 
 import 'pro_test.dart' show newState;
@@ -20,7 +21,7 @@ class _Remote extends Account {
   @override
   bool get signedIn => true;
   @override
-  User? get user => const User(id: 'me', appMetadata: {}, userMetadata: {}, aud: 'authenticated', createdAt: '2026-10-01T00:00:00Z');
+  AccountUser? get user => const AccountUser('me', null);
 }
 
 /// Een afgelopen battleweek (vanaf maandag 03:00) gaat nog één keer met de eindstand naar de server, daarna nooit

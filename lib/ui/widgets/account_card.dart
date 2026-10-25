@@ -65,7 +65,7 @@ class _AccountCardState extends State<AccountCard> {
   }
 
   Future<void> _changePassword(Account a) async {
-    final pw = TextEditingController(), pw2 = TextEditingController();
+    final current = TextEditingController(), pw = TextEditingController(), pw2 = TextEditingController();
     String? problem;
     final ok = await showDialog<bool>(
       context: context,
@@ -76,6 +76,15 @@ class _AccountCardState extends State<AccountCard> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (a.needsCurrentPassword) ...[
+                TextField(
+                  controller: current,
+                  obscureText: true,
+                  autofillHints: kIsWeb ? null : const [AutofillHints.password],
+                  decoration: InputDecoration(labelText: tr('Current password', 'Huidig wachtwoord')),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextField(
                 controller: pw,
                 obscureText: true,
@@ -100,6 +109,7 @@ class _AccountCardState extends State<AccountCard> {
             FilledButton(
               onPressed: () {
                 final p =
+                    (a.needsCurrentPassword && current.text.isEmpty ? tr('Enter your current password.', 'Vul je huidige wachtwoord in.') : null) ??
                     passwordProblem(pw.text) ??
                     (pw.text == pw2.text ? null : tr('The two passwords do not match.', 'De twee wachtwoorden zijn niet gelijk.'));
                 if (p != null) return setD(() => problem = p);
@@ -111,7 +121,8 @@ class _AccountCardState extends State<AccountCard> {
         ),
       ),
     );
-    if (ok == true) await _run(() => a.changePassword(pw.text), done: tr('Your password has been changed.', 'Je wachtwoord is gewijzigd.'));
+    if (ok == true) await _run(() => a.changePassword(pw.text, currentPassword: current.text), done: tr('Your password has been changed.', 'Je wachtwoord is gewijzigd.'));
+    current.dispose();
     pw.dispose();
     pw2.dispose();
   }

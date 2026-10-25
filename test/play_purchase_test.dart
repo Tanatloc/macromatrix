@@ -9,6 +9,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase/supabase.dart';
 import 'package:macromatrix/i18n.dart';
 import 'package:macromatrix/sync/account.dart';
+import 'package:macromatrix/sync/cloudflare_auth.dart' show AccountUser;
 import 'package:macromatrix/sync/play_purchase.dart';
 import 'package:macromatrix/sync/pro.dart';
 import 'package:macromatrix/sync/purchase.dart';
@@ -97,7 +98,7 @@ class _Signed extends Account {
   @override
   bool get signedIn => id != null;
   @override
-  User? get user => id == null ? null : User(id: id!, appMetadata: const {}, userMetadata: const {}, aud: 'authenticated', createdAt: '2026-10-01T00:00:00Z');
+  AccountUser? get user => id == null ? null : AccountUser(id!, null);
 }
 
 void main() {

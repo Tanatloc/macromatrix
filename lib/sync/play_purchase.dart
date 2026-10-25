@@ -361,7 +361,7 @@ PurchaseProvider purchaseProviderFor(Account account) {
   if (store == null) return const NoPurchaseProvider();
   final p = PlayPurchaseProvider(
     store: store,
-    verifier: HttpPlayVerifier(() => account.client?.auth.currentSession?.accessToken),
+    verifier: HttpPlayVerifier(() => account.accessToken),
     signedIn: () => account.signedIn,
     userId: () => account.user?.id,
   );

@@ -46,7 +46,7 @@ PhotoLog photoLog = PhotoLog();
 
 /// Het token van je account, of null als je niet ingelogd bent. Te vervangen in tests.
 @visibleForTesting
-String? Function(BuildContext context) photoToken = (context) => context.read<Account>().client?.auth.currentSession?.accessToken;
+String? Function(BuildContext context) photoToken = (context) => context.read<Account>().accessToken;
 
 /// Op gsm en in de browser: kiezen tussen de camera en een bestaande foto. Op een pc meteen een bestand kiezen.
 Future<Uint8List?> _pickPlatePhoto(BuildContext context) async {
@@ -245,7 +245,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
   }
 
   Future<void> _startCloud() async {
-    final token = context.read<Account>().client?.auth.currentSession?.accessToken;
+    final token = context.read<Account>().accessToken;
     if (token == null) {
       setState(
         () => _speechError = tr(
@@ -272,7 +272,7 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
   Future<void> _finishCloud() async {
     _cloudTimer?.cancel();
     if (!_cloudRecording || !mounted) return;
-    final token = context.read<Account>().client?.auth.currentSession?.accessToken ?? '';
+    final token = context.read<Account>().accessToken ?? '';
     setState(() {
       _cloudRecording = false;
       _listening = false;
