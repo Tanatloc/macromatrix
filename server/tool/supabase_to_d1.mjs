@@ -186,7 +186,8 @@ export function importSql(snap) {
 // ── D1 (via wrangler) ──
 
 function wrangler(args, opts) {
-  const flags = [opts.local ? '--local' : '--remote', ...(opts.env ? ['--env', opts.env] : [])];
+  // Productie is de bovenste laag van wrangler.jsonc (geen --env)
+  const flags = [opts.local ? '--local' : '--remote', ...(opts.env && opts.env !== 'production' ? ['--env', opts.env] : [])];
   return execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', ...flags, ...args], {
     encoding: 'utf8',
     maxBuffer: 1 << 30,

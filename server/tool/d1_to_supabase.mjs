@@ -101,7 +101,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error('Gebruik: d1_to_supabase.mjs <snapshotmap> --env <env> --cutover-seq <N> --sql uit.sql [--local]');
     process.exit(2);
   }
-  const flags = [rest.includes('--local') ? '--local' : '--remote', '--env', opt('--env')];
+  // Productie is de bovenste laag van wrangler.jsonc (geen --env)
+  const flags = [rest.includes('--local') ? '--local' : '--remote', ...(opt('--env') === 'production' ? [] : ['--env', opt('--env')])];
   const q = (s) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', ...flags, '--json', '--command', s], { encoding: 'utf8', maxBuffer: 1 << 30, stdio: ['ignore', 'pipe', 'pipe'] })).at(-1).results;
   const snapshot = JSON.parse(readFileSync(join(dir, 'snapshot.json'), 'utf8'));
   const d1 = { user: q('SELECT * FROM "user"'), account: q('SELECT * FROM account'), tables: {} };
