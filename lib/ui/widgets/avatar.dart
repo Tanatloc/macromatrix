@@ -143,9 +143,11 @@ class LevelAvatar extends StatelessWidget {
                 ],
               ),
             ),
+          // Bij de kroon (recht bovenop de ring) zit het levelbolletje rechtsonder, anders bedekt het de kroon (SU-8)
           Positioned(
             right: -2,
-            top: -2,
+            top: frame == AvatarFrame.crown ? null : -2,
+            bottom: frame == AvatarFrame.crown ? (stars > 0 ? star * 0.45 : 0) - 2 : null,
             child: Container(
               constraints: BoxConstraints(minWidth: badge, minHeight: badge),
               padding: const EdgeInsets.symmetric(horizontal: 4),

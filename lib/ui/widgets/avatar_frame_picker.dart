@@ -1,6 +1,8 @@
 /// Je supporterrand kiezen: een voorbeeld van elke rand rond je eigen avatar, op je eigen level.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -26,7 +28,7 @@ class AvatarFramePicker extends StatelessWidget {
     final enabled = isPro && !unavailable;
     final current = pro?.frame;
 
-    Widget option(AvatarFrame? f) {
+    Widget option(AvatarFrame? f, double width) {
       final selected = enabled && f == current;
       final label = f?.label ?? tr('None', 'Geen');
       return Semantics(
@@ -39,7 +41,7 @@ class AvatarFramePicker extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           onTap: enabled && !selected ? () => pro!.setFrame(f) : null,
           child: Container(
-            width: 84,
+            width: width,
             padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
@@ -106,13 +108,41 @@ class AvatarFramePicker extends StatelessWidget {
         children: [
           PanelTitle(tr('Avatar frame', 'Avatarrand'), trailing: isPro ? null : const ProTag()),
           const SizedBox(height: 4),
-          Text(
-            note,
-            key: const ValueKey('frame-note'),
-            style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2),
+          Row(
+            children: [
+              // Groot voorbeeld van je gekozen rand: klein lijken de rustige randen op "Geen" (SU-9)
+              if (enabled) ...[
+                ExcludeSemantics(
+                  child: Padding(
+                    key: const ValueKey('frame-preview'),
+                    padding: const EdgeInsets.fromLTRB(8, 10, 18, 10),
+                    child: LevelAvatar(avatar: s?.avatar, level: s?.level.level ?? 1, size: 88, frame: current),
+                  ),
+                ),
+              ],
+              Expanded(
+                child: Text(
+                  note,
+                  key: const ValueKey('frame-note'),
+                  style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
-          Wrap(spacing: 4, runSpacing: 6, children: [option(null), for (final f in AvatarFrame.values) option(f)]),
+          // Zo veel kolommen als er passen, minstens 4 op een gsm, en de vakjes vullen de breedte (SU-9)
+          LayoutBuilder(
+            builder: (context, box) {
+              const gap = 4.0;
+              final cols = math.max(4, ((box.maxWidth + gap) / (84 + gap)).floor());
+              final width = ((box.maxWidth - gap * (cols - 1)) / cols).floorToDouble();
+              return Wrap(
+                spacing: gap,
+                runSpacing: 6,
+                children: [option(null, width), for (final f in AvatarFrame.values) option(f, width)],
+              );
+            },
+          ),
         ],
       ),
     );

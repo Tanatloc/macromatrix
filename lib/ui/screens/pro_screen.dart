@@ -18,6 +18,19 @@ class ProScreen extends StatefulWidget {
 
   @override
   State<ProScreen> createState() => _ProScreenState();
+
+  /// Wat er gebeurt als je supporterperiode afloopt, volgens waar ze vandaan komt (null: onbekend, dan niets zeggen).
+  static String? renewalText(String? source) => switch (source) {
+    'play' => tr(
+      'Renews automatically through Google Play until you cancel. Cancel any time in Google Play under Payments & subscriptions.',
+      'Verlengt automatisch via Google Play tot je opzegt. Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
+    ),
+    null || 'manual' || 'gift' => tr(
+      'A gift from MacroMatrix: it does not renew and you pay nothing. Afterwards everything free keeps working.',
+      'Een geschenk van MacroMatrix: het verlengt niet en je betaalt niets. Daarna blijft alles wat gratis is gewoon werken.',
+    ),
+    _ => null,
+  };
 }
 
 class _ProScreenState extends State<ProScreen> {
@@ -290,15 +303,18 @@ class _ProScreenState extends State<ProScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (!isPro) _prices(context, pro),
+                // Ook een supporter zonder Play-abonnement (bv. een geschenk) ziet wat het kost (SU-6)
+                if (!isPro || !_playSubscriber(pro)) _prices(context, pro),
                 const SizedBox(height: 4),
-                Center(
-                  child: TextButton(
-                    key: const ValueKey('pro-restore'),
-                    onPressed: _busy ? null : () => _restore(pro),
-                    child: Text(tr('Restore purchase', 'Aankoop herstellen')),
+                // Herstellen alleen waar kopen kan: anders is er niets om te herstellen (SU-6)
+                if (canBuy(pro))
+                  Center(
+                    child: TextButton(
+                      key: const ValueKey('pro-restore'),
+                      onPressed: _busy ? null : () => _restore(pro),
+                      child: Text(tr('Restore purchase', 'Aankoop herstellen')),
+                    ),
                   ),
-                ),
                 if (_message != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -364,6 +380,15 @@ class _ProScreenState extends State<ProScreen> {
           ),
           const SizedBox(height: 4),
           Text(sub, style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink2)),
+          // Hoe het verder gaat: verlengt het, en waar stop je (SU-6, GP-4)
+          if (isPro && pro != null && pro.debugPro == null && until != null && until.year < 9000 && ProScreen.renewalText(pro.status.source) != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              ProScreen.renewalText(pro.status.source)!,
+              key: const ValueKey('pro-renewal'),
+              style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2),
+            ),
+          ],
           if (q != null) ...[
             const SizedBox(height: 6),
             Text(
@@ -389,6 +414,9 @@ class _ProScreenState extends State<ProScreen> {
       ),
     );
   }
+
+  /// Supporter via een abonnement in Google Play (dat verlengt), niet via een geschenk of met de hand.
+  static bool _playSubscriber(Pro? pro) => pro?.status.source == 'play';
 
   /// Kan je hier echt abonneren? Alleen als de winkel (Google Play) klaarstaat met onze producten en de server Pro
   /// kent. Anders geen actieve knop, maar meteen op die plek "Binnenkort" (Google-regel: geen knop die niets doet).

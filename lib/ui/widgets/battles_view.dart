@@ -5,7 +5,7 @@ import '../../i18n.dart';
 import '../../nutrition/badges.dart';
 import '../../state/app_state.dart';
 import '../../sync/friends.dart';
-import '../screens/friends_screen.dart' show confirmBlock, showReportDialog;
+import '../screens/friends_screen.dart' show confirmBlock, friendsSay, showReportDialog;
 import '../theme.dart';
 import 'avatar.dart';
 import 'badges_view.dart';
@@ -17,13 +17,18 @@ String _name(String n) => n.isEmpty ? tr('Someone without a name', 'Iemand zonde
 
 /// Uitleg hoe een battle werkt.
 String get battleRules => tr(
-  'A battle runs Monday to Sunday. Every day you log your food on time, your Nutrient score counts as points (up to 100 a day). '
-      'Whoever has the most points on Sunday evening wins. You can have one battle a week with each friend, so several at once. '
+  'A battle runs Monday to Sunday. Every day you log your food on time (on the day itself or the day after), your Nutrient '
+      'score counts as points (up to 100 a day). Whoever has the most points on Sunday evening wins. You can have one battle a '
+      'week with each friend, so several at once. Late in the week you can challenge someone for next week instead. '
       'Battles give no XP: you earn badges, titles and bragging rights.',
-  'Een battle loopt van maandag tot en met zondag. Elke dag dat je op tijd je eten logt, telt je Voedingsscore als punten (max. 100 per dag). '
-      'Wie zondagavond de meeste punten heeft, wint. Met elke vriend kan je één battle per week hebben, dus ook meerdere tegelijk. '
+  'Een battle loopt van maandag tot en met zondag. Elke dag dat je op tijd je eten logt (die dag zelf of de dag erna), telt je '
+      'Voedingsscore als punten (max. 100 per dag). Wie zondagavond de meeste punten heeft, wint. Met elke vriend kan je één '
+      'battle per week hebben, dus ook meerdere tegelijk. Op het einde van de week kan je iemand ook voor volgende week uitdagen. '
       'Battles geven geen XP: je verdient badges, titels en eer.',
 );
+
+/// Op zaterdag en zondag is er van deze week weinig over: dan stelt de app volgende week voor (SO-8).
+bool get weekNearlyOver => DateTime.now().weekday >= DateTime.saturday;
 
 /// Battles op het tabblad Vrienden: uitdagingen, lopende battles van deze week en de uitslagen van vorige week.
 class BattlesPanel extends StatelessWidget {
@@ -38,6 +43,7 @@ class BattlesPanel extends StatelessWidget {
     final incoming = f.battles.where((b) => b.pending && !b.challengedByMe).toList();
     final outgoing = f.battles.where((b) => b.pending && b.challengedByMe).toList();
     final live = f.battles.where((b) => b.live).toList();
+    final upcoming = f.battles.where((b) => b.upcoming).toList();
     final last = f.battles.where((b) => b.finished && b.week == lastMonday).toList();
     final daysLeft = 7 - (DateTime.now().weekday - 1);
 
@@ -81,7 +87,9 @@ class BattlesPanel extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            tr('${_name(b.otherName)} challenges you this week', '${_name(b.otherName)} daagt je uit deze week'),
+                            b.nextWeek
+                                ? tr('${_name(b.otherName)} challenges you for next week', '${_name(b.otherName)} daagt je uit voor volgende week')
+                                : tr('${_name(b.otherName)} challenges you this week', '${_name(b.otherName)} daagt je uit deze week'),
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: pal.ink),
                           ),
                         ),
@@ -93,6 +101,24 @@ class BattlesPanel extends StatelessWidget {
                 ),
               ),
             for (final b in live) _LiveBattle(battle: b, daysLeft: daysLeft),
+            // Aanvaard voor volgende week: begint maandag
+            for (final b in upcoming)
+              Padding(
+                key: ValueKey('battle-upcoming-${b.id}'),
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    AvatarImage(avatar: b.otherAvatar, size: 32),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        tr('Battle with ${_name(b.otherName)} starts on Monday', 'Battle met ${_name(b.otherName)} begint maandag'),
+                        style: TextStyle(fontSize: 13, color: pal.ink2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // Je eigen uitdaging die nog open staat, met Annuleren (S06)
             for (final b in outgoing)
               Padding(
@@ -104,13 +130,23 @@ class BattlesPanel extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        tr('Waiting for ${_name(b.otherName)} to accept', 'Wachten tot ${_name(b.otherName)} aanvaardt'),
+                        b.nextWeek
+                            ? tr(
+                                'Waiting for ${_name(b.otherName)} to accept (next week)',
+                                'Wachten tot ${_name(b.otherName)} aanvaardt (volgende week)',
+                              )
+                            : tr('Waiting for ${_name(b.otherName)} to accept', 'Wachten tot ${_name(b.otherName)} aanvaardt'),
                         style: TextStyle(fontSize: 13, color: pal.ink2),
                       ),
                     ),
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-                      onPressed: () => f.cancelBattle(b),
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await f.cancelBattle(b);
+                        // Bevestigen dat het gelukt is (SO-5)
+                        friendsSay(messenger, f.error ?? tr('Battle challenge cancelled.', 'Battle-uitdaging ingetrokken.'));
+                      },
                       child: Text(tr('Cancel', 'Annuleren')),
                     ),
                   ],
@@ -124,7 +160,7 @@ class BattlesPanel extends StatelessWidget {
               ),
               for (final b in last) _ResultRow(battle: b),
             ],
-            if (incoming.isEmpty && live.isEmpty && outgoing.isEmpty)
+            if (incoming.isEmpty && live.isEmpty && outgoing.isEmpty && upcoming.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
@@ -252,7 +288,7 @@ class _LiveBattle extends StatelessWidget {
                   : (ahead
                         ? tr('You are ahead by ${mine - b.otherPoints}', 'Je staat ${mine - b.otherPoints} voor')
                         : tr('You are behind by ${b.otherPoints - mine}', 'Je staat ${b.otherPoints - mine} achter')),
-              daysLeft == 1 ? tr('last day', 'laatste dag') : tr('$daysLeft days left', 'nog $daysLeft dagen'),
+              daysLeft == 1 ? tr('ends today', 'eindigt vandaag') : tr('$daysLeft days left', 'nog $daysLeft dagen'),
             ].join(' · '),
             style: TextStyle(fontSize: 12.5, color: pal.ink2),
           ),
@@ -261,8 +297,8 @@ class _LiveBattle extends StatelessWidget {
           // getallen verschillen (S02)
           Text(
             tr(
-              'Points: the sum of the day scores you logged on time this week. The leaderboard shows the average.',
-              'Punten: de som van de dagscores die je deze week op tijd logde. De ranglijst toont het gemiddelde.',
+              'Points: the sum of this week\'s day scores you logged on time (that day or the day after). The leaderboard shows the average.',
+              'Punten: de som van de dagscores van deze week die je op tijd logde (die dag of de dag erna). De ranglijst toont het gemiddelde.',
             ),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 11.5, color: pal.ink3),
@@ -325,6 +361,7 @@ class _FriendSheet extends StatelessWidget {
     if (x == null) return const SizedBox(height: 120);
     final (won, lost, draw) = f.rivalry(x.id);
     final current = f.currentBattleWith(x.id);
+    final next = f.nextBattleWith(x.id);
     final history = f.finishedBattles.where((b) => b.other == x.id).toList().reversed.take(8).toList();
     final title = titleById[x.title]?.name;
 
@@ -390,29 +427,7 @@ class _FriendSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            if (f.battlesAvailable)
-              current == null
-                  ? FilledButton.icon(
-                      icon: const Icon(Icons.sports_mma_rounded),
-                      label: Text(tr('Challenge to a battle this week', 'Uitdagen voor een battle deze week')),
-                      onPressed: () async {
-                        final messenger = ScaffoldMessenger.of(context);
-                        final nav = Navigator.of(context);
-                        final m = await f.challenge(x.id);
-                        // Verstuurd: het blad sluiten, zodat je op de Battles-kaart meteen "Wachten op …" ziet
-                        if (m != null && context.mounted) nav.pop();
-                        messenger.showSnackBar(SnackBar(content: Text(m ?? f.error ?? tr('That did not work.', 'Dat lukte niet.'))));
-                      },
-                    )
-                  : Text(
-                      current.accepted
-                          ? tr('You have a battle going this week.', 'Jullie hebben deze week een battle.')
-                          : (current.challengedByMe
-                                ? tr('Challenge sent, waiting for an answer.', 'Uitdaging verstuurd, wachten op antwoord.')
-                                : tr('They challenged you: accept it under Battles.', 'Die persoon daagde je uit: aanvaard het bij Battles.')),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: pal.ink2),
-                    ),
+            if (f.battlesAvailable) ..._battleActions(context, f, x, current, next),
             if (x.badges.isNotEmpty) ...[
               const SizedBox(height: 18),
               Text(
@@ -441,7 +456,11 @@ class _FriendSheet extends StatelessWidget {
                     icon: const Icon(Icons.flag_outlined, size: 18),
                     label: Text(tr('Report', 'Melden')),
                     style: TextButton.styleFrom(foregroundColor: pal.ink2, minimumSize: const Size(48, 48)),
-                    onPressed: () => showReportDialog(context, x.id, x.name),
+                    onPressed: () async {
+                      final nav = Navigator.of(context);
+                      // Gemeld en meteen geblokkeerd: het blad sluiten (die persoon staat niet meer in je lijst)
+                      if (await showReportDialog(context, x.id, x.name, avatar: x.avatar)) nav.pop();
+                    },
                   ),
                   const SizedBox(width: 8),
                   TextButton.icon(
@@ -462,5 +481,63 @@ class _FriendSheet extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Uitdagen, of zeggen hoe het ervoor staat. Op zaterdag en zondag is uitdagen voor volgende week de eerste keuze,
+  /// met deze week als tweede: een battle van een dag is bijna al beslist (SO-8).
+  List<Widget> _battleActions(BuildContext context, Friends f, Friend x, Battle? current, Battle? next) {
+    final pal = context.pal;
+    Future<void> challenge({required bool nextWeek}) async {
+      final messenger = ScaffoldMessenger.of(context);
+      final nav = Navigator.of(context);
+      final m = await f.challenge(x.id, nextWeek: nextWeek);
+      // Verstuurd: het blad sluiten, zodat je op de Battles-kaart meteen "Wachten op …" ziet
+      if (m != null && context.mounted) nav.pop();
+      friendsSay(messenger, m ?? f.error ?? tr('That did not work.', 'Dat lukte niet.'));
+    }
+
+    String status(Battle b, {required bool nextWeek}) => b.accepted
+        ? (nextWeek
+              ? tr('Your battle next week starts on Monday.', 'Jullie battle van volgende week begint maandag.')
+              : tr('You have a battle going this week.', 'Jullie hebben deze week een battle.'))
+        : (b.challengedByMe
+              ? tr('Challenge sent, waiting for an answer.', 'Uitdaging verstuurd, wachten op antwoord.')
+              : tr('They challenged you: accept it under Battles.', 'Die persoon daagde je uit: aanvaard het bij Battles.'));
+    Widget note(String t) => Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        t,
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 13, color: pal.ink2),
+      ),
+    );
+    final today = DateTime.now().weekday == DateTime.sunday;
+    final thisWeek = FilledButton.icon(
+      key: const Key('battle-this-week'),
+      icon: const Icon(Icons.sports_mma_rounded),
+      label: Text(tr('Challenge to a battle this week', 'Uitdagen voor een battle deze week')),
+      onPressed: () => challenge(nextWeek: false),
+    );
+    final nextWeek = FilledButton.icon(
+      key: const Key('battle-next-week'),
+      icon: const Icon(Icons.sports_mma_rounded),
+      label: Text(tr('Challenge for next week', 'Uitdagen voor volgende week')),
+      onPressed: () => challenge(nextWeek: true),
+    );
+    if (!weekNearlyOver) return [if (current == null) thisWeek else note(status(current, nextWeek: false))];
+    return [
+      if (current != null) note(status(current, nextWeek: false)),
+      if (next != null) note(status(next, nextWeek: true)) else nextWeek,
+      if (current == null)
+        TextButton(
+          key: const Key('battle-this-week-short'),
+          onPressed: () => challenge(nextWeek: false),
+          child: Text(
+            today
+                ? tr('Or this week (it ends today)', 'Of deze week (die eindigt vandaag)')
+                : tr('Or this week (it ends on Sunday)', 'Of deze week (die eindigt zondag)'),
+          ),
+        ),
+    ];
   }
 }

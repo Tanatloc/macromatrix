@@ -1,9 +1,9 @@
-<p>MacroMatrix toont wat je echt eet: energie, macro's en alle 69 voedingsstoffen, vergeleken met de referentiewaarden van EFSA. Bijna alles is gratis, de app is open source en heeft geen advertenties.</p>
+<p>MacroMatrix toont wat je echt eet: energie, macro's en alle 69 voedingsstoffen, vergeleken met de referentiewaarden van EFSA. De app is gratis, met een optioneel Supporter-abonnement voor een paar extra's. Ze is open source en heeft geen advertenties.</p>
 <ul>
 <li><b>Dagboek</b>: elke vitamine, elk mineraal, alle vetzuren en essentiële aminozuren, met een Nutrient Score per dag, week en maand, en een kort lijstje met wat je tekort vandaag aanvult.</li>
 <li><b>Loggen</b>: zoek in meer dan 20.000 basisvoedingsmiddelen uit officiële Europese tabellen en miljoenen merkproducten, scan een barcode, zeg wat je at, of neem een foto van je maaltijd (3 per dag gratis; je controleert de schatting voor ze bewaard wordt).</li>
 <li><b>Scanner</b>: productscore, Nutri-Score, bewerkingsgraad, additieven met hun risico volgens EFSA, je allergenen en een gezonder alternatief. Product onbekend? Scan dan het etiket (1 per dag gratis) en deel het als je wil met Open Food Facts.</li>
-<li><b>Vrienden</b>, als je dat wil: een wekelijkse ranglijst, battles, uitdagingen, levels, badges en titels. Vrienden zien alleen je naam, level, badges en weekscore. Je kan blokkeren en melden.</li>
+<li><b>Vrienden</b>, als je dat wil: een wekelijkse ranglijst, battles, uitdagingen, levels, badges en titels. Vrienden zien alleen je naam, foto of avatar, level, titel, badges, weekscore en gelogde dagen, je battlepunten en of je elke dag van een uitdaging haalde. Nooit je dagboek, gewicht of e-mailadres. Je kan blokkeren en melden.</li>
 <li>Weekmenu met boodschappenlijst, een dag kopiëren, back-ups, Health Connect, widget op je startscherm, herinneringen, Engels en Nederlands, licht en donker thema. Werkt ook offline.</li>
 </ul>
 <p>Supporter is optioneel (€2,99 per maand of €19,99 per jaar). Je krijgt er extra's bij die je niet nodig hebt, zoals avatarranden, meer kleuren, meer foto's en etiketscans per dag, recepten importeren en vroege toegang. Het betaalt vooral de servers en de AI-scans, zodat de app online blijft zonder advertenties.</p>

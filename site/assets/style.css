@@ -301,6 +301,9 @@ section.block { padding: 88px 0; }
 .dl-card .ctas { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
 .dl-card .small { font-size: 13.5px; color: var(--ink-3); margin: 0; }
 .dl-card code { font-size: 12.5px; word-break: break-all; }
+.dl-card .more { font-size: 13.5px; color: var(--ink-3); }
+.dl-card .more summary { cursor: pointer; }
+.dl-card .more p { margin: 8px 0 0; }
 @media (max-width: 760px) { .download { grid-template-columns: 1fr; } }
 
 /* Gratis en Supporter */

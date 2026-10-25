@@ -269,10 +269,11 @@ class AvatarFramePainter extends CustomPainter {
     }
   }
 
-  // --- Kroon: een kroontje linksboven op de ring (rechtsboven zit het levelbolletje), staat stil
+  // --- Kroon: een kroontje recht bovenop de ring, staat stil. Het levelbolletje zit bij deze rand rechtsonder
+  // (LevelAvatar), zodat het de kroon niet meer half bedekt (SU-8)
 
   void _crown(Canvas canvas, Offset c) {
-    const a = -2.1;
+    const a = -math.pi / 2;
     final w = (ring * 0.9).clamp(13.0, 34.0);
     final h = w * 0.66;
     final base = c + Offset(math.cos(a), math.sin(a)) * (ring - border * 0.9);

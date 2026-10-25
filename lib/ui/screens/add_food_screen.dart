@@ -652,10 +652,14 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                               'No products of your own found. Create one with the plus at the top right.',
                               'Geen eigen producten gevonden. Maak er een met het plusje rechtsboven.',
                             ),
-                            _Scope.recipes => tr(
-                              'No recipes found. Create one with the plus at the top right.',
-                              'Geen recepten gevonden. Maak er een met het plusje rechtsboven.',
-                            ),
+                            // De knop "Nieuw recept" staat er vlak boven (SU-14)
+                            _Scope.recipes =>
+                              widget.pickOnly
+                                  ? tr('No recipes found.', 'Geen recepten gevonden.')
+                                  : tr(
+                                      'No recipes found. Tap New recipe above to make one.',
+                                      'Geen recepten gevonden. Tik hierboven op Nieuw recept om er een te maken.',
+                                    ),
                             _ => tr('Nothing found in the built-in database.', 'Niets gevonden in de ingebouwde database.'),
                           }, style: TextStyle(color: p.ink2)),
                         ),

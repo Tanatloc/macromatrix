@@ -10,7 +10,7 @@ import '../../sync/account.dart';
 import '../../sync/challenges.dart';
 import '../../sync/friends.dart';
 import '../../sync/name_filter.dart';
-import '../screens/friends_screen.dart' show SafetyMenu;
+import '../screens/friends_screen.dart' show SafetyMenu, friendsSay;
 import '../theme.dart';
 import 'avatar.dart';
 import 'kit.dart';
@@ -24,6 +24,20 @@ DateTime _today() {
 }
 
 String _date(DateTime d) => DateFormat('EEE d MMM', appLocale).format(d);
+
+/// Wanneer een uitdaging begon of begint, gezien vanaf de dag waarin je zit ([today], logisch: tot 3 uur 's nachts
+/// is het nog gisteren, zoals in je dagboek). Vlak na middernacht zei een uitnodiging "begonnen za 24 okt" terwijl
+/// het al zondag was (SO-1); "vandaag" en "gisteren" kloppen met "Dag 1 van 30" eronder.
+String challengeStartText(DateTime start, {DateTime? today}) {
+  final t = today ?? _today();
+  return switch (daysBetween(t, start)) {
+    0 => tr('started today', 'vandaag begonnen'),
+    -1 => tr('started yesterday', 'gisteren begonnen'),
+    1 => tr('starts tomorrow', 'begint morgen'),
+    < 0 => tr('started ${_date(start)}', 'begonnen ${_date(start)}'),
+    _ => tr('starts ${_date(start)}', 'begint ${_date(start)}'),
+  };
+}
 
 /// Uitleg hoe een uitdaging werkt.
 String get challengeRules => tr(
@@ -224,7 +238,6 @@ class _InviteCard extends StatelessWidget {
     final pal = context.pal;
     final c = context.read<Friends>().challenges;
     final t = invite.template;
-    final started = !invite.start.isAfter(_today());
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(12),
@@ -257,8 +270,7 @@ class _InviteCard extends StatelessWidget {
             ],
           ),
           Text(
-            '${tr('Every day', 'Elke dag')} ${t.dailyRule} · ${t.durationText} · '
-            '${started ? tr('started ${_date(invite.start)}', 'begonnen ${_date(invite.start)}') : tr('starts ${_date(invite.start)}', 'begint ${_date(invite.start)}')}',
+            '${tr('Every day', 'Elke dag')} ${t.dailyRule} · ${t.durationText} · ${challengeStartText(invite.start)}',
             style: TextStyle(fontSize: 12.5, color: pal.ink3),
           ),
           const SizedBox(height: 6),
@@ -297,6 +309,9 @@ class _ChallengeCard extends StatelessWidget {
         if (x.state == FriendState.friend) x,
     ];
     final canInvite = c.canGroup && friends.isNotEmpty;
+    // Een groepsuitdaging waar niemand anders meer in zit (de anderen stopten, of je ziet ze niet meer na een
+    // blokkade): dan doe je het alleen (SO-10)
+    final alone = challenge.group && c.remoteById.containsKey(challenge.remoteId) && board.length <= 1 && waiting.isEmpty;
 
     return Container(
       margin: const EdgeInsets.only(top: 10),
@@ -325,7 +340,7 @@ class _ChallengeCard extends StatelessWidget {
                       [
                         if (day != null) tr('Day $day of ${t.days}', 'Dag $day van ${t.days}'),
                         if (t.need < t.days) tr('${t.need} days needed', '${t.need} dagen nodig'),
-                        if (!challenge.group) tr('on your own', 'alleen'),
+                        if (!challenge.group || alone) tr('on your own', 'alleen'),
                       ].join(' · '),
                       style: TextStyle(fontSize: 12.5, color: pal.ink3),
                     ),
@@ -649,7 +664,7 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
     if (msg != null) {
       _done = true;
       nav.pop();
-      messenger.showSnackBar(SnackBar(content: Text(msg)));
+      friendsSay(messenger, msg);
     }
   }
 
@@ -810,6 +825,19 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
                   selected: _tomorrow,
                   onChanged: (v) => setState(() => _tomorrow = v),
                 ),
+                // Na middernacht maar voor het begin van de nieuwe dag: zeggen welke dag "Vandaag" is (SO-1)
+                if (DateTime.now().day != logicalNow().day)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      tr(
+                        'Until $dayStartHour:00 at night, today is still ${_date(_today())}, just like in your diary.',
+                        'Tot $dayStartHour uur \'s nachts is vandaag nog ${_date(_today())}, net als in je dagboek.',
+                      ),
+                      key: const Key('challenge-start-night'),
+                      style: TextStyle(fontSize: 12.5, color: pal.ink3),
+                    ),
+                  ),
                 const SizedBox(height: 14),
                 Text(
                   tr('Invite friends', 'Vrienden uitnodigen'),
@@ -944,14 +972,9 @@ class _InviteSheetState extends State<_InviteSheet> {
                       if (!mounted) return;
                       setState(() => _busy = false);
                       nav.pop();
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            msg ??
-                                c.error ??
-                                tr('Challenges with friends are not available yet.', 'Uitdagingen met vrienden zijn nog niet beschikbaar.'),
-                          ),
-                        ),
+                      friendsSay(
+                        messenger,
+                        msg ?? c.error ?? tr('Challenges with friends are not available yet.', 'Uitdagingen met vrienden zijn nog niet beschikbaar.'),
                       );
                     },
               child: Text(tr('Send invitations', 'Uitnodigingen versturen')),
@@ -1035,15 +1058,11 @@ Future<void> showChallengeReportDialog(BuildContext context, String remoteId, St
   );
   if (note == null) return;
   final res = await c.report(remoteId, note: note);
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(switch (res) {
-        null => c.error ?? tr('That did not work.', 'Dat lukte niet.'),
-        'not_found' => tr('This challenge no longer exists.', 'Deze uitdaging bestaat niet meer.'),
-        final r => reportMessage(r),
-      }),
-    ),
-  );
+  friendsSay(messenger, switch (res) {
+    null => c.error ?? tr('That did not work.', 'Dat lukte niet.'),
+    'not_found' => tr('This challenge no longer exists.', 'Deze uitdaging bestaat niet meer.'),
+    final r => reportMessage(r),
+  });
 }
 
 class _ChallengeReportDialog extends StatefulWidget {

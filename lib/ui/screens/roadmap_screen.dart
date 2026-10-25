@@ -60,7 +60,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         'You have used all $roadmapVotesMax votes. Take one back to vote on this.',
         'Je gebruikt al je $roadmapVotesMax stemmen. Neem er een terug om hierop te stemmen.',
       ),
-      VoteResult.closed => tr('This one is done, so voting is closed.', 'Dit is klaar, dus stemmen kan niet meer.'),
+      // Klaar of al in vroege toegang
+      VoteResult.closed => tr('This one is already here, so voting is closed.', 'Dit is er al, dus stemmen kan niet meer.'),
       VoteResult.notPro => tr('Voting is for supporters.', 'Stemmen is voor supporters.'),
       VoteResult.notFound => tr('This item is no longer on the list.', 'Dit staat niet meer op de lijst.'),
       VoteResult.missing => null,
@@ -272,7 +273,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
 
   Widget _item(BuildContext context, RoadmapItem item, bool isPro) {
     final p = context.pal;
-    final canVote = isPro && !item.done;
+    final canVote = isPro && !item.closed;
     final busy = _roadmap.busy.contains(item.id);
     return Panel(
       key: ValueKey('roadmap-item-${item.id}'),
@@ -318,7 +319,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                     child: Icon(item.mine ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 20, color: p.ink3),
                   ),
                 Semantics(
-                  label: tr('${item.votes} votes', '${item.votes} stemmen'),
+                  label: item.votes == 1 ? tr('1 vote', '1 stem') : tr('${item.votes} votes', '${item.votes} stemmen'),
                   child: ExcludeSemantics(
                     child: Text(
                       '${item.votes}',
@@ -347,6 +348,7 @@ class _StatusChip extends StatelessWidget {
       RoadmapStatus.idea => (tr('Idea', 'Idee'), p.sunken, p.ink2),
       RoadmapStatus.planned => (tr('Planned', 'Gepland'), p.lowSoft, p.low),
       RoadmapStatus.building => (tr('In progress', 'In de maak'), p.brandSoft, p.brand),
+      RoadmapStatus.early => (tr('In early access', 'In vroege toegang'), p.brandSoft, p.brand),
       RoadmapStatus.done => (tr('Done', 'Klaar'), p.okSoft, p.ok),
     };
     return Container(
