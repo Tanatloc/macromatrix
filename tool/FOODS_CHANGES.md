@@ -148,3 +148,9 @@ rijst die ze van voorgekookte rijst leende).
 Niet veranderd: het selenium van planten met een 0 (seleenarme grond is echt), witte rijst van Matvaretabellen houdt
 selenium 0 (receptberekening uit ongekookte rijst onder de meetgrens). Overige CIQUAL "<"-waarden blijven 0 als er
 geen ander gegeven is.
+
+## Namen (25-10)
+
+Versie blijft `37c9dfe721a2` (alleen namen en zoektekst, geen waarden). CoFID "Potato chips, …" heet nu "French fries, …"
+(Britse chips zijn frieten) en Matvaretabellen "Oatmeal" met lokale naam "Havremel" heet "Oat flour". De oude naam blijft
+in de zoektekst. Eerder gebeurde dit alleen bij het tonen (`tidyFoodName`), waardoor de nieuwe naam niet vindbaar was.

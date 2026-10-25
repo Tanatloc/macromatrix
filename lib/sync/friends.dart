@@ -168,6 +168,10 @@ const socialBestSetting = 'social_best';
 /// Lokale instelling met je verstuurde battle-uitdagingen die nog open stonden.
 const sentBattlesSetting = '_battles_sent';
 
+/// Lokale instelling met je verstuurde vriendschapsverzoeken die nog open stonden (id → naam), zodat "X aanvaardde je
+/// verzoek" ook komt als de app intussen dicht was.
+const sentRequestsSetting = '_requests_sent';
+
 /// Antwoord op "vriend toevoegen": de uitkomst van de server ([result] null bij een fout) en een korte uitleg.
 class AddResult {
   const AddResult(this.result, this.message);
@@ -551,12 +555,18 @@ class Friends extends ChangeNotifier {
         rows = await client.rpc('friend_list', params: week) as List;
       }
       if (gen != _loadGen) return;
-      final sent = {
+      final sent = <String, String>{
+        for (final e in ((state.user.setting(sentRequestsSetting)?['open'] as Map?) ?? const {}).entries) e.key as String: e.value as String,
         for (final x in list)
           if (x.state == FriendState.outgoing) x.id: x.name,
       };
       list = [for (final r in rows) Friend.fromRow((r as Map).cast<String, dynamic>())];
       notices.addAll(acceptedRequestNotices(sent, list));
+      final open = {
+        for (final x in list)
+          if (x.state == FriendState.outgoing) x.id: x.name,
+      };
+      if (!mapEquals(sent, open)) state.user.setSetting(sentRequestsSetting, {'open': open});
       _keepSocialBest();
       await _loadFrames(client, gen);
       try {
