@@ -656,8 +656,10 @@ class AccentPicker extends StatelessWidget {
                     button: true,
                     selected: on,
                     label: locked ? tr('${a.name} (Supporter)', '${a.name} (Supporter)') : a.name,
-                    // Eén keer voorlezen: de tooltip niet nog eens ("Petrol Petrol", SU-14)
+                    // Eén keer voorlezen: de tooltip niet nog eens ("Petrol Petrol", SU-14). Zonder de kinderen ook
+                    // zonder hun tik, dus die hier opnieuw.
                     excludeSemantics: true,
+                    onTap: () => locked ? openProScreen(context) : s.setAccent(a.id),
                     child: Tooltip(
                       message: locked ? tr('${a.name} · for supporters', '${a.name} · voor supporters') : a.name,
                       excludeFromSemantics: true,
@@ -733,6 +735,7 @@ class BackdropPicker extends StatelessWidget {
                     selected: on,
                     label: locked ? tr('${d.name} (Supporter)', '${d.name} (Supporter)') : d.name,
                     excludeSemantics: true,
+                    onTap: () => locked ? openProScreen(context) : s.setBackdrop(d.id),
                     child: InkWell(
                       key: ValueKey('backdrop-${d.id}'),
                       borderRadius: BorderRadius.circular(10),

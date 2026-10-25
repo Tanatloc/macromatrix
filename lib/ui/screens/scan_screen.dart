@@ -47,6 +47,11 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<void> _start() async {
     if (_error != null) setState(() => _error = null);
+    // Opnieuw proberen: de vorige camera eerst vrijgeven, anders is ze "in gebruik"
+    _webTimer?.cancel();
+    final old = _controller;
+    _controller = null;
+    if (old != null) await old.dispose().catchError((_) {});
     try {
       final cams = await scanCameras();
       if (cams.isEmpty) throw CameraException('none', 'No camera');
@@ -73,10 +78,15 @@ class _ScanScreenState extends State<ScanScreen> {
       if (mounted) {
         setState(
           () => _error = e is CameraException && (e.code.contains('Denied') || e.code.contains('ermission'))
-              ? tr(
-                  'No access to the camera. Give the app permission in your phone settings.',
-                  'Geen toegang tot de camera. Geef de app toestemming in de instellingen van je gsm.',
-                )
+              ? (kIsWeb
+                    ? tr(
+                        'No access to the camera. Allow the camera for this site in your browser (the icon next to the address).',
+                        'Geen toegang tot de camera. Sta de camera toe voor deze site in je browser (het icoontje naast het adres).',
+                      )
+                    : tr(
+                        'No access to the camera. Give the app permission in your phone settings.',
+                        'Geen toegang tot de camera. Geef de app toestemming in de instellingen van je gsm.',
+                      ))
               : tr('The camera could not start.', 'De camera kon niet starten.'),
         );
       }
@@ -84,7 +94,8 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   void _onFrame(CameraImage frame) {
-    if (_busy || _done) return;
+    // Tijdens het typen niet scannen: een code die de camera toevallig ziet, zou het scherm sluiten
+    if (_busy || _done || _typing) return;
     _busy = true;
     final y = frame.planes.first;
     final w = frame.width, h = frame.height;
@@ -98,7 +109,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<void> _snapWeb() async {
     final c = _controller;
-    if (_busy || _done || c == null || !c.value.isInitialized || c.value.isTakingPicture) return;
+    if (_busy || _done || _typing || c == null || !c.value.isInitialized || c.value.isTakingPicture) return;
     _busy = true;
     try {
       final bytes = await (await c.takePicture()).readAsBytes();

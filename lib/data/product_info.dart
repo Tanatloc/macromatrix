@@ -205,12 +205,17 @@ class ProductInfo {
   /// Uit de bewaarde gegevens op dit toestel (geen internet).
   final bool offline;
 
-  ProductInfo asOffline() => ProductInfo(
+  ProductInfo asOffline() => _copy(offline: true);
+
+  /// Met je eigen product (van het etiket ingevuld) als de bron zelf geen voedingswaarden heeft.
+  ProductInfo withFood(Food f) => _copy(food: f);
+
+  ProductInfo _copy({Food? food, bool? offline}) => ProductInfo(
     code: code,
     name: name,
     brand: brand,
     image: image,
-    food: food,
+    food: food ?? this.food,
     nutriscore: nutriscore,
     nova: nova,
     additiveTags: additiveTags,
@@ -223,7 +228,7 @@ class ProductInfo {
     source: source,
     categories: categories,
     countries: countries,
-    offline: true,
+    offline: offline ?? this.offline,
   );
 
   factory ProductInfo.fromOff(Map<String, Object?> p, Food? food) {

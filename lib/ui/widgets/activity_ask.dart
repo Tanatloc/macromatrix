@@ -18,8 +18,9 @@ const activityAskKey = '_ask_activity';
 /// Na de eerste stap: de vraag later stellen.
 void askActivityLater(AppState s) => s.user.setSetting(activityAskKey, {'on': true});
 
-/// De kaart tonen? Alleen als de vraag nog openstaat.
-bool activityAskDue(AppState s) => s.user.setting(activityAskKey)?['on'] == true;
+/// De kaart tonen? Alleen als de vraag nog openstaat en je nog op de standaard "licht actief" staat (na inloggen in
+/// een bestaand account kan het profiel al iets anders zeggen).
+bool activityAskDue(AppState s) => s.user.setting(activityAskKey)?['on'] == true && s.profile.activity == Activity.light;
 
 /// Gekozen (hier of in het profiel) of weggetikt: niet meer vragen.
 void activityAsked(AppState s) {
@@ -144,7 +145,11 @@ class _ActivityAskCardState extends State<ActivityAskCard> {
       color: p.brandSoft,
       borderColor: p.brandSoft,
       padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-      onTap: () => showActivitySheet(context),
+      onTap: () async {
+        await showActivitySheet(context);
+        // Ook "licht actief" kiezen (geen wijziging, dus geen nieuw dagboek) moet de kaart weghalen
+        if (mounted && !activityAskDue(s)) setState(() => _hidden = true);
+      },
       child: Row(
         children: [
           Icon(Icons.directions_walk_rounded, color: p.brand),

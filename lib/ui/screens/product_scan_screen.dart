@@ -576,7 +576,7 @@ class _Header extends StatelessWidget {
                     ),
                     style: TextStyle(fontSize: 12.5, color: p.ink3, height: 1.3),
                   )
-                else
+                else if (score == null)
                   Text(tr('Not enough data for a score', 'Te weinig gegevens voor een score'), style: TextStyle(fontSize: 13, color: p.ink3)),
               ],
             ),

@@ -2718,21 +2718,28 @@ class AppState extends ChangeNotifier {
   /// Gescande producten blijven op dit toestel bewaard (de laatste [_scanCacheMax]), zodat scannen in de winkel
   /// ook zonder internet werkt.
   Future<ProductInfo?> productInfo(String code) async {
+    // Zonder voedingswaarden bij de bron: je eigen product met deze barcode (van het etiket ingevuld, NF-11)
+    ProductInfo mine(ProductInfo i) {
+      final own = i.food == null ? user.foodByBarcode(code) : null;
+      return own == null ? i : i.withFood(own);
+    }
+
     try {
       final p = await off.productInfoRaw(code);
       if (p != null) {
         _cacheScan(code, {'src': 'off', 'data': p});
-        return ProductInfo.fromOff(p, foodFromOff(p));
+        return mine(ProductInfo.fromOff(p, foodFromOff(p)));
       }
     } on OffException {
       final cached = cachedProduct(code);
-      if (cached != null) return cached.asOffline();
+      if (cached != null) return mine(cached.asOffline());
       rethrow;
     }
     final j = await fdc.raw(code);
     if (j == null) return null;
     _cacheScan(code, {'src': 'usda', 'data': j});
-    return productFromFdc(j);
+    final usda = productFromFdc(j);
+    return usda == null ? null : mine(usda);
   }
 
   /// Betere keuzes voor een product: tot 3 gelijkaardige producten met een duidelijk hogere productscore.

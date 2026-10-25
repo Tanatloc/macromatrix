@@ -515,6 +515,17 @@ class Friends extends ChangeNotifier {
     }
   }
 
+  /// Na een actie opnieuw laden, zonder dat een gelukte herlaadbeurt de fout van de actie zelf wist (anders meldt
+  /// het scherm "gelukt" terwijl het niet lukte).
+  Future<void> _reloadKeepingError(bool ok) async {
+    final failed = ok ? null : error;
+    await load();
+    if (failed != null && error == null) {
+      error = failed;
+      notifyListeners();
+    }
+  }
+
   bool _notifySetup = false;
 
   /// Eigen code en naam ophalen (maakt ze aan bij de eerste keer), score doorsturen en de lijst laden.
@@ -733,7 +744,7 @@ class Friends extends ChangeNotifier {
       ];
       notifyListeners();
     }
-    await load();
+    await _reloadKeepingError(ok == true);
   }
 
   Future<void> cancelBattle(Battle b) async {
@@ -749,7 +760,7 @@ class Friends extends ChangeNotifier {
       ];
       notifyListeners();
     }
-    await load();
+    await _reloadKeepingError(ok == true);
   }
 
   Future<void> respond(Friend f, bool accept) async {
@@ -765,7 +776,7 @@ class Friends extends ChangeNotifier {
       ];
       notifyListeners();
     }
-    await load();
+    await _reloadKeepingError(ok == true);
   }
 
   Future<void> remove(Friend f) async {
@@ -781,7 +792,7 @@ class Friends extends ChangeNotifier {
       ];
       notifyListeners();
     }
-    await load();
+    await _reloadKeepingError(ok == true);
   }
 
   /// Voert een functie voor blokkeren of melden uit. Kent de server ze niet (migratie nog niet uitgevoerd), dan

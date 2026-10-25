@@ -169,6 +169,9 @@ void main() {
     state.addFood(foods.search('banana', limit: 1).first, meal: Meal.breakfast, grams: 120, quantity: 120);
     expect(activityAskDue(state), isFalse);
     askActivityLater(state);
+    // Een profiel dat al iets anders zegt dan "licht actief" (bv. na inloggen in een bestaand account): niet vragen
+    expect(activityAskDue(state), isFalse);
+    state.saveProfile(state.profile.copyWith(activity: Activity.light));
     expect(activityAskDue(state), isTrue);
     activityAsked(state);
     expect(activityAskDue(state), isFalse);

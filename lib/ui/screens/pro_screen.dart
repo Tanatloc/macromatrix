@@ -304,7 +304,8 @@ class _ProScreenState extends State<ProScreen> {
                 ),
                 const SizedBox(height: 12),
                 // Ook een supporter zonder Play-abonnement (bv. een geschenk) ziet wat het kost (SU-6)
-                if (!isPro || !_playSubscriber(pro)) _prices(context, pro),
+                // Maar kopen pas als je geen supporter meer bent: een abonnement bovenop een geschenk telt geen tijd bij
+                if (!isPro || !_playSubscriber(pro)) _prices(context, pro, allowBuy: !isPro),
                 const SizedBox(height: 4),
                 // Herstellen alleen waar kopen kan: anders is er niets om te herstellen (SU-6)
                 if (canBuy(pro))
@@ -422,9 +423,9 @@ class _ProScreenState extends State<ProScreen> {
   /// kent. Anders geen actieve knop, maar meteen op die plek "Binnenkort" (Google-regel: geen knop die niets doet).
   static bool canBuy(Pro? pro) => pro != null && pro.available && pro.purchases.available;
 
-  Widget _prices(BuildContext context, Pro? pro) {
+  Widget _prices(BuildContext context, Pro? pro, {bool allowBuy = true}) {
     final p = context.pal;
-    final buy = canBuy(pro);
+    final buy = allowBuy && canBuy(pro);
     // De prijs van de winkel (in je eigen munt) als die er is, anders de vaste prijs in euro
     String priceOf(ProPlan plan) => pro?.purchases.priceOf(plan) ?? plan.price;
     Widget option(ProPlan plan, String sub) {
@@ -503,8 +504,8 @@ class _ProScreenState extends State<ProScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2),
             ),
-          ] else
-            // Op de plek van de knop: duidelijk dat kopen nog niet kan
+          ] else if (allowBuy)
+            // Op de plek van de knop: duidelijk dat kopen nog niet kan (een supporter met een geschenk ziet alleen de prijzen)
             Container(
               key: const ValueKey('pro-coming-soon'),
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),

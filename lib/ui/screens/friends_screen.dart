@@ -408,8 +408,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           onDecline: () => f.respond(x, false),
                           onAccept: () async {
                             await f.respond(x, true);
-                            // Meteen zeggen dat het gelukt is (SO-5)
-                            _say(f.error ?? addMessage('accepted', name: x.name));
+                            // Meteen zeggen dat het gelukt is (SO-5); was het verzoek intussen ingetrokken, dan dat
+                            final friends = f.list.any((y) => y.id == x.id && y.state == FriendState.friend);
+                            _say(
+                              f.error ??
+                                  (friends
+                                      ? addMessage('accepted', name: x.name)
+                                      : tr('That request is no longer there.', 'Dat verzoek is er niet meer.')),
+                            );
                           },
                         ),
                       ],
@@ -825,12 +831,14 @@ Future<bool> showReportDialog(BuildContext context, String id, String name, {Str
   if (r == null) return false;
   final (reason, note, alsoBlock) = r;
   final res = await f.report(id, reason, note: note);
-  if (res == null) {
-    friendsSay(messenger, f.error ?? tr('That did not work.', 'Dat lukte niet.'));
-    return false;
-  }
-  final blocked = alsoBlock && res == 'reported' && await f.block(id, name: name, avatar: avatar);
-  friendsSay(messenger, [reportMessage(res), if (blocked) _blockedText(name)].join(' '));
+  final reportError = res == null ? f.error : null;
+  // Blokkeren gebeurt ook als de melding niet lukte (bv. de daglimiet): wie lastiggevallen wordt, moet altijd kunnen
+  // blokkeren
+  final blocked = alsoBlock && await f.block(id, name: name, avatar: avatar);
+  friendsSay(messenger, [
+    if (res != null) reportMessage(res) else reportError ?? tr('Reporting did not work.', 'Melden lukte niet.'),
+    if (blocked) _blockedText(name) else if (alsoBlock) tr('Blocking did not work.', 'Blokkeren lukte niet.'),
+  ].join(' '));
   return blocked;
 }
 

@@ -509,11 +509,14 @@ class _AuthScreenState extends State<AuthScreen> {
         try {
           setState(() => _busy = true);
           await a.signIn(_email.text, _password.text);
-          _done();
+          if (mounted) _done();
         } on AuthException catch (e) {
+          // Intussen teruggegaan: niets meer tonen op een scherm dat weg is
+          if (!mounted) return;
           if (e.code == 'email_not_confirmed') {
             await a.resendConfirmation(_email.text).catchError((_) {});
             a.setPendingConfirmation(_email.text);
+            if (!mounted) return;
             _go(
               _Step.confirm,
               info: tr(
@@ -525,7 +528,7 @@ class _AuthScreenState extends State<AuthScreen> {
             setState(() => _error = authMessage(e));
           }
         } catch (e) {
-          setState(() => _error = authMessage(e));
+          if (mounted) setState(() => _error = authMessage(e));
         } finally {
           if (mounted) setState(() => _busy = false);
         }
@@ -953,7 +956,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      field(tr('Born in', 'Geboren in'), _birth, '', onChanged: (v) => _advance(v, 4, _heightFocus)),
+                      field(tr('Born in', 'Geboren in'), _birth, '', onChanged: (v) => _advance(v, 4, _heightFocus, min: 1900, max: DateTime.now().year - 18.0)),
                       const SizedBox(width: 10),
                       field(
                         tr('Height', 'Lengte'),
