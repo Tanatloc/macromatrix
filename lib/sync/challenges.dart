@@ -58,6 +58,7 @@ class RemoteChallenge {
     required this.start,
     this.ownerIsMe = false,
     this.invitedBy = '',
+    this.invitedById,
     this.members = const [],
   });
   final String id;
@@ -65,6 +66,9 @@ class RemoteChallenge {
   final DateTime start;
   final bool ownerIsMe;
   final String invitedBy;
+
+  /// Wie je uitnodigde (null bij een oudere server of als je de uitdaging zelf maakte).
+  final String? invitedById;
   final List<RemoteMember> members;
 
   RemoteMember? get me => members.where((m) => m.me).firstOrNull;
@@ -99,6 +103,7 @@ class RemoteChallenge {
             start: DateTime.parse(r['start_day'] as String),
             ownerIsMe: r['owner_is_me'] == true,
             invitedBy: (r['invited_by_name'] as String?) ?? '',
+            invitedById: r['invited_by'] as String?,
             members: [
               for (final m in e.value)
                 if (m['member'] != null)
@@ -238,9 +243,12 @@ class Challenges extends ChangeNotifier {
   Map<String, RemoteChallenge> remoteById = const {};
 
   /// Uitnodigingen die je nog niet aanvaard of geweigerd hebt.
-  List<RemoteChallenge> get invites => [
+  List<RemoteChallenge> get invites => invitesExcept(const {});
+
+  /// Idem, zonder die van wie in [blocked] staat: na het blokkeren meteen weg, ook voor de server ze opnieuw stuurt.
+  List<RemoteChallenge> invitesExcept(Set<String> blocked) => [
     for (final r in remoteById.values)
-      if (!r.joined && !Challenge(id: '', template: r.template, start: r.start).finishedOn(logicalNow())) r,
+      if (!r.joined && !blocked.contains(r.invitedById) && !Challenge(id: '', template: r.template, start: r.start).finishedOn(logicalNow())) r,
   ];
 
   bool loading = false;

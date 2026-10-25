@@ -16,11 +16,13 @@ export async function cleanup(db, now = new Date()) {
     db.prepare('DELETE FROM "rateLimit" WHERE "lastRequest" < ?').bind(now.getTime() - DAY),
     db.prepare('DELETE FROM signup_ips WHERE at < ?').bind(iso(DAY)),
     db.prepare('DELETE FROM test_outbox WHERE at < ?').bind(iso(DAY)),
+    // Inloglimiet per IP + e-mailadres: een venster van een minuut, na een dag zeker weg
+    db.prepare('DELETE FROM login_limits WHERE window_start < ?').bind(now.getTime() - DAY),
   ]);
-  const [users, sessions, codes, limits, ips, outbox] = res.map((r) => r.meta?.changes ?? 0);
+  const [users, sessions, codes, limits, ips, outbox, logins] = res.map((r) => r.meta?.changes ?? 0);
   // Duo-partners gelijkzetten met het abonnement van de koper (ook als Google een melding niet stuurde)
   const duos = await syncAllDuos(db, now);
-  return { users, sessions, codes, limits, ips, outbox, duos };
+  return { users, sessions, codes, limits, ips, outbox, logins, duos };
 }
 
 // ── Back-ups (src/backup.js) ──

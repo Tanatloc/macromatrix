@@ -14,8 +14,9 @@ import '../sync/pro.dart' show PhotoQuota;
 Uri apiEndpoint(String path) => kIsWeb ? Uri.base.resolve(path) : Uri.https('macromatrix.eu', path);
 
 /// Een fout van de server of de verbinding. [code]: login, not_configured, quota, pro_required, too_many, too_big,
-/// bad_image, bad_url, unreadable, no_per100, implausible, no_recipe, timeout, fetch_failed, not_html, network of
-/// failed. Bij quota de stand van de teller in [quota].
+/// bad_image, bad_url, unreadable, no_per100, implausible, no_recipe, timeout, fetch_failed, not_html, network,
+/// ai_unavailable (geen model antwoordde; er is niets geteld), unavailable of failed. De stand van de teller in [quota]
+/// als de server die meestuurde.
 class AiException implements Exception {
   AiException(this.code, {this.quota});
   final String code;
@@ -26,7 +27,11 @@ class AiException implements Exception {
 }
 
 /// Een verzoek versturen en het JSON-antwoord teruggeven. Gooit een [AiException] bij elke fout.
-Future<Map> aiSend(Future<http.Response> Function(http.Client client) send, {http.Client? client, Duration timeout = const Duration(seconds: 60)}) async {
+Future<Map> aiSend(
+  Future<http.Response> Function(http.Client client) send, {
+  http.Client? client,
+  Duration timeout = const Duration(seconds: 60),
+}) async {
   final c = client ?? http.Client();
   try {
     final res = await send(c).timeout(timeout);
@@ -38,7 +43,8 @@ Future<Map> aiSend(Future<http.Response> Function(http.Client client) send, {htt
     }
     if (res.statusCode != 200) {
       final code = '${j['error'] ?? 'failed'}';
-      throw AiException(code, quota: code == 'quota' ? PhotoQuota.fromJson(j) : null);
+      // Bij quota staat de stand in het antwoord zelf, bij andere fouten (ai_unavailable) onder quota
+      throw AiException(code, quota: PhotoQuota.fromJson(code == 'quota' ? j : j['quota']));
     }
     return j;
   } on AiException {

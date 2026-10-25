@@ -22,6 +22,17 @@ const isWeb = true;
 /// In de browser kan scannen met de camera (gsm of webcam).
 bool get canScanBarcodes => true;
 
+/// Staat grafische versnelling (WebGL) aan? LibreWolf zet het standaard uit; Flutter tekent dan met de processor en de
+/// app voelt traag aan (zie lib/ui/widgets/webgl_tip.dart). Bij twijfel ja: liever geen tip dan een verkeerde.
+bool get graphicsAccelerated {
+  try {
+    final c = web.document.createElement('canvas') as web.HTMLCanvasElement;
+    return c.getContext('webgl2') != null || c.getContext('webgl') != null;
+  } catch (_) {
+    return true;
+  }
+}
+
 /// De browser vragen om de opslag van deze site niet zelf op te ruimen als de schijf vol raakt. Zonder account
 /// staan je gegevens alleen hier, dus dan vragen we dat. Wissen via de browserinstellingen blijft altijd mogelijk.
 Future<bool> askPersistentStorage() async {
@@ -183,9 +194,7 @@ Future<Uint8List?> _gunzipped(String url) async {
     if (raw.length > 16 && ascii.decode(raw.sublist(0, 15), allowInvalid: true) == 'SQLite format 3') return raw;
     if (raw.length < 2 || raw[0] != 0x1f || raw[1] != 0x8b) return null;
     final unzip = web.DecompressionStream('gzip');
-    final stream = web.Blob([raw.toJS].toJS).stream().pipeThrough(
-      web.ReadableWritablePair(readable: unzip.readable, writable: unzip.writable),
-    );
+    final stream = web.Blob([raw.toJS].toJS).stream().pipeThrough(web.ReadableWritablePair(readable: unzip.readable, writable: unzip.writable));
     return (await web.Response(stream).arrayBuffer().toDart).toDart.asUint8List();
   } catch (_) {
     // Kapotte download of oude browser: dan de stukken

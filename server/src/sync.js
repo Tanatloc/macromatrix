@@ -98,6 +98,8 @@ export async function pullAll(db, uid, cursors, limit) {
   if (!cursors || typeof cursors !== 'object' || Array.isArray(cursors)) throw new DbError('22P02', 'cursors must be an object');
   const names = Object.keys(cursors);
   for (const t of names) tableOf(t);
+  // D1 weigert een lege batch: geen tabellen gevraagd, dan niets
+  if (!names.length) return {};
   const n = Math.min(Math.max(Number.parseInt(limit, 10) || MAX_ROWS, 1), 1000);
   const res = await db.batch(
     names.map((t) =>

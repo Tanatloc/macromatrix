@@ -84,8 +84,12 @@ class FakeServer implements SyncRemote {
     return kept;
   }
 
+  /// Hoe vaak er (ook vergeefs) opgehaald werd.
+  int pullCalls = 0;
+
   @override
   Future<List<Map<String, Object?>>> pull(SyncTable table, String? since, int limit) async {
+    pullCalls++;
     if (offline) throw Exception('geen internet');
     if (brokenPull.contains(table.name)) throw FakeServerError(SyncErrorKind.table, 'ophalen van ${table.name} mislukt');
     final all =

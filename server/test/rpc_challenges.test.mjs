@@ -274,12 +274,12 @@ test('challenge_list: één rij per deelnemer, kolommen in de volgorde van Supab
   assert.equal(rows.length, 2);
   assert.deepEqual(Object.keys(rows[0]), [
     'id', 'template', 'title', 'nutrient', 'rule', 'amount', 'days', 'need', 'start_day', 'owner_is_me', 'invited_by_name',
-    'member', 'member_name', 'member_avatar', 'member_level', 'member_accepted', 'member_met', 'is_me',
+    'member', 'member_name', 'member_avatar', 'member_level', 'member_accepted', 'member_met', 'is_me', 'invited_by',
   ]);
   assert.deepEqual(rows[0], {
     id, template: 'custom', title: 'Vezelweek', nutrient: 'fiber', rule: 'min', amount: 25, days: 14, need: 10, start_day: TODAY,
     owner_is_me: false, invited_by_name: 'Anna', member: 'a', member_name: 'Anna', member_avatar: 'av-a', member_level: 7,
-    member_accepted: true, member_met: 0, is_me: false,
+    member_accepted: true, member_met: 0, is_me: false, invited_by: 'a',
   });
   assert.deepEqual(
     { member: rows[1].member, member_name: rows[1].member_name, member_avatar: rows[1].member_avatar, member_level: rows[1].member_level, member_met: rows[1].member_met, is_me: rows[1].is_me },
@@ -446,4 +446,19 @@ test('zonder sessie: niet ingelogd (PGRST301)', async () => {
   const db = setup();
   for (const name of ['challenge_create', 'challenge_invite', 'challenge_respond', 'challenge_leave', 'challenge_list', 'challenge_report', 'challenge_days_put'])
     await assert.rejects(call(db, null, name, {}), { code: 'PGRST301' });
+});
+
+test('challenge_list na een blokkade: geen "uitgenodigd door" met de naam van wie je blokkeerde (of die jou blokkeerde)', async () => {
+  const db = setup();
+  // b werd door a uitgenodigd en deed mee; a blijft in de uitdaging (de blokkade haalt alleen openstaande uitnodigingen weg)
+  const id = await withGroup(db);
+  assert.equal((await call(db, 'b', 'challenge_list')).find((r) => r.id === id).invited_by_name, 'Anna');
+  block(db, 'b', 'a');
+  const mine = (await call(db, 'b', 'challenge_list')).filter((r) => r.id === id);
+  assert.ok(mine.length > 0);
+  assert.ok(mine.every((r) => r.invited_by_name === ''));
+  // Ook als a de blokkade zette
+  db.raw.prepare('DELETE FROM user_blocks').run();
+  block(db, 'a', 'b');
+  assert.ok((await call(db, 'b', 'challenge_list')).filter((r) => r.id === id).every((r) => r.invited_by_name === ''));
 });

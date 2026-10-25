@@ -7,7 +7,8 @@ import { createAuth, WEB_ORIGINS } from './auth.js';
 import { cleanup, dailyBackup, restoreCheck } from './cron.js';
 import { DbError, errorResponse, json } from './errors.js';
 import { hubFor } from './hub.js';
-import { checkTicket, makeTicket, notifyUser } from './live.js';
+import { checkTicket, clientId, makeTicket, notifyUser } from './live.js';
+import { loginGate } from './login_limit.js';
 import { callRpc } from './rpc/index.js';
 import { fetchRows, pull, pullAll, push } from './sync.js';
 
@@ -21,7 +22,7 @@ function cors(request, env, response) {
   if (!origin || !allowed.includes(origin) || response.status === 101) return response;
   const r = new Response(response.body, response);
   r.headers.set('access-control-allow-origin', origin);
-  r.headers.set('access-control-allow-headers', 'authorization, content-type');
+  r.headers.set('access-control-allow-headers', 'authorization, content-type, x-client');
   r.headers.set('access-control-allow-methods', 'GET, POST, OPTIONS');
   r.headers.set('access-control-expose-headers', 'set-auth-token');
   r.headers.set('access-control-max-age', '86400');
@@ -29,10 +30,33 @@ function cors(request, env, response) {
   return r;
 }
 
-// Sessies kort onthouden per Worker-instantie: bespaart bij bijna elk verzoek de D1-rondes van de sessiecontrole.
-// Een ingetrokken sessie werkt daardoor hoogstens SESSION_TTL nog (een Supabase-JWT bleef tot een uur geldig).
+// Sessies kort onthouden per Worker-instantie: bespaart de controle door Better Auth bij bijna elk verzoek. Elke
+// treffer kijkt wel met één opzoeking op de sleutel of de sessierij er nog is: uitloggen, overal uitloggen, een
+// gewijzigd of hersteld wachtwoord en een verwijderd account halen die rij weg, en dan werkt het token meteen nergens
+// meer (ook niet op een andere instantie).
 const SESSION_TTL = 60_000;
 const sessions = new Map();
+
+/**
+ * De sessie achter het Authorization-hoofd [auth]: uit het geheugen als de rij in D1 nog bestaat, anders via [load]
+ * (Better Auth). Geeft { uid, sid } of null.
+ */
+export async function cachedSession(db, auth, load, now = Date.now()) {
+  const hit = sessions.get(auth);
+  if (hit && hit.until > now) {
+    const live = await db.prepare('SELECT 1 FROM session WHERE id = ? AND "expiresAt" > ?').bind(hit.s.sid, new Date(now).toISOString()).first();
+    if (live) return hit.s;
+    sessions.delete(auth);
+    return null;
+  }
+  const s = await load();
+  const out = s?.user?.id ? { uid: s.user.id, sid: s.session.id } : null;
+  if (out) {
+    if (sessions.size > 5000) sessions.clear();
+    sessions.set(auth, { s: out, until: Math.min(now + SESSION_TTL, Date.parse(s.session.expiresAt)) });
+  }
+  return out;
+}
 
 /** Alle onthouden sessies van een gebruiker vergeten (bv. na het verwijderen van het account). */
 function forgetUser(uid) {
@@ -43,15 +67,7 @@ function forgetUser(uid) {
 async function session(env, request) {
   const auth = request.headers.get('authorization');
   if (!auth) return null;
-  const hit = sessions.get(auth);
-  if (hit && hit.until > Date.now()) return hit.s;
-  const s = await createAuth(env).api.getSession({ headers: request.headers });
-  const out = s?.user?.id ? { uid: s.user.id, sid: s.session.id } : null;
-  if (out) {
-    if (sessions.size > 5000) sessions.clear();
-    sessions.set(auth, { s: out, until: Math.min(Date.now() + SESSION_TTL, Date.parse(s.session.expiresAt)) });
-  }
-  return out;
+  return cachedSession(env.DB, auth, () => createAuth(env).api.getSession({ headers: request.headers }));
 }
 
 /** Grove limiet per sleutel (IP of gebruiker); zonder binding (lokaal) geen limiet. */
@@ -75,6 +91,10 @@ async function api(request, env, ctx, url) {
     if (!t) return json({ code: 'PGRST301', message: 'invalid ticket' }, 401);
     const headers = new Headers(request.headers);
     headers.set('x-session', t.sid);
+    // Wie dit is, zodat zijn eigen pushes hem geen seintje sturen (hub.notify)
+    headers.delete('x-client');
+    const client = clientId(url.searchParams.get('client'));
+    if (client) headers.set('x-client', client);
     return hubFor(env, t.uid).fetch(new Request(request, { headers }));
   }
   // Niet ingelogd, met een meldingstoken van het toestel (achtergrondtaak zonder sessie)
@@ -103,7 +123,8 @@ async function api(request, env, ctx, url) {
   if (path === '/v1/sync/push' && request.method === 'POST') {
     const b = await body(request);
     const saved = await push(env.DB, uid, b.table, b.rows, { insertOnly: b.insertOnly === true });
-    if (Object.keys(saved).length) waitUntil(notifyUser(env, uid, { type: 'changes', tables: [b.table] }));
+    // Seintje naar de andere toestellen (niet naar wie dit stuurde)
+    if (Object.keys(saved).length) waitUntil(notifyUser(env, uid, { type: 'changes', tables: [b.table] }, clientId(request.headers.get('x-client'))));
     // Hoeveel tijd D1 zelf nodig had (voor metingen, zie tool/load_check.mjs)
     return json(saved, 200, { 'server-timing': `db;dur=${(push.lastDbMs ?? 0).toFixed(1)}` });
   }
@@ -132,9 +153,15 @@ export default {
       // Grove bescherming per IP vóór Better Auth (die heeft zijn eigen, fijnere limieten)
       const ip = request.headers.get('cf-connecting-ip') ?? 'onbekend';
       if (await limited(env.AUTH_LIMIT, ip)) return cors(request, env, json({ code: 'RATE_LIMITED', message: 'Too many requests' }, 429));
+      // Inloggen en codes: per IP + e-mailadres (src/login_limit.js), zodat een gedeeld netwerk niet iedereen buitensluit
+      const gate = await loginGate(env.DB, request, url.pathname, ip);
+      if (gate?.blocked) {
+        return cors(request, env, json({ code: 'RATE_LIMITED', message: 'Too many attempts for this email address. Try again in a minute.' }, 429));
+      }
       // Uitloggen: daarna ook de live verbinding van die sessie sluiten
       const out = url.pathname === '/auth/sign-out' ? await session(env, request).catch(() => null) : null;
       const res = await createAuth(env).handler(request);
+      if (gate) ctx.waitUntil(gate.done(res.ok));
       // Uitgelogd of alles ingetrokken: niet meer uit het geheugen halen (op deze instantie)
       if (out && res.ok) sessions.delete(request.headers.get('authorization'));
       if (res.ok && ['/auth/revoke-sessions', '/auth/change-password', '/auth/email-otp/reset-password'].includes(url.pathname)) sessions.clear();

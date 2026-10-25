@@ -9,6 +9,7 @@ import '../nutrition/levels.dart';
 import '../platform/health_sync.dart';
 import '../platform/home_widget_sync.dart';
 import 'widgets/quick_log.dart';
+import 'widgets/webgl_tip.dart';
 import '../state/app_state.dart';
 import '../sync/friends.dart';
 import '../sync/pro.dart';
@@ -66,6 +67,8 @@ class _ShellState extends State<Shell> {
     noteFirstUse(_state.user);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLevel();
+      // Webapp zonder WebGL (LibreWolf): een korte tip, één keer
+      if (mounted) maybeShowWebGlTip(context, _state.user);
       HealthSync(_state).sync();
       HomeWidgetSync.update(_state);
       HomeWidgetSync.launchUri().then(_fromWidget);
@@ -129,7 +132,7 @@ class _ShellState extends State<Shell> {
       text: tr('$hit days in a row! Keep that fire burning.', '$hit dagen op rij! Houd dat vuur brandend.'),
       actionLabel: tr('Share', 'Delen'),
       onAction: () => shareStreak(context, days: hit),
-    );    // Na het feestje, één keer per 30 dagen: vragen om supporter te worden (support_ask.dart)
+    ); // Na het feestje, één keer per 30 dagen: vragen om supporter te worden (support_ask.dart)
     if (hit >= supportAskStreak) {
       Future.delayed(const Duration(seconds: 3), () {
         if (mounted) maybeAskSupport(context, _state.user, streak: hit, pro: context.read<Pro?>());

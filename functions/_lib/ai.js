@@ -9,6 +9,13 @@ export const ANON =
 // Zelfde beeldmodel als /api/photo: leest beelden, geen aparte licentie-aanvaarding, goedkoop
 export const MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
+// Reserve als het beeldmodel uitvalt of te lang duurt (storing van Llama 4 Scout op 25-10): leest dezelfde berichten met
+// een beeld, iets duurder per token
+export const FALLBACK_MODEL = '@cf/mistralai/mistral-small-3.1-24b-instruct';
+
+// Zo lang mag één model doen over een beeld; daarna het volgende. De app wacht 60 s.
+export const MODEL_TIMEOUT_MS = 20_000;
+
 export const MAX_IMAGE_BYTES = 1_500_000;
 
 export const json = (body, status = 200) =>
@@ -25,7 +32,7 @@ export async function checkLogin(request, fetcher = fetch) {
     if (!id) return { error: json({ error: 'login' }, 401) };
     return { user: id, auth };
   } catch (_) {
-    return { error: json({ error: 'failed' }, 502) };
+    return { error: quotaDown() };
   }
 }
 
@@ -93,6 +100,52 @@ export async function aiQuotaStatus(auth, kind, fetcher = fetch, rpc = 'ai_quota
 
 // Antwoord als de dagteller niet antwoordt: liever even niets dan onbeperkt (rekenkracht en schrijven kosten echt).
 export const quotaDown = () => json({ error: 'unavailable' }, 503);
+
+/** Geen enkel model gaf (op tijd) antwoord. */
+export class AiDown extends Error {}
+
+// De AI is even niet bereikbaar: een duidelijke fout in plaats van een 502, met de stand van de teller (er is niets
+// geteld) zodat de app die kan blijven tonen
+export const aiDown = (quota) => json({ error: 'ai_unavailable', retry: true, ...(quota ? { quota: quotaBody(quota) } : {}) }, 503);
+
+/** De teller zoals de app hem krijgt. */
+export const quotaBody = (q) => ({ used: q.used, limit: q.limit, pro: q.pro, ...(q.per === 'week' && { per: 'week' }) });
+
+/**
+ * [input] aan het eerste model in [models] vragen, met hoogstens [ms] per model; bij een fout of time-out het
+ * volgende. Geeft {result, model}, of gooit [AiDown] als geen enkel model antwoordde. [ms] is te wijzigen met
+ * env.AI_TIMEOUT_MS (in tests).
+ */
+export async function runModel(ai, input, { models = [MODEL, FALLBACK_MODEL], ms = MODEL_TIMEOUT_MS } = {}) {
+  let last = null;
+  for (const model of models) {
+    try {
+      return { result: await withTimeout(ai.run(model, input), ms), model };
+    } catch (e) {
+      last = e;
+      console.log(`${model}: ${e}`);
+    }
+  }
+  throw new AiDown(String(last));
+}
+
+/** Het tekstantwoord van een model, in het oude formaat (response) of het chatformaat (choices). */
+export function modelText(r) {
+  const t = r?.response ?? r?.choices?.[0]?.message?.content;
+  return typeof t === 'string' ? t : t == null ? '' : JSON.stringify(t);
+}
+
+/**
+ * De teller voor [kind] pas verhogen na een geslaagde AI-aanroep. Geeft de nieuwe stand, of de oude [before] als
+ * het verhogen niet lukte (net tegelijk op, of een storing): het antwoord gaat dan toch mee, want de AI is al
+ * betaald; de rem per uur houdt dat klein.
+ */
+export async function chargeQuota(auth, kind, before, fetcher = fetch) {
+  if (!before) return null;
+  const q = await aiQuotaStatus(auth, kind, fetcher);
+  if (!q.quota || !q.quota.allowed) console.log(`${kind}: teller niet verhoogd na een geslaagde aanroep`);
+  return q.quota?.allowed ? q.quota : before;
+}
 
 // De dagteller voor [kind], met de rem per uur als terugval zolang de migratie ontbreekt (alleen PGRST202 of een
 // onbekende soort). [rate] = hourly(...) van de functie zelf. Geeft {quota} (of {quota: null} zonder teller), of

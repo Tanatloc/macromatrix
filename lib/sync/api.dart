@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:supabase/supabase.dart';
@@ -31,6 +32,16 @@ class CloudflareApi implements Rpc {
   final Uri base;
   final http.Client _http;
 
+  /// Willekeurig per app-instantie (ook per tabblad): gaat mee met de WebSocket en elke verzending, zodat de server
+  /// het seintje over onze eigen wijzigingen niet naar onszelf stuurt (server/src/hub.js).
+  final String clientId = _newClientId();
+
+  static String _newClientId() {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final r = Random.secure();
+    return List.generate(20, (_) => chars[r.nextInt(chars.length)]).join();
+  }
+
   @override
   Future<dynamic> rpc(String fn, {Map<String, dynamic>? params}) => _post('/v1/rpc/$fn', params ?? const {});
 
@@ -38,16 +49,27 @@ class CloudflareApi implements Rpc {
   Future<String> liveTicket() async => (await _post('/v1/live/ticket', const {}) as Map)['ticket'] as String;
 
   /// WebSocket-adres voor live meldingen met dit ticket.
-  Uri liveUri(String ticket) => base.replace(scheme: base.scheme == 'http' ? 'ws' : 'wss', path: '/v1/live', queryParameters: {'ticket': ticket});
+  Uri liveUri(String ticket) =>
+      base.replace(scheme: base.scheme == 'http' ? 'ws' : 'wss', path: '/v1/live', queryParameters: {'ticket': ticket, 'client': clientId});
 
-  Future<dynamic> get(String path, Map<String, String> query) => _send(() => _http.get(base.replace(path: path, queryParameters: query), headers: _headers()));
+  Future<dynamic> get(String path, Map<String, String> query) => _send(
+    () => _http.get(
+      base.replace(path: path, queryParameters: query),
+      headers: _headers(),
+    ),
+  );
 
-  Future<dynamic> _post(String path, Object body) =>
-      _send(() => _http.post(base.replace(path: path), headers: _headers(), body: jsonEncode(body)));
+  Future<dynamic> _post(String path, Object body) => _send(
+    () => _http.post(
+      base.replace(path: path),
+      headers: _headers(),
+      body: jsonEncode(body),
+    ),
+  );
 
   Map<String, String> _headers() {
     final t = token();
-    return {'content-type': 'application/json', if (t != null) 'authorization': 'Bearer $t'};
+    return {'content-type': 'application/json', 'x-client': clientId, if (t != null) 'authorization': 'Bearer $t'};
   }
 
   Future<dynamic> _send(Future<http.Response> Function() request) async {
@@ -111,7 +133,9 @@ class CloudflareRemote implements SequenceRemote {
       'cursors': {for (final e in cursors.entries) e.key: e.value ?? '0'},
       'limit': limit,
     }) as Map;
-    return {for (final e in res.entries) '${e.key}': [for (final r in e.value as List) (r as Map).cast<String, Object?>()]};
+    return {
+      for (final e in res.entries) '${e.key}': [for (final r in e.value as List) (r as Map).cast<String, Object?>()],
+    };
   }
 
   @override

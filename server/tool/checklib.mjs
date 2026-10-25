@@ -93,5 +93,5 @@ export async function step(name, fn) {
 
 /** Testaccounts van deze run en de limieten opruimen. */
 export function cleanup() {
-  sql(`DELETE FROM "user" WHERE email LIKE '%-${run}@${DOMAIN}'; DELETE FROM test_outbox WHERE "to" LIKE '%-${run}@${DOMAIN}'; DELETE FROM signup_ips; DELETE FROM rateLimit`);
+  sql(`DELETE FROM "user" WHERE email LIKE '%-${run}@${DOMAIN}'; DELETE FROM test_outbox WHERE "to" LIKE '%-${run}@${DOMAIN}'; DELETE FROM signup_ips; DELETE FROM rateLimit; DELETE FROM login_limits`);
 }

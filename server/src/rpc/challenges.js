@@ -202,11 +202,17 @@ export default {
     const { results } = await ctx.db
       .prepare(
         `SELECT c.id, c.template, c.title, c.nutrient, c.rule, c.amount, c.days, c.need, c.start_day,
-           c.owner = ?1 AS owner_is_me, coalesce(ip.name, '') AS invited_by_name,
+           c.owner = ?1 AS owner_is_me,
+           -- Geen naam van wie je uitnodigde als een van beiden de ander blokkeerde
+           CASE WHEN EXISTS (
+             SELECT 1 FROM user_blocks x
+             WHERE (x.blocker = ?1 AND x.blocked = mine.invited_by) OR (x.blocker = mine.invited_by AND x.blocked = ?1)
+           ) THEN '' ELSE coalesce(ip.name, '') END AS invited_by_name,
            m.user_id AS member, coalesce(p.name, '') AS member_name, p.avatar AS member_avatar,
            coalesce(p.level, 1) AS member_level, m.accepted AS member_accepted,
            (SELECT count(*) FROM challenge_days d WHERE d.challenge_id = c.id AND d.user_id = m.user_id AND d.met = 1) AS member_met,
-           m.user_id = ?1 AS is_me
+           m.user_id = ?1 AS is_me,
+           mine.invited_by AS invited_by
          FROM challenge_members mine
          JOIN challenges c ON c.id = mine.challenge_id
          JOIN challenge_members m ON m.challenge_id = c.id

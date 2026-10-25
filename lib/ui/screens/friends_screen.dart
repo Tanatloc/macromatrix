@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
+import '../../sync/challenges.dart' show Challenges;
 import '../../sync/friends.dart';
 import '../../sync/name_filter.dart';
 import '../theme.dart';
@@ -452,7 +453,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   onBlock: r.friend == null || !f.blockAvailable
                       ? null
                       : () => confirmBlock(context, r.friend!.id, r.friend!.name, avatar: r.friend!.avatar),
-                  onReport: r.friend == null || !f.blockAvailable ? null : () => showReportDialog(context, r.friend!.id, r.friend!.name, avatar: r.friend!.avatar),
+                  onReport: r.friend == null || !f.blockAvailable
+                      ? null
+                      : () => showReportDialog(context, r.friend!.id, r.friend!.name, avatar: r.friend!.avatar),
                 ),
               if (friends.isEmpty)
                 Padding(
@@ -789,6 +792,7 @@ void friendsSay(ScaffoldMessengerState messenger, String text) => messenger
 /// Vragen of je iemand echt wil blokkeren, en dan blokkeren. Geeft true terug als het lukte.
 Future<bool> confirmBlock(BuildContext context, String id, String name, {String? avatar}) async {
   final f = context.read<Friends>();
+  final challenges = context.read<Challenges?>();
   final messenger = ScaffoldMessenger.of(context);
   final ok = await showDialog<bool>(
     context: context,
@@ -813,6 +817,8 @@ Future<bool> confirmBlock(BuildContext context, String id, String name, {String?
   if (ok != true) return false;
   final done = await f.block(id, name: name, avatar: avatar);
   friendsSay(messenger, done ? _blockedText(name) : (f.error ?? tr('That did not work.', 'Dat lukte niet.')));
+  // De server haalde de uitnodigingen tussen jullie weg: de uitdagingen opnieuw ophalen
+  if (done) unawaited(challenges?.load());
   return done;
 }
 
@@ -822,6 +828,7 @@ String _blockedText(String name) => tr('${name.isEmpty ? 'They are' : '$name is'
 /// blokkeren (SO-6). Geeft true terug als die persoon daarbij geblokkeerd werd.
 Future<bool> showReportDialog(BuildContext context, String id, String name, {String? avatar}) async {
   final f = context.read<Friends>();
+  final challenges = context.read<Challenges?>();
   final messenger = ScaffoldMessenger.of(context);
   final canBlock = f.blockAvailable && !f.blocked.any((b) => b.id == id);
   final r = await showDialog<(String, String, bool)>(
@@ -835,10 +842,14 @@ Future<bool> showReportDialog(BuildContext context, String id, String name, {Str
   // Blokkeren gebeurt ook als de melding niet lukte (bv. de daglimiet): wie lastiggevallen wordt, moet altijd kunnen
   // blokkeren
   final blocked = alsoBlock && await f.block(id, name: name, avatar: avatar);
-  friendsSay(messenger, [
-    if (res != null) reportMessage(res) else reportError ?? tr('Reporting did not work.', 'Melden lukte niet.'),
-    if (blocked) _blockedText(name) else if (alsoBlock) tr('Blocking did not work.', 'Blokkeren lukte niet.'),
-  ].join(' '));
+  if (blocked) unawaited(challenges?.load());
+  friendsSay(
+    messenger,
+    [
+      if (res != null) reportMessage(res) else reportError ?? tr('Reporting did not work.', 'Melden lukte niet.'),
+      if (blocked) _blockedText(name) else if (alsoBlock) tr('Blocking did not work.', 'Blokkeren lukte niet.'),
+    ].join(' '),
+  );
   return blocked;
 }
 

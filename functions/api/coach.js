@@ -11,7 +11,7 @@
 // (migratie 20261103000000_coach). Anders dan bij /api/label werkt dit niet zonder teller: die houdt ook de vroege
 // toegang bij. Ontbreekt de migratie, dan not_configured (de app verbergt de coach dan).
 
-import { aiQuotaStatus, checkLogin, hourly, json, modelObject, stripMarkdown, TimeoutError, withTimeout } from '../_lib/ai.js';
+import { aiDown, aiQuotaStatus, chargeQuota, checkLogin, hourly, json, modelObject, quotaBody, quotaDown, stripMarkdown, TimeoutError, withTimeout } from '../_lib/ai.js';
 import { backendFetch } from '../_lib/backend.js';
 import { readBytes } from '../_lib/body.js';
 
@@ -478,21 +478,24 @@ export async function onRequestPost({ request, env }) {
   const rate = await hourly('coach', who.user, PER_HOUR);
   if (!rate.allowed) return json({ error: 'too_many' }, 429);
 
-  // De dagteller pas na de controles hierboven. Zonder teller geen coach: die zegt ook of je al mag (vroege toegang).
-  const q = await aiQuotaStatus(who.auth, 'coach', fetcher);
+  // De teller na de controles hierboven alleen lezen; hij gaat pas omhoog als er een samenvatting terugkomt. Zonder
+  // teller geen coach: die zegt ook of je al mag (vroege toegang).
+  const q = await aiQuotaStatus(who.auth, 'coach', fetcher, 'ai_quota');
   if (q.missing) return json({ error: 'not_configured' }, 503);
-  if (!q.quota) return json({ error: 'failed' }, 502);
-  const quota = { used: q.quota.used, limit: q.quota.limit, pro: q.quota.pro, ...(q.quota.per && { per: q.quota.per }) };
-  if (!q.quota.allowed) return json({ error: 'quota', ...quota }, 429);
+  if (!q.quota) return quotaDown();
+  if (!q.quota.allowed) return json({ error: 'quota', ...quotaBody(q.quota) }, 429);
   await rate.count();
 
+  let out;
   try {
-    const out = await askCoach(env.AI, input.week, Number(env.COACH_TIMEOUT_MS) || TIMEOUT_MS);
-    if (out.error) return json({ error: out.error, quota }, 502);
-    // Het model gaat mee, zodat een melding van de tekst (ai_report) zegt welk model hem schreef
-    return json({ ...out, lang: input.week.lang, model: TEXT_MODEL, quota });
+    out = await askCoach(env.AI, input.week, Number(env.COACH_TIMEOUT_MS) || TIMEOUT_MS);
   } catch (e) {
-    if (e instanceof TimeoutError) return json({ error: 'timeout', quota }, 504);
-    return json({ error: 'failed', quota }, 502);
+    // Time-out of storing van het model: niets geteld
+    console.log(`coach: ${e}`);
+    return aiDown(q.quota);
   }
+  if (out.error) return json({ error: out.error, quota: quotaBody(q.quota) }, 422);
+  const quota = quotaBody(await chargeQuota(who.auth, 'coach', q.quota, fetcher));
+  // Het model gaat mee, zodat een melding van de tekst (ai_report) zegt welk model hem schreef
+  return json({ ...out, lang: input.week.lang, model: TEXT_MODEL, quota });
 }

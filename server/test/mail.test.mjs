@@ -53,3 +53,36 @@ test('staging: testadressen gaan naar test_outbox, niet naar buiten', async () =
   assert.equal(db.raw.prepare('SELECT token FROM test_outbox').get().token, '111222');
   assert.equal(brevo.length, 0);
 });
+
+// --- Tijdslimiet en idempotentie (live-test 25-10)
+
+test('Cloudflare antwoordt niet: na de tijdslimiet Brevo, met hetzelfde mail-id als idempotentiesleutel', async () => {
+  const sent = [];
+  const env = { EMAIL: { send: (m) => (sent.push(m), new Promise(() => {})) }, BREVO_API_KEY: 'k', MAIL_TIMEOUT_MS: '20' };
+  const t0 = Date.now();
+  assert.equal(await sendMail(env, { to: 'a@example.org', kind: 'confirmation', token: '111111' }), 'brevo');
+  assert.ok(Date.now() - t0 < 1000);
+  const id = sent[0].headers['X-Entity-Ref-ID'];
+  assert.match(id, /^[0-9a-f-]{36}$/);
+  assert.equal(brevo[0].body.headers.idempotencyKey, id);
+});
+
+test('standaard wacht het 5 s op Cloudflare', async () => {
+  const src = await import('node:fs').then((fs) => fs.readFileSync(new URL('../src/mail.js', import.meta.url), 'utf8'));
+  assert.match(src, /const CF_TIMEOUT_MS = 5_000;/);
+});
+
+test('elke mail een eigen id', async () => {
+  const sent = [];
+  const env = { EMAIL: { send: async (m) => sent.push(m) } };
+  await sendMail(env, { to: 'a@example.org', kind: 'confirmation', token: '1' });
+  await sendMail(env, { to: 'a@example.org', kind: 'confirmation', token: '2' });
+  assert.notEqual(sent[0].headers['X-Entity-Ref-ID'], sent[1].headers['X-Entity-Ref-ID']);
+});
+
+test('Brevo zegt dat die sleutel al verstuurd is (duplicate_parameter): geen fout, niet nog eens', async () => {
+  globalThis.fetch = async () => new Response('{"code":"duplicate_parameter","message":"idempotencyKey already used"}', { status: 400 });
+  assert.equal(await sendMail({ BREVO_API_KEY: 'k' }, { to: 'a@example.org', kind: 'recovery', token: '2' }), 'brevo (al verstuurd)');
+  globalThis.fetch = async () => new Response('{"code":"unauthorized"}', { status: 401 });
+  await assert.rejects(sendMail({ BREVO_API_KEY: 'k' }, { to: 'a@example.org', kind: 'recovery', token: '2' }), /Brevo 401/);
+});

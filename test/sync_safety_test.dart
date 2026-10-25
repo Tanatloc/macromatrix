@@ -118,7 +118,13 @@ void main() {
       a.db.saveFood(Food(ref: 'custom:1', name: 'n' * 600, brand: 'b' * 400, source: FoodSource.custom, per100g: const {'energy': 1}));
       expect(a.db.food('custom:1')!.name.length, UserDb.maxNameLength);
       expect(a.db.food('custom:1')!.brand!.length, UserDb.maxBrandLength);
-      a.db.addEntry(day: _day, meal: Meal.lunch, food: Food(ref: 'x', name: 'n' * 600, source: FoodSource.custom, per100g: const {}), grams: 1, quantity: 1);
+      a.db.addEntry(
+        day: _day,
+        meal: Meal.lunch,
+        food: Food(ref: 'x', name: 'n' * 600, source: FoodSource.custom, per100g: const {}),
+        grams: 1,
+        quantity: 1,
+      );
       expect(a.db.entriesFor(_day).single.name.length, UserDb.maxNameLength);
       a.db.addExercise(day: _day, name: 'e' * 400, kcal: 10);
       expect(a.db.exerciseFor(_day).single.name.length, UserDb.maxShortNameLength);
@@ -507,5 +513,51 @@ void main() {
     expect(SupabaseRemote.classifyError(const PostgrestException(message: 'bad gateway', code: '502')), SyncErrorKind.fatal);
     expect(SupabaseRemote.classifyError(Exception('offline')), SyncErrorKind.fatal);
     expect(server.classify(FakeServerError(SyncErrorKind.row, 'x')), SyncErrorKind.row);
+  });
+  group('opnieuw proberen na een mislukte synchronisatie (live-test 25-10)', () {
+    late Duration unit;
+    setUp(() => unit = Account.retryUnit);
+    tearDown(() => Account.retryUnit = unit);
+
+    test('niet-verstuurde regels: vanzelf opnieuw met een wachttijd, ook zonder nieuwe wijziging', () async {
+      Account.retryUnit = const Duration(milliseconds: 10);
+      final acc = await _signedIn(a.db, server, 'user-1');
+      a.db.addEntry(day: _day, meal: Meal.lunch, food: _banana, grams: 100, quantity: 100);
+      server.offline = true;
+      await acc.debugAfterLogin(newAccount: true);
+      expect(acc.status, SyncStatus.offline);
+      expect(a.db.hasDirtyRows, isTrue);
+      server.offline = false;
+      // Eerste nieuwe poging na 2 eenheden (20 ms)
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(a.db.hasDirtyRows, isFalse);
+      expect(acc.status, SyncStatus.idle);
+      acc.dispose();
+    });
+
+    test('weer netwerk: meteen synchroniseren, zonder op de wachttijd te wachten', () async {
+      Account.retryUnit = const Duration(hours: 1);
+      final acc = await _signedIn(a.db, server, 'user-1');
+      a.db.addEntry(day: _day, meal: Meal.lunch, food: _banana, grams: 100, quantity: 100);
+      server.offline = true;
+      await acc.debugAfterLogin(newAccount: true);
+      expect(a.db.hasDirtyRows, isTrue);
+      server.offline = false;
+      acc.networkBack();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(a.db.hasDirtyRows, isFalse);
+      acc.dispose();
+    });
+
+    test('niets te versturen: geen nieuwe pogingen (de gewone ronde om de 5 min volstaat)', () async {
+      Account.retryUnit = const Duration(milliseconds: 5);
+      final acc = await _signedIn(a.db, server, 'user-1');
+      server.offline = true;
+      await acc.debugAfterLogin(newAccount: true);
+      final before = server.pullCalls;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(server.pullCalls, before);
+      acc.dispose();
+    });
   });
 }

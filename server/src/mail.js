@@ -1,11 +1,19 @@
 // Mails van de server: codes (bevestigen, wachtwoord vergeten) en meldingen. Sjablonen uit
 // supabase/templates/make.py (mail-templates.json), dezelfde als in Supabase.
 //
-// Volgorde: testpostvak (alleen staging), Cloudflare Email Sending (binding EMAIL, als die er is), anders of bij een
-// fout Brevo (bv. het dagquotum van Cloudflare op).
+// Volgorde: testpostvak (alleen staging), Cloudflare Email Sending (binding EMAIL, als die er is), anders, bij een
+// fout of na 5 s zonder antwoord Brevo (bv. het dagquotum van Cloudflare op, of een storing).
+//
+// Elke mail krijgt één id (UUID): bij Cloudflare als X-Entity-Ref-ID (Cloudflare kent geen idempotentiesleutel), bij
+// Brevo als idempotencyKey. Wat overblijft: antwoordt Cloudflare te laat maar verstuurt het toch, dan komt de mail twee
+// keer aan (met dezelfde code).
 import templates from './mail-templates.json' with { type: 'json' };
 
 const FROM = { name: 'MacroMatrix', email: 'noreply@macromatrix.eu' };
+
+// Zo lang wachten op Cloudflare Email Sending, daarna Brevo (te wijzigen met env.MAIL_TIMEOUT_MS, voor tests)
+const CF_TIMEOUT_MS = 5_000;
+const BREVO_TIMEOUT_MS = 10_000;
 
 const fill = (s, vars) => s.replaceAll('{{ .Token }}', vars.token ?? '').replaceAll('{{ .Email }}', escapeHtml(vars.email ?? ''));
 const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -42,7 +50,7 @@ export async function sendMail(env, mail) {
   }
 }
 
-async function deliver(env, { to, kind, token }) {
+async function deliver(env, { to, kind, token, id = crypto.randomUUID() }) {
   const t = templates[kind];
   if (!t) throw new Error(`onbekend sjabloon ${kind}`);
   const testDomain = env.TEST_OUTBOX_DOMAIN;
@@ -55,37 +63,58 @@ async function deliver(env, { to, kind, token }) {
   const text = plain(html);
   if (env.EMAIL) {
     try {
-      await env.EMAIL.send({ to, from: FROM, subject, html, text });
+      await sendCloudflare(env, { to, subject, html, text }, id);
       return 'cloudflare';
     } catch (e) {
-      console.warn('Email Sending mislukt, naar Brevo:', e?.message ?? e);
+      console.warn(`Email Sending mislukt (mail ${id}), naar Brevo:`, e?.message ?? e);
     }
   }
-  return sendBrevo(env, { to, subject, html, text });
+  return sendBrevo(env, { to, subject, html, text }, id);
 }
 
-async function sendBrevo(env, { to, subject, html, text }) {
+/** Via Cloudflare, met een tijdslimiet; het mail-id als X-Entity-Ref-ID (X-headers mogen, Message-ID niet). */
+function sendCloudflare(env, msg, id) {
+  const ms = Number(env.MAIL_TIMEOUT_MS) || CF_TIMEOUT_MS;
+  let timer;
+  const late = new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`geen antwoord na ${ms} ms`)), ms)));
+  return Promise.race([env.EMAIL.send({ ...msg, from: FROM, headers: { 'X-Entity-Ref-ID': id } }), late]).finally(() => clearTimeout(timer));
+}
+
+async function sendBrevo(env, { to, subject, html, text }, id) {
   if (!env.BREVO_API_KEY) throw new Error('geen mailroute (BREVO_API_KEY ontbreekt)');
   const r = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': env.BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ sender: FROM, to: [{ email: to }], subject, htmlContent: html, textContent: text }),
+    body: JSON.stringify({
+      sender: FROM,
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+      // Brevo verstuurt dezelfde sleutel (een UUID) binnen 30 min niet nog eens
+      headers: { idempotencyKey: id, 'X-Entity-Ref-ID': id },
+    }),
+    signal: AbortSignal.timeout(BREVO_TIMEOUT_MS),
   });
-  if (!r.ok) throw new Error(`Brevo ${r.status}: ${(await r.text()).slice(0, 200)}`);
-  return 'brevo';
+  if (r.ok) return 'brevo';
+  const body = (await r.text()).slice(0, 200);
+  // Deze sleutel was al verstuurd (een eerdere poging kwam toch aan): niet nog eens, en geen fout
+  if (r.status === 400 && /duplicate_parameter/.test(body)) return 'brevo (al verstuurd)';
+  throw new Error(`Brevo ${r.status}: ${body}`);
 }
 
 /** Een waarschuwing voor de beheerder (ADMIN_EMAIL), bv. als een back-up mislukt. Platte tekst. */
 export async function sendAlert(env, subject, text) {
   if (!env.ADMIN_EMAIL) return console.error(`waarschuwing zonder ADMIN_EMAIL: ${subject}`);
   const mail = { to: env.ADMIN_EMAIL, subject: `[MacroMatrix] ${subject}`, text, html: `<pre>${escapeHtml(text)}</pre>` };
+  const id = crypto.randomUUID();
   if (env.EMAIL) {
     try {
-      await env.EMAIL.send({ ...mail, from: FROM });
+      await sendCloudflare(env, mail, id);
       return;
     } catch (e) {
       console.warn('waarschuwing via Cloudflare mislukt, naar Brevo:', e?.message ?? e);
     }
   }
-  await sendBrevo(env, mail);
+  await sendBrevo(env, mail, id);
 }

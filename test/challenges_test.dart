@@ -94,6 +94,7 @@ class FakeChallengeServer implements ChallengeRemote {
           template: x.template,
           start: x.start,
           invitedBy: x.invitedBy,
+          invitedById: x.invitedById,
           members: [for (final m in x.members) m.me ? RemoteMember(id: m.id, name: m.name, me: true, accepted: responded[x.id] == true) : m],
         ),
     ];
@@ -328,6 +329,50 @@ void main() {
   });
 
   group('met vrienden', () {
+    test('uitnodiging van wie je blokkeerde: meteen weg, ook voor de server ze weghaalt', () async {
+      final s = newState();
+      final server = FakeChallengeServer();
+      final c = Challenges(s, Account(s.user, onRemoteChanges: s.reloadFromDisk), remote: () => server);
+      addTearDown(c.dispose);
+      server.extra.add(
+        RemoteChallenge(
+          id: 'srv-b',
+          template: builtinChallenges[1],
+          start: today(),
+          invitedBy: 'Bert',
+          invitedById: 'bert',
+          members: const [
+            RemoteMember(id: 'bert', name: 'Bert'),
+            RemoteMember(id: 'me', name: 'Me', me: true, accepted: false),
+          ],
+        ),
+      );
+      await c.load();
+      expect(c.invites.single.invitedById, 'bert');
+      expect(c.invitesExcept({'bert'}), isEmpty);
+      expect(c.invitesExcept({'iemand-anders'}), hasLength(1));
+      // Van de server: het id van wie uitnodigde komt mee
+      final rows = RemoteChallenge.fromRows([
+        {
+          'id': 'x',
+          'template': 'custom',
+          'title': 't',
+          'nutrient': 'fiber',
+          'rule': 'min',
+          'amount': 25,
+          'days': 7,
+          'need': 5,
+          'start_day': '2026-10-26',
+          'owner_is_me': false,
+          'invited_by_name': '',
+          'invited_by': 'bert',
+          'member': 'me',
+          'is_me': true,
+        },
+      ]);
+      expect(rows.single.invitedById, 'bert');
+    });
+
     test('aanmaken, alleen ja/nee per dag doorsturen, uitnodiging aannemen', () async {
       final s = newState();
       final server = FakeChallengeServer();

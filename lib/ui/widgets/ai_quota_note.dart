@@ -49,7 +49,10 @@ class AiQuotaNote extends StatelessWidget {
         padding: const EdgeInsets.only(top: 6),
         child: Text(
           key: const ValueKey('ai-quota-left'),
-          tr('${q.left} of ${q.limit} free label ${q.limit == 1 ? 'scan' : 'scans'} left today', 'Nog ${q.left} van ${q.limit} gratis etiketscans vandaag'),
+          tr(
+            '${q.left} of ${q.limit} free label ${q.limit == 1 ? 'scan' : 'scans'} left today',
+            'Nog ${q.left} van ${q.limit} gratis etiketscans vandaag',
+          ),
           style: TextStyle(fontSize: 12, color: p.ink3),
         ),
       );
@@ -97,9 +100,17 @@ String aiErrorText(String code, {AiKind kind = AiKind.label}) => switch (code) {
             'Free label scan used today, back tomorrow, or become a supporter.',
             'Gratis etiketscan van vandaag gebruikt. Morgen kan het weer, of word supporter.',
           )
-        : tr('You have imported the most recipes for today. Try again tomorrow.', 'Je hebt vandaag het maximum aan recepten geïmporteerd. Morgen kan het weer.'),
+        : tr(
+            'You have imported the most recipes for today. Try again tomorrow.',
+            'Je hebt vandaag het maximum aan recepten geïmporteerd. Morgen kan het weer.',
+          ),
   'too_many' => tr('You have done this a lot this hour. Try again later.', 'Je hebt dit uur al vaak gedaan. Probeer later opnieuw.'),
   'network' || 'timeout' => tr('No connection. Check your internet and try again.', 'Geen verbinding. Kijk je internet na en probeer opnieuw.'),
+  'ai_unavailable' => tr(
+    "The AI isn't working right now. This wasn't counted. Try again in a few minutes.",
+    'De AI werkt nu even niet. Dit telde niet mee. Probeer het over een paar minuten opnieuw.',
+  ),
+  'unavailable' => tr('The server is briefly unavailable. Try again in a moment.', 'De server is even niet bereikbaar. Probeer zo meteen opnieuw.'),
   'bad_image' || 'too_big' => tr('That photo could not be opened. Try a JPG or PNG.', 'Die foto kon niet geopend worden. Probeer een JPG of PNG.'),
   'unreadable' || 'implausible' => tr(
     "Couldn't read the nutrition table. Try a sharper photo, straight on and well lit, or enter it yourself.",

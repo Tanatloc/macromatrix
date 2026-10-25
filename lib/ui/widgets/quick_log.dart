@@ -98,7 +98,6 @@ Future<Uint8List?> _pickPlatePhoto(BuildContext context) async {
   return compute(shrinkPhoto, raw);
 }
 
-
 class _QuickLogSheet extends StatefulWidget {
   const _QuickLogSheet({required this.meal, this.photo = false, this.text});
   final Meal meal;
@@ -224,6 +223,10 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
       "Je hebt dit uur al veel foto's gebruikt. Probeer later opnieuw, of typ wat je at.",
     ),
     'network' => tr('No connection. Check your internet and try again.', 'Geen verbinding. Kijk je internet na en probeer opnieuw.'),
+    'ai_unavailable' => tr(
+      "The photo reader isn't working right now. This photo wasn't counted. Try again in a few minutes, or type what you ate.",
+      'Het lezen van foto\'s werkt nu even niet. Deze foto telde niet mee. Probeer het over een paar minuten opnieuw, of typ wat je at.',
+    ),
     'none' => tr(
       'No food found in that photo. Try again with the whole plate in view, or type it.',
       'Geen eten gevonden op die foto. Probeer opnieuw met het hele bord in beeld, of typ het.',
@@ -702,7 +705,10 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                                     l.pick.$1.name,
                                     style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: p.ink),
                                   ),
-                                  Text('${l.amountLabel} · ${bigNum(l.kcal)} kcal · "${l.item.query}"', style: TextStyle(fontSize: 12, color: p.ink3)),
+                                  Text(
+                                    '${l.amountLabel} · ${bigNum(l.kcal)} kcal · "${l.item.query}"',
+                                    style: TextStyle(fontSize: 12, color: p.ink3),
+                                  ),
                                   if (l.unusual)
                                     Text(
                                       tr('Unusually large. Check the amount.', 'Ongewoon veel. Kijk de hoeveelheid na.'),
@@ -805,7 +811,10 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        tr('${bigNum(totalKcal)} kcal · ${bigNum(totalProtein)} g protein', '${bigNum(totalKcal)} kcal · ${bigNum(totalProtein)} g eiwit'),
+                        tr(
+                          '${bigNum(totalKcal)} kcal · ${bigNum(totalProtein)} g protein',
+                          '${bigNum(totalKcal)} kcal · ${bigNum(totalProtein)} g eiwit',
+                        ),
                         textAlign: TextAlign.end,
                         style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.ink),
                       ),

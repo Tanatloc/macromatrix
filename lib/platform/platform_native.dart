@@ -18,6 +18,9 @@ const isWeb = false;
 /// Barcode scannen met de camera kan op gsm, niet op een pc.
 bool get canScanBarcodes => Platform.isAndroid || Platform.isIOS;
 
+/// Grafische versnelling: buiten de browser altijd (de tip over WebGL is alleen voor browsers).
+bool get graphicsAccelerated => true;
+
 /// Alleen nodig in de browser (zie platform_web.dart); hier staat de database gewoon in de app-map.
 Future<bool> askPersistentStorage() async => true;
 
@@ -53,8 +56,12 @@ void _moveFromOldName(Directory dir) {
   if (!Platform.isLinux && !Platform.isWindows) return;
   if (File(p.join(dir.path, 'user.db')).existsSync()) return;
   final old = Platform.isLinux
-      ? [for (final id in ['online.divinenet.macromatrix', 'online.divinenet.voedingsapp']) p.join(dir.parent.path, id)]
-      : [for (final product in ['MacroMatrix', 'voedingsapp']) p.join(dir.parent.parent.path, 'DivineNet', product)];
+      ? [
+          for (final id in ['online.divinenet.macromatrix', 'online.divinenet.voedingsapp']) p.join(dir.parent.path, id),
+        ]
+      : [
+          for (final product in ['MacroMatrix', 'voedingsapp']) p.join(dir.parent.parent.path, 'DivineNet', product),
+        ];
   for (final o in old) {
     if (o == dir.path || !File(p.join(o, 'user.db')).existsSync()) continue;
     for (final name in ['user.db', 'user.db-wal', 'user.db-shm']) {

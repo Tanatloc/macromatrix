@@ -194,6 +194,10 @@ class _CoachPanelState extends State<CoachPanel> {
     ),
     'quota' => tr("That was today's last one. You can write it again tomorrow.", 'Dat was de laatste voor vandaag. Morgen kan het weer.'),
     'too_many' => tr('You asked a few times this hour. Try again later.', 'Je vroeg het dit uur al een paar keer. Probeer later opnieuw.'),
+    'ai_unavailable' => tr(
+      "The coach can't write right now. This wasn't counted. Try again in a few minutes.",
+      'De coach kan nu even niet schrijven. Dit telde niet mee. Probeer het over een paar minuten opnieuw.',
+    ),
     'network' || 'timeout' => tr(
       "Couldn't reach the coach. Check your connection and try again.",
       'De coach was niet bereikbaar. Kijk je verbinding na en probeer opnieuw.',

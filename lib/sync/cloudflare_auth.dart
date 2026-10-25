@@ -82,8 +82,13 @@ class CloudflareAuth {
     await signIn(email, newPassword);
   }
 
-  Future<void> changePassword(String currentPassword, String newPassword) =>
-      _call('POST', '/change-password', {'currentPassword': currentPassword, 'newPassword': newPassword});
+  /// Wachtwoord wijzigen. De server logt dan alle andere toestellen uit en geeft dit toestel een nieuw token.
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    final r = await _call('POST', '/change-password', {'currentPassword': currentPassword, 'newPassword': newPassword, 'revokeOtherSessions': true});
+    final token = r.token ?? (r.data as Map?)?['token'] as String?;
+    final u = _user;
+    if (token != null && u != null) _setSession(token, {'id': u.id, 'email': u.email});
+  }
 
   /// Uitloggen op dit toestel; zonder internet alleen lokaal.
   Future<void> signOut() async {

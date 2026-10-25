@@ -11,6 +11,7 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:supabase/supabase.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../data/user_db.dart';
@@ -36,7 +37,13 @@ class SupabaseRemote implements SyncRemote {
   Future<Map<String, int>?> push(SyncTable table, List<Map<String, Object?>> rows, {bool insertOnly = false}) async {
     final saved = await client
         .from(table.name)
-        .upsert([for (final r in rows) {...r, 'user_id': userId}], onConflict: 'user_id,${table.key}', ignoreDuplicates: insertOnly)
+        .upsert(
+          [
+            for (final r in rows) {...r, 'user_id': userId},
+          ],
+          onConflict: 'user_id,${table.key}',
+          ignoreDuplicates: insertOnly,
+        )
         .select('${table.key}, updated_at');
     return {for (final r in saved) '${r[table.key]}': (r['updated_at'] as num).toInt()};
   }
@@ -78,7 +85,9 @@ class SupabaseRemote implements SyncRemote {
 }
 
 class Account extends ChangeNotifier {
-  Account(this.db, {required this.onRemoteChanges});
+  /// [network]: een seintje als het toestel (weer) een netwerk heeft. Standaard via connectivity_plus (in de browser
+  /// het 'online'-event); te vervangen in tests.
+  Account(this.db, {required this.onRemoteChanges, Stream<void>? network}) : _network = network; // ignore: prefer_initializing_formals
 
   final UserDb db;
 
@@ -132,10 +141,17 @@ class Account extends ChangeNotifier {
   Timer? _periodic;
   Timer? _remoteDebounce;
   RealtimeChannel? _channel;
-  AppLifecycleListener? _lifecycle;
+  final Stream<void>? _network;
+  StreamSubscription<void>? _netSub;
 
-  /// Na het versturen even niet reageren op de live meldingen: dat zijn onze eigen wijzigingen.
-  DateTime _quietUntil = DateTime(0);
+  /// Na een mislukte synchronisatie met niet-verstuurde regels: opnieuw na 2, 4, 8, ... tot 120 keer [retryUnit].
+  Timer? _retry;
+  var _retryDelay = 2;
+
+  /// Eenheid voor het opnieuw proberen (in tests korter).
+  @visibleForTesting
+  static Duration retryUnit = const Duration(seconds: 1);
+  AppLifecycleListener? _lifecycle;
 
   SyncStatus _status = SyncStatus.idle;
   SyncStatus get status => _status;
@@ -309,6 +325,7 @@ class Account extends ChangeNotifier {
     }
     _dbSub = db.changes.listen((_) => schedule());
     _periodic = Timer.periodic(const Duration(minutes: 5), (_) => sync());
+    _listenForNetwork(_network ?? _connectivity());
     // Terug naar de app (of het tabblad): meteen bijwerken
     try {
       _lifecycle = AppLifecycleListener(onResume: () => unawaited(sync()));
@@ -419,11 +436,10 @@ class Account extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn(String email, String password) =>
-      _existingLogin(() async {
-        if (_cf != null) return _cf!.signIn(email.trim(), password);
-        await _client!.auth.signInWithPassword(email: email.trim(), password: password);
-      });
+  Future<void> signIn(String email, String password) => _existingLogin(() async {
+    if (_cf != null) return _cf!.signIn(email.trim(), password);
+    await _client!.auth.signInWithPassword(email: email.trim(), password: password);
+  });
 
   /// Wachtwoord vergeten, stap 1: een code mailen.
   Future<void> requestPasswordReset(String email) => _cf?.requestPasswordReset(email.trim()) ?? _client!.auth.resetPasswordForEmail(email.trim());
@@ -477,6 +493,7 @@ class Account extends ChangeNotifier {
   }
 
   void _stopWatching() {
+    _retry?.cancel();
     final c = _channel;
     _channel = null;
     if (c != null) unawaited(_client!.removeChannel(c));
@@ -505,9 +522,13 @@ class Account extends ChangeNotifier {
       _backoff = 1;
       // Houdt de verbinding open (Cloudflare antwoordt zelf "pong")
       _ping = Timer.periodic(const Duration(seconds: 30), (_) => ws.sink.add('ping'));
-      ws.stream.listen((m) {
-        if (m != 'pong') _remoteChanged();
-      }, onDone: () => _socketLost(ws), onError: (_) => _socketLost(ws));
+      ws.stream.listen(
+        (m) {
+          if (m != 'pong') _remoteChanged();
+        },
+        onDone: () => _socketLost(ws),
+        onError: (_) => _socketLost(ws),
+      );
       // Wat er gebeurde terwijl er geen verbinding was
       _remoteChanged();
     } catch (_) {
@@ -528,8 +549,10 @@ class Account extends ChangeNotifier {
     _backoff = (_backoff * 2).clamp(1, 60);
   }
 
+  // Geen "stil" venster na een eigen verzending meer: de eigen server stuurt ons geen seintje over onze eigen
+  // wijzigingen (client-id, zie CloudflareApi.clientId). Een seintje van een ander toestel net na onze push ging
+  // daardoor verloren (tot de volgende ronde, tot 5 min later).
   void _remoteChanged() {
-    if (DateTime.now().isBefore(_quietUntil)) return;
     // Loopt er al een synchronisatie: daarna nog een ronde (die kan het seintje net gemist hebben). Bij de eigen
     // server komt er één seintje per verzending, niet één per rij zoals bij Supabase.
     if (_status == SyncStatus.syncing) {
@@ -539,6 +562,49 @@ class Account extends ChangeNotifier {
     _remoteDebounce?.cancel();
     // Supabase stuurt een seintje per rij (even bundelen); de eigen server één per verzending
     _remoteDebounce = Timer(Duration(milliseconds: _api != null ? 300 : 1500), () => unawaited(sync()));
+  }
+
+  /// Seintjes dat er weer een netwerk is: connectivity_plus (Android, desktop, en in de browser het 'online'-event).
+  static Stream<void> _connectivity() {
+    try {
+      return Connectivity().onConnectivityChanged.where((r) => r.any((c) => c != ConnectivityResult.none));
+    } catch (_) {
+      // Zonder plug-in (tests, een platform zonder): dan alleen opnieuw proberen met de klok
+      return const Stream.empty();
+    }
+  }
+
+  void _listenForNetwork(Stream<void> s) {
+    _netSub?.cancel();
+    _netSub = s.listen((_) => networkBack(), onError: (_) {});
+  }
+
+  /// Weer een netwerk: meteen synchroniseren en de live verbinding herstellen, zonder op de wachttijd te wachten.
+  @visibleForTesting
+  void networkBack() {
+    if (!signedIn || _closing) return;
+    _retry?.cancel();
+    _retryDelay = 2;
+    if (_api != null && _socket == null && !_connecting) {
+      _reconnect?.cancel();
+      _backoff = 1;
+      unawaited(_watchOwnServer());
+    }
+    unawaited(sync());
+  }
+
+  /// Na een ronde: mislukt en nog niet-verstuurde regels, dan opnieuw na een wachttijd die verdubbelt (ook als de
+  /// live verbinding open blijft en niemand anders iets wijzigt). Gelukt: de wachttijd begint weer klein.
+  void _planRetry() {
+    _retry?.cancel();
+    final failed = _status == SyncStatus.offline || _status == SyncStatus.error;
+    if (!failed) {
+      _retryDelay = 2;
+      return;
+    }
+    if (!signedIn || _closing || _paused || !db.hasDirtyRows) return;
+    _retry = Timer(retryUnit * _retryDelay, () => unawaited(sync()));
+    _retryDelay = (_retryDelay * 2).clamp(2, 120);
   }
 
   /// Na een korte pauze synchroniseren (na wijzigingen), zodat niet elke tik een verzoek wordt.
@@ -585,7 +651,6 @@ class Account extends ChangeNotifier {
     notifyListeners();
     try {
       final result = await SyncEngine(db, _remoteFor(uid), userId: uid, active: active).run();
-      if (result.pushed > 0) _quietUntil = DateTime.now().add(const Duration(seconds: 3));
       if (result.rejected > 0 || _rejected > 0) _rejected = db.rejectedCount;
       if (result.errors.isEmpty) {
         _status = SyncStatus.idle;
@@ -612,6 +677,7 @@ class Account extends ChangeNotifier {
       _status = SyncStatus.offline;
       _error = null;
     }
+    _planRetry();
     notifyListeners();
   }
 
@@ -707,6 +773,8 @@ class Account extends ChangeNotifier {
     _debounce?.cancel();
     _periodic?.cancel();
     _remoteDebounce?.cancel();
+    _retry?.cancel();
+    _netSub?.cancel();
     _lifecycle?.dispose();
     _stopWatching();
     _client?.dispose();

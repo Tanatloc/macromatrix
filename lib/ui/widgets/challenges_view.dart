@@ -155,7 +155,8 @@ class ChallengesPanel extends StatelessWidget {
           for (final x in all)
             if (x.finishedOn(today)) x,
         ]..sort((a, b) => b.end.compareTo(a.end));
-        final invites = c.invites;
+        // Wie je blokkeerde, nodigt je niet meer uit (de server haalt die uitnodigingen ook weg)
+        final invites = c.invitesExcept({for (final b in context.watch<Friends?>()?.blocked ?? const <BlockedUser>[]) b.id});
         final signedIn = context.watch<Account>().signedIn;
         return Panel(
           shadow: false,

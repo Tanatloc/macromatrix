@@ -7,7 +7,7 @@
 // Dagteller ai_quota_use('label'): 1 gratis, 30 met Pro (migratie 20261027000000_ai_quota). Is die er nog niet,
 // dan werkt het zoals /api/photo zonder teller: alleen de rem per uur. Antwoordt de teller niet (storing): 503.
 
-import { MODEL, MAX_IMAGE_BYTES, aiQuotaStatus, checkLogin, dataUrl, hourly, imageType, json, modelObject, quotaDown } from '../_lib/ai.js';
+import { AiDown, MAX_IMAGE_BYTES, aiDown, aiQuotaStatus, chargeQuota, checkLogin, dataUrl, hourly, imageType, json, modelObject, quotaBody, quotaDown, runModel } from '../_lib/ai.js';
 import { backendFetch } from '../_lib/backend.js';
 import { readForm as readBody } from '../_lib/body.js';
 
@@ -186,21 +186,26 @@ async function readForm(request) {
   return { label, labelType, front, frontType };
 }
 
+// Met het reservemodel als het beeldmodel uitvalt (runModel); gooit AiDown als geen van beide antwoordt
 async function ask(env, prompt, bytes, mime, maxTokens) {
-  const r = await env.AI.run(MODEL, {
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: dataUrl(bytes, mime) } },
-        ],
-      },
-    ],
-    max_tokens: maxTokens,
-    temperature: 0,
-  });
-  return modelObject(r);
+  const { result } = await runModel(
+    env.AI,
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: dataUrl(bytes, mime) } },
+          ],
+        },
+      ],
+      max_tokens: maxTokens,
+      temperature: 0,
+    },
+    { ms: Number(env.AI_TIMEOUT_MS) || undefined },
+  );
+  return modelObject(result);
 }
 
 export async function onRequestPost({ request, env }) {
@@ -215,29 +220,33 @@ export async function onRequestPost({ request, env }) {
   const rate = await hourly('label', who.user, PER_HOUR);
   if (!rate.allowed) return json({ error: 'too_many' }, 429);
 
-  // De dagteller pas na de controles hierboven, zodat een kapotte foto geen scan van vandaag kost.
+  // De dagteller na de controles hierboven alleen lezen; hij gaat pas omhoog als er waarden uit het etiket komen.
   // Geen teller (migratie niet uitgevoerd): verder zoals zonder teller. Een storing bij de teller: 503.
-  const q = await aiQuotaStatus(who.auth, 'label', fetcher);
+  const q = await aiQuotaStatus(who.auth, 'label', fetcher, 'ai_quota');
   if (q.down) return quotaDown();
-  const quota = q.quota ?? null;
-  if (quota && !quota.allowed) return json({ error: 'quota', used: quota.used, limit: quota.limit, pro: quota.pro }, 429);
+  const before = q.quota ?? null;
+  if (before && !before.allowed) return json({ error: 'quota', used: before.used, limit: before.limit, pro: before.pro }, 429);
   await rate.count();
 
+  let table, front;
   try {
-    const [table, front] = await Promise.all([
+    [table, front] = await Promise.all([
       ask(env, PROMPT, form.label, form.labelType, 400),
       form.front ? ask(env, FRONT_PROMPT, form.front, form.frontType, 80).catch(() => null) : null,
     ]);
-    const out = normaliseLabel(table);
-    if (out.error) return json({ error: out.error, ...(quota ? { quota: { used: quota.used, limit: quota.limit, pro: quota.pro } } : {}) }, 422);
-    // Naam en merk van de voorkant gaan voor (daar staan ze groot); anders wat in de tabel stond
-    if (front && typeof front === 'object') {
-      out.name = text(front.name) ?? out.name;
-      out.brand = text(front.brand, 80) ?? out.brand;
-    }
-    if (quota) out.quota = { used: quota.used, limit: quota.limit, pro: quota.pro };
-    return json(out);
   } catch (e) {
-    return json({ error: 'failed' }, 502);
+    if (e instanceof AiDown) return aiDown(before);
+    throw e;
   }
+  const out = normaliseLabel(table);
+  // Onleesbaar: niets geteld (de rem per uur blijft)
+  if (out.error) return json({ error: out.error, ...(before ? { quota: quotaBody(before) } : {}) }, 422);
+  // Naam en merk van de voorkant gaan voor (daar staan ze groot); anders wat in de tabel stond
+  if (front && typeof front === 'object') {
+    out.name = text(front.name) ?? out.name;
+    out.brand = text(front.brand, 80) ?? out.brand;
+  }
+  const quota = await chargeQuota(who.auth, 'label', before, fetcher);
+  if (quota) out.quota = quotaBody(quota);
+  return json(out);
 }

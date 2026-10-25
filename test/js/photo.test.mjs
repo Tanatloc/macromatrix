@@ -7,11 +7,15 @@ import { PROMPT, onRequestPost, useQuota } from '../../functions/api/photo.js';
 
 let rpc; // wat photo_quota_use antwoordt: { status, body } of 'throw'
 let rpcCalls;
+let useCalls;
+// De stand vóór het tellen bij een stand na het tellen
+const before = (b) => (b?.allowed ? { ...b, used: Math.max(0, b.used - 1) } : b);
 let aiCalls;
 const store = new Map();
 
 beforeEach(() => {
   rpcCalls = 0;
+  useCalls = 0;
   aiCalls = 0;
   store.clear();
   globalThis.caches = {
@@ -22,12 +26,15 @@ beforeEach(() => {
   };
   globalThis.fetch = async (url, init) => {
     if (String(url).endsWith('/auth/v1/user')) return Response.json({ id: 'user-1' });
-    if (String(url).endsWith('/rest/v1/rpc/photo_quota_use')) {
+    // rpc.body is de stand na het tellen (photo_quota_use); photo_quota (alleen lezen, vooraf) geeft die daarvoor
+    const m = String(url).match(/\/rest\/v1\/rpc\/(photo_quota_use|photo_quota)$/);
+    if (m) {
       rpcCalls++;
+      if (m[1] === 'photo_quota_use') useCalls++;
       assert.equal(init.method, 'POST');
       assert.equal(init.headers.Authorization, 'Bearer tok');
       if (rpc === 'throw') throw new TypeError('fetch failed');
-      return Response.json(rpc.body, { status: rpc.status });
+      return Response.json(m[1] === 'photo_quota' ? before(rpc.body) : rpc.body, { status: rpc.status });
     }
     throw new Error(`onverwachte fetch ${url}`);
   };
@@ -131,4 +138,43 @@ test('de vraag aan het model: bereiding en soort noemen, sausen apart, grammen v
   assert.equal((await res.json()).text, '2 scrambled eggs');
   assert.equal(sent, PROMPT);
   for (const word of ['scrambled', 'wholemeal', 'rye', 'cooked ham', 'dressings', 'sausages']) assert.match(PROMPT, new RegExp(word));
+});
+
+// --- Storing van het beeldmodel (25-10: Llama 4 Scout viel ± 25 min uit)
+
+const LLAMA = '@cf/meta/llama-4-scout-17b-16e-instruct';
+const MISTRAL = '@cf/mistralai/mistral-small-3.1-24b-instruct';
+
+test('Llama valt uit: Mistral Small leest de foto, en pas daarna één keer geteld', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 2, limit: 3, pro: false } };
+  const models = [];
+  const flaky = { AI: { run: async (m) => (models.push(m), m === LLAMA ? Promise.reject(new Error('3040: capacity')) : { response: '1 apple' }) } };
+  const res = await onRequestPost({ request: photoRequest(), env: flaky });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { text: '1 apple', quota: { used: 2, limit: 3, pro: false } });
+  assert.deepEqual(models, [LLAMA, MISTRAL]);
+  assert.equal(useCalls, 1);
+});
+
+test('Llama doet er te lang over: na de time-out het reservemodel', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 3, pro: false } };
+  const slow = { AI_TIMEOUT_MS: '20', AI: { run: async (m) => (m === LLAMA ? new Promise(() => {}) : { response: '2 eggs' }) } };
+  const res = await onRequestPost({ request: photoRequest(), env: slow });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).text, '2 eggs');
+});
+
+test('beide modellen weg: 503 ai_unavailable met de teller van vóór de foto, niets geteld', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 2, limit: 3, pro: false } };
+  const down = { AI: { run: async () => Promise.reject(new Error('3040: capacity')) } };
+  const res = await onRequestPost({ request: photoRequest(), env: down });
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'ai_unavailable', retry: true, quota: { used: 1, limit: 3, pro: false } });
+  assert.equal(useCalls, 0);
+});
+
+test('antwoord in het chatformaat (choices) wordt ook gelezen', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 3, pro: false } };
+  const chat = { AI: { run: async () => ({ choices: [{ message: { content: '150 g rice, 1 apple' } }] }) } };
+  assert.equal((await (await onRequestPost({ request: photoRequest(), env: chat })).json()).text, '150 g rice, 1 apple');
 });

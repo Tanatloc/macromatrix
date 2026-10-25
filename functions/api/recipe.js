@@ -10,7 +10,7 @@
 // 20261027000000_ai_quota). Zonder die teller kan Pro niet nagekeken worden: dan pro_required. Voor een link wordt
 // eerst alleen de stand gelezen (ai_quota) en pas geteld als de pagina opgehaald is.
 
-import { MODEL, MAX_IMAGE_BYTES, aiQuotaStatus, checkLogin, dataUrl, hourly, imageType, json, modelObject } from '../_lib/ai.js';
+import { AiDown, MAX_IMAGE_BYTES, aiDown, aiQuotaStatus, chargeQuota, checkLogin, dataUrl, hourly, imageType, json, modelObject, quotaBody, runModel } from '../_lib/ai.js';
 import { backendFetch } from '../_lib/backend.js';
 import { readBytes, readJson } from '../_lib/body.js';
 
@@ -498,29 +498,37 @@ export async function onRequestPost({ request, env }) {
     const photo = read.bytes;
     const mime = imageType(photo);
     if (!mime) return json({ error: 'bad_image' }, 400);
-    const q = await checkRecipeQuota(who.auth, fetcher);
+    // Eerst alleen lezen of het mag; tellen pas als er een recept uit de foto komt
+    const q = await checkRecipeQuota(who.auth, fetcher, true);
     if (q.error) return q.error;
     await rate.count();
+    let r;
     try {
-      const r = await env.AI.run(MODEL, {
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: PHOTO_PROMPT },
-              { type: 'image_url', image_url: { url: dataUrl(photo, mime) } },
-            ],
-          },
-        ],
-        max_tokens: 900,
-        temperature: 0,
-      });
-      const out = normaliseRecipe(modelObject(r));
-      if (!out) return json({ error: 'no_recipe', quota: q.quota }, 422);
-      return json({ ...out, source: 'photo', quota: q.quota });
-    } catch (_) {
-      return json({ error: 'failed' }, 502);
+      ({ result: r } = await runModel(
+        env.AI,
+        {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: PHOTO_PROMPT },
+                { type: 'image_url', image_url: { url: dataUrl(photo, mime) } },
+              ],
+            },
+          ],
+          max_tokens: 900,
+          temperature: 0,
+        },
+        { ms: Number(env.AI_TIMEOUT_MS) || undefined },
+      ));
+    } catch (e) {
+      if (e instanceof AiDown) return aiDown(q.quota);
+      throw e;
     }
+    const out = normaliseRecipe(modelObject(r));
+    if (!out) return json({ error: 'no_recipe', quota: quotaBody(q.quota) }, 422);
+    const quota = await chargeQuota(who.auth, 'recipe', q.quota, fetcher);
+    return json({ ...out, source: 'photo', quota: quotaBody(quota) });
   }
 
   // Link
@@ -534,27 +542,35 @@ export async function onRequestPost({ request, env }) {
   await rate.count();
 
   const page = await fetchPage(body.url);
-  if (page.error) return json({ error: page.error, quota: peek.quota }, page.error === 'bad_url' ? 400 : 422);
-  // Pas nu tellen (in één stap in de database): een link die niet opengaat, kost niets
-  const q = await checkRecipeQuota(who.auth, fetcher);
-  if (q.error) return q.error;
+  if (page.error) return json({ error: page.error, quota: quotaBody(peek.quota) }, page.error === 'bad_url' ? 400 : 422);
+  // Pas tellen als er een recept is: een link die niet opengaat of geen recept heeft, kost niets
   const fromLd = parseJsonLd(page.html);
-  if (fromLd) return json({ ...fromLd, source: 'jsonld', url: page.url, quota: q.quota });
+  if (fromLd) {
+    const quota = await chargeQuota(who.auth, 'recipe', peek.quota, fetcher);
+    return json({ ...fromLd, source: 'jsonld', url: page.url, quota: quotaBody(quota) });
+  }
 
   // Geen JSON-LD: het tekstmodel leest de zichtbare tekst
-  if (!env.AI) return json({ error: 'no_recipe', quota: q.quota }, 422);
+  if (!env.AI) return json({ error: 'no_recipe', quota: quotaBody(peek.quota) }, 422);
   const text = visibleText(page.html);
-  if (text.length < 80) return json({ error: 'no_recipe', quota: q.quota }, 422);
+  if (text.length < 80) return json({ error: 'no_recipe', quota: quotaBody(peek.quota) }, 422);
+  let r;
   try {
-    const r = await env.AI.run(MODEL, {
-      messages: [{ role: 'user', content: `${TEXT_PROMPT}\n\n---\n${text}` }],
-      max_tokens: 900,
-      temperature: 0,
-    });
-    const out = normaliseRecipe(modelObject(r));
-    if (!out) return json({ error: 'no_recipe', quota: q.quota }, 422);
-    return json({ ...out, source: 'ai', url: page.url, quota: q.quota });
-  } catch (_) {
-    return json({ error: 'failed' }, 502);
+    ({ result: r } = await runModel(
+      env.AI,
+      {
+        messages: [{ role: 'user', content: `${TEXT_PROMPT}\n\n---\n${text}` }],
+        max_tokens: 900,
+        temperature: 0,
+      },
+      { ms: Number(env.AI_TIMEOUT_MS) || undefined },
+    ));
+  } catch (e) {
+    if (e instanceof AiDown) return aiDown(peek.quota);
+    throw e;
   }
+  const out = normaliseRecipe(modelObject(r));
+  if (!out) return json({ error: 'no_recipe', quota: quotaBody(peek.quota) }, 422);
+  const quota = await chargeQuota(who.auth, 'recipe', peek.quota, fetcher);
+  return json({ ...out, source: 'ai', url: page.url, quota: quotaBody(quota) });
 }

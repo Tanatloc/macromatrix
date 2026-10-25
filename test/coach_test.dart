@@ -470,6 +470,17 @@ void main() {
       expect(find.text("You've used this week's 2 free summaries. You can write it again next week."), findsOneWidget);
     });
 
+    testWidgets('AI even weg: duidelijke uitleg, niets geteld, de knop blijft werken', (tester) async {
+      final (s, f) = await setup(pro: true);
+      coach.error = AiException('ai_unavailable', quota: PhotoQuota.fromJson({'used': 0, 'limit': 3, 'pro': true}));
+      await pump(tester, s, f);
+      await tester.tap(find.byKey(const ValueKey('coach-write')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("This wasn't counted"), findsOneWidget);
+      final btn = tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('coach-write')));
+      expect(btn.onPressed, isNotNull);
+    });
+
     testWidgets('server zonder coach (not_configured): het paneel verdwijnt', (tester) async {
       final (s, f) = await setup(pro: true);
       coach.error = AiException('not_configured');

@@ -89,11 +89,13 @@ test('firstJsonObject: JSON uit een antwoord met tekst eromheen', () => {
 // --- De functie zelf, met een nagebootste Supabase, cache en beeldmodel
 
 let rpc;
+let charged;
 let aiCalls;
 const store = new Map();
 
 beforeEach(() => {
   aiCalls = 0;
+  charged = 0;
   store.clear();
   globalThis.caches = {
     default: {
@@ -103,10 +105,14 @@ beforeEach(() => {
   };
   globalThis.fetch = async (url, init) => {
     if (String(url).endsWith('/auth/v1/user')) return Response.json({ id: 'user-1' });
-    if (String(url).endsWith('/rest/v1/rpc/ai_quota_use')) {
+    // rpc.body is de stand na het tellen (ai_quota_use); ai_quota (alleen lezen, vooraf) geeft die daarvoor
+    const m = String(url).match(/\/rest\/v1\/rpc\/(ai_quota_use|ai_quota)$/);
+    if (m) {
       assert.deepEqual(JSON.parse(init.body), { p_kind: 'label' });
       if (rpc === 'throw') throw new TypeError('fetch failed');
-      return Response.json(rpc.body, { status: rpc.status });
+      if (m[1] === 'ai_quota_use') charged++;
+      const before = rpc.body?.allowed ? { ...rpc.body, used: Math.max(0, rpc.body.used - 1) } : rpc.body;
+      return Response.json(m[1] === 'ai_quota' ? before : rpc.body, { status: rpc.status });
     }
     throw new Error(`onverwachte fetch ${url}`);
   };
@@ -221,4 +227,34 @@ test('geen foto of geen JPEG/PNG: bad_image, zonder teller', async () => {
 
 test('zonder beeldmodel: not_configured', async () => {
   assert.equal((await onRequestPost({ request: labelRequest(), env: {} })).status, 503);
+});
+
+// --- Storing van het beeldmodel en tellen na een geslaagde scan
+
+test('Llama valt uit: het reservemodel leest het etiket; één keer geteld', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 1, pro: false } };
+  const models = [];
+  const flaky = { AI: { run: async (m, input) => (models.push(m), m.includes('llama') ? Promise.reject(new Error('3040')) : env.AI.run(m, input)) } };
+  const res = await onRequestPost({ request: labelRequest(), env: flaky });
+  assert.equal(res.status, 200);
+  const j = await res.json();
+  assert.equal(j.per100.energy_kcal, 454);
+  assert.deepEqual(j.quota, { used: 1, limit: 1, pro: false });
+  assert.deepEqual(models, ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/mistralai/mistral-small-3.1-24b-instruct']);
+  assert.equal(charged, 1);
+});
+
+test('beide modellen weg: 503 ai_unavailable, de gratis scan van vandaag blijft', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 1, pro: false } };
+  const res = await onRequestPost({ request: labelRequest(), env: { AI: { run: async () => Promise.reject(new Error('3040')) } } });
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'ai_unavailable', retry: true, quota: { used: 0, limit: 1, pro: false } });
+  assert.equal(charged, 0);
+});
+
+test('onleesbaar etiket: 422 zonder te tellen', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 1, pro: false } };
+  const res = await onRequestPost({ request: labelRequest(), env: { AI: { run: async () => ({ response: 'I cannot read this.' }) } } });
+  assert.equal(res.status, 422);
+  assert.equal(charged, 0);
 });

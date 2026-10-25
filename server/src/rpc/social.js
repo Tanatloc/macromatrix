@@ -142,6 +142,24 @@ async function friendRows(ctx, week, withSupporter) {
   return results.map(({ supporter, ...r }) => (withSupporter ? { ...r, supporter: supporter === 1 } : r));
 }
 
+
+/**
+ * Hebben [uid] en [other] een band: vriend of (openstaand) verzoek, een blokkade, een battle, of samen in een
+ * uitdaging (ook een uitnodiging)? Alleen dan mag je iemand blokkeren of melden.
+ */
+async function linkedTo(db, uid, other) {
+  return !!(await db
+    .prepare(
+      `SELECT EXISTS (SELECT 1 FROM friendships f WHERE (f.requester = ?1 AND f.addressee = ?2) OR (f.requester = ?2 AND f.addressee = ?1))
+         OR EXISTS (SELECT 1 FROM user_blocks x WHERE x.blocker = ?1 AND x.blocked = ?2)
+         OR EXISTS (SELECT 1 FROM battles b WHERE (b.challenger = ?1 AND b.opponent = ?2) OR (b.challenger = ?2 AND b.opponent = ?1))
+         OR EXISTS (SELECT 1 FROM challenge_members a JOIN challenge_members o ON o.challenge_id = a.challenge_id
+                    WHERE a.user_id = ?1 AND o.user_id = ?2) AS linked`,
+    )
+    .bind(uid, other)
+    .first('linked'));
+}
+
 export default {
   /**
    * Je eigen vriendenprofiel: maakt het aan (met een nieuwe code van 8 tekens) als het er nog niet is, en werkt
@@ -289,7 +307,9 @@ export default {
     const uid = me(ctx);
     const other = uuid(p.p_other);
     if (other === null || other === uid) return null;
-    if (!(await ctx.db.prepare('SELECT 1 FROM "user" WHERE id = ?').bind(other).first())) return null;
+    // Alleen iemand die je kent: anders zou een willekeurige id in je blokkeerlijst diens naam en avatar tonen. Een
+    // onbekende id antwoordt hetzelfde als een die niet bestaat (niets, en niets bewaard).
+    if (!(await linkedTo(ctx.db, uid, other))) return null;
     const n = await ctx.db.prepare('SELECT count(*) AS n FROM user_blocks WHERE blocker = ?').bind(uid).first('n');
     if (n >= 1000) raise('te veel blokkades');
     // De limiet zit ook in de insert en het opruimen alleen als de blokkade er echt staat: zo kunnen gelijktijdige
@@ -361,17 +381,7 @@ export default {
     if (reason === null || !REASONS.includes(reason)) return 'bad_reason';
     const other = uuid(p.p_other);
     if (other === null || other === uid) return 'not_found';
-    const linked = await ctx.db
-      .prepare(
-        `SELECT EXISTS (SELECT 1 FROM friendships f WHERE (f.requester = ?1 AND f.addressee = ?2) OR (f.requester = ?2 AND f.addressee = ?1))
-           OR EXISTS (SELECT 1 FROM user_blocks x WHERE x.blocker = ?1 AND x.blocked = ?2)
-           OR EXISTS (SELECT 1 FROM battles b WHERE (b.challenger = ?1 AND b.opponent = ?2) OR (b.challenger = ?2 AND b.opponent = ?1))
-           OR EXISTS (SELECT 1 FROM challenge_members a JOIN challenge_members o ON o.challenge_id = a.challenge_id
-                      WHERE a.user_id = ?1 AND o.user_id = ?2) AS linked`,
-      )
-      .bind(uid, other)
-      .first('linked');
-    if (!linked) return 'not_found';
+    if (!(await linkedTo(ctx.db, uid, other))) return 'not_found';
     // De daglimiet in dezelfde insert: gelijktijdige meldingen kunnen ze niet samen overschrijden
     const r = await ctx.db
       .prepare(

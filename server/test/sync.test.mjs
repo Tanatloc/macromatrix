@@ -87,3 +87,12 @@ test('pull-all: alle tabellen in één keer, elk met zijn eigen cursor, alleen e
   assert.deepEqual(r.settings, []);
   await assert.rejects(pullAll(db, 'a', { user: '0' }, 10), { code: '42P01' });
 });
+
+test('pull-all zonder tabellen: een leeg antwoord (geen lege batch naar D1)', async () => {
+  const { pullAll } = await import('../src/sync.js');
+  const db = d1();
+  // De echte D1 weigert een lege batch; de nabootsing ook laten weigeren
+  const batch = db.batch.bind(db);
+  db.batch = (stmts) => (stmts.length ? batch(stmts) : Promise.reject(new Error('D1_ERROR: No SQL statements detected.')));
+  assert.deepEqual(await pullAll(db, 'u1', {}), {});
+});

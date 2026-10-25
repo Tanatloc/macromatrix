@@ -191,11 +191,12 @@ beforeEach(() => {
       assert.deepEqual(JSON.parse(init.body), { p_kind: 'recipe' });
       return Response.json(rpc.body, { status: rpc.status });
     }
-    // Alleen lezen (ai_quota): dezelfde stand, zonder te tellen
+    // Alleen lezen (ai_quota): de stand vóór het tellen (rpc.body is die erna)
     if (u.endsWith('/rest/v1/rpc/ai_quota')) {
       peekCalls++;
       assert.deepEqual(JSON.parse(init.body), { p_kind: 'recipe' });
-      return Response.json(rpc.body, { status: rpc.status });
+      const before = rpc.body?.allowed ? { ...rpc.body, used: Math.max(0, rpc.body.used - 1) } : rpc.body;
+      return Response.json(before, { status: rpc.status });
     }
     if (u.startsWith('https://cloudflare-dns.com')) return Response.json({});
     if (u === 'https://example.com/soup') return new Response(fixture, { headers: { 'Content-Type': 'text/html' } });
@@ -280,14 +281,44 @@ test('foto van een kookboek met Pro', async () => {
   const j = await (await onRequestPost({ request: req, env })).json();
   assert.equal(j.source, 'photo');
   assert.equal(j.name, 'Pancakes');
-  assert.deepEqual(j.quota, { allowed: true, used: 2, limit: 20, pro: true });
+  assert.deepEqual(j.quota, { used: 2, limit: 20, pro: true });
+  // Eerst gelezen, na het recept één keer geteld
+  assert.deepEqual([peekCalls, useCalls], [1, 1]);
+});
+
+test('foto van een kookboek, beeldmodel valt uit: het reservemodel leest de foto', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 2, limit: 20, pro: true } };
+  const models = [];
+  const flaky = { AI: { run: async (model, input) => (models.push(model), model.includes('llama') ? Promise.reject(new Error('3040: capacity')) : env.AI.run(model, input)) } };
+  const photo = new Uint8Array(2000);
+  photo[0] = 0xff;
+  photo[1] = 0xd8;
+  const req = new Request('https://app.test/api/recipe', { method: 'POST', headers: { Authorization: 'Bearer tok', 'Content-Type': 'image/jpeg' }, body: photo });
+  const res = await onRequestPost({ request: req, env: flaky });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).name, 'Pancakes');
+  assert.deepEqual(models, ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/mistralai/mistral-small-3.1-24b-instruct']);
+  assert.equal(useCalls, 1);
+});
+
+test('foto van een kookboek, beide modellen vallen uit: 503 ai_unavailable, niets geteld', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 2, limit: 20, pro: true } };
+  const down = { AI: { run: async () => Promise.reject(new Error('3040: capacity')) } };
+  const photo = new Uint8Array(2000);
+  photo[0] = 0xff;
+  photo[1] = 0xd8;
+  const req = new Request('https://app.test/api/recipe', { method: 'POST', headers: { Authorization: 'Bearer tok', 'Content-Type': 'image/jpeg' }, body: photo });
+  const res = await onRequestPost({ request: req, env: down });
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'ai_unavailable', retry: true, quota: { used: 1, limit: 20, pro: true } });
+  assert.equal(useCalls, 0);
 });
 
 test('een link die niet opengaat, kost geen import van vandaag (pas geteld na het ophalen)', async () => {
   rpc = { status: 200, body: { allowed: true, used: 3, limit: 20, pro: true } };
   const res = await onRequestPost({ request: linkRequest('https://example.com/gone'), env });
   assert.equal(res.status, 422);
-  assert.deepEqual(await res.json(), { error: 'fetch_failed', quota: { allowed: true, used: 3, limit: 20, pro: true } });
+  assert.deepEqual(await res.json(), { error: 'fetch_failed', quota: { used: 2, limit: 20, pro: true } });
   assert.equal(peekCalls, 1);
   assert.equal(useCalls, 0);
   // Een link die wel werkt: één keer gelezen en één keer geteld

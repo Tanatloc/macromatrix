@@ -48,6 +48,19 @@ function call(path, body, token, extraHeaders = {}) {
   });
 }
 
+/** Een functie op /v1 (buiten /auth), zoals de app: om te zien of een token daar nog werkt. */
+async function v1(fn, token) {
+  const u = new URL(`${base}/v1/rpc/${fn}`);
+  return new Promise((resolve, reject) => {
+    const req = (u.protocol === 'https:' ? https : http).request(u, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) } }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    req.end('{}');
+  });
+}
+
 /** De laatste code in het testpostvak voor dit adres en deze soort mail. */
 function lastMail(to, kind) {
   return sql(`SELECT kind, token FROM test_outbox WHERE "to" = '${esc(to)}'${kind ? ` AND kind = '${kind}'` : ''} ORDER BY id DESC LIMIT 1`)[0];
@@ -61,7 +74,7 @@ const step = async (name, fn) => {
 };
 
 try {
-  sql('DELETE FROM signup_ips; DELETE FROM rateLimit'); // testomgeving: de limieten opnieuw laten beginnen
+  sql('DELETE FROM signup_ips; DELETE FROM rateLimit; DELETE FROM login_limits'); // testomgeving: de limieten opnieuw laten beginnen
   const a = mail('a');
   let token;
 
@@ -113,9 +126,17 @@ try {
   });
   await step('wachtwoord wijzigen (zwak geweigerd), met melding per mail', async () => {
     assert.equal((await call('/change-password', { currentPassword: 'geheim123', newPassword: 'kort1' }, token)).data.code, 'WEAK_PASSWORD');
+    const other = (await call('/sign-in/email', { email: a, password: 'geheim123' })).token;
+    // Beide tokens net gebruikt op /v1 (zitten in het geheugen van de Worker)
+    assert.deepEqual([await v1('my_pro', token), await v1('my_pro', other)], [200, 200]);
     const r = await call('/change-password', { currentPassword: 'geheim123', newPassword: 'nieuw7890' }, token);
     assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.equal(lastMail(a).kind, 'password_changed_notification');
+    // Het andere toestel en het oude token werken meteen nergens meer; dit toestel kreeg een nieuw token
+    const fresh = r.token ?? r.data?.token;
+    assert.ok(fresh && fresh !== token, 'nieuw token na de wijziging');
+    assert.deepEqual([await v1('my_pro', other), await v1('my_pro', token), await v1('my_pro', fresh)], [401, 401, 200]);
+    token = fresh;
   });
   await step('wachtwoord vergeten: code, nieuw wachtwoord, alle sessies uitgelogd', async () => {
     const t2 = (await call('/sign-in/email', { email: a, password: 'nieuw7890' })).token;
@@ -140,14 +161,58 @@ try {
     assert.equal(evil.status, 403);
     assert.equal(evil.headers['access-control-allow-origin'], undefined);
   });
-  await step('uitloggen en overal uitloggen', async () => {
+  await step('uitloggen en overal uitloggen: het token werkt meteen nergens meer, ook niet op /v1', async () => {
     const other = (await call('/sign-in/email', { email: a, password: 'herstel2468' })).token;
+    assert.deepEqual([await v1('my_pro', token), await v1('my_pro', other)], [200, 200]);
     assert.equal((await call('/sign-out', {}, token)).status, 200);
     assert.equal((await call('/get-session', undefined, token)).data, null);
+    assert.equal(await v1('my_pro', token), 401);
     assert.ok((await call('/get-session', undefined, other)).data);
+    assert.equal(await v1('my_pro', other), 200);
     const third = (await call('/sign-in/email', { email: a, password: 'herstel2468' })).token;
+    assert.equal(await v1('my_pro', third), 200);
     assert.equal((await call('/revoke-sessions', {}, third)).status, 200);
     assert.equal((await call('/get-session', undefined, other)).data, null);
+    assert.deepEqual([await v1('my_pro', other), await v1('my_pro', third)], [401, 401]);
+  });
+  await step('wachtwoord vergeten: een code werkt één keer, verloopt, en is na 5 foute pogingen ongeldig', async () => {
+    const reset = (otp, password) => call('/email-otp/reset-password', { email: a, otp, password });
+    const code = async () => {
+      assert.equal((await call('/email-otp/request-password-reset', { email: a })).status, 200);
+      return lastMail(a, 'recovery').token;
+    };
+    // Eén keer
+    const c1 = await code();
+    assert.equal((await reset(c1, 'eenmalig1357')).status, 200);
+    assert.notEqual((await reset(c1, 'tweemaal2468')).status, 200, 'dezelfde code een tweede keer');
+    assert.equal((await call('/sign-in/email', { email: a, password: 'eenmalig1357' })).status, 200);
+    // Vijf foute pogingen: daarna werkt ook de juiste code niet meer
+    const c2 = await code();
+    const wrong = c2 === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) assert.notEqual((await reset(wrong, 'fout0000a')).status, 200);
+    assert.notEqual((await reset(c2, 'teveel1357')).status, 200, 'juiste code na 5 foute pogingen');
+    // Verlopen (15 min): nagebootst door de vervaltijd in de database terug te zetten
+    const c3 = await code();
+    sql(`UPDATE verification SET "expiresAt" = '2000-01-01T00:00:00.000Z' WHERE identifier LIKE '%${esc(a)}'`);
+    assert.notEqual((await reset(c3, 'verlopen1357')).status, 200, 'verlopen code');
+    // Al die foute pogingen tellen ook voor de inloglimiet van dit adres (10 per minuut): eerst die teller terug
+    sql('DELETE FROM login_limits');
+    // Het wachtwoord is nog steeds dat van de eerste (geslaagde) code
+    const back = await call('/sign-in/email', { email: a, password: 'eenmalig1357' });
+    assert.equal(back.status, 200, JSON.stringify(back.data));
+    token = back.token;
+  });
+  await step('account verwijderen: het token werkt meteen nergens meer en inloggen kan niet meer', async () => {
+    const d = mail('weg');
+    assert.equal((await call('/sign-up/email', { email: d, password: 'verdwijn1357', name: '' })).status, 200);
+    const t = (await call('/email-otp/verify-email', { email: d, otp: lastMail(d, 'confirmation').token })).token;
+    const t2 = (await call('/sign-in/email', { email: d, password: 'verdwijn1357' })).token;
+    assert.deepEqual([await v1('my_pro', t), await v1('my_pro', t2)], [200, 200]);
+    assert.equal(await v1('delete_account', t), 200);
+    assert.deepEqual([await v1('my_pro', t), await v1('my_pro', t2)], [401, 401]);
+    assert.equal((await call('/get-session', undefined, t2)).data, null);
+    assert.equal((await call('/sign-in/email', { email: d, password: 'verdwijn1357' })).status, 401);
+    assert.equal(sql(`SELECT count(*) n FROM "user" WHERE email = '${esc(d)}'`)[0].n, 0);
   });
   await step('nooit bevestigd en opnieuw registreren: nieuw wachtwoord en nieuwe code', async () => {
     const b = mail('b');
@@ -159,13 +224,15 @@ try {
     assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.equal((await call('/sign-in/email', { email: b, password: 'tweede222' })).status, 200);
   });
-  await step('inloglimiet: hoogstens 10 pogingen per minuut per IP', async () => {
-    sql('DELETE FROM rateLimit');
+  await step('inloglimiet: 10 pogingen per minuut per IP + e-mailadres; een ander adres op hetzelfde netwerk mag nog', async () => {
+    sql('DELETE FROM rateLimit; DELETE FROM login_limits');
     const tries = [];
     for (let i = 0; i < 11; i++) tries.push((await call('/sign-in/email', { email: a, password: 'fout' })).status);
     assert.deepEqual(tries.slice(0, 10), Array(10).fill(401));
     assert.equal(tries[10], 429);
-    sql('DELETE FROM rateLimit');
+    // Zelfde IP (deze controle), ander account: niet buitengesloten
+    assert.equal((await call('/sign-in/email', { email: mail('ander-netwerkgenoot'), password: 'fout' })).status, 401);
+    sql('DELETE FROM rateLimit; DELETE FROM login_limits');
   });
   await step('account uit Supabase (bcrypt): inloggen werkt en het wachtwoord wordt omgezet', async () => {
     const c = mail('supabase');
@@ -182,9 +249,9 @@ try {
     assert.equal((await call('/sign-in/email', { email: c, password: 'oudwachtwoord1' })).status, 200);
   });
   await step('registratielimiet: hoogstens 3 nieuwe accounts per uur per netwerk (bestaande adressen tellen niet)', async () => {
-    // a en b waren de eerste twee nieuwe accounts; d is de derde, e de vierde
-    assert.equal((await call('/sign-up/email', { email: mail('d'), password: 'geheim123', name: '' })).status, 200);
-    const r = await call('/sign-up/email', { email: mail('e'), password: 'geheim123', name: '' });
+    // a, b en "weg" (account verwijderen) waren de eerste drie nieuwe accounts van dit netwerk: d is de vierde. Een
+    // verwijderd account telt mee (anders kon je de limiet omzeilen door te verwijderen en opnieuw te beginnen).
+    const r = await call('/sign-up/email', { email: mail('d'), password: 'geheim123', name: '' });
     assert.equal(r.status, 429, JSON.stringify(r.data));
     assert.match(r.data.message, /new accounts from this network/);
   });

@@ -5,18 +5,18 @@
 // Alleen voor ingelogde gebruikers: het Supabase-token wordt eerst gecontroleerd. De foto wordt niet bewaard.
 // Per account geldt een dagteller (3 gratis, 50 met Pro) in Supabase (photo_quota_use, migratie 20261026000000_pro).
 // Is die er nog niet (PGRST202), dan werkt het zoals vroeger: alleen de rem per uur. Antwoordt de teller niet (storing),
-// dan geen foto (503): anders is er geen grens aan wat het beeldmodel kost.
+// dan geen foto (503): anders is er geen grens aan wat het beeldmodel kost. Vooraf wordt de teller alleen gelezen
+// (photo_quota); hij gaat pas omhoog als het model antwoordde. Valt Llama 4 Scout uit of duurt het te lang, dan het
+// reservemodel; antwoordt geen van beide, dan 503 ai_unavailable (er is niets geteld).
 
 import { backendFetch } from '../_lib/backend.js';
-import { quotaDown } from '../_lib/ai.js';
+import { AiDown, aiDown, modelText, quotaBody, quotaDown, runModel } from '../_lib/ai.js';
 import { readBytes } from '../_lib/body.js';
 
 const SUPABASE_URL = 'https://hvqbqgxpksxmavopngap.supabase.co';
 const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2cWJxZ3hwa3N4bWF2b3BuZ2FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTk1ODAsImV4cCI6MjEwNzczNTU4MH0.SY50CM-HSMNYWOxidnFS8yjve46NdbmKhFwZDPPTI3g';
 const MAX_BYTES = 1_500_000; // een JPEG van 1024 px aan kwaliteit 80 is meestal 100 à 300 kB
 const PER_HOUR = 30;
-// Llama 4 Scout: kan beelden lezen, vraagt geen aparte licentie-aanvaarding (zoals Llama 3.2 Vision) en is goedkoop
-const MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
 // De bereiding en de soort tellen bij het opzoeken (roerei is geen gekookt ei, roggebrood geen wit brood), dus het
 // model moet ze noemen; sausen en dressings apart, want die zie je makkelijk over het hoofd (SU-5).
@@ -51,10 +51,10 @@ function cleanSentence(raw) {
 
 // De dagteller verhogen met het token van de gebruiker zelf (auth.uid() in Supabase). Geeft {quota: {allowed, used,
 // limit, pro}} terug, {missing: true} als de functie nog niet bestaat (PGRST202, migratie niet uitgevoerd: dan
-// alleen de rem per uur), of {down: true} als Supabase niet (goed) antwoordt.
-export async function useQuota(auth, fetcher = fetch) {
+// alleen de rem per uur), of {down: true} als Supabase niet (goed) antwoordt. [rpc] = 'photo_quota' leest alleen.
+export async function useQuota(auth, fetcher = fetch, rpc = 'photo_quota_use') {
   try {
-    const r = await fetcher(`${SUPABASE_URL}/rest/v1/rpc/photo_quota_use`, {
+    const r = await fetcher(`${SUPABASE_URL}/rest/v1/rpc/${rpc}`, {
       method: 'POST',
       headers: { apikey: ANON, Authorization: auth, 'Content-Type': 'application/json' },
       body: '{}',
@@ -65,14 +65,14 @@ export async function useQuota(auth, fetcher = fetch) {
         code = (await r.json())?.code ?? '';
       } catch (_) {}
       if (code === 'PGRST202') return { missing: true };
-      console.log(`photo_quota_use: ${r.status} ${code}`);
+      console.log(`${rpc}: ${r.status} ${code}`);
       return { down: true };
     }
     const q = await r.json();
     if (typeof q?.allowed !== 'boolean') return { down: true };
     return { quota: { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true } };
   } catch (e) {
-    console.log(`photo_quota_use: ${e}`);
+    console.log(`${rpc}: ${e}`);
     return { down: true };
   }
 }
@@ -105,34 +105,47 @@ export async function onRequestPost({ request, env }) {
   const count = seen ? Number(await seen.text()) : 0;
   if (count >= PER_HOUR) return json({ error: 'too_many' }, 429);
 
-  // De dagteller pas na de controles hierboven, zodat een kapotte foto geen foto van vandaag kost
-  const q = await useQuota(auth, fetcher);
+  // De dagteller pas na de controles hierboven lezen, zodat een kapotte foto geen foto van vandaag kost
+  const q = await useQuota(auth, fetcher, 'photo_quota');
   if (q.down) return quotaDown();
-  const quota = q.quota ?? null;
-  if (quota && !quota.allowed) return json({ error: 'quota', used: quota.used, limit: quota.limit, pro: quota.pro }, 429);
+  const before = q.quota ?? null;
+  if (before && !before.allowed) return json({ error: 'quota', used: before.used, limit: before.limit, pro: before.pro }, 429);
   await cache.put(key, new Response(String(count + 1), { headers: { 'Cache-Control': 'max-age=3600' } }));
 
   let b64 = '';
   for (let i = 0; i < photo.length; i += 0x8000) b64 += String.fromCharCode(...photo.subarray(i, i + 0x8000));
+  let r;
   try {
-    const r = await env.AI.run(MODEL, {
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: PROMPT },
-            { type: 'image_url', image_url: { url: `data:image/${png ? 'png' : 'jpeg'};base64,${btoa(b64)}` } },
-          ],
-        },
-      ],
-      max_tokens: 200,
-      temperature: 0.2,
-    });
-    const body = { text: cleanSentence(r?.response) };
-    // De app toont daarmee meteen "nog 1 van 3 gratis foto's vandaag", zonder extra vraag aan de server
-    if (quota) body.quota = { used: quota.used, limit: quota.limit, pro: quota.pro };
-    return json(body);
+    ({ result: r } = await runModel(
+      env.AI,
+      {
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: PROMPT },
+              { type: 'image_url', image_url: { url: `data:image/${png ? 'png' : 'jpeg'};base64,${btoa(b64)}` } },
+            ],
+          },
+        ],
+        max_tokens: 200,
+        temperature: 0.2,
+      },
+      { ms: Number(env.AI_TIMEOUT_MS) || undefined },
+    ));
   } catch (e) {
-    return json({ error: 'failed' }, 502);
+    if (e instanceof AiDown) return aiDown(before);
+    throw e;
   }
+  const body = { text: cleanSentence(modelText(r)) };
+  // Pas nu tellen. Lukt dat niet (net tegelijk op, of een storing), dan gaat het antwoord toch mee
+  let quota = before;
+  if (before) {
+    const after = await useQuota(auth, fetcher);
+    if (after.quota?.allowed) quota = after.quota;
+    else console.log('photo: teller niet verhoogd na een geslaagde aanroep');
+  }
+  // De app toont daarmee meteen "nog 1 van 3 gratis foto's vandaag", zonder extra vraag aan de server
+  if (quota) body.quota = quotaBody(quota);
+  return json(body);
 }

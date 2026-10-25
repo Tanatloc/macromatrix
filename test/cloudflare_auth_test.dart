@@ -85,7 +85,17 @@ void main() {
     await a.signIn('a@example.org', 'x');
     await a.changePassword('oud', 'nieuw123');
     expect(sent.last.headers['authorization'], 'Bearer t');
-    expect(jsonDecode(sent.last.body), {'currentPassword': 'oud', 'newPassword': 'nieuw123'});
+    expect(jsonDecode(sent.last.body), {'currentPassword': 'oud', 'newPassword': 'nieuw123', 'revokeOtherSessions': true});
+  });
+
+  test('wachtwoord gewijzigd: de andere toestellen gaan eruit, dit toestel bewaart het nieuwe token', () async {
+    await auth((_) => ok({'user': user}, token: 'oud-token')).signIn('a@example.org', 'x');
+    final a = auth((r) => ok({'token': 'nieuw-token', 'user': user}, token: r.url.path == '/auth/change-password' ? 'nieuw-token' : null));
+    await a.changePassword('oud', 'nieuw123');
+    expect(a.token, 'nieuw-token');
+    expect(a.user?.id, user['id']);
+    // Ook na een herstart
+    expect(CloudflareAuth(db, base: 'https://x').token, 'nieuw-token');
   });
 
   test('foutcodes zoals bij Supabase (voor authMessage)', () async {

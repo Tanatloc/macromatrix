@@ -1,5 +1,7 @@
 // UserHub: één Durable Object per gebruiker. De toestellen van die gebruiker houden er een WebSocket open; na een
 // geslaagde push (of een sociale gebeurtenis) stuurt de hub een kort bericht, en de toestellen halen dan zelf op.
+// Het toestel (of tabblad) dat de push deed, krijgt dat bericht niet: elke verbinding draagt de client-id van de app
+// (x-client), en een push zegt van welke client hij komt. Per sessie overslaan kan niet: tabbladen delen een sessie.
 // Met de Hibernation-API: een open verbinding zonder verkeer kost niets. "ping" beantwoordt Cloudflare zelf.
 import { DurableObject } from 'cloudflare:workers';
 
@@ -17,15 +19,19 @@ export class UserHub extends DurableObject {
     for (const ws of open.slice(0, Math.max(0, open.length - 19))) ws.close(4000, 'too many connections');
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ sid: request.headers.get('x-session') });
+    server.serializeAttachment({ sid: request.headers.get('x-session'), client: request.headers.get('x-client') || null });
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  /** Bericht naar alle open toestellen, bv. { type: 'changes', tables: ['diary'] }. Geeft het aantal terug. */
-  async notify(message) {
+  /**
+   * Bericht naar alle open toestellen, bv. { type: 'changes', tables: ['diary'] }, behalve de verbindingen van client
+   * [except] (wie de wijziging zelf stuurde). Geeft het aantal terug.
+   */
+  async notify(message, except = null) {
     const text = JSON.stringify(message);
     let n = 0;
     for (const ws of this.ctx.getWebSockets()) {
+      if (except && ws.deserializeAttachment()?.client === except) continue;
       try {
         ws.send(text);
         n++;

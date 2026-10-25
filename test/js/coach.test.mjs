@@ -211,6 +211,7 @@ test('stripMarkdown en withTimeout', async () => {
 // --- De functie zelf, met een nagebootste Supabase, cache en tekstmodel
 
 let rpc;
+let charged;
 let aiCalls;
 let lastInput;
 let reply;
@@ -218,6 +219,7 @@ const store = new Map();
 
 beforeEach(() => {
   aiCalls = 0;
+  charged = 0;
   lastInput = null;
   store.clear();
   rpc = { status: 200, body: { allowed: true, used: 1, limit: 3, pro: true } };
@@ -230,10 +232,14 @@ beforeEach(() => {
   };
   globalThis.fetch = async (url, init) => {
     if (String(url).endsWith('/auth/v1/user')) return Response.json({ id: 'user-1' });
-    if (String(url).endsWith('/rest/v1/rpc/ai_quota_use')) {
+    // rpc.body is de stand na het tellen; ai_quota (alleen lezen, vooraf) geeft de stand daarvoor
+    const m = String(url).match(/\/rest\/v1\/rpc\/(ai_quota_use|ai_quota)$/);
+    if (m) {
       assert.deepEqual(JSON.parse(init.body), { p_kind: 'coach' });
       if (rpc === 'throw') throw new TypeError('fetch failed');
-      return Response.json(rpc.body, { status: rpc.status });
+      if (m[1] === 'ai_quota_use') charged++;
+      const before = rpc.body?.allowed ? { ...rpc.body, used: Math.max(0, rpc.body.used - 1) } : rpc.body;
+      return Response.json(m[1] === 'ai_quota' ? before : rpc.body, { status: rpc.status });
     }
     throw new Error(`onverwachte fetch ${url}`);
   };
@@ -299,9 +305,11 @@ test('migratie ontbreekt (PGRST202 of oude soortenlijst): not_configured, geen m
   assert.equal(aiCalls, 0);
 });
 
-test('Supabase onbereikbaar: failed, geen model', async () => {
+test('Supabase onbereikbaar: 503 unavailable, geen model', async () => {
   rpc = 'throw';
-  assert.equal((await onRequestPost({ request: req(week()), env })).status, 502);
+  const res = await onRequestPost({ request: req(week()), env });
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'unavailable' });
   assert.equal(aiCalls, 0);
 });
 
@@ -318,8 +326,10 @@ test('gratis telt per week: de app hoort per week, ook als de teller op is', asy
 test('ongeldige JSON van het model: een nette fout met de teller', async () => {
   reply = { response: 'Sure! Here is your summary: great week' };
   const res = await onRequestPost({ request: req(week()), env });
-  assert.equal(res.status, 502);
-  assert.deepEqual(await res.json(), { error: 'bad_output', quota: { used: 1, limit: 3, pro: true } });
+  // Geen bruikbare samenvatting: niets geteld, de stand van vóór de vraag gaat mee
+  assert.equal(res.status, 422);
+  assert.deepEqual(await res.json(), { error: 'bad_output', quota: { used: 0, limit: 3, pro: true } });
+  assert.equal(charged, 0);
   reply = { response: '```json\n{"summary": "**Steady** week with 5 days logged and fibre a bit low.", "tips": ["Add a pear."]}\n```' };
   const ok = await onRequestPost({ request: req(week()), env });
   assert.equal(ok.status, 200);
@@ -354,7 +364,7 @@ test('antwoord in de verkeerde taal: één nieuwe poging, en daarna bad_output',
   replies.push(english, english, english);
   inputs.length = 0;
   const bad = await onRequestPost({ request: req(week({ lang: 'nl' })), env: seq });
-  assert.equal(bad.status, 502);
+  assert.equal(bad.status, 422);
   assert.equal((await bad.json()).error, 'bad_output');
   assert.equal(inputs.length, 2);
   // Engels gevraagd en Nederlands gekregen: ook een nieuwe poging
@@ -382,16 +392,26 @@ test('voorstellen en vorige week gaan mee naar het model', async () => {
   assert.equal(sent.energy_note, null);
 });
 
-test('model faalt: failed', async () => {
+test('model faalt: 503 ai_unavailable met de teller, en niets geteld', async () => {
   reply = 'throw';
-  assert.equal((await onRequestPost({ request: req(week()), env })).status, 502);
+  const res = await onRequestPost({ request: req(week()), env });
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'ai_unavailable', retry: true, quota: { used: 0, limit: 3, pro: true } });
+  assert.equal(charged, 0);
 });
 
-test('model antwoordt niet op tijd: 504 timeout', async () => {
+test('model antwoordt niet op tijd: 503 ai_unavailable, niets geteld', async () => {
   reply = 'hang';
   const res = await onRequestPost({ request: req(week()), env: { ...env, COACH_TIMEOUT_MS: '20' } });
-  assert.equal(res.status, 504);
-  assert.equal((await res.json()).error, 'timeout');
+  assert.equal(res.status, 503);
+  assert.equal((await res.json()).error, 'ai_unavailable');
+  assert.equal(charged, 0);
+});
+
+test('geslaagd: pas na het antwoord één keer geteld', async () => {
+  const res = await onRequestPost({ request: req(week()), env });
+  assert.equal(res.status, 200);
+  assert.equal(charged, 1);
 });
 
 test('te groot: 413 zonder teller of model', async () => {

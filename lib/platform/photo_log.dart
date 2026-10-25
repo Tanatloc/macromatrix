@@ -58,7 +58,8 @@ class PhotoLog {
       }
       if (res.statusCode != 200) {
         final code = '${j['error'] ?? 'failed'}';
-        throw PhotoLogException(code, quota: code == 'quota' ? PhotoQuota.fromJson(j) : null);
+        // Bij quota staat de stand in het antwoord zelf, bij andere fouten (ai_unavailable) onder quota
+        throw PhotoLogException(code, quota: PhotoQuota.fromJson(code == 'quota' ? j : j['quota']));
       }
       lastQuota = PhotoQuota.fromJson(j['quota']);
       return ((j['text'] as String?) ?? '').trim();

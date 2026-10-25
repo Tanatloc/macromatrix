@@ -32,10 +32,16 @@ export async function checkTicket(env, ticket, now = Date.now()) {
   return live ? { uid, sid } : null;
 }
 
-/** Melding naar alle toestellen van een gebruiker; fouten worden genegeerd (het is maar een seintje). */
-export async function notifyUser(env, uid, message) {
+/** Een client-id van de app (willekeurig per app-instantie), of null als die ontbreekt of niet klopt. */
+export const clientId = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null);
+
+/**
+ * Melding naar alle toestellen van een gebruiker, behalve client [except]; fouten worden genegeerd (het is maar een
+ * seintje).
+ */
+export async function notifyUser(env, uid, message, except = null) {
   try {
-    await hubFor(env, uid).notify(message);
+    await hubFor(env, uid).notify(message, except);
   } catch (e) {
     console.warn('hub-melding mislukt', e?.message ?? e);
   }

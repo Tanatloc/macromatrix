@@ -124,8 +124,9 @@ test('friend_add: not_found, self, requested (met seintje), already en accepted'
 });
 
 test('friend_add: een blokkade in welke richting ook geeft not_found', async () => {
-  const { call, sql } = setup();
+  const { call, sql, befriend } = setup();
   const codes = await profiles(call);
+  befriend(B, A, 0); // blokkeren kan alleen wie je kent: hier een verzoek
   await call(A, 'friend_block', { p_other: B });
   assert.equal(await call(B, 'friend_add', { p_code: codes[A] }), 'not_found');
   assert.equal(await call(A, 'friend_add', { p_code: codes[B] }), 'not_found');
@@ -324,7 +325,8 @@ test('friend_block: jezelf, null of een onbekende gebruiker doet niets', async (
 });
 
 test('friend_block: hoogstens 1000 blokkades', async () => {
-  const { db, call, sql } = setup();
+  const { db, call, sql, befriend } = setup();
+  befriend(A, B, 0);
   const ins = db.raw.prepare('INSERT INTO user_blocks (blocker, blocked) VALUES (?, ?)');
   for (let i = 0; i < 1000; i++) {
     const u = `eeeeeeee-0000-4000-8000-${String(i).padStart(12, '0')}`;
@@ -336,9 +338,12 @@ test('friend_block: hoogstens 1000 blokkades', async () => {
 });
 
 test('friend_blocked_list en friend_unblock: alleen je eigen blokkades, nieuwste eerst', async () => {
-  const { call, sql } = setup();
+  const { call, sql, befriend } = setup();
   await profiles(call);
   sql("UPDATE friend_profiles SET avatar = 'avC' WHERE user_id = ?", C);
+  befriend(A, B, 0);
+  befriend(C, A, 0);
+  befriend(D, A, 0);
   await call(A, 'friend_block', { p_other: B }, new Date('2026-10-28T10:00:00.000Z'));
   await call(A, 'friend_block', { p_other: C }, new Date('2026-10-28T11:00:00.000Z'));
   await call(D, 'friend_block', { p_other: A });
@@ -492,4 +497,21 @@ test('battle_list: vorm en types, punten van beide kanten, nieuwste week eerst, 
   // De battle van B en C ziet A niet; D heeft er geen
   assert.ok(!rows.some((r) => r.id === 'other'));
   assert.deepEqual(await call(D, 'battle_list'), []);
+});
+
+test('friend_block: alleen wie je kent; een willekeurige id onthult geen naam of avatar en wordt niet bewaard', async () => {
+  const { call, sql, befriend } = setup();
+  await profiles(call);
+  // Geen band met B: niets bewaard, en de lijst toont B niet
+  assert.equal(await call(A, 'friend_block', { p_other: B }), null);
+  assert.deepEqual(await call(A, 'friend_blocked_list'), []);
+  assert.equal(sql('SELECT count(*) AS n FROM user_blocks')[0].n, 0);
+  // Een verzoek (ook van de ander) is een band
+  befriend(B, A, 0);
+  await call(A, 'friend_block', { p_other: B });
+  assert.deepEqual((await call(A, 'friend_blocked_list')).map((r) => r.other), [B]);
+  // Een battle is een band, ook zonder vriendschap
+  sql("INSERT INTO battles (id, challenger, opponent, week, accepted) VALUES ('bt-1', ?, ?, '2026-10-26', 0)", C, A);
+  await call(A, 'friend_block', { p_other: C });
+  assert.deepEqual((await call(A, 'friend_blocked_list')).map((r) => r.other).sort(), [B, C].sort());
 });

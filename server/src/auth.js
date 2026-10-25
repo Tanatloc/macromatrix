@@ -133,6 +133,9 @@ function buildAuth(env) {
           const problem = passwordProblem(pw);
           if (problem) throw new APIError('BAD_REQUEST', { code: 'WEAK_PASSWORD', message: problem });
         }
+        // Wachtwoord gewijzigd: de andere toestellen altijd uitloggen (ook als een oudere app het niet vraagt). Dit
+        // toestel krijgt een nieuw token in het antwoord.
+        if (p === '/change-password' && ctx.body) return { context: { ...ctx, body: { ...ctx.body, revokeOtherSessions: true } } };
       }),
       after: createAuthMiddleware(async (ctx) => {
         // Ingelogd met een wachtwoord uit Supabase: meteen omzetten naar scrypt
@@ -147,7 +150,7 @@ function buildAuth(env) {
         // Alle sessies weg (overal uitloggen, wachtwoord vergeten): ook de live verbindingen sluiten
         if (!(ctx.context.returned instanceof APIError)) {
           let uid = null;
-          if (ctx.path === '/revoke-sessions' || (ctx.path === '/change-password' && ctx.body?.revokeOtherSessions)) uid = ctx.context.session?.user.id;
+          if (ctx.path === '/revoke-sessions' || ctx.path === '/change-password') uid = ctx.context.session?.user.id;
           if (ctx.path === '/email-otp/reset-password' && ctx.body?.email) uid = (await ctx.context.internalAdapter.findUserByEmail(ctx.body.email.toLowerCase()))?.user.id;
           if (uid) await hubFor(env, uid).closeAll().catch(() => {});
         }
@@ -162,8 +165,9 @@ function buildAuth(env) {
         expiresIn: 15 * 60,
         allowedAttempts: 5,
         storeOTP: 'hashed',
-        // Per IP en pad; veel mensen delen een IP (gsm-netwerken). Codes raden blokkeert allowedAttempts al.
-        rateLimit: { window: 60, max: 10 },
+        // Per IP en pad, alleen tegen grof misbruik: veel mensen delen een IP (gsm-netwerken). De echte limiet is per
+        // IP + e-mailadres (src/login_limit.js); codes raden blokkeert allowedAttempts al.
+        rateLimit: { window: 60, max: 60 },
         overrideDefaultEmailVerification: true,
         async sendVerificationOTP({ email, otp, type }) {
           if (type === 'email-verification') await sendMail(env, { to: email, kind: 'confirmation', token: otp });
@@ -177,7 +181,9 @@ function buildAuth(env) {
       storage: 'database',
       window: 60,
       max: 100,
-      customRules: { '/sign-in/email': { window: 60, max: 10 }, '/sign-up/email': { window: 60, max: 10 } },
+      // Inloggen per IP ruim (60/min, tegen grof misbruik): de echte limiet is 10/min per IP + e-mailadres
+      // (src/login_limit.js). Registreren blijft 10/min per IP, met daarnaast 3 per uur per netwerk.
+      customRules: { '/sign-in/email': { window: 60, max: 60 }, '/sign-up/email': { window: 60, max: 10 } },
     },
     advanced: {
       ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
