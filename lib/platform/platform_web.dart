@@ -104,6 +104,9 @@ void _listenForRelease() {
   } catch (_) {}
 }
 
+/// De pagina herladen (nieuwe versie van de webapp), na het wegschrijven van de gegevens.
+Future<void> reloadApp() => _releaseAndReload();
+
 Future<void> _releaseAndReload() async {
   try {
     await _userFs?.flush();

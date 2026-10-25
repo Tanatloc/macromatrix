@@ -13,9 +13,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../data/backup.dart';
 import '../../data/export.dart';
 import '../../nutrition/targets.dart';
-import '../../platform/platform.dart' show askPersistentStorage, saveTextFile;
+import '../../platform/platform.dart' show askPersistentStorage, reloadApp, saveTextFile;
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
+import '../../sync/update_check.dart';
 import '../shell.dart';
 import '../theme.dart';
 import '../widgets/account_card.dart' show signOutAsking;
@@ -43,7 +44,7 @@ bool get runsOnWeb => debugWebOverride ?? kIsWeb;
 /// Google Play wijst niet naar een APK buiten de Play Store (GP-18). Op het web gewoon de homepage.
 String get aboutPagePath => runsOnWeb ? '/' : '/about/';
 
-enum GateScreen { loading, welcome, otherAccount, firstSync, profileSetup, app }
+enum GateScreen { updateRequired, loading, welcome, otherAccount, firstSync, profileSetup, app }
 
 /// Wat [AuthGate] toont. Zonder account (bewust gekozen) kom je overal in de app, ook in de browser: je gegevens
 /// staan dan in de opslag van de browser (IndexedDB, zie platform_web.dart).
@@ -51,6 +52,7 @@ enum GateScreen { loading, welcome, otherAccount, firstSync, profileSetup, app }
 /// [otherAccount]: op dit toestel staan nog niet-verstuurde gegevens van een ander account ([Account.otherAccountData]).
 /// [firstSync]: ingelogd, maar nog nooit iets van de server opgehaald ([Account.needsFirstSync]). Zonder profiel dan
 /// geen "Over jou" (dat zou je echte profiel overschrijven), maar wachten of opnieuw proberen.
+/// [updateRequired]: deze versie is te oud ([UpdateCheck.required]); gaat voor alles.
 GateScreen gateScreen({
   required bool ready,
   required bool configured,
@@ -60,7 +62,9 @@ GateScreen gateScreen({
   bool fetching = false,
   bool otherAccount = false,
   bool firstSync = false,
+  bool updateRequired = false,
 }) {
+  if (updateRequired) return GateScreen.updateRequired;
   if (!ready) return GateScreen.loading;
   if (configured && !signedIn && !localOnly) return GateScreen.welcome;
   if (configured && signedIn && otherAccount) return GateScreen.otherAccount;
@@ -78,7 +82,9 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = context.watch<Account>();
     final s = context.watch<AppState>();
+    final update = context.watch<UpdateCheck?>();
     return switch (gateScreen(
+      updateRequired: update?.required ?? false,
       ready: a.ready,
       configured: Account.configured,
       signedIn: a.signedIn,
@@ -88,6 +94,7 @@ class AuthGate extends StatelessWidget {
       otherAccount: a.otherAccountData,
       firstSync: a.needsFirstSync,
     )) {
+      GateScreen.updateRequired => UpdateRequiredScreen(url: update!.updateUrl),
       GateScreen.loading => Scaffold(backgroundColor: context.pal.bg, body: const SizedBox.expand()),
       GateScreen.welcome => const WelcomeScreen(),
       GateScreen.otherAccount => const OtherAccountScreen(),
@@ -180,6 +187,31 @@ class FirstSyncScreen extends StatelessWidget {
         FilledButton(onPressed: a.sync, child: Text(tr('Try again', 'Opnieuw proberen'))),
         const SizedBox(height: 8),
         TextButton(onPressed: () => signOutAsking(context, a), child: Text(tr('Log out', 'Uitloggen'))),
+      ],
+    );
+  }
+}
+
+/// Deze versie is te oud ([UpdateCheck]). Je gegevens blijven op dit toestel staan en gaan na de update mee.
+class UpdateRequiredScreen extends StatelessWidget {
+  const UpdateRequiredScreen({super.key, required this.url});
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GateMessage(
+      key: const ValueKey('update-required'),
+      icon: Icons.system_update_outlined,
+      title: tr('Please update MacroMatrix', 'Werk MacroMatrix bij'),
+      text: tr(
+        'This version no longer works with our server. Your data is safe on this device and will sync again after the update.',
+        'Deze versie werkt niet meer met onze server. Je gegevens staan veilig op dit toestel en worden na de update weer gesynchroniseerd.',
+      ),
+      children: [
+        FilledButton(
+          onPressed: runsOnWeb ? reloadApp : () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+          child: Text(runsOnWeb ? tr('Reload', 'Herladen') : tr('Get the new version', 'Nieuwe versie downloaden')),
+        ),
       ],
     );
   }

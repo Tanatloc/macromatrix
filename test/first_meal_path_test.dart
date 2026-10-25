@@ -32,7 +32,7 @@ class _Gate extends StatelessWidget {
     final a = context.watch<Account>();
     final s = context.watch<AppState>();
     return switch (gateScreen(ready: true, configured: true, signedIn: false, localOnly: a.localOnly, hasProfile: s.hasProfile)) {
-      GateScreen.loading || GateScreen.otherAccount || GateScreen.firstSync => const SizedBox.shrink(),
+      GateScreen.updateRequired || GateScreen.loading || GateScreen.otherAccount || GateScreen.firstSync => const SizedBox.shrink(),
       GateScreen.welcome => const WelcomeScreen(),
       GateScreen.profileSetup => const ProfileSetupScreen(),
       GateScreen.app => const DiaryScreen(),

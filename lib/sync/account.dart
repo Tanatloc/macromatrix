@@ -107,6 +107,16 @@ class Account extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Deze versie is te oud ([UpdateCheck.required]): niets meer versturen of ophalen. Wat je intussen wijzigt,
+  /// blijft lokaal staan als "niet verstuurd" en gaat mee na de update.
+  bool get paused => _paused;
+  bool _paused = false;
+  set paused(bool on) {
+    if (on == _paused) return;
+    _paused = on;
+    if (!on) unawaited(sync());
+  }
+
   SupabaseClient? _client;
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<void>? _dbSub;
@@ -415,7 +425,7 @@ class Account extends ChangeNotifier {
 
   /// Na een korte pauze synchroniseren (na wijzigingen), zodat niet elke tik een verzoek wordt.
   void schedule() {
-    if (!signedIn) return;
+    if (!signedIn || _paused) return;
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 3), () {
       if (db.hasDirtyRows) sync();
@@ -426,7 +436,7 @@ class Account extends ChangeNotifier {
   Future<void> sync() {
     final u = user;
     // Nooit gegevens van een ander account versturen (zie [otherAccountData])
-    if (u == null || _closing || _otherPending || _ownerId != u.id) return Future.value();
+    if (u == null || _paused || _closing || _otherPending || _ownerId != u.id) return Future.value();
     if (_running != null) {
       _again = true;
       return _running!;

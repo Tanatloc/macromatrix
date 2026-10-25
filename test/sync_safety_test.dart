@@ -352,6 +352,31 @@ void main() {
     });
   });
 
+  group('update nodig (v1.17.4)', () {
+    test('Account.paused: niets versturen; na het vrijgeven gaat alles alsnog mee', () async {
+      final account = await _signedIn(a.db, server, 'user-1');
+      await account.debugAfterLogin();
+      account.paused = true;
+      final before = server.pushes;
+      a.db.addEntry(day: _day, meal: Meal.lunch, food: _banana, grams: 100, quantity: 100);
+      await account.sync();
+      expect(server.pushes, before);
+      expect(a.db.hasDirtyRows, isTrue);
+      account.paused = false;
+      await account.sync();
+      expect(server.pushes, greaterThan(before));
+      expect(a.db.hasDirtyRows, isFalse);
+      account.dispose();
+    });
+
+    test('het updatescherm gaat voor alles', () {
+      expect(
+        gateScreen(updateRequired: true, ready: false, configured: true, signedIn: true, localOnly: false, hasProfile: true),
+        GateScreen.updateRequired,
+      );
+    });
+  });
+
   group('6. mislukte eerste synchronisatie: geen "Over jou"', () {
     test('zonder geslaagd ophalen van de instellingen is er geen lastSync', () async {
       server.brokenPull.add('settings');

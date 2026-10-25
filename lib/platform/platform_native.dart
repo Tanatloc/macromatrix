@@ -26,6 +26,9 @@ Future<bool> claimUserDatabase() async => true;
 
 Future<void> takeOverUserDatabase() async {}
 
+/// Alleen op het web: daar volstaat herladen voor een nieuwe versie.
+Future<void> reloadApp() async {}
+
 /// Opent de ingebouwde voedingsdatabase (gekopieerd naar de app-map, opnieuw na een update) en de
 /// database van de gebruiker.
 Future<(FoodDb, UserDb)> openDatabases() async {

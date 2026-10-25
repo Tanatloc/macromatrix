@@ -12,6 +12,7 @@ import 'platform/platform.dart';
 import 'platform/reminders.dart';
 import 'state/app_state.dart';
 import 'sync/account.dart';
+import 'sync/update_check.dart';
 import 'i18n.dart';
 import 'sync/features.dart';
 import 'sync/friends.dart';
@@ -70,6 +71,13 @@ Future<void> main() async {
   final pro = Pro(account, purchases: purchaseProviderFor(account));
   // Vroege toegang: welke functies aan staan (bij de start, na het inloggen en als Pro verandert)
   final features = Features(account, pro: pro);
+  // Te oude versie (na een serververhuis): alleen het updatescherm, en de sync ligt stil
+  final updates = UpdateCheck(user);
+  void applyUpdate() => account.paused = updates.required;
+  applyUpdate();
+  updates
+    ..addListener(applyUpdate)
+    ..init();
 
   runApp(
     MultiProvider(
@@ -81,6 +89,7 @@ Future<void> main() async {
         ChangeNotifierProvider(lazy: false, create: (_) => Friends(state, account, pro: pro)),
         ChangeNotifierProvider.value(value: pro),
         ChangeNotifierProvider.value(value: features),
+        ChangeNotifierProvider.value(value: updates),
       ],
       child: const MacroMatrixApp(),
     ),
