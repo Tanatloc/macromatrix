@@ -2354,6 +2354,13 @@ class AppState extends ChangeNotifier {
     return result;
   }
 
+  /// Alles wat uit [source] geïmporteerd werd, weer weghalen. Geeft het aantal verwijderde regels terug.
+  int removeImported(ImportSource source) {
+    final n = user.removeImported(source.code);
+    _refresh();
+    return n;
+  }
+
   void addCustomBiometricType(String name, String unit) {
     final list = [...((user.setting('customBiometrics')?['types'] as List?) ?? const [])];
     list.add({'name': name, 'unit': unit});

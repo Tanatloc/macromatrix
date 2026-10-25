@@ -173,4 +173,60 @@ void main() {
       expect(batch.files.single.$2, 'niet herkend, overgeslagen');
     });
   });
+
+  group('twee imports na elkaar (dagtotalen en producten)', () {
+    const daily = 'Date,Energy (kcal),Protein (g),Carbs (g),Fat (g),Completed\n2026-10-14,957,40,67,24,true\n2026-10-15,1800,80,200,60,true\n';
+    ImportBatch read(String name, String text) => Importer(ImportSource.cronometer).read([file(name, text)]);
+    int active(UserDb db, String day) => db.entriesFor(day).length;
+
+    test('eerst dagtotalen, dan producten: de producten vervangen het dagtotaal van die dag', () {
+      final db = UserDb(sqlite3.openInMemory());
+      expect(db.importBatch(read('dailysummary.csv', daily)), (2, 0));
+      final items = read('servings.csv', cronometerServings);
+      expect(db.importBatch(items), (4, 0));
+      expect(items.replacedTotals, 1);
+      expect(db.entriesFor('2026-10-14').map((e) => e.foodRef), everyElement(isNot(endsWith(':totaal'))));
+      expect(active(db, '2026-10-14'), 4);
+      // Een dag zonder producten houdt zijn dagtotaal
+      expect(db.entriesFor('2026-10-15').single.foodRef, 'import:cm:totaal');
+    });
+
+    test('eerst producten, dan dagtotalen: het dagtotaal van die dag wordt overgeslagen', () {
+      final db = UserDb(sqlite3.openInMemory());
+      db.importBatch(read('servings.csv', cronometerServings));
+      final totals = read('dailysummary.csv', daily);
+      expect(db.importBatch(totals), (1, 1));
+      expect(active(db, '2026-10-14'), 4);
+      expect(db.entriesFor('2026-10-15').single.foodRef, 'import:cm:totaal');
+    });
+
+    test('MyFitnessPal: dezelfde maaltijdtotalen twee keer (overlappende exports) geven geen dubbels', () {
+      const a = 'Date,Meal,Calories,Protein (g)\n2026-10-14,Breakfast,450,25\n2026-10-15,Dinner,700,45\n';
+      const b = 'Date,Meal,Calories,Protein (g)\n2026-10-15,Dinner,700,45\n2026-10-16,Lunch,500,30\n';
+      final db = UserDb(sqlite3.openInMemory());
+      expect(db.importBatch(Importer(ImportSource.myfitnesspal).read([file('Nutrition-Summary-a.csv', a)])), (2, 0));
+      expect(db.importBatch(Importer(ImportSource.myfitnesspal).read([file('Nutrition-Summary-b.csv', b)])), (1, 1));
+      expect(db.entriesFor('2026-10-15'), hasLength(1));
+    });
+
+    test('import ongedaan maken: alleen wat uit die app kwam', () {
+      final db = UserDb(sqlite3.openInMemory());
+      db.importBatch(
+        Importer(ImportSource.cronometer).read([
+          file('servings.csv', cronometerServings),
+          file('exercises.csv', cronometerExercises),
+          file('biometrics.csv', cronometerBiometrics),
+        ]),
+      );
+      final (entries, workouts, measurements) = db.importedCounts('cm');
+      expect(entries, 4);
+      expect(workouts, 1);
+      expect(measurements, greaterThan(0));
+      expect(db.importedCounts('mfp'), (0, 0, 0));
+      expect(db.removeImported('cm'), entries + workouts + measurements);
+      expect(db.importedCounts('cm'), (0, 0, 0));
+      expect(db.entriesFor('2026-10-14'), isEmpty);
+      expect(db.hasDirtyRows, isTrue, reason: 'het verwijderen gaat ook naar je andere toestellen');
+    });
+  });
 }

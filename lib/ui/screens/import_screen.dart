@@ -130,13 +130,73 @@ class _ImportScreenState extends State<ImportScreen> {
                     if (_busy) const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator(minHeight: 2)),
                     if (_error != null) ...[const SizedBox(height: 12), _box(p, _error!, p.highSoft, p.high)],
                     if (_batch != null && _result == null) ...[const SizedBox(height: 12), _preview(p, _batch!)],
-                    if (_result != null) ...[const SizedBox(height: 12), _done(p, _result!)],
+                    if (_result != null) ...[const SizedBox(height: 12), _done(p, _result!, _batch?.replacedTotals ?? 0)],
+                    _removeImported(p),
                   ],
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Een import ongedaan maken: alles wat uit deze app kwam weer weg, na bevestiging. Alleen als er iets is.
+  Widget _removeImported(Palette p) {
+    final s = context.watch<AppState>();
+    final (entries, workouts, measurements) = s.user.importedCounts(_source.code);
+    final total = entries + workouts + measurements;
+    if (total == 0) return const SizedBox.shrink();
+    final parts = [
+      if (entries > 0) tr('${fmtInt(entries)} diary ${entries == 1 ? 'entry' : 'entries'}', '${fmtInt(entries)} dagboekregels'),
+      if (workouts > 0) tr('${fmtInt(workouts)} ${workouts == 1 ? 'workout' : 'workouts'}', '${fmtInt(workouts)} keer beweging'),
+      if (measurements > 0)
+        tr('${fmtInt(measurements)} ${measurements == 1 ? 'measurement' : 'measurements'}', '${fmtInt(measurements)} metingen'),
+    ].join(', ');
+    Future<void> confirm() async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(tr('Remove imported data?', 'Geïmporteerde gegevens verwijderen?')),
+          content: Text(
+            tr(
+              'This removes everything imported from ${_source.label}: $parts. What you entered yourself stays, and so do notes. '
+                  'You can import again afterwards.',
+              'Dit haalt alles weg wat uit ${_source.label} kwam: $parts. Wat je zelf invoerde blijft staan, notities ook. '
+                  'Je kan daarna opnieuw importeren.',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Remove', 'Verwijderen'))),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      final n = context.read<AppState>().removeImported(_source);
+      setState(() => _result = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr('Removed ${fmtInt(n)} imported items.', '${fmtInt(n)} geïmporteerde regels verwijderd.'))),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tr('Already imported from ${_source.label}: $parts.', 'Al geïmporteerd uit ${_source.label}: $parts.'),
+            style: TextStyle(fontSize: 12.5, color: p.ink3),
+          ),
+          TextButton.icon(
+            key: const ValueKey('remove-imported'),
+            onPressed: _busy ? null : confirm,
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: Text(tr('Remove data imported from ${_source.label}', 'Gegevens uit ${_source.label} verwijderen')),
+          ),
+        ],
       ),
     );
   }
@@ -266,7 +326,7 @@ class _ImportScreenState extends State<ImportScreen> {
     ),
   );
 
-  Widget _done(Palette p, (int, int) r) => Panel(
+  Widget _done(Palette p, (int, int) r, int replaced) => Panel(
     color: p.okSoft,
     borderColor: p.okSoft,
     shadow: false,
@@ -287,9 +347,13 @@ class _ImportScreenState extends State<ImportScreen> {
         Text(
           tr(
             'Added ${fmtInt(r.$1)} ${r.$1 == 1 ? 'entry' : 'entries'}'
-                '${r.$2 > 0 ? ', ${fmtInt(r.$2)} were already there' : ''}. With an account they go to your other devices automatically.',
+                '${r.$2 > 0 ? ', ${fmtInt(r.$2)} were already there' : ''}'
+                '${replaced > 0 ? '. ${fmtInt(replaced)} daily ${replaced == 1 ? 'total was' : 'totals were'} replaced by the separate foods' : ''}'
+                '. With an account they go to your other devices automatically.',
             '${fmtInt(r.$1)} ${r.$1 == 1 ? 'regel' : 'regels'} toegevoegd'
-                '${r.$2 > 0 ? ', ${fmtInt(r.$2)} stonden er al' : ''}. Met een account gaan ze vanzelf naar je andere toestellen.',
+                '${r.$2 > 0 ? ', ${fmtInt(r.$2)} stonden er al' : ''}'
+                '${replaced > 0 ? '. ${fmtInt(replaced)} ${replaced == 1 ? 'dagtotaal werd' : 'dagtotalen werden'} vervangen door de losse producten' : ''}'
+                '. Met een account gaan ze vanzelf naar je andere toestellen.',
           ),
           style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
         ),
@@ -313,22 +377,32 @@ class _Steps extends StatelessWidget {
         tr('On a computer, go to cronometer.com and log in.', 'Ga op een computer naar cronometer.com en log in.'),
         tr('Open Settings → Account and look for "Export Data".', 'Open Settings (instellingen) → Account en zoek "Export Data".'),
         tr(
-          'Choose "All time" and download each type: Food & Recipe Entries (your diary), Exercises, Biometrics and Notes. You get a CSV file per type.',
-          'Kies "All time" en download elk type: Food & Recipe Entries (je dagboek), Exercises, Biometrics en Notes. Je krijgt per type een CSV-bestand.',
+          'Choose "All time" and click "Export Food & Recipe Entries": that is your diary, food by food. Add Exercises, Biometrics and Notes if you want them. You get a CSV file per type.',
+          'Kies "All time" en klik "Export Food & Recipe Entries": dat is je dagboek, product per product. Neem er Exercises, Biometrics en Notes bij als je die wilt. Je krijgt per type een CSV-bestand.',
+        ),
+        tr(
+          'You don\'t need "Export Daily Nutrition": those are only daily totals of the same food.',
+          '"Export Daily Nutrition" heb je niet nodig: dat zijn alleen dagtotalen van hetzelfde eten.',
         ),
         tr('Choose all those files at once below.', 'Kies hieronder al die bestanden tegelijk.'),
       ],
       ImportSource.myfitnesspal => [
-        tr('On a computer, go to myfitnesspal.com and log in.', 'Ga op een computer naar myfitnesspal.com en log in.'),
         tr(
-          'Open Settings → Account (or Privacy) and choose "Download your data". With Premium you can also use Reports → Export Data.',
-          'Open Settings → Account (of Privacy) en kies "Download your data". Met Premium kan het ook via Reports → Export Data.',
+          'Exporting needs MyFitnessPal Premium; free accounts have no export.',
+          'Exporteren kan alleen met MyFitnessPal Premium; een gratis account heeft geen export.',
         ),
         tr(
-          'Within a few hours you get an email with a ZIP file. Download it.',
-          'Je krijgt binnen een paar uur een mail met een ZIP-bestand. Download het.',
+          'On the website: log in on myfitnesspal.com, click Reports, then Export on the right. In the app: More → Nutrition (or Progress) → the export icon at the top right.',
+          'Op de website: log in op myfitnesspal.com, klik Reports en dan Export rechts. In de app: More → Nutrition (of Progress) → het exporticoon rechtsboven.',
         ),
-        tr('Choose that ZIP file below; no need to unzip it.', 'Kies hieronder dat ZIP-bestand; uitpakken hoeft niet.'),
+        tr(
+          'Choose the date range (all the time you used it) and tap Export. You get an email; click "Download Files" to get a ZIP file.',
+          'Kies de periode (de hele tijd dat je het gebruikte) en tik Export. Je krijgt een mail; klik "Download Files" voor een ZIP-bestand.',
+        ),
+        tr(
+          'Choose that ZIP file below; no need to unzip it. MyFitnessPal only exports totals per meal, so each meal comes in as one entry, without the separate foods.',
+          'Kies hieronder dat ZIP-bestand; uitpakken hoeft niet. MyFitnessPal exporteert alleen totalen per maaltijd: elke maaltijd komt binnen als één regel, zonder de producten apart.',
+        ),
       ],
     };
     return Panel(

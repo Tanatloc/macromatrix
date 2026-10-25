@@ -104,6 +104,9 @@ class ImportBatch {
   /// De eenheid die gebruikt werd voor gewichten zonder eenheid (gekozen, of geraden).
   WeightUnit weightUnitUsed = WeightUnit.kg;
 
+  /// Na het bewaren: hoeveel dagtotalen die al in het dagboek stonden, vervangen werden door de losse producten.
+  int replacedTotals = 0;
+
   Set<String> get days => {for (final e in entries) e.day, for (final b in biometrics) b.day, for (final x in exercises) x.day};
   bool get isEmpty => entries.isEmpty && exercises.isEmpty && biometrics.isEmpty && notes.isEmpty;
 }
@@ -541,8 +544,10 @@ class Importer {
               '${source.label} gaf alleen totalen per maaltijd: die komen als één regel per maaltijd, zonder de producten apart.',
             )
           : tr(
-              '${source.label} only provided daily totals: they come in as one entry per day.',
-              '${source.label} gaf alleen dagtotalen: die komen als één regel per dag.',
+              '${source.label} only provided daily totals: they come in as one entry per day. For every food separately, '
+                  'use the export with your diary entries instead (in Cronometer: "Food & Recipe Entries").',
+              '${source.label} gaf alleen dagtotalen: die komen als één regel per dag. Voor elk product apart gebruik je '
+                  'beter de export met je dagboekregels (in Cronometer: "Food & Recipe Entries").',
             ),
     );
   }

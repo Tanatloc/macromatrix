@@ -288,12 +288,44 @@ class UserDb {
 
   /// Gegevens uit een andere app bewaren. Regels die er al zijn (zelfde vaste id) worden overgeslagen; notities
   /// worden aangevuld. Geeft (toegevoegd, al aanwezig) terug.
+  ///
+  /// Dagtotalen en losse producten uit dezelfde app tellen niet samen, ook niet over twee imports heen (bv. eerst
+  /// "Daily Nutrition", daarna "Food & Recipe Entries" van Cronometer): een dagtotaal voor een dag die al producten
+  /// uit die app heeft, wordt overgeslagen (telt als al aanwezig), en losse producten vervangen een dagtotaal dat er
+  /// al stond. Hoeveel er vervangen werden, staat daarna in [ImportBatch.replacedTotals].
   (int, int) importBatch(ImportBatch batch) {
     var added = 0, skipped = 0;
     void count() => _db.updatedRows > 0 ? added++ : skipped++;
     final now = _now();
+    bool isTotal(String ref) => ref.startsWith('import:') && ref.endsWith(':totaal');
+    String prefix(String ref) => ref.substring(0, ref.indexOf(':', 7) + 1);
     transaction(() {
+      // Dagen (per app) met losse producten, in deze import of al in het dagboek
+      final itemDays = <String>{
+        for (final e in batch.entries)
+          if (e.foodRef.startsWith('import:') && !isTotal(e.foodRef)) '${prefix(e.foodRef)}${e.day}',
+      };
+      for (final r in _db.select(
+        "SELECT DISTINCT day, food_ref FROM diary WHERE deleted = 0 AND food_ref LIKE 'import:%' AND food_ref NOT LIKE '%:totaal'",
+      )) {
+        itemDays.add('${prefix(r['food_ref'] as String)}${r['day']}');
+      }
+      var replaced = 0;
+      for (final key in itemDays) {
+        final cut = key.lastIndexOf(':') + 1;
+        _db.execute('UPDATE diary SET deleted = 1, updated_at = ? WHERE deleted = 0 AND day = ? AND food_ref = ?', [
+          now,
+          key.substring(cut),
+          '${key.substring(0, cut)}totaal',
+        ]);
+        replaced += _db.updatedRows;
+      }
+      batch.replacedTotals = replaced;
       for (final e in batch.entries) {
+        if (isTotal(e.foodRef) && itemDays.contains('${prefix(e.foodRef)}${e.day}')) {
+          skipped++;
+          continue;
+        }
         _db.execute(
           'INSERT OR IGNORE INTO diary (id, day, meal, food_ref, name, brand, grams, portion_label, quantity, nutrients, created_at, updated_at, time) '
           'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -335,6 +367,33 @@ class UserDb {
       }
     });
     return (added, skipped);
+  }
+
+  /// Wat ooit uit een andere app werd geïmporteerd (zie [importBatch]) en nog in je gegevens staat: (dagboekregels,
+  /// beweging, metingen). Herkend aan food_ref "import:<code>:" en de ids "import-<code>-".
+  (int, int, int) importedCounts(String code) {
+    int n(String sql, String arg) => _db.select(sql, [arg]).first.columnAt(0) as int;
+    return (
+      n('SELECT COUNT(*) FROM diary WHERE deleted = 0 AND food_ref LIKE ?', 'import:$code:%'),
+      n('SELECT COUNT(*) FROM exercise WHERE deleted = 0 AND id LIKE ?', 'import-$code-%'),
+      n('SELECT COUNT(*) FROM biometrics WHERE deleted = 0 AND id LIKE ?', 'import-$code-%'),
+    );
+  }
+
+  /// Alles wat uit die app geïmporteerd werd, weer weghalen (zacht, zodat het ook van je andere toestellen
+  /// verdwijnt). Wat je zelf invoerde blijft staan; notities ook, want die werden bij je eigen tekst gevoegd.
+  int removeImported(String code) {
+    final now = _now();
+    var removed = 0;
+    transaction(() {
+      _db.execute('UPDATE diary SET deleted = 1, updated_at = ? WHERE deleted = 0 AND food_ref LIKE ?', [now, 'import:$code:%']);
+      removed += _db.updatedRows;
+      for (final t in ['exercise', 'biometrics']) {
+        _db.execute('UPDATE $t SET deleted = 1, updated_at = ? WHERE deleted = 0 AND id LIKE ?', [now, 'import-$code-%']);
+        removed += _db.updatedRows;
+      }
+    });
+    return removed;
   }
 
   /// Meerdere schrijfacties als één geheel.
