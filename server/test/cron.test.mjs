@@ -19,7 +19,7 @@ test('niet-bevestigde accounts na 30 dagen weg, bevestigde en recente blijven; v
   db.raw.prepare("INSERT INTO verification (id, identifier, value, \"expiresAt\", \"createdAt\", \"updatedAt\") VALUES ('v', 'x', 'y', ?, ?, ?)").run(ago(1), ago(2), ago(2));
   db.raw.prepare('INSERT INTO signup_ips (ip_hash, at) VALUES (?, ?), (?, ?)').run('a', ago(2), 'b', ago(0.1));
   const r = await cleanup(db, now);
-  assert.deepEqual(r, { users: 1, sessions: 1, codes: 1, limits: 0, ips: 1, outbox: 0 });
+  assert.deepEqual(r, { users: 1, sessions: 1, codes: 1, limits: 0, ips: 1, outbox: 0, duos: 0 });
   assert.deepEqual(db.raw.prepare('SELECT id FROM "user" ORDER BY id').all().map((x) => x.id), ['nieuw-onbevestigd', 'oud-bevestigd']);
   assert.deepEqual(db.raw.prepare('SELECT id FROM session').all().map((x) => x.id), ['geldig']);
 });

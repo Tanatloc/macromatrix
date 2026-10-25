@@ -315,6 +315,7 @@ section.block { padding: 88px 0; }
 .plan-price { margin: 0 0 18px; color: var(--ink-2); font-size: 15px; }
 .plan-head .plan-price { margin: 0; }
 .plan-price .num { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; color: var(--ink); }
+.plan-duo { margin: -10px 0 18px; color: var(--ink-2); font-size: 14px; }
 .plan-price .nw { white-space: nowrap; }
 .plan-price .or { margin: 0 4px; color: var(--ink-3); }
 .plan-pro .ticks li::before { background: var(--brand); }

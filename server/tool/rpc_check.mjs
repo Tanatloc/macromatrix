@@ -79,6 +79,19 @@ try {
     assert.ok(Array.isArray(pending.data));
     assert.equal((await call('POST', '/v1/rpc/pending_challenges', { p_token: crypto.randomUUID() })).data.length, 0);
   });
+  await step('Duo: A koopt Duo (nagebootst in play_purchases), kiest vriend B, B is Supporter via de Duo', async () => {
+    const until = new Date(Date.now() + 30 * 86_400_000).toISOString();
+    sql(`INSERT INTO play_purchases (purchase_token, user_id, product, expiry) VALUES ('check-duo-${a.id}', '${a.id}', 'duo_monthly', '${until}');
+         INSERT OR REPLACE INTO pro_status (user_id, until, source) VALUES ('${a.id}', '${until}', 'play')`);
+    assert.equal((await rpc(c.token, 'duo_set_partner', { p_other: a.id })).result, 'no_duo');
+    const r = await rpc(a.token, 'duo_set_partner', { p_other: b.id });
+    assert.equal(r.result, 'ok');
+    const pb = await rpc(b.token, 'my_pro');
+    assert.deepEqual([pb.pro, pb.source], [true, 'duo']);
+    assert.equal((await rpc(b.token, 'duo_status')).role, 'partner');
+    await rpc(b.token, 'duo_leave');
+    assert.equal((await rpc(b.token, 'my_pro')).pro, false);
+  });
   await step('blokkeren: B blokkeert A, de vriendschap en battle verdwijnen', async () => {
     await rpc(b.token, 'friend_block', { p_other: a.id });
     assert.deepEqual(await rpc(a.token, 'friend_list_v2', { p_week: monday }), []);

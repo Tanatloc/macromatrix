@@ -11,6 +11,7 @@
 import { DbError, raise } from '../errors.js';
 import { hubFor } from '../hub.js';
 import challenges from './challenges.js';
+import duo from './duo.js';
 import misc from './misc.js';
 import { textBlocked } from './shared.js';
 import social from './social.js';
@@ -59,7 +60,7 @@ const core = {
   },
 };
 
-export const RPC = { ...core, ...social, ...challenges, ...misc };
+export const RPC = { ...core, ...social, ...challenges, ...misc, ...duo };
 
 /** Eén functie uitvoeren. [uid] is null zonder sessie; alleen functies met .anon mogen dat. */
 export async function callRpc(name, params, { db, env, uid, now = new Date(), waitUntil = () => {} }) {

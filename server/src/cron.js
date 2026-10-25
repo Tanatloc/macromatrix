@@ -1,6 +1,7 @@
 // Geplande taken (Cron Triggers): elke nacht opruimen (was pg_cron in Supabase: niet-bevestigde accounts na 30
 // dagen, plus wat Better Auth en de limieten laten liggen) en een back-up; elke maand een hersteltest.
 import { makeBackup, putStream, restoreBackup, verifyRestore } from './backup.js';
+import { syncAllDuos } from './rpc/duo.js';
 import { sendAlert } from './mail.js';
 
 const DAY = 86_400_000;
@@ -17,7 +18,9 @@ export async function cleanup(db, now = new Date()) {
     db.prepare('DELETE FROM test_outbox WHERE at < ?').bind(iso(DAY)),
   ]);
   const [users, sessions, codes, limits, ips, outbox] = res.map((r) => r.meta?.changes ?? 0);
-  return { users, sessions, codes, limits, ips, outbox };
+  // Duo-partners gelijkzetten met het abonnement van de koper (ook als Google een melding niet stuurde)
+  const duos = await syncAllDuos(db, now);
+  return { users, sessions, codes, limits, ips, outbox, duos };
 }
 
 // ── Back-ups (src/backup.js) ──

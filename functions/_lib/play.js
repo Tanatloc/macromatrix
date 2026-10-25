@@ -13,7 +13,8 @@ import { SUPABASE_URL } from './ai.js';
 import { acknowledgeSubscription, getSubscription, GoogleError, googleAccessToken, parseServiceAccount } from './google.js';
 
 // Moeten gelijk zijn aan de product-id's in de Play Console en in lib/sync/purchase.dart (ProPlan.productId)
-export const PRODUCTS = ['pro_monthly', 'pro_yearly'];
+// Supporter en Duo (Duo: de koper kiest een vriend die ook Supporter is, zie server/src/rpc/duo.js)
+export const PRODUCTS = ['pro_monthly', 'pro_yearly', 'duo_monthly', 'duo_yearly'];
 
 // Toestanden waarin je betaald hebt (CANCELED = opgezegd, maar betaald tot de vervaldatum)
 const ENTITLED = new Set(['SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD', 'SUBSCRIPTION_STATE_CANCELED']);

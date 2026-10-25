@@ -455,7 +455,7 @@ void main() {
       final p = await provider();
       final pro = Pro(_Signed(s.user), remote: () => FakeProRemote(), purchases: p);
       await pump(tester, s, pro, const ProScreen());
-      expect(find.text('€19.99'), findsOneWidget);
+      expect(find.text('€29.99'), findsOneWidget);
       expect(find.byKey(const ValueKey('pro-subscribe')), findsNothing);
       expect(find.byKey(const ValueKey('pro-coming-soon')), findsOneWidget);
     });

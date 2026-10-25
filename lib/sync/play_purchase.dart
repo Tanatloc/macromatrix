@@ -181,7 +181,8 @@ class PlayPurchaseProvider extends PurchaseProvider with ChangeNotifier {
         final plan = ProPlan.fromProductId(f.id);
         if (plan != null) _products[plan] = f;
       }
-      _ready = ProPlan.values.every(_products.containsKey);
+      // Klaar zodra Supporter (maand en jaar) er is; Duo komt erbij als die producten er ook zijn
+      _ready = [ProPlan.monthly, ProPlan.yearly].every(_products.containsKey);
     } catch (e) {
       debugPrint('play: $e');
     } finally {
@@ -194,6 +195,9 @@ class PlayPurchaseProvider extends PurchaseProvider with ChangeNotifier {
 
   @override
   String? priceOf(ProPlan plan) => _products[plan]?.price;
+
+  @override
+  bool get duoAvailable => _ready && [ProPlan.duoMonthly, ProPlan.duoYearly].every(_products.containsKey);
 
   @override
   bool get pending => _pending;

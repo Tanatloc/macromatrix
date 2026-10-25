@@ -36,6 +36,7 @@ import 'widgets/kit.dart';
 import 'widgets/logo.dart';
 import '../i18n.dart';
 import 'widgets/pro_widgets.dart';
+import 'widgets/support_ask.dart';
 
 /// Hoofdscherm met vijf tabbladen (Lichaam zit onder Profiel). Op een gsm onderaan, op een tablet als smalle rail
 /// links, en op een pc als zijbalk met namen en snelkoppelingen. Op een pc opent alles binnen het tabblad, zodat de
@@ -61,6 +62,8 @@ class _ShellState extends State<Shell> {
     _state.addListener(_checkStreak);
     _state.addListener(_scheduleBadgeCheck);
     _pro?.addListener(_scheduleBadgeCheck);
+    // Het begin van de eerste 7 dagen op dit toestel (daarvoor nooit vragen om supporter te worden)
+    noteFirstUse(_state.user);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLevel();
       HealthSync(_state).sync();
@@ -126,7 +129,12 @@ class _ShellState extends State<Shell> {
       text: tr('$hit days in a row! Keep that fire burning.', '$hit dagen op rij! Houd dat vuur brandend.'),
       actionLabel: tr('Share', 'Delen'),
       onAction: () => shareStreak(context, days: hit),
-    );
+    );    // Na het feestje, één keer per 30 dagen: vragen om supporter te worden (support_ask.dart)
+    if (hit >= supportAskStreak) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) maybeAskSupport(context, _state.user, streak: hit, pro: context.read<Pro?>());
+      });
+    }
   }
 
   Timer? _badgeTimer;

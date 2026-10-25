@@ -176,9 +176,12 @@ void main() {
     });
 
     test('prijzen en de naad voor betalen', () async {
-      expect(ProPlan.monthly.price, '€2.99');
-      expect(ProPlan.yearly.price, '€19.99');
-      expect(yearlySavingPercent, 44);
+      expect(ProPlan.monthly.price, '€3.99');
+      expect(ProPlan.yearly.price, '€29.99');
+      expect(ProPlan.duoMonthly.price, '€4.99');
+      expect(ProPlan.duoYearly.price, '€39.99');
+      expect(yearlySavingPercentFor(duo: true), 33);
+      expect(yearlySavingPercent, 37);
       const none = NoPurchaseProvider();
       expect(none.available, isFalse);
       expect(await none.subscribe(ProPlan.yearly), PurchaseOutcome.unavailable);
@@ -382,8 +385,8 @@ void main() {
       expect(find.textContaining('Unlimited'), findsNothing);
       expect(find.text('Why become a supporter?'), findsOneWidget);
       expect(find.textContaining('costs real computing'), findsOneWidget);
-      expect(find.text('€2.99'), findsOneWidget);
-      expect(find.text('€19.99'), findsOneWidget);
+      expect(find.text('€3.99'), findsOneWidget);
+      expect(find.text('€29.99'), findsOneWidget);
       expect(find.text('Photos today: 1 of 3'), findsOneWidget);
 
       // Zonder winkel (NoPurchaseProvider): geen actieve abonneerknop, wel meteen "Binnenkort" op die plek (GP-2)

@@ -6,6 +6,8 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { createAuth } from './auth.js';
 import { DbError, fromD1 } from './errors.js';
+import { extendPro, endPro } from './pro.js';
+import { syncDuoPartner } from './rpc/duo.js';
 import { callRpc } from './rpc/index.js';
 
 export class Internal extends WorkerEntrypoint {
@@ -56,30 +58,19 @@ export class Internal extends WorkerEntrypoint {
   }
 
   /**
-   * Supporter verlengen tot [untilIso], nooit inkorten. Een kortere Supporter met de hand of als geschenk wordt
-   * onthouden in base_until/base_source. In één opdracht, dus veilig bij gelijktijdige wijzigingen.
+   * Supporter verlengen tot [untilIso], nooit inkorten (src/pro.js). Een Duo-koper: zijn partner loopt mee.
    */
   async grantPro(user, untilIso) {
-    const now = new Date().toISOString();
-    await this.env.DB.prepare(
-      `INSERT INTO pro_status (user_id, until, source, updated_at) VALUES (?1, ?2, 'play', ?3)
-       ON CONFLICT (user_id) DO UPDATE SET
-         base_until = CASE WHEN pro_status.source <> 'play' THEN pro_status.until ELSE pro_status.base_until END,
-         base_source = CASE WHEN pro_status.source <> 'play' THEN pro_status.source ELSE pro_status.base_source END,
-         until = excluded.until, source = 'play', updated_at = excluded.updated_at
-       WHERE pro_status.until < excluded.until`,
-    )
-      .bind(user, untilIso, now)
-      .run()
-      .catch((e) => {
-        throw fromD1(e);
-      });
+    await this.env.DB.batch([extendPro(this.env.DB, user, untilIso, 'play')]).catch((e) => {
+      throw fromD1(e);
+    });
+    await syncDuoPartner(this.env.DB, user);
   }
 
   /**
    * Supporter stopzetten na een einde of terugbetaling: tot nu, of tot de vervaldatum van een ander lopend
    * Play-abonnement van hetzelfde account. Alleen een rij met source 'play'; liep er een langere Supporter met de hand
-   * onder (base_until), dan komt die terug.
+   * onder (base_until), dan komt die terug. Een Duo-partner loopt mee.
    */
   async revokePro(user, exceptToken, nowMs) {
     const nowIso = new Date(nowMs).toISOString();
@@ -89,16 +80,7 @@ export class Internal extends WorkerEntrypoint {
       .bind(user, exceptToken, nowIso)
       .first('expiry');
     const floor = other ? new Date(other).toISOString() : nowIso;
-    await this.env.DB.prepare(
-      `UPDATE pro_status SET
-         until = CASE WHEN base_until IS NOT NULL AND base_source IS NOT NULL AND base_until > ?2 THEN base_until ELSE ?2 END,
-         source = CASE WHEN base_until IS NOT NULL AND base_source IS NOT NULL AND base_until > ?2 THEN base_source ELSE source END,
-         base_until = CASE WHEN base_until IS NOT NULL AND base_source IS NOT NULL AND base_until > ?2 THEN NULL ELSE base_until END,
-         base_source = CASE WHEN base_until IS NOT NULL AND base_source IS NOT NULL AND base_until > ?2 THEN NULL ELSE base_source END,
-         updated_at = ?3
-       WHERE user_id = ?1 AND source = 'play' AND until > ?2`,
-    )
-      .bind(user, floor, nowIso)
-      .run();
+    await this.env.DB.batch([endPro(this.env.DB, user, floor, 'play', new Date(nowMs))]);
+    await syncDuoPartner(this.env.DB, user, new Date(nowMs));
   }
 }

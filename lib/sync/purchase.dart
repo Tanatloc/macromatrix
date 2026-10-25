@@ -12,11 +12,23 @@ library;
 
 import '../i18n.dart';
 
+/// De abonnementen (prijzen van 25-10-2026). Duo: jij en één vriend die je kiest (server/src/rpc/duo.js).
 enum ProPlan {
-  monthly(299, 'month', 'pro_monthly'),
-  yearly(1999, 'year', 'pro_yearly');
+  monthly(399, 'month', 'pro_monthly'),
+  yearly(2999, 'year', 'pro_yearly'),
+  duoMonthly(499, 'month', 'duo_monthly', duo: true),
+  duoYearly(3999, 'year', 'duo_yearly', duo: true);
 
-  const ProPlan(this.cents, this.period, this.productId);
+  const ProPlan(this.cents, this.period, this.productId, {this.duo = false});
+
+  /// Voor twee personen: de koper en één vriend.
+  final bool duo;
+
+  /// Het jaarplan bij dit plan (zelfde soort).
+  ProPlan get yearlyOfKind => duo ? duoYearly : yearly;
+
+  /// Het maandplan bij dit plan (zelfde soort).
+  ProPlan get monthlyOfKind => duo ? duoMonthly : monthly;
 
   /// Prijs in eurocent, btw inbegrepen.
   final int cents;
@@ -33,15 +45,17 @@ enum ProPlan {
   String get price => '€${(cents / 100).toStringAsFixed(2).replaceAll('.', isNl ? ',' : '.')}';
   String get label => labelFor(price);
 
-  /// "€19.99 / year" met een andere prijs (bv. die van de winkel, in je eigen munt).
-  String labelFor(String price) => switch (this) {
-    ProPlan.monthly => tr('$price / month', '$price / maand'),
-    ProPlan.yearly => tr('$price / year', '$price / jaar'),
-  };
+  /// "€29.99 / year" met een andere prijs (bv. die van de winkel, in je eigen munt).
+  String labelFor(String price) => period == 'month' ? tr('$price / month', '$price / maand') : tr('$price / year', '$price / jaar');
 }
 
-/// Hoeveel je met een jaar bespaart tegenover 12 maanden (afgerond op een heel percent).
-int get yearlySavingPercent => (100 - ProPlan.yearly.cents * 100 / (ProPlan.monthly.cents * 12)).round();
+/// Hoeveel je met een jaar bespaart tegenover 12 maanden (afgerond op een heel percent), voor Supporter of Duo.
+int yearlySavingPercentFor({bool duo = false}) {
+  final m = duo ? ProPlan.duoMonthly : ProPlan.monthly, y = duo ? ProPlan.duoYearly : ProPlan.yearly;
+  return (100 - y.cents * 100 / (m.cents * 12)).round();
+}
+
+int get yearlySavingPercent => yearlySavingPercentFor();
 
 enum PurchaseOutcome {
   /// Betaald of hersteld; de app haalt de status daarna opnieuw op bij de server.
@@ -86,6 +100,9 @@ abstract class PurchaseProvider {
 
   /// De prijs zoals de winkel ze toont (in je eigen munt), of null: dan de vaste prijs van [ProPlan].
   String? priceOf(ProPlan plan) => null;
+
+  /// Kan Duo hier gekocht worden (de Duo-producten bestaan in de winkel)?
+  bool get duoAvailable => false;
 
   /// Wacht er een betaling op bevestiging?
   bool get pending => false;

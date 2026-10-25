@@ -19,6 +19,7 @@ import '../i18n.dart';
 import 'account.dart';
 import 'api.dart';
 import 'challenges.dart' show isMissingTable;
+import 'duo.dart';
 import 'purchase.dart';
 
 /// Gratis foto's per dag, en de rem tegen misbruik met Pro. Moeten gelijk zijn aan photo_limit() op de server.
@@ -220,7 +221,7 @@ abstract class ProRemote {
   Future<void> showBadge(bool show);
 }
 
-class SupabaseProRemote implements ProRemote, AiQuotaRemote, ProFrameRemote {
+class SupabaseProRemote implements ProRemote, AiQuotaRemote, ProFrameRemote, DuoRemote {
   SupabaseProRemote(this.client);
   final Rpc client;
 
@@ -254,6 +255,21 @@ class SupabaseProRemote implements ProRemote, AiQuotaRemote, ProFrameRemote {
       rethrow;
     }
   }
+
+  @override
+  Future<DuoStatus> duoStatus() async => DuoStatus.fromJson(await client.rpc('duo_status'));
+
+  @override
+  Future<(DuoResult, DuoStatus)> duoSetPartner(String friendId) async {
+    final j = await client.rpc('duo_set_partner', params: {'p_other': friendId});
+    return j is Map ? (DuoResult.parse(j['result']), DuoStatus.fromJson(j['status'])) : (DuoResult.failed, DuoStatus.none);
+  }
+
+  @override
+  Future<DuoStatus> duoRemove() async => DuoStatus.fromJson(await client.rpc('duo_remove'));
+
+  @override
+  Future<DuoStatus> duoLeave() async => DuoStatus.fromJson(await client.rpc('duo_leave'));
 
   @override
   Future<PhotoQuota?> aiQuota(AiKind kind) async {
@@ -380,11 +396,56 @@ class Pro extends ChangeNotifier {
         final q = await _run(r.quota);
         if (q != null) _quota = q;
       }
+      if (r case final DuoRemote d) {
+        final s = await _run(d.duoStatus);
+        if (s != null) duo = s;
+      }
     } finally {
       loading = false;
       notifyListeners();
     }
     _maybeRecheck();
+  }
+
+  // ── Duo ──
+
+  /// Je Duo: als koper (met de gekozen vriend) of als partner. [DuoStatus.none] zonder Duo of zonder verbinding.
+  DuoStatus duo = DuoStatus.none;
+
+  DuoRemote? get _duo => switch (remote) {
+    final DuoRemote d => d,
+    _ => null,
+  };
+
+  /// Een vriend als partner kiezen. Daarna ook je eigen status opnieuw (niet nodig, maar goedkoop) en meldingen.
+  Future<DuoResult> setDuoPartner(String friendId) async {
+    final d = _duo;
+    if (d == null) return DuoResult.failed;
+    final r = await _run(() => d.duoSetPartner(friendId));
+    if (r == null) return DuoResult.failed;
+    duo = r.$2;
+    notifyListeners();
+    return r.$1;
+  }
+
+  /// Als koper je partner weghalen.
+  Future<bool> removeDuoPartner() => _duoAction((d) => d.duoRemove());
+
+  /// Als partner uit de Duo stappen (je Supporter via de Duo stopt meteen).
+  Future<bool> leaveDuo() async {
+    final ok = await _duoAction((d) => d.duoLeave());
+    if (ok) await refresh();
+    return ok;
+  }
+
+  Future<bool> _duoAction(Future<DuoStatus> Function(DuoRemote d) f) async {
+    final d = _duo;
+    if (d == null) return false;
+    final s = await _run(() => f(d));
+    if (s == null) return false;
+    duo = s;
+    notifyListeners();
+    return true;
   }
 
   void _purchasesChanged() {

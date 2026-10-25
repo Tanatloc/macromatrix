@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../i18n.dart';
+import 'package:provider/provider.dart';
+
+import '../../sync/duo.dart';
+import '../../sync/friends.dart';
 import '../../sync/pro.dart';
 import '../../sync/purchase.dart';
 import '../theme.dart';
+import '../widgets/avatar.dart';
 import '../widgets/avatar_frame_picker.dart';
 import '../widgets/kit.dart';
 import '../widgets/pro_widgets.dart';
@@ -25,6 +30,10 @@ class ProScreen extends StatefulWidget {
       'Renews automatically through Google Play until you cancel. Cancel any time in Google Play under Payments & subscriptions.',
       'Verlengt automatisch via Google Play tot je opzegt. Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
     ),
+    'duo' => tr(
+      "Through a friend's Duo subscription: it runs as long as their subscription does. You pay nothing.",
+      'Via het Duo-abonnement van een vriend: het loopt zolang dat abonnement loopt. Je betaalt niets.',
+    ),
     null || 'manual' || 'gift' => tr(
       'A gift from MacroMatrix: it does not renew and you pay nothing. Afterwards everything free keeps working.',
       'Een geschenk van MacroMatrix: het verlengt niet en je betaalt niets. Daarna blijft alles wat gratis is gewoon werken.',
@@ -36,6 +45,7 @@ class ProScreen extends StatefulWidget {
 class _ProScreenState extends State<ProScreen> {
   ProPlan _plan = ProPlan.yearly;
   String? _message;
+  String? _duoMessage;
   bool _busy = false;
 
   @override
@@ -149,6 +159,7 @@ class _ProScreenState extends State<ProScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _status(context, pro),
+                if (pro != null && pro.duo.role != DuoRole.none) ...[const SizedBox(height: 12), _duoPanel(context, pro)],
                 const SizedBox(height: 12),
                 Panel(
                   key: const ValueKey('pro-free'),
@@ -426,6 +437,10 @@ class _ProScreenState extends State<ProScreen> {
   Widget _prices(BuildContext context, Pro? pro, {bool allowBuy = true}) {
     final p = context.pal;
     final buy = allowBuy && canBuy(pro);
+    // Duo alleen kiezen als de winkel het heeft; zonder winkel tonen we beide prijzen ter info
+    final duoChoice = !buy || (pro?.purchases.duoAvailable ?? false);
+    if (!duoChoice && _plan.duo) _plan = _plan.period == 'month' ? ProPlan.monthly : ProPlan.yearly;
+    final duo = _plan.duo;
     // De prijs van de winkel (in je eigen munt) als die er is, anders de vaste prijs in euro
     String priceOf(ProPlan plan) => pro?.purchases.priceOf(plan) ?? plan.price;
     Widget option(ProPlan plan, String sub) {
@@ -443,7 +458,7 @@ class _ProScreenState extends State<ProScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                plan == ProPlan.monthly ? tr('Monthly', 'Per maand') : tr('Yearly', 'Per jaar'),
+                plan.period == 'month' ? tr('Monthly', 'Per maand') : tr('Yearly', 'Per jaar'),
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.ink2),
               ),
               const SizedBox(height: 4),
@@ -460,19 +475,22 @@ class _ProScreenState extends State<ProScreen> {
     }
 
     final price = priceOf(_plan);
-    final renews = _plan == ProPlan.monthly
+    final name = duo ? 'MacroMatrix Duo' : 'MacroMatrix Supporter';
+    final who = duo ? tr(' For you and one friend you choose.', ' Voor jou en één vriend die je kiest.') : '';
+    final renews = _plan.period == 'month'
         ? tr(
-            'MacroMatrix Supporter, monthly: $price per month. Renews automatically every month until you cancel. '
+            '$name, monthly: $price per month.$who Renews automatically every month until you cancel. '
                 'Cancel anytime in Google Play under Payments & subscriptions.',
-            'MacroMatrix Supporter, per maand: $price per maand. Verlengt automatisch elke maand tot je opzegt. '
+            '$name, per maand: $price per maand.$who Verlengt automatisch elke maand tot je opzegt. '
                 'Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
           )
         : tr(
-            'MacroMatrix Supporter, yearly: $price per year. Renews automatically every year until you cancel. '
+            '$name, yearly: $price per year.$who Renews automatically every year until you cancel. '
                 'Cancel anytime in Google Play under Payments & subscriptions.',
-            'MacroMatrix Supporter, per jaar: $price per jaar. Verlengt automatisch elk jaar tot je opzegt. '
+            '$name, per jaar: $price per jaar.$who Verlengt automatisch elk jaar tot je opzegt. '
                 'Opzeggen kan altijd in Google Play onder Betalingen en abonnementen.',
           );
+    final saving = yearlySavingPercentFor(duo: duo);
     final android = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Panel(
@@ -482,12 +500,35 @@ class _ProScreenState extends State<ProScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(tr('Prices', 'Prijzen'), subtitle: tr('Including VAT.', 'Btw inbegrepen.')),
+          if (duoChoice) ...[
+            const SizedBox(height: 10),
+            SegmentedButton<bool>(
+              key: const ValueKey('pro-kind'),
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(value: false, label: Text(tr('Just me', 'Alleen ik'))),
+                ButtonSegment(value: true, label: Text(tr('Duo · you + 1 friend', 'Duo · jij + 1 vriend'))),
+              ],
+              selected: {duo},
+              onSelectionChanged: (s) => setState(() => _plan = s.first ? _plan.period == 'month' ? ProPlan.duoMonthly : ProPlan.duoYearly : _plan.period == 'month' ? ProPlan.monthly : ProPlan.yearly),
+            ),
+            if (duo) ...[
+              const SizedBox(height: 8),
+              Text(
+                tr(
+                  'You choose one friend who gets every Supporter extra too, for as long as your subscription runs. You can switch friends once every 30 days.',
+                  'Je kiest één vriend die ook alle Supporter-extra\'s krijgt, zolang je abonnement loopt. Je kunt één keer per 30 dagen van vriend wisselen.',
+                ),
+                style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2),
+              ),
+            ],
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
-              option(ProPlan.monthly, tr('per month', 'per maand')),
+              option(_plan.monthlyOfKind, tr('per month', 'per maand')),
               const SizedBox(width: 10),
-              option(ProPlan.yearly, tr('per year · save $yearlySavingPercent%', 'per jaar · $yearlySavingPercent% goedkoper')),
+              option(_plan.yearlyOfKind, tr('per year · save $saving%', 'per jaar · $saving% goedkoper')),
             ],
           ),
           const SizedBox(height: 12),
@@ -547,6 +588,188 @@ class _ProScreenState extends State<ProScreen> {
         ],
       ),
     );
+  }
+
+  /// Je Duo: als koper je vriend kiezen, wisselen of weghalen; als partner zien van wie, en eruit stappen.
+  Widget _duoPanel(BuildContext context, Pro pro) {
+    final p = context.pal;
+    final d = pro.duo;
+    final date = d.until == null ? null : DateFormat('d MMMM y', appLocale).format(d.until!.toLocal());
+    final children = <Widget>[];
+    if (d.role == DuoRole.partner) {
+      final owner = d.owner?.name ?? tr('a friend', 'een vriend');
+      children.addAll([
+        PanelTitle(tr('Duo', 'Duo')),
+        const SizedBox(height: 6),
+        Text(
+          d.active
+              ? tr("You're a supporter through $owner's Duo${date == null ? '' : ' (until $date)'}.", 'Je bent supporter via de Duo van $owner${date == null ? '' : ' (tot $date)'}.')
+              : tr("$owner's Duo has ended.", 'De Duo van $owner is afgelopen.'),
+          style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            key: const ValueKey('duo-leave'),
+            onPressed: _busy ? null : () => _leaveDuo(pro),
+            child: Text(tr('Leave the Duo', 'Uit de Duo stappen')),
+          ),
+        ),
+      ]);
+    } else {
+      final partner = d.partner;
+      final next = d.nextChange == null ? null : DateFormat('d MMMM', appLocale).format(d.nextChange!.toLocal());
+      children.addAll([
+        PanelTitle(tr('Your Duo', 'Jouw Duo'), subtitle: d.active && date != null ? tr('Until $date', 'Tot $date') : null),
+        const SizedBox(height: 6),
+        if (!d.active)
+          Text(
+            tr('Your Duo subscription has ended.', 'Je Duo-abonnement is afgelopen.'),
+            style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink2),
+          )
+        else if (partner != null) ...[
+          Text(
+            tr('${partner.name ?? 'Your friend'} is a supporter through your Duo.', '${partner.name ?? 'Je vriend'} is supporter via jouw Duo.'),
+            key: const ValueKey('duo-partner'),
+            style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink),
+          ),
+          if (next != null)
+            Text(
+              tr('You can switch to another friend from $next.', 'Vanaf $next kun je naar een andere vriend wisselen.'),
+              style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink3),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const ValueKey('duo-remove'),
+              onPressed: _busy ? null : () => _removeDuo(pro, partner.name),
+              child: Text(tr('Remove from my Duo', 'Uit mijn Duo halen')),
+            ),
+          ),
+        ] else
+          ..._duoChoices(context, pro, next),
+      ]);
+    }
+    if (_duoMessage != null) {
+      children.addAll([
+        const SizedBox(height: 4),
+        Text(_duoMessage!, key: const ValueKey('duo-message'), style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink2)),
+      ]);
+    }
+    return Panel(
+      key: const ValueKey('duo-panel'),
+      shadow: false,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+    );
+  }
+
+  /// Nog niemand gekozen: je vrienden om uit te kiezen.
+  List<Widget> _duoChoices(BuildContext context, Pro pro, String? next) {
+    final p = context.pal;
+    final friends = [for (final f in context.watch<Friends?>()?.list ?? const <Friend>[]) if (f.state == FriendState.friend) f];
+    if (next != null) {
+      return [Text(tr('You can choose a friend again from $next.', 'Vanaf $next kun je opnieuw een vriend kiezen.'), style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink2))];
+    }
+    if (friends.isEmpty) {
+      return [
+        Text(
+          tr('Add a friend first (Friends tab), then choose them here.', 'Voeg eerst een vriend toe (tabblad Vrienden) en kies die dan hier.'),
+          style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink2),
+        ),
+      ];
+    }
+    return [
+      Text(tr('Choose the friend who gets Supporter too:', 'Kies de vriend die ook supporter wordt:'), style: TextStyle(fontSize: 13.5, height: 1.4, color: p.ink)),
+      const SizedBox(height: 4),
+      for (final f in friends)
+        ListTile(
+          key: ValueKey('duo-choose-${f.id}'),
+          contentPadding: EdgeInsets.zero,
+          leading: AvatarImage(avatar: f.avatar, size: 36),
+          title: Text(f.name),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _busy ? null : () => _chooseDuo(pro, f),
+        ),
+    ];
+  }
+
+  Future<bool> _confirm(String title, String text, String yes) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: Text(text),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(yes)),
+          ],
+        ),
+      ) ==
+      true;
+
+  Future<void> _chooseDuo(Pro pro, Friend f) async {
+    if (!await _confirm(
+      tr('Give ${f.name} Supporter?', '${f.name} supporter maken?'),
+      tr(
+        '${f.name} gets every Supporter extra for as long as your Duo runs. You can switch friends once every 30 days.',
+        "${f.name} krijgt alle Supporter-extra's zolang je Duo loopt. Je kunt één keer per 30 dagen van vriend wisselen.",
+      ),
+      tr('Choose', 'Kiezen'),
+    )) {
+      return;
+    }
+    setState(() => _busy = true);
+    final r = await pro.setDuoPartner(f.id);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _duoMessage = switch (r) {
+        DuoResult.ok => tr('${f.name} is now a supporter through your Duo.', '${f.name} is nu supporter via jouw Duo.'),
+        DuoResult.noDuo => tr('Your Duo subscription is not active (anymore).', 'Je Duo-abonnement loopt niet (meer).'),
+        DuoResult.self => null,
+        DuoResult.notFriends => tr('You are no longer friends with ${f.name}.', 'Je bent niet meer bevriend met ${f.name}.'),
+        DuoResult.taken => tr('${f.name} is already in a Duo.', '${f.name} zit al in een Duo.'),
+        DuoResult.tooSoon => tr('You can only switch once every 30 days.', 'Wisselen kan maar één keer per 30 dagen.'),
+        DuoResult.failed => tr('That did not work. Check your connection and try again.', 'Dat lukte niet. Controleer je verbinding en probeer opnieuw.'),
+      };
+    });
+  }
+
+  Future<void> _removeDuo(Pro pro, String? name) async {
+    if (!await _confirm(
+      tr('Remove ${name ?? 'your friend'} from your Duo?', '${name ?? 'Je vriend'} uit je Duo halen?'),
+      tr(
+        "Their Supporter extras stop right away. You can choose someone again after 30 days.",
+        "Zijn of haar Supporter-extra's stoppen meteen. Na 30 dagen kun je opnieuw iemand kiezen.",
+      ),
+      tr('Remove', 'Uit Duo halen'),
+    )) {
+      return;
+    }
+    setState(() => _busy = true);
+    final ok = await pro.removeDuoPartner();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _duoMessage = ok ? null : tr('That did not work. Try again.', 'Dat lukte niet. Probeer opnieuw.');
+    });
+  }
+
+  Future<void> _leaveDuo(Pro pro) async {
+    if (!await _confirm(
+      tr('Leave the Duo?', 'Uit de Duo stappen?'),
+      tr("Your Supporter extras through this Duo stop right away.", "Je Supporter-extra's via deze Duo stoppen meteen."),
+      tr('Leave', 'Eruit stappen'),
+    )) {
+      return;
+    }
+    setState(() => _busy = true);
+    final ok = await pro.leaveDuo();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _duoMessage = ok ? null : tr('That did not work. Try again.', 'Dat lukte niet. Probeer opnieuw.');
+    });
   }
 
   /// Alleen in een debug-build: Pro op dit toestel nabootsen, om de extra's te testen.
