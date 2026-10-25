@@ -30,8 +30,11 @@ enum Meal {
   final String en, nl;
   String get label => tr(en, nl);
 
-  /// Logische maaltijd voor het huidige uur.
-  static Meal forHour(int h) => h < 11
+  /// Logische maaltijd voor het huidige uur. Na middernacht en vóór [dayStartHour] hoort het nog bij gisteren: een
+  /// tussendoortje, geen ontbijt (NW-20).
+  static Meal forHour(int h) => h < dayStartHour
+      ? snacks
+      : h < 11
       ? breakfast
       : h < 16
       ? lunch

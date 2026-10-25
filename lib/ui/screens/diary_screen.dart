@@ -286,6 +286,8 @@ Future<void> pickDay(BuildContext context) async {
     firstDate: DateTime(2000),
     // Niet in de toekomst loggen: tot en met vandaag
     lastDate: now,
+    // "Vandaag" in de kalender is de dag van de app (die begint om 3 uur), niet de kalenderdag (SU-13)
+    currentDate: now,
     // In de taal van de app, met de week vanaf maandag (N46)
     builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),
   );
@@ -450,6 +452,7 @@ Future<void> pickDayToCopyFrom(BuildContext context) async {
     firstDate: DateTime.parse(earlier.first),
     lastDate: yesterday,
     selectableDayPredicate: (d) => logged.contains(dayKey(d)),
+    currentDate: logicalNow(),
     helpText: tr('Copy day from', 'Kopieer dag van'),
     builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),
   );
@@ -469,6 +472,7 @@ Future<void> pickDayToCopyTo(BuildContext context) async {
     firstDate: DateTime(today.year - 2),
     lastDate: next.isAfter(last) ? next : last,
     selectableDayPredicate: (d) => dayKey(d) != dayKey(from),
+    currentDate: today,
     helpText: tr('Copy this day to', 'Kopieer deze dag naar'),
     builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),
   );
@@ -3123,6 +3127,7 @@ Future<void> _copyToDay(BuildContext context, List<DiaryEntry> entries) async {
     initialDate: s.date,
     firstDate: DateTime(today.year - 2),
     lastDate: DateTime(today.year, today.month, today.day + 30),
+    currentDate: today,
     // Kort, zodat de titel niet afgekapt wordt; taal van de app en week vanaf maandag (N46)
     helpText: tr('Copy to', 'Kopiëren naar'),
     builder: (ctx, child) => Localizations.override(context: ctx, locale: pickerLocale, child: child!),

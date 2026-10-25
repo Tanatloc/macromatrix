@@ -8,12 +8,19 @@ import 'package:zxing_lib/common.dart';
 import 'package:zxing_lib/oned.dart';
 import 'package:zxing_lib/zxing.dart';
 
+import '../../data/off_client.dart' show looksLikeBarcode;
 import '../../i18n.dart';
 
-/// Barcode scannen met de camera (Android en browser). Geeft de gelezen code terug.
+/// Barcode scannen met de camera (Android en browser). Geeft de gelezen code terug. Start de camera niet (geen camera,
+/// geen toestemming), dan typ je het nummer onder de streepjes of probeer je opnieuw (NW-14); dat typen kan ook
+/// altijd via het toetsenbord bovenaan.
 ///
 /// Volledig met vrije software: de camera-plugin van Flutter en ZXing (Apache 2.0, in Dart). Op Android worden de
 /// beelden rechtstreeks gelezen (helderheid van elk pixel), in de browser elke halve seconde een foto.
+/// De camera's van het toestel. Te vervangen in tests (daar is geen camera).
+@visibleForTesting
+Future<List<CameraDescription>> Function() scanCameras = availableCameras;
+
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
 
@@ -26,6 +33,11 @@ class _ScanScreenState extends State<ScanScreen> {
   String? _error;
   bool _busy = false, _done = false, _torch = false;
   Timer? _webTimer;
+  final _typed = TextEditingController();
+
+  /// Het nummer zelf typen in plaats van de camera (ook als die wel werkt, bv. bij een gekreukte barcode).
+  bool _typing = false;
+  String? _typedError;
 
   @override
   void initState() {
@@ -34,8 +46,9 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Future<void> _start() async {
+    if (_error != null) setState(() => _error = null);
     try {
-      final cams = await availableCameras();
+      final cams = await scanCameras();
       if (cams.isEmpty) throw CameraException('none', 'No camera');
       final back = cams.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => cams.first);
       final c = CameraController(
@@ -55,10 +68,11 @@ class _ScanScreenState extends State<ScanScreen> {
       } else {
         await c.startImageStream(_onFrame);
       }
-    } on CameraException catch (e) {
+    } catch (e) {
+      // Ook een fout die geen CameraException is (geen camera-ondersteuning in deze browser): dan dezelfde uitweg
       if (mounted) {
         setState(
-          () => _error = e.code.contains('Denied') || e.code.contains('ermission')
+          () => _error = e is CameraException && (e.code.contains('Denied') || e.code.contains('ermission'))
               ? tr(
                   'No access to the camera. Give the app permission in your phone settings.',
                   'Geen toegang tot de camera. Geef de app toestemming in de instellingen van je gsm.',
@@ -105,6 +119,21 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
+  /// Het getypte nummer teruggeven, zoals een gescande code.
+  void _submitTyped() {
+    final code = _typed.text.replaceAll(RegExp(r'\s'), '');
+    if (!looksLikeBarcode(code)) {
+      setState(
+        () => _typedError = tr(
+          'That is not a barcode. Type the 8 or 13 digits under the stripes.',
+          'Dat is geen barcode. Typ de 8 of 13 cijfers onder de streepjes.',
+        ),
+      );
+      return;
+    }
+    _found(code);
+  }
+
   void _found(String? code) {
     if (code == null || _done || !mounted) return;
     _done = true;
@@ -124,6 +153,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   @override
   void dispose() {
+    _typed.dispose();
     _webTimer?.cancel();
     final c = _controller;
     if (c != null) {
@@ -143,7 +173,14 @@ class _ScanScreenState extends State<ScanScreen> {
         backgroundColor: Colors.black,
         title: Text(tr('Scan barcode', 'Barcode scannen'), style: const TextStyle(color: Colors.white)),
         actions: [
-          if (!kIsWeb)
+          if (_error == null)
+            IconButton(
+              key: const ValueKey('scan-type-number'),
+              onPressed: () => setState(() => _typing = !_typing),
+              icon: Icon(_typing ? Icons.qr_code_scanner_rounded : Icons.keyboard_outlined),
+              tooltip: _typing ? tr('Use the camera', 'Camera gebruiken') : tr('Type the number', 'Nummer typen'),
+            ),
+          if (!kIsWeb && !_typing && _error == null)
             IconButton(
               onPressed: _toggleTorch,
               icon: Icon(_torch ? Icons.flashlight_off_outlined : Icons.flashlight_on_outlined),
@@ -151,51 +188,118 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
         ],
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (_error != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            )
-          else if (c == null || !c.value.isInitialized)
-            const Center(child: CircularProgressIndicator(color: Colors.white))
-          else
-            Center(
-              child: AspectRatio(aspectRatio: kIsWeb ? c.value.aspectRatio : 1 / c.value.aspectRatio, child: CameraPreview(c)),
-            ),
-          // Kader als hulp om te richten
-          Center(
-            child: Container(
-              width: 280,
-              height: 160,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 3),
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 48,
-            child: Text(
-              tr('Point at the barcode on the packaging', 'Richt op de barcode van de verpakking'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
-          ),
-        ],
-      ),
+      body: _error != null || _typing ? _typePanel() : _cameraView(c),
     );
   }
+
+  /// Camera kapot of zelf gekozen: het nummer onder de streepjes typen, en bij een fout opnieuw proberen.
+  Widget _typePanel() => SafeArea(
+    child: Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_error != null) ...[
+                const Icon(Icons.no_photography_outlined, color: Colors.white70, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  key: const ValueKey('scan-error'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+              ],
+              Text(
+                tr('Type the number under the barcode', 'Typ het nummer onder de barcode'),
+                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                key: const ValueKey('scan-typed'),
+                controller: _typed,
+                autofocus: _typing,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(color: Colors.white, fontSize: 20, letterSpacing: 1.5),
+                cursorColor: Colors.white,
+                onChanged: (_) {
+                  if (_typedError != null) setState(() => _typedError = null);
+                },
+                onSubmitted: (_) => _submitTyped(),
+                decoration: InputDecoration(
+                  hintText: '5400000000000',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  errorText: _typedError,
+                  errorMaxLines: 3,
+                  filled: true,
+                  fillColor: Colors.white10,
+                  prefixIcon: const Icon(Icons.qr_code_rounded, color: Colors.white70),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                key: const ValueKey('scan-typed-go'),
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                onPressed: _submitTyped,
+                child: Text(tr('Look up', 'Opzoeken')),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  key: const ValueKey('scan-retry'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white54),
+                  ),
+                  onPressed: _start,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(tr('Try the camera again', 'Camera opnieuw proberen')),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _cameraView(CameraController? c) => Stack(
+    fit: StackFit.expand,
+    children: [
+      if (c == null || !c.value.isInitialized)
+        const Center(child: CircularProgressIndicator(color: Colors.white))
+      else
+        Center(
+          child: AspectRatio(aspectRatio: kIsWeb ? c.value.aspectRatio : 1 / c.value.aspectRatio, child: CameraPreview(c)),
+        ),
+      // Kader als hulp om te richten
+      Center(
+        child: Container(
+          width: 280,
+          height: 160,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white, width: 3),
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+      ),
+      Positioned(
+        left: 24,
+        right: 24,
+        bottom: 48,
+        child: Text(
+          tr('Point at the barcode on the packaging', 'Richt op de barcode van de verpakking'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+        ),
+      ),
+    ],
+  );
 }
 
 /// Zoekt een EAN/UPC-barcode in een grijswaardenbeeld. Probeert het beeld rechtop en 90° gedraaid (de camera van

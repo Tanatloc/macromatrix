@@ -249,6 +249,13 @@ double foodQueryScore(Food f, String rawQuery) {
     r'\b(chicken|beef|pork|turkey|lamb|fish|salmon|cod|tuna|rice|pasta|spaghetti|noodles?|quinoa|potato(es)?|lentils?|beans?|egg|eggs|kip|rijst|vis|aardappel(en)?)\b',
   );
   if (cookable.hasMatch(n) && RegExp(r'\b(cooked|boiled|baked|grilled|roasted|steamed|whole)\b').hasMatch(n)) s += 12;
+  // Rauw vlees, rauwe vis of rauwe vleeswaren alleen als je het zo noemt: "ham" of "bacon" op je bord is bereid, geen
+  // rauwe hamlap (SU-5). Gerookt, gedroogd of gezouten heet niet "raw" en blijft gewoon staan.
+  if (RegExp(r'\braw\b').hasMatch(n) &&
+      const {'meat', 'poultry', 'processed meat', 'fish'}.contains(f.label?.group) &&
+      !RegExp(r'\b(raw|rauw|uncooked|tartare|sushi|sashimi|carpaccio|ceviche|poke)\b').hasMatch(query)) {
+    s -= 10;
+  }
   // Frietjes zijn gefrituurd ("fries" vraagt dus wel om "fried" en "chips")
   if (RegExp(r'\b(fried|deep fried|candied|canned|syrup|chips|sweetened)\b').hasMatch(bakedBeans ? n.replaceAll('canned', '') : n) &&
       !RegExp(r'fried|fries|candied|canned|syrup|chips|sweet').hasMatch(query)) {

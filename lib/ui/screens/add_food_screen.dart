@@ -39,15 +39,28 @@ enum _Scope {
   String get label => tr(en, nl);
 }
 
+/// Barcode scannen vanuit het +-menu: meteen de scanner, zonder het zoekscherm ertussen, zodat terug uit de scanner
+/// terug is naar waar je was (NW-19). Met een code opent het zoekscherm en zoekt die meteen op (het product, of "niet
+/// gevonden" met etiket scannen of zelf invullen).
+Future<void> scanBarcodeFor(BuildContext context, Meal meal) async {
+  final code = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const ScanScreen()));
+  if (code == null || !context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => AddFoodScreen(meal: meal, barcode: code),
+    ),
+  );
+}
+
 /// Zoeken en toevoegen: recent gegeten, maaltijden, recepten, eigen producten, de ingebouwde database en
 /// Open Food Facts. Met [pickOnly] om een ingrediënt te kiezen (geeft een [ItemTemplate] terug).
 class AddFoodScreen extends StatefulWidget {
-  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false, this.forPlan = false, this.scan = false, this.initialQuery});
+  const AddFoodScreen({super.key, required this.meal, this.pickOnly = false, this.forPlan = false, this.barcode, this.initialQuery});
   final Meal meal;
   final bool pickOnly;
 
-  /// Meteen de camera openen om een barcode te scannen.
-  final bool scan;
+  /// Een gescande barcode meteen opzoeken (zie [scanBarcodeFor]).
+  final String? barcode;
 
   /// Met [pickOnly]: kiezen voor de planner (in plaats van voor een recept).
   final bool forPlan;
@@ -88,7 +101,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       _query.text = widget.initialQuery!.trim();
       WidgetsBinding.instance.addPostFrameCallback((_) => _onChanged(_query.text));
     }
-    if (widget.scan) WidgetsBinding.instance.addPostFrameCallback((_) => _scan());
+    if (widget.barcode case final code?) WidgetsBinding.instance.addPostFrameCallback((_) => _byBarcode(code));
   }
 
   @override
@@ -818,11 +831,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
         ),
         const SizedBox(height: 16),
       ],
-      if (meals.isNotEmpty) ...[
-        SectionHeader(tr('Saved meals', 'Opgeslagen maaltijden')),
-        _mealsPanel(meals, p),
-        const SizedBox(height: 16),
-      ],
+      if (meals.isNotEmpty) ...[SectionHeader(tr('Saved meals', 'Opgeslagen maaltijden')), _mealsPanel(meals, p), const SizedBox(height: 16)],
 
       SectionHeader(
         tr('Recently used', 'Recent gebruikt'),

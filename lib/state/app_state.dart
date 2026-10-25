@@ -164,7 +164,7 @@ class AppState extends ChangeNotifier {
   /// Maaltijd om iets aan toe te voegen: vandaag volgens de klok; op een andere dag de eerste maaltijd die nog leeg is,
   /// want wie 's avonds gisteren invult, begint niet bij het avondeten.
   Meal get suggestedMeal {
-    if (isToday) return Meal.forHour(DateTime.now().hour);
+    if (isToday) return Meal.forHour(appClock().hour);
     final used = {for (final e in _entries) e.meal};
     return Meal.values.firstWhere((m) => !used.contains(m), orElse: () => Meal.snacks);
   }
@@ -172,7 +172,7 @@ class AppState extends ChangeNotifier {
   /// Maaltijd voor een voorstel ("Wat moet ik nog eten?", "Grootste winst vandaag"): de maaltijd die nu komt, niet
   /// het ontbijt 's avonds (NW-10, NW-11). Zie [nextMealFor]; op een andere dag zoals [suggestedMeal].
   Meal get adviceMeal => isToday
-      ? nextMealFor(DateTime.now(), {
+      ? nextMealFor(appClock(), {
           for (final e in _entries)
             if (!e.foodRef.startsWith('supp:')) e.meal,
         })
@@ -406,8 +406,9 @@ class AppState extends ChangeNotifier {
 
   // ── Weergave ──
 
-  /// Licht, donker of zoals het toestel (opgeslagen als "light", "dark" of "system"); standaard licht.
-  String get themeMode => (user.setting('ui')?['theme'] as String?) ?? 'light';
+  /// Licht, donker of zoals het toestel (opgeslagen als "light", "dark" of "system"); standaard zoals het toestel,
+  /// net als de website, tot je zelf kiest (NW-8, NW-16).
+  String get themeMode => (user.setting('ui')?['theme'] as String?) ?? 'system';
 
   /// Taal van de app (alleen op dit toestel).
   void setLanguage(AppLang lang) {
@@ -1494,21 +1495,58 @@ class AppState extends ChangeNotifier {
     // Wat je eerder at, is bijna altijd wat je bedoelt
     final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
     var all = _candidates(q.query, first: pickedFood);
-    // Niets gevonden: probeer de woorden aan elkaar ("volkorenbrood") en dan het laatste woord ("brood")
     final words = q.query.split(RegExp(r'\s+'));
+    // Een bereiding die de databank bij dit product niet kent ("fried ham"): dan het product zelf, niet een ander
+    // product met die bereiding (gebakken champignons, want "champignon" bevat "ham"). Kent de databank de bereiding
+    // wel, dan verandert er niets: "scrambled eggs" blijft roerei (SU-5).
+    final bare = [
+      for (final w in words)
+        if (!RegExp(r'^(fried|pan-fried|grilled|roast|roasted|baked|boiled|scrambled|poached|steamed|stewed|braised|toasted|cooked)$').hasMatch(w)) w,
+    ];
+    if (bare.isNotEmpty && bare.length < words.length) {
+      final noun = RegExp('\\b${RegExp.escape(bare.last.replaceAll(RegExp(r'(es|s)$'), ''))}(es|s)?\\b');
+      // Is er een kandidaat die dat product zelf is (niet een gerecht met ham erin, zoals een croque madame)?
+      if (!all.any((f) => noun.hasMatch(f.label?.food ?? f.name.split(',').first.toLowerCase()))) {
+        // Producten zonder dat woord (de champignons) vallen weg; een gerecht met het product erin blijft staan
+        final keep = [
+          for (final f in all)
+            if (noun.hasMatch(f.name.toLowerCase())) f,
+        ];
+        final seen = {for (final f in keep) f.ref};
+        all = [...keep, ..._candidates(bare.join(' ')).where((f) => seen.add(f.ref))];
+      }
+    }
+    // Niets gevonden: probeer de woorden aan elkaar ("volkorenbrood") en dan elk woord apart, het laatste eerst
+    // ("brood"). Dan telt elk woord dat een product mist tegen: "balsamic glaze" is balsamico, geen taartglazuur (SU-5).
     if (all.isEmpty && words.length > 1) all = searchLocal(words.join()).take(25).toList();
-    if (all.isEmpty && words.length > 1) all = searchLocal(words.last).take(25).toList();
+    final partial = all.isEmpty && words.length > 1;
+    if (partial) {
+      final seen = <String>{};
+      all = [
+        for (final w in words.reversed)
+          if (w.length > 2)
+            for (final f in searchLocal(w).take(25))
+              if (seen.add(f.ref)) f,
+      ];
+    }
     // Eén woord met een tikfout ("porrige"): wat het zoekvak dan vindt
     if (all.isEmpty && words.length == 1) all = searchLocal(q.query).take(25).toList();
     // Hetzelfde basisproduct als bovenaan in het zoekvak, zodat Snel loggen en zoeken geen twee eierregels geven (N10)
-    final boxTop = all.isEmpty ? null : groupFoods(searchLocal(q.query)).firstOrNull?.main;
+    final boxTop = all.isEmpty || partial ? null : groupFoods(searchLocal(q.query)).firstOrNull?.main;
     if (boxTop != null && !all.any((f) => f.ref == boxTop.ref)) all = [...all, boxTop];
+    // Woorden die een product niet heeft, als niets alle woorden had
+    int missing(Food f) {
+      final n = f.name.toLowerCase();
+      return words.where((w) => w.length > 2 && !RegExp('\\b${RegExp.escape(w.replaceAll(RegExp(r'(es|s)$'), ''))}').hasMatch(n)).length;
+    }
+
     // Dezelfde score als het zoekvak (P152), plus je eigen keuzes en wat je eerder at
     double rank(int i, Food f) {
       var s = 20.0 - i * 0.15 + foodQueryScore(f, q.query);
       if (f.ref == picked) s += 200;
       if (f.ref == boxTop?.ref) s += 20;
       if (mine.contains(f.ref)) s += 25;
+      if (partial) s -= 8 * missing(f);
       return s;
     }
 

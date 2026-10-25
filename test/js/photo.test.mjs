@@ -3,7 +3,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { onRequestPost, useQuota } from '../../functions/api/photo.js';
+import { PROMPT, onRequestPost, useQuota } from '../../functions/api/photo.js';
 
 let rpc; // wat photo_quota_use antwoordt: { status, body } of 'throw'
 let rpcCalls;
@@ -101,4 +101,14 @@ test('useQuota: een vreemd antwoord telt als geen teller', async () => {
   assert.equal(await useQuota('Bearer tok', f), null);
   const pro = async () => Response.json({ allowed: true, used: 7, limit: 50, pro: true });
   assert.deepEqual(await useQuota('Bearer tok', pro), { allowed: true, used: 7, limit: 50, pro: true });
+});
+
+test('de vraag aan het model: bereiding en soort noemen, sausen apart, grammen voor vlees (SU-5)', async () => {
+  rpc = { status: 404, body: { code: 'PGRST202' } };
+  let sent = '';
+  const spy = { AI: { run: async (_, input) => ((sent = input.messages[0].content[0].text), { response: '2 scrambled eggs' }) } };
+  const res = await onRequestPost({ request: photoRequest(), env: spy });
+  assert.equal((await res.json()).text, '2 scrambled eggs');
+  assert.equal(sent, PROMPT);
+  for (const word of ['scrambled', 'wholemeal', 'rye', 'cooked ham', 'dressings', 'sausages']) assert.match(PROMPT, new RegExp(word));
 });

@@ -31,6 +31,12 @@
 
   <title>MacroMatrix</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Tijdens het laden al de kleur van het toestel (licht of donker), zoals de website en de app zelf (NW-8) -->
+  <meta name="color-scheme" content="light dark">
+  <style>
+    body { margin: 0; background: #F4F3EF; }
+    @media (prefers-color-scheme: dark) { body { background: #0D0F11; } }
+  </style>
 </head>
 <body>
   <!--

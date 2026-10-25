@@ -43,7 +43,7 @@ Future<void> showAddMenu(BuildContext context) {
   void push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   final items = <(IconData, Color, String, VoidCallback)>[
     (Icons.restaurant_rounded, p.protein, tr('Add food', 'Eten toevoegen'), () => push(AddFoodScreen(meal: meal))),
-    (Icons.qr_code_scanner_rounded, p.ink, tr('Scan barcode', 'Barcode scannen'), () => push(AddFoodScreen(meal: meal, scan: true))),
+    (Icons.qr_code_scanner_rounded, p.ink, tr('Scan barcode', 'Barcode scannen'), () => scanBarcodeFor(context, meal)),
     (Icons.bolt_rounded, p.carbs, tr('Quick log', 'Snel loggen'), () => showQuickLog(context, meal: meal)),
     // Foto van je bord: hetzelfde venster als Snel loggen, dat meteen om een foto vraagt
     (Icons.photo_camera_outlined, p.protein, tr('Photo', 'Foto'), () => showQuickLog(context, meal: meal, photo: true)),

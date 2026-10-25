@@ -60,6 +60,20 @@ class Account extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Je registreerde, maar vulde de code uit de mail nog niet in: dat e-mailadres, zodat het welkomscherm aanbiedt om
+  /// de bevestiging af te maken (NW-6). Hoogstens een week; weg na het bevestigen of inloggen.
+  String? get pendingConfirmation {
+    final p = db.setting('_pending_confirm');
+    final at = p?['at'] as int?;
+    if (p?['email'] is! String || at == null) return null;
+    return DateTime.now().millisecondsSinceEpoch - at < const Duration(days: 7).inMilliseconds ? p!['email'] as String : null;
+  }
+
+  void setPendingConfirmation(String? email) {
+    db.setSetting('_pending_confirm', email == null ? {} : {'email': email.trim(), 'at': DateTime.now().millisecondsSinceEpoch});
+    notifyListeners();
+  }
+
   SupabaseClient? _client;
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<void>? _dbSub;
@@ -194,6 +208,7 @@ class Account extends ChangeNotifier {
 
   /// Na het inloggen eerst alles ophalen, zodat bv. je profiel er meteen is op een nieuw toestel.
   Future<void> _afterLogin() async {
+    if (pendingConfirmation != null) db.setSetting('_pending_confirm', {});
     // Een ander account dan de vorige keer op dit toestel: de oude gegevens horen daar niet bij
     final previous = db.setting('_sync')?['user'];
     if (previous != null && previous != user?.id) {

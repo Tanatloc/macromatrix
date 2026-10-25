@@ -145,6 +145,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
+    final pending = context.select<Account, String?>((a) => a.pendingConfirmation);
     Widget point(IconData icon, String title, String text) => Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -233,6 +234,37 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  // Een registratie die nog op de code uit de mail wacht: meteen afmaken, niet opnieuw beginnen (NW-6)
+                  if (pending != null) ...[
+                    Container(
+                      key: const ValueKey('pending-confirm'),
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+                      decoration: BoxDecoration(color: p.brandSoft, borderRadius: BorderRadius.circular(14)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tr('Code from the email ready?', 'Code uit de mail bij de hand?'),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            tr('Your account for $pending is waiting to be confirmed.', 'Je account voor $pending wacht nog op je bevestiging.'),
+                            style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () =>
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => AuthScreen(register: true, confirmEmail: pending))),
+                              child: Text(tr('Confirm your account', 'Bevestig je account')),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   FilledButton(
                     style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen(register: true))),
@@ -280,20 +312,31 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
 enum _Step { register, confirm, login, forgot, reset }
 
+/// Het veld waar een foutmelding bij hoort: de melding staat onder dat veld (of dat vakje) en verdwijnt zodra je het
+/// aanpast (NW-5).
+enum _Field { email, code, password, password2, terms }
+
 /// Op een gsm-browser stelt Chrome bij een "nieuw wachtwoord"-veld zelf een wachtwoord voor; in de webversie blijft
 /// dat voorstel onzichtbaar en verschijnt het toetsenbord niet. Daarom op het web geen hint voor nieuwe wachtwoorden.
 const _newPasswordHints = kIsWeb ? null : [AutofillHints.newPassword];
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, required this.register});
+  const AuthScreen({super.key, required this.register, this.confirmEmail});
   final bool register;
+
+  /// Meteen de code invullen voor dit adres: een registratie die je eerder niet afmaakte (NW-6).
+  final String? confirmEmail;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  late _Step _step = widget.register ? _Step.register : _Step.login;
+  late _Step _step = widget.confirmEmail != null
+      ? _Step.confirm
+      : widget.register
+      ? _Step.register
+      : _Step.login;
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _password2 = TextEditingController();
@@ -304,6 +347,22 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _busy = false;
   String? _error;
   String? _info;
+  (String, _Field)? _fieldError;
+
+  /// Terug op het codescherm: naar het formulier waar je vandaan kwam, met alles nog ingevuld (NW-6).
+  _Step? _backTo;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.confirmEmail case final email?) {
+      _email.text = email;
+      _info = tr(
+        'Enter the 6-digit code we sent to $email. Also check your spam.',
+        'Vul de code van 6 cijfers in die we naar $email stuurden. Kijk ook in je spam.',
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -315,8 +374,10 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   void _go(_Step s, {String? info}) => setState(() {
+    _backTo = s == _Step.confirm && (_step == _Step.register || _step == _Step.login) && widget.confirmEmail == null ? _step : null;
     _step = s;
     _error = null;
+    _fieldError = null;
     _info = info;
     _code.clear();
     if (s == _Step.reset || s == _Step.register || s == _Step.login) {
@@ -330,6 +391,7 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _fieldError = null;
     });
     try {
       await action();
@@ -346,16 +408,42 @@ class _AuthScreenState extends State<AuthScreen> {
     if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
-  String? _check({bool email = true, bool password = false, bool twice = false, bool code = false}) {
-    if (email && !validEmail(_email.text)) return tr('Enter a valid email address.', 'Vul een geldig e-mailadres in.');
+  (String, _Field)? _check({bool email = true, bool password = false, bool twice = false, bool code = false}) {
+    if (email && !validEmail(_email.text)) return (tr('Enter a valid email address.', 'Vul een geldig e-mailadres in.'), _Field.email);
+    if (code && _code.text.trim().length < 6) {
+      return (tr('Enter the 6-digit code from the email.', 'Vul de code van 6 cijfers uit de mail in.'), _Field.code);
+    }
     if (password) {
       final p = passwordProblem(_password.text);
-      if (p != null) return p;
+      if (p != null) return (p, _Field.password);
     }
-    if (twice && _password.text != _password2.text) return tr('The two passwords do not match.', 'De twee wachtwoorden zijn niet gelijk.');
-    if (code && _code.text.trim().length < 6) return tr('Enter the 6-digit code from the email.', 'Vul de code van 6 cijfers uit de mail in.');
+    if (twice && _password.text != _password2.text) {
+      return (tr('The two passwords do not match.', 'De twee wachtwoorden zijn niet gelijk.'), _Field.password2);
+    }
     return null;
   }
+
+  /// De melding bij dit veld, of null.
+  String? _errorAt(_Field f) => _fieldError?.$2 == f ? _fieldError!.$1 : null;
+
+  /// Je past een veld aan: de melding bij dat veld en een algemene melding (bv. van de server) verdwijnen.
+  void _changed(_Field f) {
+    if (_fieldError?.$2 != f && _error == null) return;
+    setState(() {
+      if (_fieldError?.$2 == f) _fieldError = null;
+      _error = null;
+    });
+  }
+
+  /// Terug op het codescherm: het formulier van daarvoor, met e-mail en wachtwoord nog ingevuld.
+  void _back() => setState(() {
+    _step = _backTo!;
+    _backTo = null;
+    _error = null;
+    _fieldError = null;
+    _info = null;
+    _code.clear();
+  });
 
   Future<void> _submit() async {
     final a = context.read<Account>();
@@ -365,14 +453,19 @@ class _AuthScreenState extends State<AuthScreen> {
             _check(password: true, twice: true) ??
             (_terms
                 ? null
-                : tr(
-                    'Tick that you agree, otherwise we cannot store your data.',
-                    'Vink aan dat je akkoord gaat, anders kunnen we je gegevens niet bewaren.',
+                : (
+                    tr(
+                      'Tick that you agree, otherwise we cannot store your data.',
+                      'Vink aan dat je akkoord gaat, anders kunnen we je gegevens niet bewaren.',
+                    ),
+                    _Field.terms,
                   ));
-        if (problem != null) return setState(() => _error = problem);
+        if (problem != null) return setState(() => _fieldError = problem);
         var isNew = true;
         if (await _run(() async => isNew = await a.signUp(_email.text, _password.text))) {
           if (isNew) {
+            // Onthouden: ga je terug of sluit je de app, dan biedt het welkomscherm aan om de code nog in te vullen
+            a.setPendingConfirmation(_email.text);
             _go(
               _Step.confirm,
               info: tr(
@@ -392,13 +485,13 @@ class _AuthScreenState extends State<AuthScreen> {
           }
         }
       case _Step.confirm:
-        final problem = _check(code: true);
-        if (problem != null) return setState(() => _error = problem);
+        final problem = _check(email: false, code: true);
+        if (problem != null) return setState(() => _fieldError = problem);
         if (await _run(() => a.confirmSignUp(_email.text, _code.text))) _done();
       case _Step.login:
         final problem = _check();
-        if (problem != null) return setState(() => _error = problem);
-        if (_password.text.isEmpty) return setState(() => _error = tr('Enter your password.', 'Vul je wachtwoord in.'));
+        if (problem != null) return setState(() => _fieldError = problem);
+        if (_password.text.isEmpty) return setState(() => _fieldError = (tr('Enter your password.', 'Vul je wachtwoord in.'), _Field.password));
         try {
           setState(() => _busy = true);
           await a.signIn(_email.text, _password.text);
@@ -406,6 +499,7 @@ class _AuthScreenState extends State<AuthScreen> {
         } on AuthException catch (e) {
           if (e.code == 'email_not_confirmed') {
             await a.resendConfirmation(_email.text).catchError((_) {});
+            a.setPendingConfirmation(_email.text);
             _go(
               _Step.confirm,
               info: tr(
@@ -423,7 +517,7 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       case _Step.forgot:
         final problem = _check();
-        if (problem != null) return setState(() => _error = problem);
+        if (problem != null) return setState(() => _fieldError = problem);
         if (await _run(() => a.requestPasswordReset(_email.text))) {
           _go(
             _Step.reset,
@@ -434,8 +528,8 @@ class _AuthScreenState extends State<AuthScreen> {
           );
         }
       case _Step.reset:
-        final problem = _check(code: true, password: true, twice: true);
-        if (problem != null) return setState(() => _error = problem);
+        final problem = _check(email: false, code: true, password: true, twice: true);
+        if (problem != null) return setState(() => _fieldError = problem);
         if (await _run(() => context.read<Account>().resetPassword(_email.text, _code.text, _password.text))) _done();
     }
   }
@@ -456,8 +550,10 @@ class _AuthScreenState extends State<AuthScreen> {
     final needsTwice = _step == _Step.register || _step == _Step.reset;
     final needsCode = _step == _Step.confirm || _step == _Step.reset;
 
-    InputDecoration pw(String label) => InputDecoration(
+    InputDecoration pw(String label, _Field field) => InputDecoration(
       labelText: label,
+      errorText: _errorAt(field),
+      errorMaxLines: 2,
       prefixIcon: const Icon(Icons.lock_outline_rounded),
       suffixIcon: IconButton(
         tooltip: _show ? tr('Hide', 'Verbergen') : tr('Show', 'Tonen'),
@@ -466,184 +562,217 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(icon: Icon(Icons.arrow_back_rounded), tooltip: tr('Back', 'Terug'), onPressed: () => Navigator.of(context).maybePop()),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: _maybeAutofill(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.headlineMedium),
-                    const SizedBox(height: 8),
-                    if (_info != null)
-                      Container(
-                        margin: const EdgeInsets.only(top: 6),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(color: p.brandSoft, borderRadius: BorderRadius.circular(14)),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.info_outline_rounded, size: 20, color: p.brand),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(_info!, style: TextStyle(fontSize: 14, height: 1.45, color: p.ink)),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (_step == _Step.register)
-                      Text(
-                        tr(
-                          'With an account your data is stored safely and you see it on all your devices.',
-                          'Met een account bewaar je je gegevens veilig en zie je ze op al je toestellen.',
-                        ),
-                        style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
-                      )
-                    else if (_step == _Step.forgot)
-                      Text(
-                        tr('We will email you a code to choose a new password.', 'We mailen je een code om een nieuw wachtwoord te kiezen.'),
-                        style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
-                      ),
-                    // Eerst zonder account gebruikt: zeggen dat dat niet verloren gaat
-                    if (guest && (_step == _Step.register || _step == _Step.login)) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        _step == _Step.register
-                            ? tr(
-                                'Everything you logged so far comes along to your new account.',
-                                'Alles wat je tot nu toe logde, gaat mee naar je nieuwe account.',
-                              )
-                            : tr(
-                                'What you logged so far is added to your account. If your account already has a profile and goals, those are kept.',
-                                'Wat je tot nu toe logde, komt bij je account. Heeft je account al een profiel en doelen, dan blijven die.',
-                              ),
-                        key: const ValueKey('guest-upgrade-note'),
-                        style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
-                      ),
-                    ],
-                    const SizedBox(height: 22),
-                    if (needsEmail) ...[
-                      TextField(
-                        controller: _email,
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.email],
-                        textInputAction: TextInputAction.next,
-                        decoration: InputDecoration(labelText: tr('Email address', 'E-mailadres'), prefixIcon: Icon(Icons.mail_outline_rounded)),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (needsCode) ...[
-                      TextField(
-                        controller: _code,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: wholeInput,
-                        autofillHints: kIsWeb ? null : const [AutofillHints.oneTimeCode],
-                        maxLength: 6,
-                        style: numStyle(22),
-                        textInputAction: needsPassword ? TextInputAction.next : TextInputAction.done,
-                        decoration: InputDecoration(labelText: tr('Code from the email', 'Code uit de e-mail'), counterText: ''),
-                        onSubmitted: needsPassword ? null : (_) => _submit(),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (needsPassword) ...[
-                      TextField(
-                        controller: _password,
-                        focusNode: _passwordFocus,
-                        obscureText: !_show,
-                        autofillHints: _step == _Step.login ? const [AutofillHints.password] : _newPasswordHints,
-                        textInputAction: needsTwice ? TextInputAction.next : TextInputAction.done,
-                        decoration: pw(_step == _Step.reset ? tr('New password', 'Nieuw wachtwoord') : tr('Password', 'Wachtwoord')),
-                        onSubmitted: needsTwice ? null : (_) => _submit(),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (needsTwice) ...[
-                      TextField(
-                        controller: _password2,
-                        obscureText: !_show,
-                        autofillHints: _newPasswordHints,
-                        decoration: pw(tr('Repeat the password', 'Herhaal het wachtwoord')),
-                        onSubmitted: (_) => _submit(),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        tr('At least 8 characters, with letters and numbers.', 'Minstens 8 tekens, met letters en cijfers.'),
-                        style: TextStyle(fontSize: 12, color: p.ink3),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    if (_step == _Step.register)
-                      InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => setState(() => _terms = !_terms),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
+    final termsError = _errorAt(_Field.terms);
+    return PopScope(
+      canPop: _backTo == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _backTo != null) _back();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(icon: Icon(Icons.arrow_back_rounded), tooltip: tr('Back', 'Terug'), onPressed: () => Navigator.of(context).maybePop()),
+        ),
+        body: SafeArea(
+          // Bovenaan, niet in het midden: een foutmelding duwt dan niets omhoog onder je vinger (NW-4)
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: _maybeAutofill(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(title, style: Theme.of(context).textTheme.headlineMedium),
+                      const SizedBox(height: 8),
+                      if (_info != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 6),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(color: p.brandSoft, borderRadius: BorderRadius.circular(14)),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Checkbox(value: _terms, onChanged: (v) => setState(() => _terms = v ?? false)),
-                              const SizedBox(width: 4),
+                              Icon(Icons.info_outline_rounded, size: 20, color: p.brand),
+                              const SizedBox(width: 10),
                               Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: Text.rich(
-                                    TextSpan(
-                                      children: [
-                                        TextSpan(text: tr('I agree to the ', 'Ik ga akkoord met de ')),
-                                        WidgetSpan(
-                                          alignment: PlaceholderAlignment.baseline,
-                                          baseline: TextBaseline.alphabetic,
-                                          child: _Link(tr('terms', 'voorwaarden'), () => openPage('/terms/')),
-                                        ),
-                                        TextSpan(text: tr(' and the ', ' en het ')),
-                                        WidgetSpan(
-                                          alignment: PlaceholderAlignment.baseline,
-                                          baseline: TextBaseline.alphabetic,
-                                          child: _Link(tr('privacy policy', 'privacybeleid'), () => openPage('/privacy/')),
-                                        ),
-                                        TextSpan(
-                                          text: tr(
-                                            ', and give permission to store my nutrition and health data so the app can work.',
-                                            ', en geef toestemming om mijn voedings- en gezondheidsgegevens te bewaren om de app te laten werken.',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
-                                  ),
-                                ),
+                                child: Text(_info!, style: TextStyle(fontSize: 14, height: 1.45, color: p.ink)),
                               ),
                             ],
                           ),
+                        )
+                      else if (_step == _Step.register)
+                        Text(
+                          tr(
+                            'With an account your data is stored safely and you see it on all your devices.',
+                            'Met een account bewaar je je gegevens veilig en zie je ze op al je toestellen.',
+                          ),
+                          style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
+                        )
+                      else if (_step == _Step.forgot)
+                        Text(
+                          tr('We will email you a code to choose a new password.', 'We mailen je een code om een nieuw wachtwoord te kiezen.'),
+                          style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
                         ),
+                      // Eerst zonder account gebruikt: zeggen dat dat niet verloren gaat
+                      if (guest && (_step == _Step.register || _step == _Step.login)) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _step == _Step.register
+                              ? tr(
+                                  'Everything you logged so far comes along to your new account.',
+                                  'Alles wat je tot nu toe logde, gaat mee naar je nieuwe account.',
+                                )
+                              : tr(
+                                  'What you logged so far is added to your account. If your account already has a profile and goals, those are kept.',
+                                  'Wat je tot nu toe logde, komt bij je account. Heeft je account al een profiel en doelen, dan blijven die.',
+                                ),
+                          key: const ValueKey('guest-upgrade-note'),
+                          style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      if (needsEmail) ...[
+                        TextField(
+                          controller: _email,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          textInputAction: TextInputAction.next,
+                          onChanged: (_) => _changed(_Field.email),
+                          decoration: InputDecoration(
+                            labelText: tr('Email address', 'E-mailadres'),
+                            errorText: _errorAt(_Field.email),
+                            prefixIcon: Icon(Icons.mail_outline_rounded),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (needsCode) ...[
+                        TextField(
+                          controller: _code,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: wholeInput,
+                          autofillHints: kIsWeb ? null : const [AutofillHints.oneTimeCode],
+                          maxLength: 6,
+                          style: numStyle(22),
+                          textInputAction: needsPassword ? TextInputAction.next : TextInputAction.done,
+                          onChanged: (_) => _changed(_Field.code),
+                          decoration: InputDecoration(
+                            labelText: tr('Code from the email', 'Code uit de e-mail'),
+                            counterText: '',
+                            errorText: _errorAt(_Field.code),
+                          ),
+                          onSubmitted: needsPassword ? null : (_) => _submit(),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (needsPassword) ...[
+                        TextField(
+                          controller: _password,
+                          focusNode: _passwordFocus,
+                          obscureText: !_show,
+                          autofillHints: _step == _Step.login ? const [AutofillHints.password] : _newPasswordHints,
+                          textInputAction: needsTwice ? TextInputAction.next : TextInputAction.done,
+                          onChanged: (_) => _changed(_Field.password),
+                          decoration: pw(
+                            _step == _Step.reset ? tr('New password', 'Nieuw wachtwoord') : tr('Password', 'Wachtwoord'),
+                            _Field.password,
+                          ),
+                          onSubmitted: needsTwice ? null : (_) => _submit(),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (needsTwice) ...[
+                        TextField(
+                          controller: _password2,
+                          obscureText: !_show,
+                          autofillHints: _newPasswordHints,
+                          onChanged: (_) => _changed(_Field.password2),
+                          decoration: pw(tr('Repeat the password', 'Herhaal het wachtwoord'), _Field.password2),
+                          onSubmitted: (_) => _submit(),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          tr('At least 8 characters, with letters and numbers.', 'Minstens 8 tekens, met letters en cijfers.'),
+                          style: TextStyle(fontSize: 12, color: p.ink3),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      if (_step == _Step.register)
+                        InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _tickTerms(!_terms),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Checkbox(value: _terms, isError: termsError != null, onChanged: (v) => _tickTerms(v ?? false)),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          TextSpan(text: tr('I agree to the ', 'Ik ga akkoord met de ')),
+                                          WidgetSpan(
+                                            alignment: PlaceholderAlignment.baseline,
+                                            baseline: TextBaseline.alphabetic,
+                                            child: _Link(tr('terms', 'voorwaarden'), () => openPage('/terms/')),
+                                          ),
+                                          TextSpan(text: tr(' and the ', ' en het ')),
+                                          WidgetSpan(
+                                            alignment: PlaceholderAlignment.baseline,
+                                            baseline: TextBaseline.alphabetic,
+                                            child: _Link(tr('privacy policy', 'privacybeleid'), () => openPage('/privacy/')),
+                                          ),
+                                          TextSpan(
+                                            text: tr(
+                                              ', and give permission to store my nutrition and health data so the app can work.',
+                                              ', en geef toestemming om mijn voedings- en gezondheidsgegevens te bewaren om de app te laten werken.',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      style: TextStyle(fontSize: 13.5, height: 1.45, color: p.ink2),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (termsError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, bottom: 4),
+                          child: Text(
+                            termsError,
+                            key: const ValueKey('terms-error'),
+                            style: TextStyle(fontSize: 12.5, color: p.high),
+                          ),
+                        ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: p.highSoft, borderRadius: BorderRadius.circular(12)),
+                          child: Text(_error!, style: TextStyle(fontSize: 13.5, color: p.high)),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                        onPressed: _busy ? null : _submit,
+                        child: _busy
+                            ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: p.ink3))
+                            : Text(button),
                       ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: p.highSoft, borderRadius: BorderRadius.circular(12)),
-                        child: Text(_error!, style: TextStyle(fontSize: 13.5, color: p.high)),
-                      ),
+                      const SizedBox(height: 10),
+                      ..._links(),
                     ],
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                      onPressed: _busy ? null : _submit,
-                      child: _busy
-                          ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: p.ink3))
-                          : Text(button),
-                    ),
-                    const SizedBox(height: 10),
-                    ..._links(),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -652,6 +781,11 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     );
   }
+
+  void _tickTerms(bool on) => setState(() {
+    _terms = on;
+    if (on && _fieldError?.$2 == _Field.terms) _fieldError = null;
+  });
 
   /// Velden groeperen voor wachtwoordbeheerders, maar op het web alleen bij inloggen (zie [_newPasswordHints]).
   Widget _maybeAutofill({required Widget child}) => !kIsWeb || _step == _Step.login ? AutofillGroup(child: child) : child;
@@ -671,7 +805,10 @@ class _AuthScreenState extends State<AuthScreen> {
             setState(() => _info = tr('New code sent to ${_email.text.trim()}.', 'Nieuwe code verstuurd naar ${_email.text.trim()}.'));
           }
         }),
-        link(tr('Different email address', 'Ander e-mailadres'), () => _go(_Step.register)),
+        link(tr('Different email address', 'Ander e-mailadres'), () {
+          a.setPendingConfirmation(null);
+          _go(_Step.register);
+        }),
       ],
       _Step.forgot => [link(tr('Back to log in', 'Terug naar inloggen'), () => _go(_Step.login))],
       _Step.reset => [
@@ -769,7 +906,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Eyebrow(tr('Step 2 of 2', 'Stap 2 van 2')),
+                  // Geen "stap 2 van 2": de eerste stap (het account) zag je niet als stap (NW-16)
+                  Eyebrow(tr('Last step', 'Laatste stap')),
                   const SizedBox(height: 6),
                   Text(tr('About you', 'Over jou'), style: Theme.of(context).textTheme.headlineMedium),
                   const SizedBox(height: 8),

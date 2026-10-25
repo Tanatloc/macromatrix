@@ -13,12 +13,17 @@ const PER_HOUR = 30;
 // Llama 4 Scout: kan beelden lezen, vraagt geen aparte licentie-aanvaarding (zoals Llama 3.2 Vision) en is goedkoop
 const MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
-const PROMPT = [
+// De bereiding en de soort tellen bij het opzoeken (roerei is geen gekookt ei, roggebrood geen wit brood), dus het
+// model moet ze noemen; sausen en dressings apart, want die zie je makkelijk over het hoofd (SU-5).
+export const PROMPT = [
   'You look at a photo of a meal and list every food and drink you can see, with an estimated amount.',
   'Answer in English, on one line, as a comma-separated list, for example:',
-  '150 g spaghetti bolognese, 1 slice of bread, 1 glass of orange juice',
+  '150 g spaghetti bolognese, 2 slices of wholemeal bread, 2 scrambled eggs, 30 g caesar dressing, 1 glass of orange juice',
   'Rules: use grams ("120 g rice") or a common portion ("1 apple", "2 eggs", "1 cup of coffee", "1 bowl of soup").',
-  'Use plain food names that a nutrition database would know. Count separate items separately.',
+  'Say how each food is prepared and which kind it is when you can see it: scrambled, fried, poached or boiled eggs; white, wholemeal or rye bread; cooked ham; grilled chicken; boiled rice.',
+  'Give grams for meat, fish and sausages, judged from their size on the plate (a thin sausage is about 35 g, a thick one about 60 g).',
+  'List sauces, dressings, oils and spreads you can see as separate items, with grams (2 tablespoons of dressing is about 30 g).',
+  'Use plain food names that a nutrition database would know, without size words like small, thin or large. Count separate items separately.',
   'No explanations, no totals, no calories, no extra text. If there is no food or drink in the photo, answer: none',
 ].join('\n');
 
