@@ -42,6 +42,20 @@ friends, levels, badges and weekly battles to keep you going. European data firs
 | USDA FoodData Central (US), incl. Branded Foods | Public domain (CC0) |
 | Open Food Facts (products, additives) | ODbL |
 
+The values from these tables were converted to common units and definitions, combined, and in places estimated or
+corrected (see `tool/FOODS_CHANGES.md`); estimated values are marked with ≈ in the app.
+
+- ANSES. 2025. Ciqual French food composition table (https://ciqual.anses.fr), Licence Ouverte 2.0.
+- Food data (frida.fooddata.dk), version 6.1, National Food Institute, Technical University of Denmark (DTU).
+- Contains public sector information licensed under the Open Government Licence v3.0 (McCance and Widdowson's
+  Composition of Foods Integrated Dataset 2021, Public Health England / Office for Health Improvement and Disparities).
+- Livsmedelsverket, Livsmedelsdatabasen (https://soknaringsinnehall.livsmedelsverket.se), licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); changes were made.
+- Contains data under the Norwegian licence for Open Government data (NLOD) made available by Mattilsynet
+  (Matvaretabellen, https://www.matvaretabellen.no).
+- U.S. Department of Agriculture, Agricultural Research Service. FoodData Central (https://fdc.nal.usda.gov).
+- Open Food Facts (https://world.openfoodfacts.org), available under the Open Database License (ODbL).
+
 Reference values: EFSA Dietary Reference Values; essential amino acids: WHO/FAO/UNU 2007. **Not medical advice.**
 
 ## Building
@@ -86,5 +100,12 @@ MacroMatrix is free software: you can redistribute it and/or modify it under the
 [GNU Affero General Public License v3.0](LICENSE). If you run a modified version as a service, you must make your
 source code available to its users.
 
-The name **MacroMatrix** and the MacroMatrix logo are not covered by this licence: please do not use them for
-modified versions or other products without permission. Data from the sources above remains under their own licences.
+### Name and logo
+
+The AGPL covers the code, not the brand. The name **MacroMatrix**, the logo and the app icon are not covered by this
+licence and may not be used for modified versions or other products without written permission from VanoWeb. If you
+publish your own build (in an app store or as a website), give it a different name, icon and application id (not
+`online.divinenet.macromatrix`), and don't suggest that it is the official app. Saying that your version is based on
+MacroMatrix, with a link to this repository, is fine.
+
+Data from the sources above remains under their own licences.

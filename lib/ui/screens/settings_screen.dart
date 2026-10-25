@@ -498,11 +498,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           Text(
             tr(
-              'Branded products: Open Food Facts, available under the Open Database License (ODbL).\n'
+              'Values were converted, combined and in places estimated (≈) or corrected by MacroMatrix. '
+                  'Contains public sector information licensed under the Open Government Licence v3.0 (CoFID). '
+                  'Contains data under the Norwegian licence for Open Government data (NLOD) made available by Mattilsynet. '
+                  'Livsmedelsverket data under CC BY 4.0. Frida food data, version 6.1, DTU Food Institute.\n'
+                  'Branded products: Open Food Facts, available under the Open Database License (ODbL).\n'
                   'Reference values: EFSA Dietary Reference Values; essential amino acids: WHO/FAO/UNU 2007.\n'
                   'Fonts: Geist and Geist Mono (SIL Open Font License).\n'
                   'This app does not give medical advice.',
-              'Merkproducten: Open Food Facts, beschikbaar onder de Open Database License (ODbL).\n'
+              'Waarden werden door MacroMatrix omgerekend, samengevoegd en soms geschat (≈) of gecorrigeerd. '
+                  'Bevat overheidsinformatie onder de Open Government Licence v3.0 (CoFID). '
+                  'Bevat gegevens onder de Noorse licentie voor open overheidsdata (NLOD), ter beschikking gesteld door Mattilsynet. '
+                  'Gegevens van Livsmedelsverket onder CC BY 4.0. Frida-voedingsdata, versie 6.1, DTU Food Institute.\n'
+                  'Merkproducten: Open Food Facts, beschikbaar onder de Open Database License (ODbL).\n'
                   'Richtwaarden: EFSA Dietary Reference Values; essentiële aminozuren: WHO/FAO/UNU 2007.\n'
                   'Lettertypes: Geist en Geist Mono (SIL Open Font License).\n'
                   'Deze app geeft geen medisch advies.',
