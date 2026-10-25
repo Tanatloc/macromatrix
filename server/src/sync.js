@@ -90,6 +90,23 @@ export async function fetchRows(db, uid, table, keys) {
   return out;
 }
 
+/**
+ * Alle tabellen in één keer: { tabel: cursor } → { tabel: rijen } (één D1-batch, dus één wachttijd). Een tabel met
+ * [limit] rijen heeft er misschien meer: de app haalt die daarna met pull verder op.
+ */
+export async function pullAll(db, uid, cursors, limit) {
+  if (!cursors || typeof cursors !== 'object' || Array.isArray(cursors)) throw new DbError('22P02', 'cursors must be an object');
+  const names = Object.keys(cursors);
+  for (const t of names) tableOf(t);
+  const n = Math.min(Math.max(Number.parseInt(limit, 10) || MAX_ROWS, 1), 1000);
+  const res = await db.batch(
+    names.map((t) =>
+      db.prepare(`SELECT * FROM ${q(t)} WHERE user_id = ? AND server_seq > ? ORDER BY server_seq LIMIT ?`).bind(uid, Number.parseInt(cursors[t] ?? '0', 10) || 0, n),
+    ),
+  );
+  return Object.fromEntries(names.map((t, i) => [t, res[i].results]));
+}
+
 /** Geeft { sleutel: updated_at } van de rijen die echt opgeslagen werden. */
 export async function push(db, uid, table, rows, { insertOnly = false } = {}) {
   const key = tableOf(table);
@@ -124,6 +141,7 @@ export async function push(db, uid, table, rows, { insertOnly = false } = {}) {
   } catch (e) {
     throw fromD1(e);
   }
+  push.lastDbMs = res.reduce((n, r) => n + (r.meta?.duration ?? 0), 0);
   const stored = new Set(res.slice(0, stmts.length).flatMap((r) => r.results.map((x) => String(x.k))));
   const out = {};
   for (const r of res.slice(stmts.length)) for (const x of r.results) if (stored.has(String(x.k))) out[x.k] = x.updated_at;

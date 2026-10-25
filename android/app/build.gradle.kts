@@ -25,8 +25,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "online.divinenet.macromatrix"
+        // Testversie tegen de staging-server (bouwen met -P staging=true, zie server/tool/build_staging_apk.sh):
+        // een eigen app-id en naam, zodat ze naast de gewone app staat en die niet raakt
+        val staging = project.findProperty("staging") == "true"
+        applicationId = "online.divinenet.macromatrix" + if (staging) ".staging" else ""
+        manifestPlaceholders["appLabel"] = if (staging) "MM Staging" else "MacroMatrix"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Health Connect vraagt minstens Android 8 (API 26)

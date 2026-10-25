@@ -73,3 +73,17 @@ test('fetch: alleen eigen rijen, ook met veel sleutels', async () => {
   assert.equal(got.length, 250);
   assert.ok(got.every((r) => r.user_id === 'a'));
 });
+
+test('pull-all: alle tabellen in één keer, elk met zijn eigen cursor, alleen eigen rijen', async () => {
+  const { pullAll } = await import('../src/sync.js');
+  const db = setup();
+  await push(db, 'a', 'diary', [entry('1', 10), entry('2', 20)]);
+  await push(db, 'a', 'notes', [{ day: '2026-10-25', text: 'hoi', updated_at: 1 }]);
+  await push(db, 'b', 'diary', [entry('3', 30)]);
+  const first = (await pull(db, 'a', 'diary', null, 500))[0].server_seq;
+  const r = await pullAll(db, 'a', { diary: String(first), notes: '0', settings: '0' }, 500);
+  assert.deepEqual(r.diary.map((x) => x.id), ['2']);
+  assert.equal(r.notes.length, 1);
+  assert.deepEqual(r.settings, []);
+  await assert.rejects(pullAll(db, 'a', { user: '0' }, 10), { code: '42P01' });
+});

@@ -4,7 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 out=build/staging-site
-rm -rf "$out"
+# Alles opnieuw, behalve de test-APK (server/tool/build_staging_apk.sh)
+mkdir -p "$out"
+find "$out" -mindepth 1 -maxdepth 1 ! -name download -exec rm -rf {} +
 flutter build web --release --no-web-resources-cdn --base-href /app/ --dart-define-from-file=supabase.json \
   --dart-define=API_URL=https://api-staging.macromatrix.eu -o "$out/app"
 cp -r site/. "$out/"

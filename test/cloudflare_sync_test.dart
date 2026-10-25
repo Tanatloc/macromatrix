@@ -54,6 +54,20 @@ class _Server {
       ]..sort((a, b) => (a['server_seq'] as int).compareTo(b['server_seq'] as int));
       return http.Response(jsonEncode(out.take(limit).toList()), 200);
     }
+    if (r.url.path == '/v1/sync/pull-all') {
+      final b = jsonDecode(r.body) as Map;
+      final limit = b['limit'] as int;
+      return http.Response(
+        jsonEncode({
+          for (final e in (b['cursors'] as Map).entries)
+            e.key: ([
+              for (final row in (rows[e.key] ?? {}).values)
+                if (row['user_id'] == uid && (row['server_seq'] as int) > int.parse('${e.value}')) row,
+            ]..sort((a, b) => (a['server_seq'] as int).compareTo(b['server_seq'] as int))).take(limit).toList(),
+        }),
+        200,
+      );
+    }
     if (r.url.path == '/v1/sync/fetch') {
       final b = jsonDecode(r.body) as Map;
       final t = rows[b['table']] ?? {};
@@ -86,7 +100,10 @@ void main() {
     // Een volgende keer vraagt B alleen wat na die cursor kwam
     server.requests.clear();
     await sync(b);
-    expect(server.requests.where((r) => r.url.path == '/v1/sync/pull' && r.url.queryParameters['table'] == 'diary').single.url.queryParameters['since'], '$cursor');
+    // Alles in één verzoek, elke tabel vanaf zijn cursor
+    final pulls = server.requests.where((r) => r.url.path.startsWith('/v1/sync/pull')).toList();
+    expect(pulls.single.url.path, '/v1/sync/pull-all');
+    expect((jsonDecode(pulls.single.body) as Map)['cursors']['diary'], '$cursor');
   });
 
   test('een cursor van Supabase (een tijdstip) telt niet: alles opnieuw ophalen', () async {
@@ -131,5 +148,18 @@ void main() {
     expect(remote.classify(const PostgrestException(message: 'x', code: '23514')), SyncErrorKind.row);
     expect(remote.classify(const PostgrestException(message: 'x', code: 'PGRST301')), SyncErrorKind.fatal);
     expect(remote.classify(const PostgrestException(message: 'x', code: '42P01')), SyncErrorKind.table);
+  });
+
+  test('een volle pagina: die tabel daarna apart verder ophalen', () async {
+    for (var i = 0; i < SyncEngine.pullPage + 50; i++) {
+      a.setNote('d$i', 'n$i');
+    }
+    await sync(a);
+    final raw = sqlite3.openInMemory();
+    final c = UserDb(raw);
+    server.requests.clear();
+    await SyncEngine(c, server.remote('u1'), userId: 'u1').run();
+    expect(raw.select('SELECT count(*) n FROM notes').first['n'], SyncEngine.pullPage + 50);
+    expect(server.requests.where((r) => r.url.path == '/v1/sync/pull' && r.url.queryParameters['table'] == 'notes'), isNotEmpty);
   });
 }

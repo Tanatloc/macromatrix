@@ -60,7 +60,15 @@ export async function checkSignupLimit(env, ip) {
   }
 }
 
+// Eén Better Auth per Worker-instantie (env blijft dezelfde), niet bij elk verzoek opnieuw opbouwen
+const instances = new WeakMap();
+
 export function createAuth(env) {
+  if (!instances.has(env)) instances.set(env, buildAuth(env));
+  return instances.get(env);
+}
+
+function buildAuth(env) {
   const auth = betterAuth({
     appName: 'MacroMatrix',
     database: env.DB,

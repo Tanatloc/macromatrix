@@ -76,3 +76,22 @@ test('de import-SQL laadt in het echte schema, ook lange tekst, en twee keer lad
   d1.settings[0].value = '{"x":1}';
   assert.equal(compareRows(snapshot(), d1, { seqBase: 2 }).diffs.length, 1);
 });
+
+test('vergelijking: een rij die na de import op staging veranderde, is geen fout maar telt apart', () => {
+  const snap = { ...snapshot(), at: '2026-10-25T12:00:00.000Z' };
+  const d1 = {
+    user: transform(snap).users.map((u) => u.user),
+    account: transform(snap).users.map((u) => u.account),
+    notes: transform(snap).tables.notes.map((r) => ({ ...r })),
+    settings: transform(snap).tables.settings.map((r) => ({ ...r })),
+    friendships: [{ requester: 'u1', addressee: 'u2', accepted: 0, created_at: '2026-10-25T13:00:00.000Z' }],
+  };
+  // Nieuw na de import (server_seq voorbij de geïmporteerde) en een nieuwe vriendschap: later, geen verschil
+  d1.notes[0] = { ...d1.notes[0], text: 'later gewijzigd', server_seq: 99 };
+  const r = compareRows(snap, d1);
+  assert.deepEqual(r.diffs, []);
+  assert.equal(r.later.length, 2);
+  // Een echte afwijking zonder nieuwere tijd blijft een verschil
+  d1.settings[0] = { ...d1.settings[0], value: '{"kapot":1}' };
+  assert.equal(compareRows(snap, d1).diffs.length, 1);
+});

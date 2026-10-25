@@ -77,6 +77,9 @@ class CloudflareApi implements Rpc {
 abstract class SequenceRemote implements SyncRemote {
   /// Cursor van een opgehaalde rij.
   String cursorOf(Map<String, Object?> row);
+
+  /// Alle tabellen in één verzoek, elk vanaf zijn cursor (null = alles), hooguit [limit] rijen per tabel.
+  Future<Map<String, List<Map<String, Object?>>>> pullAll(Map<String, String?> cursors, int limit);
 }
 
 /// De eigen server als [SyncRemote].
@@ -100,6 +103,15 @@ class CloudflareRemote implements SequenceRemote {
   Future<List<Map<String, Object?>>> fetch(SyncTable table, List<String> keys) async {
     final rows = await api._post('/v1/sync/fetch', {'table': table.name, 'keys': keys}) as List;
     return [for (final r in rows) (r as Map).cast<String, Object?>()];
+  }
+
+  @override
+  Future<Map<String, List<Map<String, Object?>>>> pullAll(Map<String, String?> cursors, int limit) async {
+    final res = await api._post('/v1/sync/pull-all', {
+      'cursors': {for (final e in cursors.entries) e.key: e.value ?? '0'},
+      'limit': limit,
+    }) as Map;
+    return {for (final e in res.entries) '${e.key}': [for (final r in e.value as List) (r as Map).cast<String, Object?>()]};
   }
 
   @override

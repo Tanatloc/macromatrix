@@ -9,7 +9,7 @@ import { DbError, errorResponse, json } from './errors.js';
 import { hubFor } from './hub.js';
 import { checkTicket, makeTicket, notifyUser } from './live.js';
 import { callRpc } from './rpc/index.js';
-import { fetchRows, pull, push } from './sync.js';
+import { fetchRows, pull, pullAll, push } from './sync.js';
 
 export { UserHub } from './hub.js';
 export { Internal } from './internal.js';
@@ -29,11 +29,24 @@ function cors(request, env, response) {
   return r;
 }
 
+// Sessies kort onthouden per Worker-instantie: bespaart bij bijna elk verzoek de D1-rondes van de sessiecontrole.
+// Een ingetrokken sessie werkt daardoor hoogstens SESSION_TTL nog (een Supabase-JWT bleef tot een uur geldig).
+const SESSION_TTL = 60_000;
+const sessions = new Map();
+
 /** Ingelogde gebruiker en sessie uit de Bearer-token, of null. */
 async function session(env, request) {
-  if (!request.headers.get('authorization')) return null;
+  const auth = request.headers.get('authorization');
+  if (!auth) return null;
+  const hit = sessions.get(auth);
+  if (hit && hit.until > Date.now()) return hit.s;
   const s = await createAuth(env).api.getSession({ headers: request.headers });
-  return s?.user?.id ? { uid: s.user.id, sid: s.session.id } : null;
+  const out = s?.user?.id ? { uid: s.user.id, sid: s.session.id } : null;
+  if (out) {
+    if (sessions.size > 5000) sessions.clear();
+    sessions.set(auth, { s: out, until: Math.min(Date.now() + SESSION_TTL, Date.parse(s.session.expiresAt)) });
+  }
+  return out;
 }
 
 /** Grove limiet per sleutel (IP of gebruiker); zonder binding (lokaal) geen limiet. */
@@ -74,6 +87,10 @@ async function api(request, env, ctx, url) {
   if (path === '/v1/sync/pull' && request.method === 'GET') {
     return json(await pull(env.DB, uid, url.searchParams.get('table'), url.searchParams.get('since'), url.searchParams.get('limit')));
   }
+  if (path === '/v1/sync/pull-all' && request.method === 'POST') {
+    const b = await body(request);
+    return json(await pullAll(env.DB, uid, b.cursors, b.limit));
+  }
   if (path === '/v1/sync/fetch' && request.method === 'POST') {
     const b = await body(request);
     return json(await fetchRows(env.DB, uid, b.table, b.keys));
@@ -82,7 +99,8 @@ async function api(request, env, ctx, url) {
     const b = await body(request);
     const saved = await push(env.DB, uid, b.table, b.rows, { insertOnly: b.insertOnly === true });
     if (Object.keys(saved).length) waitUntil(notifyUser(env, uid, { type: 'changes', tables: [b.table] }));
-    return json(saved);
+    // Hoeveel tijd D1 zelf nodig had (voor metingen, zie tool/load_check.mjs)
+    return json(saved, 200, { 'server-timing': `db;dur=${(push.lastDbMs ?? 0).toFixed(1)}` });
   }
   const m = path.match(/^\/v1\/rpc\/([a-z0-9_]{1,64})$/);
   if (m && request.method === 'POST') {
@@ -111,6 +129,9 @@ export default {
       // Uitloggen: daarna ook de live verbinding van die sessie sluiten
       const out = url.pathname === '/auth/sign-out' ? await session(env, request).catch(() => null) : null;
       const res = await createAuth(env).handler(request);
+      // Uitgelogd of alles ingetrokken: niet meer uit het geheugen halen (op deze instantie)
+      if (out && res.ok) sessions.delete(request.headers.get('authorization'));
+      if (res.ok && ['/auth/revoke-sessions', '/auth/change-password', '/auth/email-otp/reset-password'].includes(url.pathname)) sessions.clear();
       if (out && res.ok) ctx.waitUntil(hubFor(env, out.uid).closeSession(out.sid).catch(() => {}));
       return cors(request, env, res);
     }

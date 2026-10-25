@@ -137,10 +137,39 @@ class SyncEngine {
       }
     }
 
-    // De eigen server: alle tabellen tegelijk (één wachttijd in plaats van negen). Elke tabel schrijft in zijn eigen
-    // transactie, dus dat kan veilig door elkaar. Supabase zoals vroeger, na elkaar.
-    if (remote is SequenceRemote) {
-      await Future.wait([for (final t in UserDb.syncTables) pull(t)], eagerError: true);
+    // De eigen server: alle tabellen in één verzoek; alleen een tabel met een volle pagina daarna nog apart verder.
+    // Supabase zoals vroeger, tabel per tabel.
+    final r = remote;
+    if (r is SequenceRemote) {
+      final start = {for (final t in UserDb.syncTables) t.name: int.tryParse('${cursors[t.name]}') == null ? null : '${cursors[t.name]}'};
+      Map<String, List<Map<String, Object?>>> first;
+      try {
+        first = await r.pullAll(start, pullPage);
+      } catch (e) {
+        if (_fatal(e)) rethrow;
+        // Bv. één tabel die de server (nog) niet kent: dan tabel per tabel, zodat de andere wel lukken
+        first = const {};
+        for (final t in UserDb.syncTables) {
+          await pull(t);
+        }
+      }
+      _check();
+      for (final t in UserDb.syncTables) {
+        final rows = first[t.name] ?? const [];
+        if (rows.isNotEmpty) {
+          db.transaction(() {
+            for (final row in rows) {
+              if (db.applyRemote(t, row)) _pulled++;
+            }
+          });
+          cursors[t.name] = r.cursorOf(rows.last);
+        } else if (start[t.name] == null) {
+          // Niets op de server: de cursor van Supabase (een tijdstip) mag weg
+          cursors.remove(t.name);
+        }
+        if (first.isNotEmpty && t.name == 'settings') settingsPulled = true;
+        if (rows.length >= pullPage) await pull(t);
+      }
     } else {
       for (final t in UserDb.syncTables) {
         await pull(t);

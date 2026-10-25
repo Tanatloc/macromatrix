@@ -7,6 +7,8 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // De Worker draait dicht bij de database (veel korte D1-rondes per verzoek) in plaats van bij de gebruiker
+  "placement": { "mode": "smart" },
   // UserHub: één Durable Object per gebruiker voor live meldingen (src/hub.js)
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserHub"] }],
   "env": {

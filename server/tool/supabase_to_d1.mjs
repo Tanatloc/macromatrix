@@ -206,9 +206,16 @@ function load(dir, opts) {
 
 // ── Vergelijken ──
 
-export function compareRows(snap, d1, { seqBase = 0 } = {}) {
-  const { tables, users } = transform(snap);
+export function compareRows(snap, d1, { seqBase = 0, seqCount } = {}) {
+  const { tables, users, seqCount: imported } = transform(snap);
+  seqCount ??= imported;
   const diffs = [];
+  // Rijen die na de import op staging veranderden (iemand gebruikte de app intussen): apart, geen fout
+  const later = [];
+  const since = Date.parse(snap.at);
+  const changedSince = (r) =>
+    (typeof r.server_seq === 'number' && r.server_seq - seqBase > seqCount) ||
+    ['updated_at', 'updatedAt', 'created_at', 'createdAt'].some((c) => typeof r[c] === 'string' && Date.parse(r[c]) > since);
   const perTable = {};
   const keyOf = (r, key) => key.map((c) => r[c]).join('\u0000');
   const check = (t, key, want, got, skip = []) => {
@@ -221,6 +228,10 @@ export function compareRows(snap, d1, { seqBase = 0 } = {}) {
         continue;
       }
       g.delete(k);
+      if (changedSince(r) && Object.keys(w).some((c) => !skip.includes(c) && w[c] !== (c === 'server_seq' ? r[c] - seqBase : r[c]))) {
+        later.push(`${t} ${k}`);
+        continue;
+      }
       for (const c of Object.keys(w)) {
         if (skip.includes(c)) continue;
         const a = w[c], b = c === 'server_seq' ? r[c] - seqBase : r[c];
@@ -229,13 +240,13 @@ export function compareRows(snap, d1, { seqBase = 0 } = {}) {
         if (a !== b) diffs.push(`${t} ${k}: ${c} ${show(a)} != ${show(b)}`);
       }
     }
-    for (const k of g.keys()) diffs.push(`${t}: extra in D1: ${k}`);
+    for (const [k, r] of g) (changedSince(r) ? later : diffs).push(`${t}: extra in D1: ${k}`);
     perTable[t] = { supabase: want.length, d1: got.length };
   };
   check('user', ['id'], users.map((u) => u.user), d1.user);
   check('account', ['id'], users.map((u) => u.account), d1.account);
   for (const t of Object.keys(tables)) check(t, snap.schema[t].key, tables[t], d1[t] ?? []);
-  return { diffs, perTable };
+  return { diffs, perTable, later };
 }
 
 function compare(dir, opts) {
@@ -249,7 +260,7 @@ function compare(dir, opts) {
   // server_seq: de import telt op bij wat er al was; de laagste geïmporteerde waarde is base + 1
   const seqs = SYNC.flatMap((t) => (d1[t] ?? []).map((r) => r.server_seq));
   const seqBase = seqs.length ? Math.min(...seqs) - 1 : 0;
-  const { diffs, perTable } = compareRows(snap, d1, { seqBase });
+  const { diffs, perTable, later } = compareRows(snap, d1, { seqBase });
   const [{ active }] = d1Query('SELECT active FROM import_mode', opts);
   if (active !== 0) diffs.push('import_mode staat nog aan');
   // Per gebruiker: aantallen (alleen tabellen met user_id)
@@ -262,6 +273,7 @@ function compare(dir, opts) {
   const userDiffs = Object.entries(perUser).filter(([, v]) => v.s !== v.d);
   for (const [t, v] of Object.entries(perTable)) console.log(`${t.padEnd(18)} supabase ${String(v.supabase).padStart(6)}  d1 ${String(v.d1).padStart(6)}`);
   console.log(`gebruikers met afwijkende aantallen: ${userDiffs.length} (van ${Object.keys(perUser).length})`);
+  if (later.length) console.log(`na de import gewijzigd op staging (geen fout): ${later.length}${later.length <= 5 ? ` (${later.join(', ')})` : ''}`);
   console.log(`verschillen: ${diffs.length}`);
   for (const d of diffs.slice(0, 50)) console.log('  ' + d);
   return diffs.length + userDiffs.length;
