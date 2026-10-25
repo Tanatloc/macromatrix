@@ -1,0 +1,21 @@
+// Worker "macromatrix-api" (api.macromatrix.eu). Geen geheimen hier: die staan als Worker-secrets bij Cloudflare.
+// Account: via de omgevingsvariabele CLOUDFLARE_ACCOUNT_ID.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "macromatrix-api",
+  "compatibility_date": "2026-10-01",
+  "env": {
+    // Testomgeving: kopie van de productiedata (tool/supabase_to_d1.mjs), EU-jurisdictie
+    "staging": {
+      "name": "macromatrix-api-staging",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "macromatrix-staging",
+          "database_id": "769e5567-132b-4aac-94fc-8e001d615d73",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
+}
