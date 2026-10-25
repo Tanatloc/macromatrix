@@ -235,7 +235,7 @@ class AppState extends ChangeNotifier {
     // Automatische supplementen: alleen vandaag aanvinken, en nooit opnieuw als je ze zelf afvinkte
     if (_date == _dateOnly(logicalNow())) {
       for (final sup in supplements) {
-        if (sup.auto && day.compareTo(sup.since ?? day) >= 0 && !user.hasSupplementRow(day, sup)) user.setSupplementTaken(day, sup, true);
+        if (sup.auto && day.compareTo(sup.since ?? day) >= 0 && !user.hasSupplementRow(day, sup)) user.setSupplementTaken(day, sup, true, auto: true);
       }
     }
     _level = null;

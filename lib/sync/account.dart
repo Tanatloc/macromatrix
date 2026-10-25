@@ -27,10 +27,16 @@ class SupabaseRemote implements SyncRemote {
   final SupabaseClient client;
   final String userId;
 
+  /// Met [insertOnly]: "on conflict do nothing". De server geeft terug wat hij echt opsloeg: een oudere versie laat de
+  /// trigger vallen, en de tijd kan begrensd zijn (supabase/migrations/20261107100000_sync_safety.sql).
   @override
-  Future<void> push(SyncTable table, List<Map<String, Object?>> rows) => client.from(table.name).upsert([
-    for (final r in rows) {...r, 'user_id': userId},
-  ], onConflict: 'user_id,${table.key}');
+  Future<Map<String, int>?> push(SyncTable table, List<Map<String, Object?>> rows, {bool insertOnly = false}) async {
+    final saved = await client
+        .from(table.name)
+        .upsert([for (final r in rows) {...r, 'user_id': userId}], onConflict: 'user_id,${table.key}', ignoreDuplicates: insertOnly)
+        .select('${table.key}, updated_at');
+    return {for (final r in saved) '${r[table.key]}': (r['updated_at'] as num).toInt()};
+  }
 
   @override
   Future<List<Map<String, Object?>>> pull(SyncTable table, String? since, int limit) async {
@@ -38,6 +44,33 @@ class SupabaseRemote implements SyncRemote {
     if (since != null) q = q.gt('server_ts', since);
     final rows = await q.order('server_ts', ascending: true).limit(limit);
     return [for (final r in rows) r.cast<String, Object?>()];
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> fetch(SyncTable table, List<String> keys) async {
+    final out = <Map<String, Object?>>[];
+    // In stukken: de sleutels staan in de URL
+    for (var i = 0; i < keys.length; i += 100) {
+      final part = keys.sublist(i, i + 100 > keys.length ? keys.length : i + 100);
+      final rows = await client.from(table.name).select().eq('user_id', userId).inFilter(table.key, part);
+      out.addAll([for (final r in rows) r.cast<String, Object?>()]);
+    }
+    return out;
+  }
+
+  @override
+  SyncErrorKind classify(Object error) => classifyError(error);
+
+  /// SQLSTATE 22… (ongeldige waarde, bv. te lang), 23… (een regel geschonden, bv. de grootte) en 54… (te veel rijen):
+  /// het ligt aan een rij. Sessie (PGRST3…) of geen antwoord van de database (HTTP-status als code): later opnieuw.
+  /// De rest (bv. een kolom die op de server nog ontbreekt): alleen die tabel.
+  static SyncErrorKind classifyError(Object error) {
+    if (error is! PostgrestException) return SyncErrorKind.fatal;
+    final code = error.code ?? '';
+    if (code == '23503') return SyncErrorKind.table; // verwijzing: het account zelf bestaat niet (meer)
+    if (code.length == 5 && (code.startsWith('22') || code.startsWith('23') || code.startsWith('54'))) return SyncErrorKind.row;
+    if (code.isEmpty || code.startsWith('PGRST3') || RegExp(r'^\d{3}$').hasMatch(code)) return SyncErrorKind.fatal;
+    return SyncErrorKind.table;
   }
 }
 
@@ -92,6 +125,30 @@ class Account extends ChangeNotifier {
   String? get error => _error;
   bool _again = false;
 
+  /// De synchronisatie die nu loopt (uitloggen wacht erop).
+  Future<void>? _running;
+
+  /// Telt op bij uitloggen en account verwijderen: een synchronisatie van daarvoor schrijft dan niets meer.
+  int _generation = 0;
+
+  /// Bezig met uitloggen of verwijderen: geen nieuwe synchronisatie starten.
+  bool _closing = false;
+
+  /// Rijen die de server weigerde (bijgewerkt na elke synchronisatie).
+  int _rejected = 0;
+
+  /// Melding als de server iets weigerde: dat blijft op dit toestel (wijzig het om het opnieuw te proberen).
+  String? get rejectedNotice => _rejected == 0
+      ? null
+      : tr(
+          _rejected == 1
+              ? '1 change could not be saved on the server (for example a note that is too long). It stays on this device; edit it to try again.'
+              : '$_rejected changes could not be saved on the server (for example a note that is too long). They stay on this device; edit them to try again.',
+          _rejected == 1
+              ? '1 wijziging kon niet op de server bewaard worden (bv. een te lange notitie). Ze blijft op dit toestel; pas ze aan om het opnieuw te proberen.'
+              : '$_rejected wijzigingen konden niet op de server bewaard worden (bv. een te lange notitie). Ze blijven op dit toestel; pas ze aan om het opnieuw te proberen.',
+        );
+
   /// Klaar met opstarten (een bewaarde sessie is hersteld of er is er geen).
   bool _ready = !configured;
   bool get ready => _ready;
@@ -110,6 +167,91 @@ class Account extends ChangeNotifier {
     final ms = SyncEngine(db, SupabaseRemote(_client!, u.id), userId: u.id).lastSync;
     return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
   }
+
+  /// Ingelogd, maar voor dit account kwam er nog nooit iets van de server binnen (bv. de eerste synchronisatie
+  /// mislukte). Je profiel kan dan nog op de server staan: de app toont geen "Over jou" maar wacht (of laat opnieuw
+  /// proberen), zodat je je echte profiel niet overschrijft.
+  bool get needsFirstSync => signedIn && lastSync == null;
+
+  // ── Van wie zijn de gegevens op dit toestel? ──
+
+  /// Het account waarvan de gegevens op dit toestel zijn (laatst ingelogd of gesynchroniseerd), of null: van
+  /// niemand (zonder account gebruikt, of na uitloggen gewist).
+  String? get _ownerId => db.setting('_owner')?['id'] as String? ?? db.setting('_sync')?['user'] as String?;
+
+  void _setOwner(User u) => db.setSetting('_owner', {'id': u.id, 'email': u.email});
+
+  /// Ingelogd met een ander account dan dat van de gegevens op dit toestel, terwijl er daarvan nog iets niet op de
+  /// server staat: eerst kiezen wat ermee gebeurt (zie [discardOtherAccountData] en [switchToOtherAccount]). Tot dan
+  /// synchroniseert de app niets: die gegevens mogen nooit in dit account terechtkomen.
+  bool get otherAccountData => signedIn && _otherPending;
+  bool _otherPending = false;
+
+  /// E-mailadres van het account van die gegevens (als het bekend is).
+  String? get otherAccountEmail => otherAccountData ? (db.setting('_owner')?['email'] as String?) : null;
+
+  /// De gegevens van het andere account wissen en verder met dit account.
+  Future<void> discardOtherAccountData() async {
+    final u = user;
+    if (u == null) return;
+    db.wipeUserData();
+    _setOwner(u);
+    _otherPending = false;
+    onRemoteChanges();
+    notifyListeners();
+    _watchRemote();
+    await sync();
+  }
+
+  /// Toch met het andere account verder: dit account uitloggen zonder iets te wissen, zodat je met dat account kunt
+  /// inloggen (de gegevens gaan dan gewoon naar dat account).
+  Future<void> switchToOtherAccount() async {
+    _stopWatching();
+    try {
+      await _client!.auth.signOut();
+    } catch (_) {}
+    db.setSetting('_session', {});
+    _otherPending = false;
+    notifyListeners();
+  }
+
+  /// Na het inloggen (en bij het opstarten): horen de gegevens op dit toestel bij dit account? False: ze zijn van
+  /// een ander account en nog niet allemaal verstuurd, dan eerst vragen ([otherAccountData]).
+  bool _claimData(User u, {bool newAccount = false, bool atStart = false}) {
+    final owner = _ownerId;
+    if (owner == u.id) return true;
+    if (owner != null) {
+      // Een ander account dan de vorige keer op dit toestel: de oude gegevens horen daar niet bij
+      if (db.hasUnsentRows) {
+        _otherPending = true;
+        return false;
+      }
+      db.wipeUserData();
+      onRemoteChanges();
+    } else if (newAccount) {
+      // Een nieuw account: wat hier staat (ook het profiel) is van dat account
+      db.claimUnsentSettings();
+    } else if (!atStart) {
+      // Nog nooit gesynchroniseerd (meestal: eerst zonder account gebruikt). Alles van hier gaat mee naar het
+      // account, maar een bestaand profiel in het account wordt niet overschreven door dat van dit toestel.
+      db.yieldUnsentSettings();
+    }
+    _setOwner(u);
+    return true;
+  }
+
+  /// Voor tests: een client met een (lokale) sessie en een nagebootste server, zonder live meldingen.
+  SyncRemote Function(String userId)? _debugRemote;
+
+  @visibleForTesting
+  void debugConnect(SupabaseClient client, SyncRemote Function(String userId) remote) {
+    _client = client;
+    _debugRemote = remote;
+    _ready = true;
+  }
+
+  @visibleForTesting
+  Future<void> debugAfterLogin({bool newAccount = false}) => _afterLogin(newAccount: newAccount);
 
   Future<void> init() async {
     if (!configured) return;
@@ -151,6 +293,13 @@ class Account extends ChangeNotifier {
       // Zonder Flutter-binding (tests): niet nodig
     }
     _ready = true;
+    final u = user;
+    // Ook bij het opstarten: gegevens van een ander account gaan nooit mee (bv. de app werd gesloten tijdens de vraag)
+    if (u != null && !_claimData(u, atStart: true)) {
+      notifyListeners();
+      return;
+    }
+    _rejected = db.rejectedCount;
     notifyListeners();
     if (signedIn) {
       _watchRemote();
@@ -183,7 +332,7 @@ class Account extends ChangeNotifier {
   /// De bevestigingscode uit de mail controleren; daarna ben je ingelogd en wordt alles gesynchroniseerd.
   Future<void> confirmSignUp(String email, String code) async {
     await _client!.auth.verifyOTP(type: OtpType.signup, email: email.trim(), token: code.trim());
-    await _afterLogin();
+    await _afterLogin(newAccount: true);
   }
 
   /// De bevestigingscode opnieuw sturen.
@@ -220,17 +369,15 @@ class Account extends ChangeNotifier {
   Future<void> changePassword(String newPassword) => _client!.auth.updateUser(UserAttributes(password: newPassword));
 
   /// Na het inloggen eerst alles ophalen, zodat bv. je profiel er meteen is op een nieuw toestel.
-  Future<void> _afterLogin() async {
+  /// [newAccount]: net geregistreerd en bevestigd; wat op dit toestel staat, is dan van dat account.
+  Future<void> _afterLogin({bool newAccount = false}) async {
     if (pendingConfirmation != null) db.setSetting('_pending_confirm', {});
-    // Een ander account dan de vorige keer op dit toestel: de oude gegevens horen daar niet bij
-    final previous = db.setting('_sync')?['user'];
-    if (previous != null && previous != user?.id) {
-      db.wipeUserData();
-      onRemoteChanges();
-    } else if (previous == null) {
-      // Nog nooit gesynchroniseerd (meestal: eerst zonder account gebruikt). Alles van hier gaat mee naar het
-      // account, maar een bestaand profiel in het account wordt niet overschreven door dat van dit toestel.
-      db.yieldUnsentSettings();
+    final u = user;
+    if (u == null) return;
+    if (!_claimData(u, newAccount: newAccount)) {
+      // Eerst kiezen wat er met de gegevens van het andere account gebeurt (zie [otherAccountData])
+      notifyListeners();
+      return;
     }
     notifyListeners();
     _watchRemote();
@@ -240,7 +387,7 @@ class Account extends ChangeNotifier {
   /// Live meldingen van de server: zodra een ander toestel iets wijzigt, haalt dit toestel het meteen op.
   void _watchRemote() {
     final u = user;
-    if (u == null || _channel != null) return;
+    if (u == null || _channel != null || _debugRemote != null) return;
     var channel = _client!.channel('wijzigingen-${u.id}');
     for (final t in UserDb.syncTables) {
       channel = channel.onPostgresChanges(
@@ -275,21 +422,56 @@ class Account extends ChangeNotifier {
     });
   }
 
-  Future<void> sync() async {
+  /// Synchroniseren. Loopt er al een, dan volgt er daarna nog een, en wacht dit op allebei.
+  Future<void> sync() {
     final u = user;
-    if (u == null) return;
-    if (_status == SyncStatus.syncing) {
+    // Nooit gegevens van een ander account versturen (zie [otherAccountData])
+    if (u == null || _closing || _otherPending || _ownerId != u.id) return Future.value();
+    if (_running != null) {
       _again = true;
-      return;
+      return _running!;
     }
+    final run = _running = _syncLoop(u.id, _generation);
+    return run.whenComplete(() {
+      if (!identical(_running, run)) return;
+      _running = null;
+      // Net na de laatste ronde nog een wijziging: die niet laten liggen tot de volgende keer
+      if (_again) {
+        _again = false;
+        unawaited(sync());
+      }
+    });
+  }
+
+  Future<void> _syncLoop(String uid, int generation) async {
+    bool active() => generation == _generation && !_closing && user?.id == uid;
+    do {
+      _again = false;
+      await _syncOnce(uid, active);
+    } while (_again && active());
+  }
+
+  Future<void> _syncOnce(String uid, bool Function() active) async {
     _status = SyncStatus.syncing;
     _error = null;
     notifyListeners();
     try {
-      final result = await SyncEngine(db, SupabaseRemote(_client!, u.id), userId: u.id).run();
+      final result = await SyncEngine(db, _debugRemote?.call(uid) ?? SupabaseRemote(_client!, uid), userId: uid, active: active).run();
       if (result.pushed > 0) _quietUntil = DateTime.now().add(const Duration(seconds: 3));
-      _status = SyncStatus.idle;
+      if (result.rejected > 0 || _rejected > 0) _rejected = db.rejectedCount;
+      if (result.errors.isEmpty) {
+        _status = SyncStatus.idle;
+      } else {
+        // Andere tabellen zijn wel gelukt; deze volgende keer opnieuw
+        _status = SyncStatus.error;
+        final MapEntry(key: table, value: e) = result.errors.entries.first;
+        final why = e is PostgrestException ? e.message : '$e';
+        _error = tr('Not everything could be synced ($table): $why', 'Niet alles kon gesynchroniseerd worden ($table): $why');
+      }
       if (result.pulled > 0) onRemoteChanges();
+    } on SyncCancelled {
+      // Uitgelogd of een ander account: niets meer melden
+      _status = SyncStatus.idle;
     } on AuthException catch (e) {
       _status = SyncStatus.error;
       _error = tr('Your session has expired. Please log in again. (${e.message})', 'Je sessie is verlopen. Log opnieuw in. (${e.message})');
@@ -302,10 +484,13 @@ class Account extends ChangeNotifier {
       _error = null;
     }
     notifyListeners();
-    if (_again) {
-      _again = false;
-      unawaited(sync());
-    }
+  }
+
+  /// Wachten tot een synchronisatie die nog loopt, gestopt is.
+  Future<void> _settle() async {
+    try {
+      await _running;
+    } catch (_) {}
   }
 
   /// Uitloggen: eerst alles versturen, dan de gegevens van dit toestel wissen (ze staan veilig op de server).
@@ -313,7 +498,21 @@ class Account extends ChangeNotifier {
   Future<bool> signOut({bool force = false}) async {
     if (!signedIn) return true;
     await sync();
-    if (db.hasDirtyRows && !force) return false;
+    // Ook wat de server weigerde, staat alleen hier
+    if (db.hasUnsentRows && !force) return false;
+    // Een synchronisatie die nog loopt, schrijft niets meer (anders kwamen haar rijen na het wissen terug)
+    _closing = true;
+    _generation++;
+    try {
+      await _settle();
+      await _signOutAndWipe();
+    } finally {
+      _closing = false;
+    }
+    return true;
+  }
+
+  Future<void> _signOutAndWipe() async {
     _stopWatching();
     // Geen battle-meldingen meer naar dit toestel
     final notify = db.setting('_notify')?['token'];
@@ -330,23 +529,34 @@ class Account extends ChangeNotifier {
     }
     db.wipeUserData();
     db.setSetting('_session', {});
+    _otherPending = false;
+    _rejected = 0;
     onRemoteChanges();
     notifyListeners();
-    return true;
   }
 
   /// Account en alle gegevens op de server verwijderen, en daarna ook op dit toestel.
   Future<void> deleteAccount() async {
-    await _client!.rpc('delete_account');
-    _stopWatching();
-    db.deleteSetting('_notify');
+    // Eerst een lopende synchronisatie stoppen: die zou anders na het verwijderen nog rijen versturen of schrijven
+    _closing = true;
+    _generation++;
     try {
-      await _client!.auth.signOut();
-    } catch (_) {}
-    db.wipeUserData();
-    db.setSetting('_session', {});
-    onRemoteChanges();
-    notifyListeners();
+      await _settle();
+      await _client!.rpc('delete_account');
+      _stopWatching();
+      db.deleteSetting('_notify');
+      try {
+        await _client!.auth.signOut();
+      } catch (_) {}
+      db.wipeUserData();
+      db.setSetting('_session', {});
+      _otherPending = false;
+      _rejected = 0;
+      onRemoteChanges();
+      notifyListeners();
+    } finally {
+      _closing = false;
+    }
   }
 
   @override

@@ -109,6 +109,23 @@ class UserDb {
 
   static int _now() => DateTime.now().millisecondsSinceEpoch;
 
+  /// Tijdstip voor rijen die de app zelf aanmaakt (herhalingen, automatisch aangevinkte supplementen, Health
+  /// Connect): het oudst mogelijke. Een echte wijziging of verwijdering op welk toestel ook wint zo altijd, en de
+  /// synchronisatie verstuurt zulke rijen alleen als de server ze nog niet heeft (zie SyncEngine).
+  static const generatedAt = 1;
+
+  /// Grenzen van de server (supabase/migrations/20261018000000_hardening.sql): wat langer is, weigert de server,
+  /// dus de app knipt het al af bij het invoeren en importeren.
+  static const maxNoteLength = 20000;
+  static const maxNameLength = 500;
+  static const maxBrandLength = 300;
+
+  /// Namen van opgeslagen maaltijden en beweging: op de server hoogstens 300 tekens.
+  static const maxShortNameLength = 300;
+
+  static String clip(String s, int max) => s.length <= max ? s : s.substring(0, max);
+  static String? _clipOpt(String? s, int max) => s == null ? null : clip(s, max);
+
   void _migrate() {
     final version = _db.select('PRAGMA user_version').first.columnAt(0) as int;
     if (version < 1) {
@@ -207,6 +224,19 @@ class UserDb {
         PRAGMA user_version = 6;
       ''');
     }
+    if (version < 7) {
+      // "synced = 2": de server weigerde de rij (bv. te lang). Ze blijft hier staan; wijzig je ze, dan probeert de
+      // synchronisatie het opnieuw (zie [markRejected]).
+      final sql = StringBuffer();
+      for (final t in syncTables) {
+        sql.writeln(
+          'CREATE TRIGGER IF NOT EXISTS ${t.name}_retry AFTER UPDATE ON ${t.name} WHEN NEW.synced = 2 AND OLD.synced = 2 '
+          'BEGIN UPDATE ${t.name} SET synced = 0 WHERE rowid = NEW.rowid; END;',
+        );
+      }
+      sql.writeln('PRAGMA user_version = 7;');
+      _db.execute(sql.toString());
+    }
   }
 
   // ── Synchronisatie ──
@@ -234,12 +264,12 @@ class UserDb {
 
   static String _cols(SyncTable t) => t.columns.map((c) => '"$c"').join(', ');
 
+  /// Lokale instellingen (weergave, "_…") gaan nooit mee.
+  static String _syncedOnly(SyncTable t) => t.name == 'settings' ? " AND key != 'ui' AND key NOT LIKE '\\_%' ESCAPE '\\'" : '';
+
   /// Wijzigingen die nog naar de server moeten.
   List<Map<String, Object?>> dirtyRows(SyncTable t, {int limit = 500}) => [
-    for (final r in _db.select(
-      'SELECT ${_cols(t)} FROM ${t.name} WHERE synced = 0${t.name == 'settings' ? " AND key != 'ui' AND key NOT LIKE '\\_%' ESCAPE '\\'" : ''} LIMIT ?',
-      [limit],
-    ))
+    for (final r in _db.select('SELECT ${_cols(t)} FROM ${t.name} WHERE synced = 0${_syncedOnly(t)} LIMIT ?', [limit]))
       {for (final c in t.columns) c: r[c]},
   ];
 
@@ -247,11 +277,39 @@ class UserDb {
   /// gaan gewoon mee, maar bij instellingen (profiel, doelen …) wint wat al in het account staat. Daarvoor
   /// krijgen de instellingen die nog niet verstuurd zijn de oudst mogelijke tijd: de server houdt dan zijn eigen
   /// versie, en wat er nog niet was komt er wel bij.
+  /// Zo'n instelling gaat alleen naar de server als die ze nog niet heeft (zie SyncEngine): een bestaande waarde in
+  /// het account wordt nooit vervangen.
   void yieldUnsentSettings() =>
-      _db.execute("UPDATE settings SET updated_at = 1 WHERE synced = 0 AND key != 'ui' AND key NOT LIKE '\\_%' ESCAPE '\\'");
+      _db.execute('UPDATE settings SET updated_at = $generatedAt WHERE synced = 0${_syncedOnly(syncTables.first)}');
+
+  /// Een nieuw account: de instellingen van dit toestel zijn die van het account. Ze krijgen een gewone tijd, ook
+  /// als ze eerder al weken (zie [yieldUnsentSettings]).
+  void claimUnsentSettings() =>
+      _db.execute('UPDATE settings SET updated_at = ? WHERE synced = 0 AND updated_at <= $generatedAt${_syncedOnly(syncTables.first)}', [_now()]);
 
   /// Is er iets wat nog naar de server moet?
   bool get hasDirtyRows => syncTables.any((t) => dirtyRows(t, limit: 1).isNotEmpty);
+
+  /// Staat er iets op dit toestel dat (nog) niet op de server staat: nog te versturen, of geweigerd?
+  bool get hasUnsentRows => syncTables.any((t) => _db.select('SELECT 1 FROM ${t.name} WHERE synced != 1${_syncedOnly(t)} LIMIT 1').isNotEmpty);
+
+  /// De server weigerde deze rij (te lang, te veel rijen …): niet meer versturen tot ze hier opnieuw gewijzigd wordt
+  /// (trigger "_retry") of [retryRejected]. Alleen als ze intussen niet gewijzigd is.
+  void markRejected(SyncTable t, Map<String, Object?> row) => _db.execute(
+    'UPDATE ${t.name} SET synced = 2 WHERE "${t.key}" = ? AND updated_at = ? AND synced = 0',
+    [row[t.key], row['updated_at']],
+  );
+
+  /// Hoeveel rijen de server weigerde.
+  int get rejectedCount =>
+      syncTables.fold(0, (n, t) => n + (_db.select('SELECT COUNT(*) FROM ${t.name} WHERE synced = 2${_syncedOnly(t)}').first.columnAt(0) as int));
+
+  /// Geweigerde rijen opnieuw proberen (na een tijd: misschien is de server intussen anders).
+  void retryRejected() => transaction(() {
+    for (final t in syncTables) {
+      _db.execute('UPDATE ${t.name} SET synced = 0 WHERE synced = 2');
+    }
+  });
 
   /// Rijen als verstuurd markeren, maar alleen als ze intussen niet opnieuw gewijzigd zijn.
   void markSynced(SyncTable t, List<Map<String, Object?>> rows) => transaction(() {
@@ -267,12 +325,27 @@ class UserDb {
     final local = _db.select('SELECT updated_at FROM ${t.name} WHERE "${t.key}" = ?', [key]);
     final remoteAt = (row['updated_at'] as num?)?.toInt() ?? 0;
     if (local.isNotEmpty && (local.first['updated_at'] as num).toInt() >= remoteAt) return false;
-    _db.execute('INSERT OR REPLACE INTO ${t.name} (${_cols(t)}, synced) VALUES (${List.filled(t.columns.length + 1, '?').join(', ')})', [
-      for (final c in t.columns) _localValue(row[c]),
-      1,
-    ]);
+    _put(t, row);
     return true;
   }
+
+  /// Na het versturen hield de server een andere versie (nieuwer van een ander toestel, er stond al een, of een tijd
+  /// die de server begrensde): die overnemen, ook als ze ouder lijkt, zodat beide kanten hetzelfde hebben. Niet als
+  /// de rij hier intussen opnieuw gewijzigd werd ([sentAt] is de verstuurde versie): die gaat dan opnieuw.
+  bool replaceIfUnchanged(SyncTable t, Map<String, Object?> row, int sentAt) {
+    final key = row[t.key];
+    if (key == null || (t.name == 'settings' && isLocalSetting(key as String))) return false;
+    final local = _db.select('SELECT updated_at FROM ${t.name} WHERE "${t.key}" = ?', [key]);
+    if (local.isNotEmpty && (local.first['updated_at'] as num).toInt() != sentAt) return false;
+    _put(t, row);
+    return true;
+  }
+
+  void _put(SyncTable t, Map<String, Object?> row) =>
+      _db.execute('INSERT OR REPLACE INTO ${t.name} (${_cols(t)}, synced) VALUES (${List.filled(t.columns.length + 1, '?').join(', ')})', [
+        for (final c in t.columns) _localValue(row[c]),
+        1,
+      ]);
 
   /// Waarden van de server terugzetten naar wat SQLite verwacht (true/false wordt 1/0).
   static Object? _localValue(Object? v) => v is bool ? (v ? 1 : 0) : v;
@@ -307,7 +380,10 @@ class UserDb {
         'INSERT INTO diary (id, day, meal, food_ref, name, brand, grams, portion_label, quantity, nutrients, created_at, updated_at, time) '
         'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) '
         'ON CONFLICT(id) DO UPDATE SET deleted = 0, updated_at = excluded.updated_at WHERE diary.deleted = 1',
-        [e.id, e.day, e.meal, e.foodRef, e.name, e.brand, e.grams, e.portionLabel, e.quantity, encodeNutrients(e.per100g), now, now, e.time],
+        [
+          e.id, e.day, e.meal, e.foodRef, clip(e.name, maxNameLength), _clipOpt(e.brand, maxBrandLength), e.grams, e.portionLabel, //
+          e.quantity, encodeNutrients(e.per100g), now, now, e.time,
+        ],
       );
       count();
     }
@@ -478,13 +554,17 @@ class UserDb {
     String? time,
     String? repeatId,
     String? id,
+    bool generated = false,
   }) {
     id ??= _uuid.v4();
     final now = _now();
     _db.execute(
       'INSERT INTO diary (id, day, meal, food_ref, name, brand, grams, portion_label, quantity, nutrients, created_at, updated_at, time, repeat_id) '
       'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [id, day, meal.index, food.ref, food.name, food.brand, grams, portionLabel, quantity, encodeNutrients(food.per100g), now, now, time, repeatId],
+      [
+        id, day, meal.index, food.ref, clip(food.name, maxNameLength), _clipOpt(food.brand, maxBrandLength), grams, portionLabel, quantity, //
+        encodeNutrients(food.per100g), now, generated ? generatedAt : now, time, repeatId,
+      ],
     );
     return id;
   }
@@ -523,7 +603,7 @@ class UserDb {
   }
 
   /// Een opgeslagen item (uit een maaltijd of herhaling) in het dagboek zetten.
-  String addTemplate(String day, Meal meal, ItemTemplate t, {String? time, String? repeatId, String? id}) => addEntry(
+  String addTemplate(String day, Meal meal, ItemTemplate t, {String? time, String? repeatId, String? id, bool generated = false}) => addEntry(
     day: day,
     meal: meal,
     food: Food(ref: t.foodRef, name: t.name, brand: t.brand, source: FoodSource.custom, per100g: t.per100g),
@@ -533,6 +613,7 @@ class UserDb {
     time: time,
     repeatId: repeatId,
     id: id,
+    generated: generated,
   );
 
   void updateEntry(String id, {required Meal meal, required double grams, required double quantity, String? portionLabel, String? time}) {
@@ -548,8 +629,9 @@ class UserDb {
   }
 
   /// Supplement op [day] aan- of afvinken. Eén vaste regel per supplement en dag (ook na afvinken blijft ze bestaan,
-  /// als gewiste regel), zodat automatisch aanvinken een bewuste keuze niet ongedaan maakt.
-  void setSupplementTaken(String day, Supplement s, bool taken) {
+  /// als gewiste regel), zodat automatisch aanvinken een bewuste keuze niet ongedaan maakt. [auto]: de app vinkt
+  /// zelf aan; die regel krijgt [generatedAt], zodat afvinken op een ander toestel (nog niet binnengehaald) wint.
+  void setSupplementTaken(String day, Supplement s, bool taken, {bool auto = false}) {
     final id = s.entryId(day);
     if (_db.select('SELECT 1 FROM diary WHERE id = ?', [id]).isNotEmpty) {
       _db.execute('UPDATE diary SET deleted = ?, nutrients = ?, name = ?, portion_label = ?, updated_at = ? WHERE id = ?', [
@@ -569,6 +651,7 @@ class UserDb {
         quantity: 1,
         portionLabel: s.dose,
         id: id,
+        generated: auto,
       );
     }
   }
@@ -681,7 +764,10 @@ class UserDb {
         : jsonEncode({'proxy': f.proxyRef, 'estimated': f.estimated, if (f.nova != null) 'nova': f.nova});
     _db.execute(
       'INSERT OR REPLACE INTO foods (id, source, name, brand, barcode, nutrients, portions, extra, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,?,0)',
-      [f.ref, f.source.name, f.name, f.brand, f.barcode, encodeNutrients(f.per100g), encodePortions(f.portions), extra, _now()],
+      [
+        f.ref, f.source.name, clip(f.name, maxNameLength), _clipOpt(f.brand, maxBrandLength), f.barcode, encodeNutrients(f.per100g), //
+        encodePortions(f.portions), extra, _now(),
+      ],
     );
   }
 
@@ -697,7 +783,9 @@ class UserDb {
     var n = 0;
     for (final r in _db.select('SELECT id, nutrients FROM diary WHERE food_ref = ? AND deleted = 0', [foodRef])) {
       if (r['nutrients'] == encoded) continue;
-      _db.execute('UPDATE diary SET nutrients = ?, updated_at = ? WHERE id = ?', [encoded, _now(), r['id']]);
+      // Automatisch: net nieuwer dan de vorige versie, zodat een echte wijziging of verwijdering op een ander toestel
+      // (nog niet binnengehaald) wint. Dat toestel werkt zijn eigen regels zelf bij.
+      _db.execute('UPDATE diary SET nutrients = ?, updated_at = updated_at + 1 WHERE id = ?', [encoded, r['id']]);
       n++;
     }
     return n;
@@ -709,7 +797,7 @@ class UserDb {
       final old = decodeNutrients(r['nutrients'] as String);
       final merged = {...per100g, ...old};
       if (merged.length == old.length) continue;
-      _db.execute('UPDATE diary SET nutrients = ?, updated_at = ? WHERE id = ?', [encodeNutrients(merged), _now(), r['id']]);
+      _db.execute('UPDATE diary SET nutrients = ?, updated_at = updated_at + 1 WHERE id = ?', [encodeNutrients(merged), r['id']]);
       n++;
     }
     return n;
@@ -748,7 +836,10 @@ class UserDb {
     final f = recipe.toFood();
     _db.execute(
       'INSERT OR REPLACE INTO foods (id, source, name, brand, barcode, nutrients, portions, extra, updated_at, deleted) VALUES (?,?,?,?,?,?,?,?,?,0)',
-      [f.ref, 'recipe', f.name, null, null, encodeNutrients(f.per100g), encodePortions(f.portions), jsonEncode(recipe.toJson()), _now()],
+      [
+        f.ref, 'recipe', clip(f.name, maxNameLength), null, null, encodeNutrients(f.per100g), encodePortions(f.portions), //
+        jsonEncode(recipe.toJson()), _now(),
+      ],
     );
   }
 
@@ -778,7 +869,7 @@ class UserDb {
   void saveMeal(String name, List<ItemTemplate> items, {String? id, Meal? meal}) =>
       _db.execute('INSERT OR REPLACE INTO meals (id, name, items, updated_at, deleted, meal) VALUES (?,?,?,?,0,?)', [
         id ?? _uuid.v4(),
-        name,
+        clip(name, maxShortNameLength),
         jsonEncode([for (final i in items) i.toJson()]),
         _now(),
         meal?.index,
@@ -815,7 +906,7 @@ class UserDb {
       final done = _db.select('SELECT 1 FROM diary WHERE day = ? AND repeat_id = ? LIMIT 1', [day, r.id]);
       if (done.isNotEmpty) continue;
       // Vaste id per herhaling en dag: twee toestellen maken zo dezelfde regel en geen dubbele
-      addTemplate(day, Meal.values[r.mealIndex], r.item, repeatId: r.id, id: '${r.id}:$day');
+      addTemplate(day, Meal.values[r.mealIndex], r.item, repeatId: r.id, id: '${r.id}:$day', generated: true);
       added++;
     }
     return added;
@@ -855,7 +946,8 @@ class UserDb {
   String? biometricMoment(String id) => _db.select('SELECT moment FROM biometric_moments WHERE id = ?', [id]).firstOrNull?['moment'] as String?;
 
   /// Meting met een vaste id (bv. uit Health Connect): bijwerken als ze bestaat, maar niet terugzetten als je
-  /// ze zelf verwijderde. Geeft true als er iets veranderde.
+  /// ze zelf verwijderde. Geeft true als er iets veranderde. Een nieuwe krijgt [generatedAt]: kwam ze op een ander
+  /// toestel al binnen (en werd ze daar aangepast of verwijderd), dan wint die versie.
   bool upsertBiometric({required String id, required String day, required String type, required double value, String? time}) {
     final old = _db.select('SELECT value, deleted FROM biometrics WHERE id = ?', [id]);
     if (old.isNotEmpty && (old.first['deleted'] == 1 || (old.first['value'] as num).toDouble() == value)) return false;
@@ -865,7 +957,7 @@ class UserDb {
       time,
       type,
       value,
-      _now(),
+      old.isEmpty ? generatedAt : _now(),
     ]);
     return true;
   }
@@ -941,7 +1033,9 @@ class UserDb {
     return rows.isEmpty ? '' : rows.first['text'] as String;
   }
 
-  void setNote(String day, String text) => _db.execute('INSERT OR REPLACE INTO notes (day, text, updated_at) VALUES (?,?,?)', [day, text, _now()]);
+  /// Hoogstens [maxNoteLength] tekens (de grens van de server); de rest valt weg.
+  void setNote(String day, String text) =>
+      _db.execute('INSERT OR REPLACE INTO notes (day, text, updated_at) VALUES (?,?,?)', [day, clip(text, maxNoteLength), _now()]);
 
   // ── Beweging ──
 
@@ -980,18 +1074,32 @@ class UserDb {
 
   void addExercise({required String day, required String name, required double kcal, double? minutes}) => _db.execute(
     'INSERT INTO exercise (id, day, name, minutes, kcal, updated_at) VALUES (?,?,?,?,?,?)',
-    [_uuid.v4(), day, name, minutes, kcal, _now()],
+    [_uuid.v4(), day, clip(name, maxShortNameLength), minutes, kcal, _now()],
   );
 
   /// Beweging met een vaste id (bv. een workout uit Health Connect), alleen als ze nog niet bestaat of verwijderd werd.
+  /// Met [generatedAt]: wat een ander toestel met dezelfde workout deed (aanpassen, verwijderen), wint.
   bool insertExerciseOnce({required String id, required String day, required String name, required double kcal, double? minutes}) {
     if (_db.select('SELECT 1 FROM exercise WHERE id = ?', [id]).isNotEmpty) return false;
-    _db.execute('INSERT INTO exercise (id, day, name, minutes, kcal, updated_at) VALUES (?,?,?,?,?,?)', [id, day, name, minutes, kcal, _now()]);
+    _db.execute('INSERT INTO exercise (id, day, name, minutes, kcal, updated_at) VALUES (?,?,?,?,?,?)', [
+      id,
+      day,
+      clip(name, maxShortNameLength),
+      minutes,
+      kcal,
+      generatedAt,
+    ]);
     return true;
   }
 
   void updateExercise(String id, {required String name, required double kcal, double? minutes}) {
-    _db.execute('UPDATE exercise SET name = ?, minutes = ?, kcal = ?, updated_at = ? WHERE id = ?', [name, minutes, kcal, _now(), id]);
+    _db.execute('UPDATE exercise SET name = ?, minutes = ?, kcal = ?, updated_at = ? WHERE id = ?', [
+      clip(name, maxShortNameLength),
+      minutes,
+      kcal,
+      _now(),
+      id,
+    ]);
   }
 
   void deleteExercise(String id) => _db.execute('UPDATE exercise SET deleted = 1, updated_at = ? WHERE id = ?', [_now(), id]);

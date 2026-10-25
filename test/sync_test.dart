@@ -5,36 +5,106 @@ import 'package:macromatrix/data/models.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/sync/sync_engine.dart';
 
-/// Nagebootste server met dezelfde regels als de Supabase-trigger: oudere wijzigingen worden genegeerd,
-/// elke opgeslagen rij krijgt een oplopende server_ts.
+/// Fout van de nagebootste server, met de soort zoals [SupabaseRemote.classifyError] die zou geven.
+class FakeServerError implements Exception {
+  FakeServerError(this.kind, this.message);
+  final SyncErrorKind kind;
+  final String message;
+  @override
+  String toString() => message;
+}
+
+/// Nagebootste server met dezelfde regels als de Supabase-triggers (supabase/migrations): oudere wijzigingen worden
+/// genegeerd (stil), elke opgeslagen rij krijgt een oplopende server_ts, te lange velden en te veel rijen worden
+/// geweigerd (het hele pakket, zoals één INSERT met meerdere rijen), en de upsert geeft terug wat opgeslagen werd.
 class FakeServer implements SyncRemote {
   final rows = <String, Map<String, Map<String, Object?>>>{};
   var _clock = DateTime.utc(2026, 1, 1);
   var pushes = 0;
 
+  /// Klok van de server (ms) voor het begrenzen van updated_at (20261107100000_sync_safety.sql); null: die migratie
+  /// staat er nog niet op, niets begrenzen.
+  int? nowMs;
+
+  /// Hoogstens zoveel rijen per tabel (limit_rows). [oldLimitRows]: zoals vóór 20261107100000_sync_safety.sql, toen
+  /// ook een upsert van een bestaande rij meetelde en verwijderde rijen ook.
+  int maxRows = 50000;
+  bool oldLimitRows = false;
+
+  /// Tabellen waarbij versturen of ophalen helemaal mislukt (bv. een kolom die op de server nog ontbreekt).
+  final brokenPush = <String>{}, brokenPull = <String>{};
+
+  /// Geen internet.
+  bool offline = false;
+
+  /// Wordt opgeroepen vlak voor een ophaling antwoordt (om iets te laten gebeuren terwijl de synchronisatie loopt).
+  Future<void> Function(SyncTable table)? beforePullReturns;
+
   String _tick() => (_clock = _clock.add(const Duration(milliseconds: 1))).toIso8601String();
 
+  /// Grenzen uit 20261018000000_hardening.sql (een deel).
+  static String? _tooLong(String table, Map<String, Object?> r) {
+    int len(String c) => (r[c] as String?)?.length ?? 0;
+    if (table == 'notes' && len('text') > 20000) return 'notes_size';
+    if ((table == 'foods' || table == 'diary') && (len('name') > 500 || len('brand') > 300)) return '${table}_size';
+    if ((table == 'meals' || table == 'exercise') && len('name') > 300) return '${table}_size';
+    return null;
+  }
+
   @override
-  Future<void> push(SyncTable table, List<Map<String, Object?>> batch) async {
+  Future<Map<String, int>?> push(SyncTable table, List<Map<String, Object?>> batch, {bool insertOnly = false}) async {
+    if (offline) throw Exception('geen internet');
     pushes++;
+    if (brokenPush.contains(table.name)) throw FakeServerError(SyncErrorKind.table, 'Could not find a column of ${table.name}');
     final t = rows.putIfAbsent(table.name, () => {});
+    for (final r in batch) {
+      final why = _tooLong(table.name, r);
+      if (why != null) throw FakeServerError(SyncErrorKind.row, 'new row violates check constraint "$why"');
+    }
+    // limit_rows: een trigger "before insert" per rij, dus ook bij een upsert
+    var live = t.values.where((r) => oldLimitRows || r['deleted'] != 1).length;
+    for (final r in batch) {
+      final exists = t.containsKey(r[table.key]);
+      if (exists && !oldLimitRows) continue;
+      if (live >= maxRows) throw FakeServerError(SyncErrorKind.row, 'te veel rijen in ${table.name}');
+      if (!exists) live++;
+    }
+    final kept = <String, int>{};
     for (final r in batch) {
       final key = r[table.key] as String;
       final old = t[key];
-      if (old != null && (old['updated_at'] as int) > (r['updated_at'] as int)) continue;
-      t[key] = {...r, 'server_ts': _tick()};
+      if (old != null && insertOnly) continue;
+      var at = r['updated_at'] as int;
+      final now = nowMs;
+      if (now != null && at > now + 5 * 60 * 1000) at = now + 5 * 60 * 1000;
+      if (old != null && (old['updated_at'] as int) > at) continue;
+      t[key] = {...r, 'updated_at': at, 'server_ts': _tick()};
+      kept[key] = at;
     }
+    return kept;
   }
 
   @override
   Future<List<Map<String, Object?>>> pull(SyncTable table, String? since, int limit) async {
+    if (offline) throw Exception('geen internet');
+    if (brokenPull.contains(table.name)) throw FakeServerError(SyncErrorKind.table, 'ophalen van ${table.name} mislukt');
     final all =
         (rows[table.name]?.values ?? const <Map<String, Object?>>[])
             .where((r) => since == null || (r['server_ts'] as String).compareTo(since) > 0)
             .toList()
           ..sort((a, b) => (a['server_ts'] as String).compareTo(b['server_ts'] as String));
+    await beforePullReturns?.call(table);
     return all.take(limit).toList();
   }
+
+  @override
+  Future<List<Map<String, Object?>>> fetch(SyncTable table, List<String> keys) async {
+    if (offline) throw Exception('geen internet');
+    return [for (final k in keys) ?rows[table.name]?[k]];
+  }
+
+  @override
+  SyncErrorKind classify(Object error) => error is FakeServerError ? error.kind : SyncErrorKind.fatal;
 }
 
 const _banana = Food(ref: 'ciqual:13005', name: 'Banana, raw', source: FoodSource.ciqual, per100g: {'energy': 90, 'potassium': 320});

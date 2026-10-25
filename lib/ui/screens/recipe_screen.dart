@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:provider/provider.dart';
 
 import '../../data/food_db.dart';
@@ -208,6 +209,8 @@ class _RecipeScreenState extends State<RecipeScreen> {
             children: [
               TextField(
                 controller: _name,
+                // Grens van de server (langer wordt niet gesynchroniseerd)
+                inputFormatters: [LengthLimitingTextInputFormatter(UserDb.maxNameLength)],
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(labelText: tr('Recipe name', 'Naam van het recept')),
                 onChanged: (_) => setState(() {}),

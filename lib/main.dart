@@ -18,6 +18,7 @@ import 'sync/friends.dart';
 import 'sync/play_purchase.dart';
 import 'sync/pro.dart';
 import 'ui/screens/auth_screens.dart';
+import 'ui/screens/other_tab_screen.dart';
 import 'ui/theme.dart';
 import 'ui/widgets/tap_guard.dart';
 
@@ -38,6 +39,21 @@ Future<void> main() async {
   );
   Intl.defaultLocale = 'nl_BE';
   await initializeDateFormatting(appLocale);
+
+  // In de browser: al open in een ander tabblad? Dan eerst wachten (twee tabbladen beschadigen de database)
+  if (!await claimUserDatabase()) {
+    setAppLang(deviceLang);
+    final ready = Completer<void>();
+    runApp(
+      OtherTabApp(
+        onTakeOver: () async {
+          await takeOverUserDatabase();
+          if (!ready.isCompleted) ready.complete();
+        },
+      ),
+    );
+    await ready.future;
+  }
 
   final (foods, user) = await openDatabases();
   final state = AppState(foods: foods, user: user)

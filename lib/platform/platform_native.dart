@@ -21,6 +21,11 @@ bool get canScanBarcodes => Platform.isAndroid || Platform.isIOS;
 /// Alleen nodig in de browser (zie platform_web.dart); hier staat de database gewoon in de app-map.
 Future<bool> askPersistentStorage() async => true;
 
+/// Alleen in de browser kan de app twee keer tegelijk open staan (twee tabbladen, zie platform_web.dart).
+Future<bool> claimUserDatabase() async => true;
+
+Future<void> takeOverUserDatabase() async {}
+
 /// Opent de ingebouwde voedingsdatabase (gekopieerd naar de app-map, opnieuw na een update) en de
 /// database van de gebruiker.
 Future<(FoodDb, UserDb)> openDatabases() async {

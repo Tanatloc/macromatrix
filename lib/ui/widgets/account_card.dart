@@ -9,6 +9,35 @@ import '../theme.dart';
 import 'kit.dart';
 import '../../i18n.dart';
 
+/// Uitloggen; staat er nog iets niet op de server, dan eerst vragen of je echt wilt (die wijzigingen zijn dan weg).
+Future<void> signOutAsking(BuildContext context, Account a) async {
+  final ok = await a.signOut();
+  if (ok || !context.mounted) return;
+  final force = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(tr('Not everything has been sent yet', 'Nog niet alles is verstuurd')),
+      content: Text(
+        tr(
+          'Some changes are not on the server yet (no connection?). If you log out now, you will lose them. '
+              'Better try again with internet.',
+          'Er zijn wijzigingen die nog niet op de server staan (geen verbinding?). Als je nu uitlogt, ben je die kwijt. '
+              'Probeer het liever opnieuw met internet.',
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: ctx.pal.high),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(tr('Log out anyway', 'Toch uitloggen')),
+        ),
+      ],
+    ),
+  );
+  if (force == true) await a.signOut(force: true);
+}
+
 /// Account in Profiel: e-mail, synchronisatie, wachtwoord wijzigen, uitloggen en account verwijderen.
 class AccountCard extends StatefulWidget {
   const AccountCard({super.key});
@@ -87,33 +116,7 @@ class _AccountCardState extends State<AccountCard> {
     pw2.dispose();
   }
 
-  Future<void> _signOut(Account a) async {
-    final ok = await a.signOut();
-    if (ok || !mounted) return;
-    final force = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('Not everything has been sent yet', 'Nog niet alles is verstuurd')),
-        content: Text(
-          tr(
-            'Some changes are not on the server yet (no connection?). If you log out now, you will lose them. '
-                'Better try again with internet.',
-            'Er zijn wijzigingen die nog niet op de server staan (geen verbinding?). Als je nu uitlogt, ben je die kwijt. '
-                'Probeer het liever opnieuw met internet.',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: ctx.pal.high),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(tr('Log out anyway', 'Toch uitloggen')),
-          ),
-        ],
-      ),
-    );
-    if (force == true) await a.signOut(force: true);
-  }
+  Future<void> _signOut(Account a) => signOutAsking(context, a);
 
   Future<void> _delete(Account a) async {
     // De melding via de bovenste ScaffoldMessenger: na het verwijderen verdwijnt dit scherm (naar welkom)
@@ -243,6 +246,10 @@ class _AccountCardState extends State<AccountCard> {
                         ),
                       ],
                     ),
+                    if (a.rejectedNotice case final notice?) ...[
+                      const SizedBox(height: 4),
+                      Text(notice, key: const ValueKey('sync-rejected'), style: TextStyle(fontSize: 12, height: 1.35, color: p.high)),
+                    ],
                   ],
                 ),
               ),
