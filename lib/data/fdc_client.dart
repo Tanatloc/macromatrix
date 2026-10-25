@@ -29,6 +29,7 @@ const _ids = <int, (String, String)>{
   1018: ('alcohol', 'G'),
   1057: ('caffeine', 'MG'),
   1106: ('vit_a', 'UG'),
+  1105: ('retinol', 'UG'),
   1107: ('beta_carotene', 'UG'),
   1162: ('vit_c', 'MG'),
   1114: ('vit_d', 'UG'),

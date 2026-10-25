@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -7,10 +10,12 @@ import 'package:macromatrix/data/food_db.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/nutrition/food_groups.dart';
 import 'package:macromatrix/nutrition/gap_plan.dart';
+import 'package:macromatrix/nutrition/health.dart';
 import 'package:macromatrix/nutrition/insights.dart';
 import 'package:macromatrix/nutrition/nutrients.dart';
 import 'package:macromatrix/nutrition/quick_parse.dart';
 import 'package:macromatrix/nutrition/targets.dart';
+import 'package:macromatrix/nutrition/values.dart';
 import 'package:macromatrix/state/app_state.dart';
 import 'package:macromatrix/ui/theme.dart';
 import 'package:macromatrix/ui/widgets/kit.dart';
@@ -169,6 +174,233 @@ void main() {
       final p = tester.element(find.byType(NutrientRow)).pal;
       expect(tester.widget<StatusMark>(find.byType(StatusMark)).level, Level.high);
       expect(tester.widget<Text>(find.text('>999%')).style?.color, p.high);
+    });
+  });
+
+  // Onafhankelijke controle van ronde 11 (voedingsapp-data/evaluaties/rondes/r11/data-verificatie.md): de punten 1-11
+  group('R11-controle', () {
+    final raw = sqlite3.open('assets/db/foods.db', mode: OpenMode.readOnly);
+    final all = [
+      for (final r in raw.select('SELECT source, source_id, nutrients, estimated, label FROM foods'))
+        (
+          ref: '${r['source']}:${r['source_id']}',
+          n: (jsonDecode(r['nutrients'] as String) as Map).cast<String, num>(),
+          est: (jsonDecode(r['estimated'] as String) as Map).cast<String, String>(),
+          label: (r['label'] as String).isEmpty ? const <String, Object?>{} : (jsonDecode(r['label'] as String) as Map).cast<String, Object?>(),
+        ),
+    ];
+    final adult = targetsFor(const Profile(sex: Sex.female, birthYear: 1990, weightKg: 65, heightCm: 170), year: 2026);
+
+    test('1. foute tryptofaan telt niet meer in B3: rundshart ~10,8 mg NE, koffie en thee niet absurd', () {
+      for (final r in ['frida:641', 'ciqual:40052', 'mvt:03.118', 'frida:566']) {
+        final f = ref(r);
+        expect(f.per100g['tryptophan']! / f.per100g['protein']!, lessThan(0.025), reason: r);
+        expect(f.per100g['b3'], inInclusiveRange(7, 13), reason: '$r: ${f.per100g['b3']}');
+      }
+      expect(ref('frida:1075').per100g['b3'], lessThan(30)); // gemalen koffie, was 125
+      expect(ref('ciqual:18003').per100g['b3'], lessThan(30));
+      expect(ref('frida:537').per100g['b3'], lessThan(15)); // theebladeren, was 21
+      expect(ref('frida:1089').per100g['b3'], lessThan(3)); // schorseneer, was 18
+      // Boven 2,5 % van het eiwit alleen wat twee databanken onafhankelijk meten (dadels, pecannoten)
+      final high = {
+        for (final f in all)
+          if ((f.n['protein'] ?? 0) >= 1 && f.n['tryptophan'] != null && f.n['tryptophan']! / f.n['protein']! > 0.025) f.label['f'],
+      };
+      expect(high, everyElement(isIn(['date', 'pecan nut'])));
+    });
+
+    test('1. tryptofaan, chroom en molybdeen zitten in de uitschieterscontrole', () {
+      final report = File('tool/outlier_report.md').readAsStringSync();
+      expect(report, contains('| frida:641 | Heart, beef, raw | offal | tryptophan |'));
+      expect(report, contains('| frida:1075 | Coffee bean, roasted, ground |'));
+    });
+
+    test('2. NE van de bron zonder voorgevormde niacine: max(bron, niacine + tryptofaan/60)', () {
+      expect(ref('frida:59').per100g['b3'], closeTo(0.8 + 179 / 60, 0.05)); // havervlokken ~3,8
+      expect(ref('frida:617').per100g['b3'], greaterThan(25)); // tarwezemelen, was 3,4
+      expect(ref('frida:1081').per100g['b3'], greaterThan(30)); // rijstzemelen, was 3,1
+      expect(ref('cofid:13-805').per100g['b3'], closeTo(6.9 + 3.7, 0.05)); // basilicum: NIACEQU 1,6 was fout
+      expect(ref('cofid:19-535').per100g['b3'], closeTo(3.0 + 2.9, 0.05)); // lamscurry: NIACEQU 0,6 was fout
+      // Waar de bron wel klopt, blijft haar eigen NE (CoFID halfvolle melk 0,7)
+      expect(ref('cofid:12-313').per100g['b3'], closeTo(0.7, 1e-6));
+    });
+
+    test('3. Matvaretabellen: de eigen NIAEQ', () {
+      final heart = ref('mvt:03.118');
+      expect(heart.per100g['b3'], closeTo(10.8, 1e-6));
+      expect(heart.estimated, isNot(contains('b3')));
+    });
+
+    test('4. "semi-skimmed milk" en "halfvolle melk": een melk met ~1,5 % vet vooraan', () {
+      for (final q in ['semi-skimmed milk', 'halfvolle melk', 'milk', 'melk']) {
+        final quick = s.resolveQuick(QuickItem(q)).first.$1;
+        final foods = [quick, if (q.contains('skimm') || q.contains('halfvol')) groupFoods(s.searchLocal(q)).first.main];
+        for (final f in foods) {
+          expect(f.per100g['fat'], inInclusiveRange(1.4, 1.9), reason: '$q: ${f.ref} ${f.name}');
+          expect(f.per100g['energy'], inInclusiveRange(44, 50), reason: '$q: ${f.ref} ${f.name}');
+        }
+      }
+      // De regel zelf: EU-benamingen met hun vetgehalte, niet één bepaald product
+      expect(offStandardMilk(ref('mvt:01.292')), isTrue); // Noorse lettmelk 0,8 % als "semi-skimmed"
+      expect(offStandardMilk(ref('ciqual:19041')), isFalse);
+      expect(offStandardMilk(ref('cofid:12-313')), isFalse); // 1,7 %
+      expect(offStandardMilk(ref('frida:1066')), isFalse); // magere melk 0,5 %
+      expect(offStandardMilk(ref('frida:1265')), isFalse); // volle melk 3,5 %
+    });
+
+    test('5. "chicken breast" en "kipfilet": zonder vel vooraan, met vel alleen als je het vraagt', () {
+      for (final q in ['chicken breast', 'kipfilet']) {
+        for (final f in [groupFoods(s.searchLocal(q)).first.main, s.resolveQuick(QuickItem(q)).first.$1]) {
+          expect(f.label?.part, isNot('muscle+skin'), reason: '$q: ${f.ref} ${f.name}');
+          expect(f.name.toLowerCase(), isNot(contains('and skin')), reason: '$q: ${f.name}');
+          expect(f.per100g['energy'], inInclusiveRange(130, 170), reason: '$q: ${f.name}');
+          expect(f.per100g['protein'], greaterThanOrEqualTo(28), reason: '$q: ${f.name}');
+        }
+      }
+      final withSkin = ref('cofid:18-325');
+      expect(foodQueryScore(withSkin, 'chicken breast'), lessThan(foodQueryScore(withSkin, 'chicken breast with skin')));
+    });
+
+    test('6. geen schatting uit een nagekeken uitschieter of uit droge bladeren voor een drank', () {
+      // Verse spirulina kreeg 35 940 µg jodium uit gedroogd Gracilaria-zeewier
+      expect(ref('ciqual:20982').per100g['iodine'] ?? 0, lessThan(100));
+      expect(ref('usda_sr:170091').per100g['iodine'] ?? 0, lessThan(100));
+      final keep = (jsonDecode(File('tool/outlier_keep.json').readAsStringSync())['keep'] as Map).cast<String, Map>();
+      for (final f in all) {
+        for (final e in f.est.entries) {
+          final donor = e.value.replaceFirst(RegExp(r'^~+'), '');
+          expect(keep[donor]?.containsKey(e.key) ?? false, isFalse, reason: '${f.ref} ${e.key} uit $donor');
+        }
+      }
+      // Thee als drank: geen 335 µg chroom (de waarde van de droge bladeren)
+      for (final r in ['mvt:13.042', 'cofid:17-171', 'cofid:17-170', 'cofid:17-169', 'cofid:17-168']) {
+        expect(ref(r).per100g['chromium'] ?? 0, lessThan(10), reason: r);
+      }
+      // Cafeïne in thee met melk is geen groepsgemiddelde van dranken (0,12 mg)
+      expect(ref('cofid:17-169').estimated['caffeine'] ?? '', isNot(startsWith('~~')));
+    });
+
+    test('6. jodium, chroom, seleen, B12 en vitamine D: geen absurde schatting', () {
+      // Ruim boven het hoogste gewone voedingsmiddel (paling 98 µg vitamine D, lever 100 µg B12), ver onder de oude fouten
+      const limits = {'selenium': 400.0, 'b12': 120.0, 'vit_d': 120.0, 'chromium': 400.0};
+      for (final f in all) {
+        for (final MapEntry(key: k, value: max) in limits.entries) {
+          if (f.est.containsKey(k)) expect(f.n[k]!, lessThan(max), reason: '${f.ref} $k ${f.n[k]}');
+        }
+        // Jodium in de tienduizenden alleen bij zeewier zelf
+        if (f.est.containsKey('iodine') && f.n['iodine']! > 1000) expect(f.label['k'], 'algae', reason: f.ref);
+      }
+    });
+
+    test('7. zeeduivel en grenadier: geen 414 en 356 µg selenium; een piek binnen dezelfde soort valt op', () {
+      expect(ref('ciqual:26208').per100g['selenium'], lessThan(80));
+      expect(ref('ciqual:26208').estimated, contains('selenium'));
+      expect(ref('ciqual:26128').per100g['selenium'], lessThan(80));
+      // Dezelfde toets vangt de gebraden gans van Matvaretabellen (~7× de mineralen van andere gans)
+      expect(ref('mvt:03.245').per100g['zinc'], lessThan(8));
+      expect(ref('mvt:03.245').per100g['b3'], lessThan(20)); // niacine 33,2 mg, NE 82: verbeterd in food_fixes.json
+      final report = File('tool/outlier_report.md').readAsStringSync();
+      expect(report, contains('(soort: monkfish)'));
+      expect(report, contains('(soort: grenadier)'));
+    });
+
+    test('8. retinol apart, met de EFSA-bovengrens; geen bovengrens op het totaal (RE)', () {
+      final n = nutrientByKey['retinol']!;
+      expect(n.indent, 1);
+      expect(nutrients.indexWhere((x) => x.key == 'retinol'), nutrients.indexWhere((x) => x.key == 'vit_a') + 1);
+      expect(adult['retinol']!.upper, 3000);
+      expect(adult['retinol']!.goal, isNull);
+      expect(adult['vit_a']!.upper, isNull);
+      expect(retinolUpperLimit(16), 2600);
+      // Lever: bijna al het vitamine A is retinol; wortel: geen retinol
+      for (final r in ['ciqual:40106', 'cofid:18-409', 'frida:698', 'usda_sr:169451']) {
+        final liver = ref(r);
+        expect(liver.per100g['retinol'], greaterThan(3000), reason: r);
+        expect(liver.per100g['retinol']!, lessThanOrEqualTo(liver.per100g['vit_a']! * 1.01), reason: r);
+      }
+      for (final r in ['ciqual:20009', 'usda_sr:170393', 'frida:24']) {
+        expect(ref(r).per100g['retinol'], 0, reason: r);
+      }
+      // USDA zonder apart retinol: RAE − bètacaroteen / 12 (boter 671 µg)
+      expect(ref('usda_sr:173410').per100g['retinol'], closeTo(671, 1));
+      expect(mapFdcNutrients([
+        [1008, 'KCAL', 100],
+        [1105, 'UG', 250],
+      ])['retinol'], 250);
+    });
+
+    test('8. een dag met 100 g lever: waarschuwing; 300 g wortel: niet', () {
+      NutrientMap day(String r, double grams) => {for (final e in ref(r).per100g.entries) e.key: e.value * grams / 100};
+      final liver = day('ciqual:40106', 100);
+      expect(isTooMuch(liver['retinol']!, adult['retinol']), isTrue);
+      expect([for (final a in attentionList(liver, adult, limit: 4)) a.$1.key], contains('retinol'));
+      final carrots = day('ciqual:20009', 300);
+      expect(isTooMuch(carrots['vit_a']!, adult['vit_a']), isFalse);
+      expect(isTooMuch(carrots['retinol'] ?? 0, adult['retinol']), isFalse);
+      expect([for (final a in attentionList(carrots, adult, limit: 4)) if (a.$3 == Level.high) a.$1.key], isEmpty);
+    });
+
+    test('8. gezondheidscheck: gemiddeld boven 3000 µg retinol geeft een tip over lever', () {
+      final t = targetsFor(const Profile(), year: 2026);
+      NutrientTotals day(double retinol) => NutrientTotals(
+        {
+          for (final k in stripKeys) k: (t[k]!.goal ?? 0) * 1.0,
+          'energy': t['energy']!.goal!,
+          'protein': t['protein']!.goal!,
+          'fiber': 32,
+          'sodium': 1600,
+          'retinol': retinol,
+        },
+        const {},
+        const {},
+        10,
+      );
+      List<String> tips(double retinol) => healthCheck([for (var i = 0; i < 7; i++) (day(retinol), t)], weightKg: 75)!
+          .factors
+          .firstWhere((f) => f.key == 'micro')
+          .tips;
+      expect(tips(5000).join(' '), contains('retinol'));
+      expect(tips(1000).join(' '), isNot(contains('retinol')));
+    });
+
+    testWidgets('8. retinol boven de bovengrens: rood in de lijst', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(Brightness.light),
+          home: Scaffold(body: SizedBox(width: 400, child: NutrientRow(nutrient: nutrientByKey['retinol']!, amount: 13800, target: adult['retinol']))),
+        ),
+      );
+      expect(tester.widget<StatusMark>(find.byType(StatusMark)).level, Level.high);
+    });
+
+    test('9. CoFID zonder zetmeel/suikers: ÷ 1,10 bij zetmeelrijk, anders ÷ 1,05', () {
+      expect(ref('cofid:13-107').per100g['carbs'], closeTo(23.9 / 1.10, 0.01)); // pintobonen, gekookt
+      expect(ref('cofid:11-011').per100g['carbs'], closeTo(73.1 / 1.10, 0.01)); // maïsmeel
+      expect(ref('cofid:14-265').per100g['carbs'], closeTo(56.5 / 1.05, 0.01)); // tamarinde
+      expect(ref('cofid:13-805').per100g['carbs'], closeTo(43.2 / 1.05, 0.01)); // gedroogde basilicum
+      expect(ref('cofid:13-107').per100g['energy'], 137); // energie ongewijzigd (3,75 kcal per g mono-eq.)
+    });
+
+    test('10. geschatte tryptofaan als deel van het eiwit', () {
+      final shares = [
+        for (final f in all)
+          if (f.est.containsKey('tryptophan') && (f.n['protein'] ?? 0) >= 5 && f.label['f'] != 'pecan nut') f.n['tryptophan']! / f.n['protein']!,
+      ]..sort();
+      expect(shares[shares.length ~/ 2], inInclusiveRange(0.010, 0.014));
+      expect(shares.last, lessThanOrEqualTo(0.025));
+      // De cheddar uit de controle (0,156 g) was hüttenkäse met 12,4 g eiwit: 1,25 %, in orde
+      final cottage = ref('usda_sr:167703');
+      expect(cottage.per100g['tryptophan']! / cottage.per100g['protein']!, inInclusiveRange(0.010, 0.016));
+    });
+
+    test('11. rijst: niet de parboiled rijst met 61 mg calcium vooraan', () {
+      for (final q in ['rice', 'rijst']) {
+        for (final f in [groupFoods(s.searchLocal(q)).first.main, s.resolveQuick(QuickItem(q)).first.$1]) {
+          expect(f.name.toLowerCase(), isNot(contains('parboiled')), reason: '$q: ${f.name}');
+          expect(f.per100g['calcium'], lessThan(30), reason: '$q: ${f.name}');
+          expect(f.per100g['energy'], inInclusiveRange(100, 160), reason: '$q: ${f.name}');
+        }
+      }
     });
   });
 }

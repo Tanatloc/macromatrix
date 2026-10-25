@@ -148,7 +148,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Add 1 to lunch'));
       await tester.pumpAndSettle();
-      expect(s.entriesFor(Meal.lunch).single.grams, 110);
+      expect(s.entriesFor(Meal.lunch).single.grams, 112); // 2 × 56 g (gekookt ei, Matvaretabellen)
     });
 
     testWidgets('een typisch antwoord van de server geeft één regel per product', (tester) async {

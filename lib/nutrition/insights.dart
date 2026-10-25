@@ -90,6 +90,10 @@ final stripKeys = [
   for (final (k, _) in [...stripVitamins, ...stripMinerals]) k,
 ];
 
+/// Voedingsstoffen met alleen een veiligheidsgrens, buiten de score en het overzicht: voorgevormd retinol (lever,
+/// EFSA 3000 µg per dag). Ze verschijnen bij "wat aandacht vraagt" en in de gezondheidscheck als je erboven zit.
+const safetyKeys = ['retinol'];
+
 /// Volledigheidsscore 0–100: hoe dicht je bij je doel zit voor de 25 vitaminen en mineralen.
 /// Per stof telt het deel van het doel (maximaal 100%); boven een bovengrens of limiet daalt de score.
 int completenessScore(NutrientMap values, Map<String, Target> targets) {
@@ -138,10 +142,16 @@ List<(Nutrient, double, Level)> attentionList(NutrientMap values, Map<String, Ta
     if (level == Level.high) high.add((n, f, level));
     if (level == Level.low) low.add((n, f, level));
   }
+  // Een veiligheidsgrens (retinol uit lever) krijgt een eigen plaats: anders verdringt het koper van dezelfde lever ze
+  final safety = [
+    for (final k in safetyKeys)
+      if (fractionOf(values[k] ?? 0, targets[k]) case final f? when isTooMuch(values[k] ?? 0, targets[k])) (nutrientByKey[k]!, f, Level.high),
+  ];
   low.sort((a, b) => a.$2.compareTo(b.$2));
   high.sort((a, b) => b.$2.compareTo(a.$2));
-  // Hooguit één "te veel" bovenaan, zodat de tekorten zichtbaar blijven
-  return [...low.take(limit - math.min(1, high.length)), ...high.take(1)].take(limit).toList()
+  // Hooguit één "te veel" bovenaan (plus een overschreden veiligheidsgrens), zodat de tekorten zichtbaar blijven
+  final highs = [...high.take(1), ...safety];
+  return [...low.take(math.max(0, limit - highs.length)), ...highs].take(limit).toList()
     ..sort((a, b) => a.$3 == b.$3 ? a.$2.compareTo(b.$2) : (a.$3 == Level.low ? -1 : 1));
 }
 

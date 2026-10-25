@@ -103,7 +103,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
 
   /// Stoffen waarvan minder beter is, ook zonder ingesteld maximum (alle suikers samen hebben er geen): de lijst met
   /// bronnen is dan een waarschuwing, geen aanrader (N26).
-  static const _lessIsBetter = {'sugars', 'free_sugars', 'sfa', 'trans', 'sodium', 'salt', 'alcohol', 'cholesterol', 'caffeine'};
+  static const _lessIsBetter = {'sugars', 'free_sugars', 'sfa', 'trans', 'sodium', 'salt', 'alcohol', 'cholesterol', 'caffeine', 'retinol'};
 
   static String _groupLabel(NutrientGroup g) => switch (g) {
     NutrientGroup.vitamins => tr('Vitamin', 'Vitamine'),

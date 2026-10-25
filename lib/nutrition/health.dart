@@ -513,11 +513,19 @@ HealthCheck? healthCheck(
     for (final k in stripKeys)
       if (weekTargets[k]!.upper case final u? when weekTargets[k]!.goal != null && avg(k) > u) nutrientByKey[k]!.name,
   ];
+  // Voorgevormd retinol (zie safetyKeys): geen doel, wel de EFSA-bovengrens, gemiddeld over de week zoals de andere
+  final retinolUpper = mean(full.map((d) => d.$2['retinol']?.upper));
+  final tooMuchRetinol = retinolUpper != null && avg('retinol') > retinolUpper;
   final microTips = [
     if (tooMuch.isNotEmpty)
       tr(
         'On average you get more than the safe upper limit of ${tooMuch.join(', ')}. Too much of this for a long time can harm you: check your supplements.',
         'Je krijgt gemiddeld meer dan de veilige bovengrens van ${tooMuch.join(', ')}. Daar langdurig te veel van kan schaden: kijk je supplementen na.',
+      ),
+    if (tooMuchRetinol)
+      tr(
+        'On average you get more than ${fmtGrouped(retinolUpper, 0)} µg of retinol (preformed vitamin A) a day, the safe upper limit. It mostly comes from liver and liver products: eat those at most once a week, and not at all when pregnant. Check supplements with vitamin A too.',
+        'Je krijgt gemiddeld meer dan ${fmtGrouped(retinolUpper, 0)} µg retinol (voorgevormde vitamine A) per dag, de veilige bovengrens. Dat komt vooral uit lever en leverproducten: eet die hooguit één keer per week, en niet als je zwanger bent. Kijk ook supplementen met vitamine A na.',
       ),
   ];
 

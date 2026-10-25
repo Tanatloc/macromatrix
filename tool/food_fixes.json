@@ -56,7 +56,8 @@
     },
     "ciqual:40102": {
       "vit_a": null,
-      "_waarom": "Lamslever: 441 µg vitamine A is veel te laag (lever: 7000–50000 µg); opnieuw aangevuld uit een andere bron"
+      "_waarom": "Lamslever: 441 µg vitamine A is veel te laag (lever: 7000–50000 µg); opnieuw aangevuld uit een andere bron; retinol: 435 µg is geen lamslever (elders 7000-20 000 µg); vitamine A was al weggelaten om dezelfde reden",
+      "retinol": null
     },
     "mvt:06.151": {
       "potassium": 2630,
@@ -492,8 +493,9 @@
     },
     "frida:511": {
       "vit_e": 0.5,
-      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken); vit_a: value inconsistent with the product and with other databases (vergelijking met andere databanken)",
-      "vit_a": 280.0
+      "_waarom": "vit_e: value inconsistent with the product and with other databases (vergelijking met andere databanken); vit_a: value inconsistent with the product and with other databases (vergelijking met andere databanken); retinol: 1182 µg past niet bij het verbeterde vitamine A (280 µg); opnieuw geschat",
+      "vit_a": 280.0,
+      "retinol": null
     },
     "cofid:12-542": {
       "cholesterol": null,
@@ -961,7 +963,8 @@
     },
     "slv:7252": {
       "vit_a": 800.0,
-      "_waarom": "vit_a: fortified margarine vit A ~800-900 (vergelijking met andere databanken)"
+      "_waarom": "vit_a: fortified margarine vit A ~800-900 (vergelijking met andere databanken); retinol: 0 µg past niet bij het verbeterde vitamine A (800 µg, verrijkt); opnieuw geschat",
+      "retinol": null
     },
     "slv:2401": {
       "beta_carotene": 540.0,
@@ -1130,7 +1133,8 @@
     },
     "slv:7200": {
       "vit_a": null,
-      "_waarom": "vit_a: Paneer has vitamin A in the hundreds, 0.33 impossible (vergelijking met andere databanken)"
+      "_waarom": "vit_a: Paneer has vitamin A in the hundreds, 0.33 impossible (vergelijking met andere databanken); retinol: 0 µg in paneer kan niet (zuivel); vitamine A was al weggelaten",
+      "retinol": null
     },
     "cofid:15-666": {
       "b9": null,
@@ -1151,7 +1155,8 @@
     },
     "cofid:12-492": {
       "vit_a": null,
-      "_waarom": "vit_a: Port Salut vitamin A ~250, 14 far too low (vergelijking met andere databanken)"
+      "_waarom": "vit_a: Port Salut vitamin A ~250, 14 far too low (vergelijking met andere databanken); retinol: 0 µg in Port Salut kan niet (kaas); vitamine A was al weggelaten",
+      "retinol": null
     },
     "cofid:18-292": {
       "b2": 0.08,
@@ -1396,6 +1401,11 @@
     "ciqual:11063": {
       "sugars": 5,
       "_waarom": "sugars: sugars 37.6 g exceed carbs minus fiber plausibility (42.2-13.6); dried dill sugars are low (controle meestgegeten voedingsmiddelen)"
+    },
+    "mvt:03.245": {
+      "b3": null,
+      "_ne": null,
+      "_waarom": "Gans zonder vel, gebraden (Matvaretabellen): niacine 33,2 mg (NE 82) is 5 à 8× de andere gans (4-8 mg); ook magnesium, fosfor, kalium en zink liggen ~7× te hoog (die vangt outlier_pass)"
     }
   }
 }

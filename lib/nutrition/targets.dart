@@ -292,6 +292,16 @@ String goalNowEarlier(List<double> goals, String Function(double) fmt) {
   );
 }
 
+/// Veilige bovengrens voor voorgevormd retinol in µg per dag (EFSA/SCF 2002), naar leeftijd.
+double retinolUpperLimit(int age) => switch (age) {
+  < 4 => 800,
+  < 7 => 1100,
+  < 11 => 1500,
+  < 15 => 2000,
+  < 18 => 2600,
+  _ => 3000,
+};
+
 /// Richtwaarden voor een profiel. [extraKcal] = verbrande energie door beweging die bij het doel komt.
 ///
 /// [proteinGoal] = een eigen eiwitdoel: koolhydraten en vet verdelen dan wat na dat eiwit overblijft.
@@ -331,6 +341,9 @@ Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal =
 
     // Vitaminen
     'vit_a': Target(goal: male ? 750 : 650),
+    // Voorgevormd retinol: alleen een bovengrens (EFSA/SCF 2002: 3000 µg per dag voor volwassenen, ook bij zwangerschap;
+    // lager voor jongeren). Niet op het totaal (RE): dan zou 100 g wortel al rood zijn.
+    'retinol': Target(upper: retinolUpperLimit(age)),
     'vit_c': Target(goal: male ? 110 : 95),
     'vit_d': const Target(goal: 15, upper: 100),
     'vit_e': Target(goal: male ? 13 : 11, upper: 300),
