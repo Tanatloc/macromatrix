@@ -72,7 +72,12 @@ const _unitAlone = {'pint': 'beer'};
 /// Woorden die alleen een stuk aanduiden (het product bepaalt het gewicht).
 const _pieces = {'piece', 'pieces', 'stuk', 'stuks', 'stukje', 'stukjes'};
 
-final _splitter = RegExp(r'\s*(?:(?<!\d),|,(?!\d)|;|\+|&|\band\b|\ben\b|\bwith\b|\bmet\b|\bplus\b)\s*', caseSensitive: false);
+/// Niet bij "with no added sugar" of "met minder suiker": dat zegt iets over het product zelf (zie splitSugarAsk).
+final _splitter = RegExp(
+  r'\s*(?:(?<!\d),|,(?!\d)|;|\+|&|\band\b|\ben\b|\bwith\b(?!\s+(no|less|reduced|low|lower)(\s+added)?\s+sugars?\b)|'
+  r'\bmet\b(?!\s+(minder|weinig)\s+suikers?\b)|\bplus\b)\s*',
+  caseSensitive: false,
+);
 final _withWord = RegExp(r'\b(with|met)\b', caseSensitive: false);
 final _amount = RegExp(r'^(\d+(?:[.,]\d+)?)\s*(kg|g|gr|gram|grams|gramme|ml|cl|l)?\b\s*(.*)$', caseSensitive: false);
 final _filler = RegExp(r'^(?:of|van|de|het|the|some|wat|a|an|een)\s+', caseSensitive: false);

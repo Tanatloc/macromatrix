@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import '../data/food.dart';
 import '../data/search_terms.dart';
+import 'free_sugars.dart';
 import 'gap_plan.dart';
 
 class FoodGroup {
@@ -38,10 +39,14 @@ String sameProductKey(Food f) => _key(f);
 String _key(Food f) {
   final l = f.label;
   if (l == null) return f.ref;
-  final flags = [
+  // "No added sugars" of "reduced sugar" in de naam is een ander product, ook als het label dat niet zegt: zo staat
+  // muesli zonder suiker niet onder de gewone muesli (en omgekeerd)
+  final flags = {
     for (final x in l.flags)
       if (!_sameFlags.contains(x)) x,
-  ]..sort();
+    if (noAddedSugarName.hasMatch(f.name)) 'unsweetened',
+    if (lowSugarName.hasMatch(f.name)) 'reduced sugar',
+  }.toList()..sort();
   return [l.food, l.group, l.part, l.state, l.dish ? 'dish' : '', ...flags].join('|');
 }
 
@@ -161,12 +166,46 @@ int _better(Food a, Food b) {
   return score(b).compareTo(score(a));
 }
 
+/// Wat iemand over suiker vraagt: [none] zonder toegevoegde suiker ("sugar free", "unsweetened", "zonder suiker"),
+/// [low] minder suiker ("low sugar", "reduced sugar", "minder suiker").
+enum SugarAsk { none, low }
+
+/// Zo zegt iemand dat in een zoekopdracht (Engels en Nederlands), eventueel met "with"/"met" ervoor.
+final _askNone = RegExp(
+  r'\b((with|met) )?(sugar[- ]?free|sugarless|zero sugar|unsweetened|not sweetened|no (added )?sugars?( added)?|without (any )?(added )?sugars?|'
+  r'(zonder|geen) (toegevoegde )?suikers?( toegevoegd)?|suikervrije?|ongezoete?)(?![a-zà-ÿ])',
+);
+final _askLow = RegExp(r'\b((with|met) )?((low|reduced|less|lower)[- ]sugars?|sugar[- ]reduced|(minder|weinig) suikers?|suikerarme?)(?![a-zà-ÿ])');
+
+/// Een suikerwens is geen voedingsmiddel: "sugar free muesli" wordt ("muesli", [SugarAsk.none]) en "muesli zonder
+/// toegevoegde suiker" ook. De overige woorden bepalen het voedingsmiddel, de wens alleen welke vorm bovenaan staat
+/// (zie [foodQueryScore]). Zonder ander woord ("sugar free", "no added sugar") blijft de zoekopdracht zoals ze is.
+(String, SugarAsk?) splitSugarAsk(String query) {
+  final q = query.toLowerCase();
+  for (final (re, ask) in [(_askNone, SugarAsk.none), (_askLow, SugarAsk.low)]) {
+    if (!re.hasMatch(q)) continue;
+    final rest = q
+        .replaceAll(re, ' ')
+        .replaceAll(RegExp(r'[\s,]+'), ' ')
+        .trim()
+        .replaceAll(RegExp(r'^(with|met|and|en) |\s(with|met|and|en)$'), '')
+        .trim();
+    if (rest.isNotEmpty) return (rest, ask);
+  }
+  return (query, null);
+}
+
 /// Hoe goed een product past bij wat iemand typt of zegt, hoger = beter. Gedeeld door het zoekvak en Snel loggen
 /// (P152), zodat "rijst", "griekse yoghurt" of "halfvolle melk" op beide plaatsen hetzelfde product bovenaan zet:
 /// hele woorden, het gewone product (geen gerecht, poeder, diepvries of dieetvariant), en bij granen, pasta,
 /// peulvruchten, vlees en eieren de bereide vorm. Eigen voorkeuren (eerder gekozen of gegeten) komen er los bij.
-double foodQueryScore(Food f, String rawQuery) {
-  final n = f.name.toLowerCase();
+/// Een suikerwens ([sugar], of nog in [rawQuery]: zie [splitSugarAsk]) zet de vorm zonder of met minder suiker
+/// vooraan; is die er niet, dan blijft het gewone product de beste.
+double foodQueryScore(Food f, String rawQuery, {SugarAsk? sugar}) {
+  if (sugar == null) (rawQuery, sugar) = splitSugarAsk(rawQuery);
+  final full = sameSpelling(f.name.toLowerCase());
+  // Bij een suikerwens is "no added sugars" in de naam geen dieetvariant of extra woord: dat telt hieronder apart
+  final n = sugar == null ? full : full.replaceAll(noAddedSugarName, ' ').replaceAll(lowSugarName, ' ');
   // Waarin iets gekookt of gebakken is, maakt er geen gerecht of dieetvariant van ("boiled in unsalted water",
   // "fried in corn oil")
   final dish = n.replaceAll(RegExp(r'\bin (unsalted |salted )?water\b|\bin (\w+ )?oil\b|\bin (beef )?dripping\b'), '');
@@ -193,8 +232,9 @@ double foodQueryScore(Food f, String rawQuery) {
       s -= 14;
     }
   }
-  // Een woord dat alleen iets anders beschrijft ("spinach spaghetti", "quinoa pasta") is niet het product zelf
-  final last = head.trim().split(RegExp(r'\s+')).last;
+  // Een woord dat alleen iets anders beschrijft ("spinach spaghetti", "quinoa pasta") is niet het product zelf. Wat
+  // tussen haakjes staat, telt niet ("Muesli (average)" is gewoon muesli).
+  final last = head.replaceAll(RegExp(r'\([^)]*\)?'), ' ').trim().split(RegExp(r'\s+')).last;
   if (queryWords.length == 1 && !last.startsWith(queryWords.first.replaceAll(RegExp(r'(es|s)$'), '')) && head.split(RegExp(r'\s+')).length > 1) {
     s -= 4;
   }
@@ -303,7 +343,7 @@ double foodQueryScore(Food f, String rawQuery) {
   }
   if (RegExp(r"^[A-Z0-9 &'.-]{4,},").hasMatch(f.name)) s -= 12;
   // Een zoekwoord dat alleen in een merk- of bedrijfsnaam staat ("cola" in THE COCA-COLA COMPANY)
-  final plainName = f.name.replaceAll(RegExp(r"\b[A-Z][A-Z0-9&'.]+(?:-[A-Z0-9&'.]+)*\b"), ' ').toLowerCase();
+  final plainName = sameSpelling(f.name.replaceAll(RegExp(r"\b[A-Z][A-Z0-9&'.]+(?:-[A-Z0-9&'.]+)*\b"), ' ').toLowerCase());
   if (queryWords.any((w) => n.contains(w) && !plainName.contains(w))) s -= 12;
   // Orgaanvlees en dieetvarianten alleen als je ze zelf noemt
   if (RegExp(r'\b(liver|kidney|heart|gizzard|giblets|tongue|lever)\b').hasMatch(n) &&
@@ -324,6 +364,19 @@ double foodQueryScore(Food f, String rawQuery) {
   if (RegExp(r'\b(gluten free|low fat|reduced|diet|light|sugar free|unsalted|low sodium)\b').hasMatch(dish) &&
       !RegExp(r'gluten|low|reduced|diet|light|free|unsalted').hasMatch(query)) {
     s -= 10;
+  }
+  if (sugar != null) {
+    final none = noAddedSugarName.hasMatch(full) || (f.label?.flags.contains('unsweetened') ?? false);
+    final low = lowSugarName.hasMatch(full);
+    // "Low sugar" neemt ook "no added sugar", "sugar free" ook "reduced sugar" (maar minder graag)
+    s += switch (sugar) {
+      SugarAsk.none => none ? 16 : (low ? 8 : 0),
+      SugarAsk.low => low ? 16 : (none ? 14 : 0),
+    };
+    // Met suiker, honing of siroop, terwijl je zonder of met minder vraagt: liever de gewone
+    if (!none && !low && (RegExp(r'\b(sweetened|sugars?|honey|syrup|candied)\b').hasMatch(n) || (f.label?.flags.contains('sweetened') ?? false))) {
+      s -= 8;
+    }
   }
   return s - n.length / 15;
 }

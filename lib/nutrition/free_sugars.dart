@@ -43,10 +43,26 @@ final _flavourName = RegExp(
   caseSensitive: false,
 );
 
+/// Hoe een naam "zonder toegevoegde suiker" zegt (Engels, Nederlands, Frans). Ook voor het zoeken: "sugar free
+/// muesli" zet zo'n product bovenaan (zie splitSugarAsk in food_groups.dart).
+const _noSugarWords =
+    r'unsweetened|not sweetened|ongezoet|no added\s+sugars?|no sugars? added|sugars? not added|no sugars?\b|without (added )?sugars?|'
+    r'sugar[- ]?free|sugarless|zonder (toegevoegde )?suikers?|suikervrij|sans sucres?( ajoutés?)?|non sucrée?s?';
+
+/// Zonder toegevoegde suiker, volgens de naam.
+final noAddedSugarName = RegExp(_noSugarWords, caseSensitive: false);
+
+/// Minder suiker dan het gewone product, volgens de naam ("reduced sugar", "with less sugar", "low sugar content").
+/// Niet "(not reduced sugar)": dat is juist de gewone.
+final lowSugarName = RegExp(
+  r'(?<!not )\b(reduced|less|low|lower)[- ](in )?sugars?\b|\blow sugar content|sugars?[- ]reduced|minder suiker|suikerarm|'
+  r'(réduit|allégé)e?s? en sucres?',
+  caseSensitive: false,
+);
+
 /// Zinnen die op het tegendeel wijzen: fruit in eigen sap, zonder suiker, "sweet potato".
 final _notSweet = RegExp(
-  r'in (its own |eigen )?(juice|sap)|unsweetened|ongezoet|no added sugars?|no sugars? added|sugars? not added|without (added )?sugars?|sugar[- ]?free|'
-  r'zonder (toegevoegde )?suikers?|suikervrij|sans sucres? ajoutés?|sweet ?potato(es)?|zoete aardappel(en)?|sweet ?corn|'
+  'in (its own |eigen )?(juice|sap)|$_noSugarWords|sweet ?potato(es)?|zoete aardappel(en)?|sweet ?corn|'
   r'sweet peppers?|zoete paprika|sugar[- ]?snap|sugar peas?|honeydew|honeycrisp|nectarine|in tomato juice|'
   r'(gooseberries|apples?|pears?|plums?), dessert',
   caseSensitive: false,
