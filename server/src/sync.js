@@ -32,7 +32,7 @@ async function columns(db, table) {
 }
 
 function tableOf(name) {
-  const key = SYNC_TABLES[name];
+  const key = typeof name === 'string' && Object.hasOwn(SYNC_TABLES, name) ? SYNC_TABLES[name] : null;
   if (!key) throw new DbError('42P01', `relation "${name}" does not exist`, { status: 404 });
   return key;
 }
@@ -76,6 +76,7 @@ export async function pull(db, uid, table, since, limit) {
 export async function fetchRows(db, uid, table, keys) {
   const key = tableOf(table);
   if (!Array.isArray(keys) || keys.some((k) => typeof k !== 'string')) throw new DbError('22P02', 'keys must be strings');
+  if (keys.length > 1000) throw new DbError('54000', 'at most 1000 keys per request');
   const out = [];
   for (let i = 0; i < keys.length; i += 90) {
     const part = keys.slice(i, i + 90);

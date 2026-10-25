@@ -39,6 +39,7 @@ dependencies:
   sqlite3: ^3.7.1
   provider: ^6.1.5+1
   http: ^1.6.0
+  web_socket_channel: ^3.0.3
   path_provider: ^2.1.6
   path: ^1.9.1
   intl: ^0.20.3

@@ -17,6 +17,7 @@ import 'package:supabase/supabase.dart';
 
 import '../i18n.dart';
 import 'account.dart';
+import 'api.dart';
 import 'challenges.dart' show isMissingTable;
 import 'purchase.dart';
 
@@ -221,7 +222,7 @@ abstract class ProRemote {
 
 class SupabaseProRemote implements ProRemote, AiQuotaRemote, ProFrameRemote {
   SupabaseProRemote(this.client);
-  final SupabaseClient client;
+  final Rpc client;
 
   Future<T> _guard<T>(Future<T> Function() f) async {
     try {
@@ -288,7 +289,7 @@ class Pro extends ChangeNotifier {
   /// De server, alleen als je ingelogd bent (of de nagebootste in tests).
   ProRemote? get remote {
     if (_remoteFor != null) return _remoteFor();
-    final c = account.client;
+    final c = account.api;
     return c == null || account.user == null ? null : SupabaseProRemote(c);
   }
 

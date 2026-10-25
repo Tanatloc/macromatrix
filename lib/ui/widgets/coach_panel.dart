@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase/supabase.dart' show SupabaseClient;
 
 import '../../i18n.dart';
 import '../../nutrition/coach.dart';
@@ -19,6 +18,7 @@ import '../../platform/ai_request.dart';
 import '../../platform/coach_request.dart';
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
+import '../../sync/api.dart' show Rpc;
 import '../../sync/ai_report.dart';
 import '../../sync/features.dart';
 import '../../sync/pro.dart' show PhotoQuota, utcDayKey;
@@ -39,8 +39,8 @@ String? Function(BuildContext context) coachToken = (context) => context.read<Ac
 @visibleForTesting
 AiReporter coachReporter = const AiReporter();
 
-/// De Supabase-verbinding voor een melding, of null zonder account. Te vervangen in tests.
-SupabaseClient? Function(BuildContext context) coachClient = (context) => context.read<Account?>()?.client;
+/// De verbinding met de server voor een melding, of null zonder account. Te vervangen in tests.
+Rpc? Function(BuildContext context) coachClient = (context) => context.read<Account?>()?.api;
 
 /// Op true zodra de server zegt dat de coach er (nog) niet is (migratie niet uitgevoerd of geen model): dan verbergt
 /// het weekrapport hem tot de app opnieuw start.

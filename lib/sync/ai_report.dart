@@ -3,7 +3,7 @@
 /// [kind]. Gebruikers kunnen meldingen niet lezen; alleen de beheerder bekijkt ze.
 library;
 
-import 'package:supabase/supabase.dart';
+import 'api.dart';
 
 /// Hoogstens zoveel tekens tekst (de tabel weigert meer).
 const aiReportMaxText = 4000;
@@ -28,7 +28,7 @@ class AiReporter {
 
   /// Meldt [text] (bv. de samenvatting en de tips van de coach) met [note] (week, model, en wat de gebruiker
   /// eventueel schreef). [kind]: 'coach', 'photo', 'label', … Gooit nooit.
-  Future<AiReportResult> report(SupabaseClient? client, {required String kind, required String text, String? note}) async {
+  Future<AiReportResult> report(Rpc? client, {required String kind, required String text, String? note}) async {
     if (client == null) return AiReportResult.failed;
     try {
       final r = await client.rpc(

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase/supabase.dart';
 import 'package:macromatrix/sync/pro.dart';
+import 'package:macromatrix/sync/api.dart';
 
 /// SupabaseProRemote tegen een kleine nagebootste PostgREST-server: met de migratie (antwoorden van my_pro en
 /// photo_quota) en zonder (PGRST202 wordt ProMissing). Apart bestand: testWidgets vervangt HttpClient.
@@ -35,7 +36,7 @@ void main() {
   });
   tearDown(() => http.close(force: true));
 
-  SupabaseProRemote remote() => SupabaseProRemote(SupabaseClient('http://127.0.0.1:${http.port}', 'anon-key'));
+  SupabaseProRemote remote() => SupabaseProRemote(SupabaseRpc(SupabaseClient('http://127.0.0.1:${http.port}', 'anon-key')));
 
   test('met de migratie: status en teller', () async {
     missing = false;

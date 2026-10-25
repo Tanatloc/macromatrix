@@ -9,7 +9,7 @@ export class UserHub extends DurableObject {
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
-  /** WebSocket van een toestel (de Worker controleerde het ticket al). */
+  /** WebSocket van een toestel (de Worker controleerde het ticket al en geeft de sessie mee in x-session). */
   async fetch(request) {
     if (request.headers.get('upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
     // Hoogstens 20 tegelijk per gebruiker: de oudste gaat dicht
@@ -17,6 +17,7 @@ export class UserHub extends DurableObject {
     for (const ws of open.slice(0, Math.max(0, open.length - 19))) ws.close(4000, 'too many connections');
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ sid: request.headers.get('x-session') });
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -33,7 +34,12 @@ export class UserHub extends DurableObject {
     return n;
   }
 
-  /** Account verwijderd: alle verbindingen sluiten. */
+  /** Uitgelogd op één toestel: alleen de verbindingen van die sessie sluiten. */
+  async closeSession(sid) {
+    for (const ws of this.ctx.getWebSockets()) if (ws.deserializeAttachment()?.sid === sid) ws.close(4002, 'signed out');
+  }
+
+  /** Account verwijderd, overal uitgelogd of wachtwoord gewijzigd: alle verbindingen sluiten. */
   async closeAll() {
     for (const ws of this.ctx.getWebSockets()) ws.close(4001, 'account deleted');
   }

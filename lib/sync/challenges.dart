@@ -18,6 +18,7 @@ import '../nutrition/challenges.dart';
 import '../state/app_state.dart';
 import '../state/challenge_days.dart';
 import 'account.dart';
+import 'api.dart';
 import 'name_filter.dart';
 
 /// De tabellen of functies voor uitdagingen bestaan (nog) niet op de server.
@@ -137,7 +138,7 @@ String _rule(ChallengeRule r) => r.name;
 
 class SupabaseChallengeRemote implements ChallengeRemote {
   SupabaseChallengeRemote(this.client, this.uid);
-  final SupabaseClient client;
+  final Rpc client;
   final String uid;
 
   Future<T> _guard<T>(Future<T> Function() f) async {
@@ -196,8 +197,11 @@ class SupabaseChallengeRemote implements ChallengeRemote {
   @override
   Future<void> pushDays(String id, Map<String, bool> days) => _guard(() async {
     if (days.isEmpty) return;
+    final c = client;
+    // Supabase: rechtstreeks in de tabel (RLS); de eigen server heeft er een functie voor
+    if (c is! SupabaseRpc) return c.rpc('challenge_days_put', params: {'p_challenge': id, 'p_days': days});
     final now = DateTime.now().toUtc().toIso8601String();
-    await client.from('challenge_days').upsert([
+    await c.client.from('challenge_days').upsert([
       for (final e in days.entries) {'challenge_id': id, 'user_id': uid, 'day': e.key, 'met': e.value, 'updated_at': now},
     ], onConflict: 'challenge_id,user_id,day');
   });
@@ -217,7 +221,7 @@ class Challenges extends ChangeNotifier {
   /// De server, alleen als je ingelogd bent (of de nagebootste in tests).
   ChallengeRemote? get remote {
     if (_remoteFor != null) return _remoteFor();
-    final c = account.client, u = account.user;
+    final c = account.api, u = account.user;
     return c == null || u == null ? null : SupabaseChallengeRemote(c, u.id);
   }
 

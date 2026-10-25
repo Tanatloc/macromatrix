@@ -10,9 +10,10 @@ import '../data/user_db.dart';
 import '../i18n.dart';
 import '../state/app_state.dart';
 import '../sync/account.dart';
+import '../sync/cloudflare_auth.dart' show apiUrl;
 import 'platform_native.dart';
 
-/// Hoe het werkt: het toestel krijgt bij Supabase een willekeurige code (notify_register). Een taak op de
+/// Hoe het werkt: het toestel krijgt bij de server een willekeurige code (notify_register). Een taak op de
 /// achtergrond (ongeveer elk kwartier, alleen met internet) vraagt met die code de openstaande uitdagingen op
 /// (pending_challenges) en toont een melding voor elke nieuwe. Zo heeft de achtergrondtaak je sessie niet nodig.
 class BattleNotify {
@@ -21,7 +22,7 @@ class BattleNotify {
   /// Code aanvragen (één keer per toestel) en de taak inplannen. Veilig om vaak aan te roepen.
   static Future<void> setup(AppState state, Account account) async {
     if (!Platform.isAndroid || !account.signedIn) return;
-    final client = account.client;
+    final client = account.api;
     if (client == null) return;
     try {
       var token = state.user.setting('_notify')?['token'] as String?;
@@ -71,11 +72,15 @@ class BattleNotify {
     try {
       final n = db.setting('_notify');
       final token = n?['token'] as String?;
-      if (token == null || supabaseUrl.isEmpty) return true;
+      if (token == null || (supabaseUrl.isEmpty && apiUrl.isEmpty)) return true;
+      // Zonder sessie, alleen met de code van dit toestel
       final res = await http
           .post(
-            Uri.parse('$supabaseUrl/rest/v1/rpc/pending_challenges'),
-            headers: {'apikey': supabaseAnonKey, 'Authorization': 'Bearer $supabaseAnonKey', 'Content-Type': 'application/json'},
+            apiUrl.isNotEmpty ? Uri.parse(apiUrl).replace(path: '/v1/rpc/pending_challenges') : Uri.parse('$supabaseUrl/rest/v1/rpc/pending_challenges'),
+            headers: {
+              if (apiUrl.isEmpty) ...{'apikey': supabaseAnonKey, 'Authorization': 'Bearer $supabaseAnonKey'},
+              'Content-Type': 'application/json',
+            },
             body: jsonEncode({'p_token': token}),
           )
           .timeout(const Duration(seconds: 20));

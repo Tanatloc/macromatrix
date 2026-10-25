@@ -12,6 +12,7 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { bearer, emailOTP } from 'better-auth/plugins';
 import bcrypt from 'bcryptjs';
+import { hubFor } from './hub.js';
 import { sendMail } from './mail.js';
 
 /** Webversies die de API mogen aanspreken (de app zelf stuurt geen Origin). */
@@ -46,11 +47,17 @@ export async function checkSignupLimit(env, ip) {
   const now = Date.now();
   const iso = (ms) => new Date(ms).toISOString();
   await env.DB.prepare('DELETE FROM signup_ips WHERE at < ?').bind(iso(now - DAY * 1000)).run();
-  const r = await env.DB.prepare('SELECT count(*) AS day, sum(at > ?) AS hour FROM signup_ips WHERE ip_hash = ?').bind(iso(now - 3600 * 1000), h).first();
-  if ((r?.hour ?? 0) >= 3 || (r?.day ?? 0) >= 10) {
+  // Tellen en bijschrijven in één opdracht: gelijktijdige registraties kunnen er niet samen door
+  const r = await env.DB.prepare(
+    `INSERT INTO signup_ips (ip_hash, at) SELECT ?1, ?2
+     WHERE (SELECT count(*) FROM signup_ips WHERE ip_hash = ?1 AND at > ?3) < 3
+       AND (SELECT count(*) FROM signup_ips WHERE ip_hash = ?1) < 10`,
+  )
+    .bind(h, iso(now), iso(now - 3600 * 1000))
+    .run();
+  if (r.meta.changes === 0) {
     throw new APIError('TOO_MANY_REQUESTS', { code: 'SIGNUP_IP_LIMIT', message: 'Too many new accounts from this network. Try again later.' });
   }
-  await env.DB.prepare('INSERT INTO signup_ips (ip_hash, at) VALUES (?, ?)').bind(h, iso(now)).run();
 }
 
 export function createAuth(env) {
@@ -109,6 +116,11 @@ export function createAuth(env) {
       before: createAuthMiddleware(async (ctx) => {
         const p = ctx.path;
         const pw = p === '/sign-up/email' || p === '/email-otp/reset-password' ? ctx.body?.password : p === '/change-password' ? ctx.body?.newPassword : undefined;
+        // Staging bevat een kopie van echte accounts: daar alleen de adressen uit STAGING_EMAILS en het testdomein
+        const email = typeof ctx.body?.email === 'string' ? ctx.body.email.trim().toLowerCase() : null;
+        if (env.STAGING_EMAILS && email && !email.endsWith(`@${env.TEST_OUTBOX_DOMAIN}`) && !env.STAGING_EMAILS.toLowerCase().split(',').includes(email)) {
+          throw new APIError('FORBIDDEN', { code: 'STAGING_ONLY', message: 'This is a test server.' });
+        }
         if (pw !== undefined) {
           const problem = passwordProblem(pw);
           if (problem) throw new APIError('BAD_REQUEST', { code: 'WEAK_PASSWORD', message: problem });
@@ -123,6 +135,13 @@ export function createAuth(env) {
           if (cred?.password && /^\$2[aby]\$/.test(cred.password)) {
             await ctx.context.internalAdapter.updatePassword(uid, await passwords.hash(ctx.body.password));
           }
+        }
+        // Alle sessies weg (overal uitloggen, wachtwoord vergeten): ook de live verbindingen sluiten
+        if (!(ctx.context.returned instanceof APIError)) {
+          let uid = null;
+          if (ctx.path === '/revoke-sessions' || (ctx.path === '/change-password' && ctx.body?.revokeOtherSessions)) uid = ctx.context.session?.user.id;
+          if (ctx.path === '/email-otp/reset-password' && ctx.body?.email) uid = (await ctx.context.internalAdapter.findUserByEmail(ctx.body.email.toLowerCase()))?.user.id;
+          if (uid) await hubFor(env, uid).closeAll().catch(() => {});
         }
         if (ctx.path === '/change-password' && ctx.context.session && !(ctx.context.returned instanceof APIError)) {
           await sendMail(env, { to: ctx.context.session.user.email, kind: 'password_changed_notification' });

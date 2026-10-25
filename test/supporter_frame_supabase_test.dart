@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase/supabase.dart';
 import 'package:macromatrix/i18n.dart';
+import 'package:macromatrix/sync/api.dart';
 import 'package:macromatrix/sync/account.dart';
 import 'package:macromatrix/sync/cloudflare_auth.dart' show AccountUser;
 import 'package:macromatrix/sync/friends.dart';
@@ -109,7 +110,7 @@ void main() {
 
   test('pro_set_frame: met en zonder de migratie', () async {
     missing = false;
-    final remote = SupabaseProRemote(client());
+    final remote = SupabaseProRemote(SupabaseRpc(client()));
     expect(await remote.setFrame(AvatarFrame.sparkle), isTrue);
     expect(calls['pro_set_frame'], {'p_frame': 'sparkle'});
     await remote.setFrame(null);

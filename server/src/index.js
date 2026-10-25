@@ -27,11 +27,16 @@ function cors(request, env, response) {
   return r;
 }
 
-/** Ingelogde gebruiker uit de Bearer-token, of null. */
-async function sessionUser(env, request) {
+/** Ingelogde gebruiker en sessie uit de Bearer-token, of null. */
+async function session(env, request) {
   if (!request.headers.get('authorization')) return null;
   const s = await createAuth(env).api.getSession({ headers: request.headers });
-  return s?.user?.id ?? null;
+  return s?.user?.id ? { uid: s.user.id, sid: s.session.id } : null;
+}
+
+/** Grove limiet per sleutel (IP of gebruiker); zonder binding (lokaal) geen limiet. */
+async function limited(limiter, key) {
+  return limiter ? !(await limiter.limit({ key })).success : false;
 }
 
 async function body(request) {
@@ -44,20 +49,26 @@ async function body(request) {
 
 async function api(request, env, ctx, url) {
   const path = url.pathname;
+  const ip = request.headers.get('cf-connecting-ip') ?? 'onbekend';
   if (path === '/v1/live') {
-    const uid = await checkTicket(env, url.searchParams.get('ticket'));
-    if (!uid) return json({ code: 'PGRST301', message: 'invalid ticket' }, 401);
-    return hubFor(env, uid).fetch(request);
+    const t = await checkTicket(env, url.searchParams.get('ticket'));
+    if (!t) return json({ code: 'PGRST301', message: 'invalid ticket' }, 401);
+    const headers = new Headers(request.headers);
+    headers.set('x-session', t.sid);
+    return hubFor(env, t.uid).fetch(new Request(request, { headers }));
   }
   // Niet ingelogd, met een meldingstoken van het toestel (achtergrondtaak zonder sessie)
   if (path === '/v1/rpc/pending_challenges' && request.method === 'POST') {
+    if (await limited(env.AUTH_LIMIT, ip)) return json({ code: '429', message: 'Too many requests' }, 429);
     return json(await callRpc('pending_challenges', await body(request), { db: env.DB, env, uid: null }));
   }
-  const uid = await sessionUser(env, request);
-  if (!uid) return json({ code: 'PGRST301', message: 'not logged in' }, 401);
+  const s = await session(env, request);
+  if (!s) return json({ code: 'PGRST301', message: 'not logged in' }, 401);
+  const { uid } = s;
+  if (await limited(env.API_LIMIT, uid)) return json({ code: '429', message: 'Too many requests' }, 429);
   const waitUntil = (p) => ctx.waitUntil(p);
 
-  if (path === '/v1/live/ticket' && request.method === 'POST') return json({ ticket: await makeTicket(env, uid) });
+  if (path === '/v1/live/ticket' && request.method === 'POST') return json({ ticket: await makeTicket(env, uid, s.sid) });
   if (path === '/v1/sync/pull' && request.method === 'GET') {
     return json(await pull(env.DB, uid, url.searchParams.get('table'), url.searchParams.get('since'), url.searchParams.get('limit')));
   }
@@ -87,10 +98,12 @@ export default {
     if (url.pathname.startsWith('/auth/')) {
       // Grove bescherming per IP vóór Better Auth (die heeft zijn eigen, fijnere limieten)
       const ip = request.headers.get('cf-connecting-ip') ?? 'onbekend';
-      if (env.AUTH_LIMIT && !(await env.AUTH_LIMIT.limit({ key: ip })).success) {
-        return cors(request, env, json({ code: 'RATE_LIMITED', message: 'Too many requests' }, 429));
-      }
-      return cors(request, env, await createAuth(env).handler(request));
+      if (await limited(env.AUTH_LIMIT, ip)) return cors(request, env, json({ code: 'RATE_LIMITED', message: 'Too many requests' }, 429));
+      // Uitloggen: daarna ook de live verbinding van die sessie sluiten
+      const out = url.pathname === '/auth/sign-out' ? await session(env, request).catch(() => null) : null;
+      const res = await createAuth(env).handler(request);
+      if (out && res.ok) ctx.waitUntil(hubFor(env, out.uid).closeSession(out.sid).catch(() => {}));
+      return cors(request, env, res);
     }
     if (url.pathname.startsWith('/v1/')) {
       try {

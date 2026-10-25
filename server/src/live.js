@@ -1,30 +1,35 @@
 // Live meldingen: de app vraagt (ingelogd) een kort ticket en opent daarmee een WebSocket naar zijn UserHub.
-// Een ticket is uid.vervaltijd.HMAC (60 s geldig), zodat het sessietoken nooit in een URL staat.
+// Een ticket is uid.sessie-id.vervaltijd.HMAC (60 s geldig), zodat het sessietoken nooit in een URL staat. De sessie
+// moet bij het verbinden nog bestaan, en uitloggen sluit de verbindingen van die sessie (hub.closeSession).
 import { hubFor } from './hub.js';
 
 const enc = new TextEncoder();
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 async function key(env) {
+  // Zonder geheim zou iedereen een ticket kunnen maken
+  if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET.length < 32) throw new Error('BETTER_AUTH_SECRET ontbreekt of is te kort');
   return crypto.subtle.importKey('raw', enc.encode(`live:${env.BETTER_AUTH_SECRET}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
-export async function makeTicket(env, uid, now = Date.now()) {
-  const body = `${uid}.${now + 60_000}`;
+export async function makeTicket(env, uid, sid, now = Date.now()) {
+  const body = `${uid}.${sid}.${now + 60_000}`;
   return `${body}.${b64url(await crypto.subtle.sign('HMAC', await key(env), enc.encode(body)))}`;
 }
 
-/** Geeft de uid als het ticket klopt en nog geldig is, anders null. */
+/** Geeft { uid, sid } als het ticket klopt, nog geldig is en de sessie nog bestaat, anders null. */
 export async function checkTicket(env, ticket, now = Date.now()) {
   const parts = String(ticket ?? '').split('.');
-  if (parts.length !== 3) return null;
-  const [uid, exp, sig] = parts;
+  if (parts.length !== 4) return null;
+  const [uid, sid, exp, sig] = parts;
   if (!(Number(exp) > now)) return null;
-  const expected = b64url(await crypto.subtle.sign('HMAC', await key(env), enc.encode(`${uid}.${exp}`)));
+  const expected = b64url(await crypto.subtle.sign('HMAC', await key(env), enc.encode(`${uid}.${sid}.${exp}`)));
   if (expected.length !== sig.length) return null;
   let diff = 0;
   for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  return diff === 0 ? uid : null;
+  if (diff !== 0) return null;
+  const live = await env.DB.prepare('SELECT 1 FROM session WHERE id = ? AND "userId" = ? AND "expiresAt" > ?').bind(sid, uid, new Date(now).toISOString()).first();
+  return live ? { uid, sid } : null;
 }
 
 /** Melding naar alle toestellen van een gebruiker; fouten worden genegeerd (het is maar een seintje). */

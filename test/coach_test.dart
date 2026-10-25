@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:macromatrix/data/food.dart';
+import 'package:macromatrix/sync/api.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/i18n.dart';
 import 'package:macromatrix/nutrition/allergens.dart';
@@ -21,7 +22,6 @@ import 'package:macromatrix/platform/coach_request.dart';
 import 'package:macromatrix/state/app_state.dart';
 import 'package:macromatrix/sync/account.dart';
 import 'package:macromatrix/sync/ai_report.dart';
-import 'package:supabase/supabase.dart' show SupabaseClient;
 import 'package:macromatrix/sync/features.dart';
 import 'package:macromatrix/sync/friends.dart' show mondayOf;
 import 'package:macromatrix/sync/pro.dart';
@@ -59,7 +59,7 @@ class FakeReporter extends AiReporter {
   AiReportResult result = AiReportResult.reported;
 
   @override
-  Future<AiReportResult> report(SupabaseClient? client, {required String kind, required String text, String? note}) async {
+  Future<AiReportResult> report(Rpc? client, {required String kind, required String text, String? note}) async {
     calls.add((kind: kind, text: text, note: note));
     return result;
   }

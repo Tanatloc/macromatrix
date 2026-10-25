@@ -28,6 +28,7 @@ import 'package:supabase/supabase.dart';
 
 import '../i18n.dart';
 import 'account.dart';
+import 'api.dart';
 import 'challenges.dart' show isMissingTable;
 import 'pro.dart';
 
@@ -94,7 +95,7 @@ abstract class FeaturesRemote {
 
 class SupabaseFeaturesRemote implements FeaturesRemote {
   SupabaseFeaturesRemote(this.client);
-  final SupabaseClient client;
+  final Rpc client;
 
   @override
   Future<List<FeatureFlag>> mine() async {
@@ -137,7 +138,7 @@ class Features extends ChangeNotifier {
   /// De server, alleen als je ingelogd bent (of de nagebootste in tests).
   FeaturesRemote? get remote {
     if (_remoteFor != null) return _remoteFor();
-    final c = account.client;
+    final c = account.api;
     return c == null || account.user == null ? null : SupabaseFeaturesRemote(c);
   }
 

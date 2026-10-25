@@ -7,6 +7,8 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // UserHub: één Durable Object per gebruiker voor live meldingen (src/hub.js)
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserHub"] }],
   "env": {
     // Testomgeving: kopie van de productiedata (tool/supabase_to_d1.mjs), EU-jurisdictie
     "staging": {
@@ -19,7 +21,12 @@
         "TEST_OUTBOX_DOMAIN": "test.macromatrix.invalid",
         "EXTRA_ORIGINS": "http://localhost:8931,https://staging.macromatrix.eu"
       },
-      "ratelimits": [{ "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 300, "period": 60 } }],
+      "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "UserHub" }] },
+      "ratelimits": [
+        { "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 300, "period": 60 } },
+        // Per gebruiker op /v1: ruim boven wat de app doet (sync, functies), tegen misbruik met een geldige sessie
+        { "name": "API_LIMIT", "namespace_id": "1002", "simple": { "limit": 600, "period": 60 } }
+      ],
       "d1_databases": [
         {
           "binding": "DB",

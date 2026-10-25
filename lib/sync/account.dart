@@ -11,8 +11,10 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:supabase/supabase.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../data/user_db.dart';
+import 'api.dart';
 import 'cloudflare_auth.dart';
 import 'sync_engine.dart';
 import '../i18n.dart';
@@ -85,8 +87,7 @@ class Account extends ChangeNotifier {
 
   static bool get configured => usesOwnServer || (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty);
 
-  /// Gebouwd met `API_URL`: inloggen bij de eigen server (Cloudflare) in plaats van Supabase. Synchroniseren kan
-  /// daar nog niet (komt in fase 3 van de overstap); tot dan blijft alles op het toestel.
+  /// Gebouwd met `API_URL`: de eigen server (Cloudflare, server/ in deze repo) in plaats van Supabase.
   static bool get usesOwnServer => apiUrl.isNotEmpty;
 
   /// Bewust zonder account: alles blijft op dit toestel. Maak je later toch een account, dan gaan de lokale
@@ -124,6 +125,7 @@ class Account extends ChangeNotifier {
 
   SupabaseClient? _client;
   CloudflareAuth? _cf;
+  CloudflareApi? _api;
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<void>? _dbSub;
   Timer? _debounce;
@@ -181,8 +183,15 @@ class Account extends ChangeNotifier {
   /// Token voor onze eigen API's (AI, foto, Google Play): het Supabase-token of de sessie van de eigen server.
   String? get accessToken => _cf != null ? _cf!.token : _client?.auth.currentSession?.accessToken;
 
-  /// Kan dit account synchroniseren? Bij de eigen server nog niet (fase 3).
-  bool get canSync => _cf == null;
+  /// Functies op de server (vrienden, battles, Supporter, ...), of null als je niet ingelogd bent.
+  Rpc? get api {
+    if (!signedIn) return null;
+    final c = client;
+    return _api ?? (c == null ? null : SupabaseRpc(c));
+  }
+
+  /// De server om mee te synchroniseren.
+  SyncRemote _remoteFor(String uid) => _debugRemote?.call(uid) ?? (_api != null ? CloudflareRemote(_api!) : SupabaseRemote(_client!, uid));
 
   /// Bij de eigen server vraagt een nieuw wachtwoord ook het huidige.
   bool get needsCurrentPassword => _cf != null;
@@ -192,15 +201,15 @@ class Account extends ChangeNotifier {
   /// Laatste geslaagde synchronisatie.
   DateTime? get lastSync {
     final u = user;
-    if (u == null || _client == null) return null;
-    final ms = SyncEngine(db, SupabaseRemote(_client!, u.id), userId: u.id).lastSync;
+    if (u == null || (_client == null && _api == null && _debugRemote == null)) return null;
+    final ms = SyncEngine(db, _remoteFor(u.id), userId: u.id).lastSync;
     return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
   }
 
   /// Ingelogd, maar voor dit account kwam er nog nooit iets van de server binnen (bv. de eerste synchronisatie
   /// mislukte). Je profiel kan dan nog op de server staan: de app toont geen "Over jou" maar wacht (of laat opnieuw
   /// proberen), zodat je je echte profiel niet overschrijft.
-  bool get needsFirstSync => signedIn && canSync && lastSync == null;
+  bool get needsFirstSync => signedIn && lastSync == null;
 
   // ── Van wie zijn de gegevens op dit toestel? ──
 
@@ -292,13 +301,36 @@ class Account extends ChangeNotifier {
     if (!configured) return;
     if (usesOwnServer) {
       final cf = _cf = CloudflareAuth(db);
+      _api = CloudflareApi(() => cf.token);
       await cf.restore();
-      _ready = true;
-      final u = user;
-      if (u != null) _claimData(u, atStart: true);
+      retryRejectedOnce(db);
+    } else {
+      await _initSupabase();
+    }
+    _dbSub = db.changes.listen((_) => schedule());
+    _periodic = Timer.periodic(const Duration(minutes: 5), (_) => sync());
+    // Terug naar de app (of het tabblad): meteen bijwerken
+    try {
+      _lifecycle = AppLifecycleListener(onResume: () => unawaited(sync()));
+    } catch (_) {
+      // Zonder Flutter-binding (tests): niet nodig
+    }
+    _ready = true;
+    final u = user;
+    // Ook bij het opstarten: gegevens van een ander account gaan nooit mee (bv. de app werd gesloten tijdens de vraag)
+    if (u != null && !_claimData(u, atStart: true)) {
       notifyListeners();
       return;
     }
+    _rejected = db.rejectedCount;
+    notifyListeners();
+    if (signedIn) {
+      _watchRemote();
+      unawaited(sync());
+    }
+  }
+
+  Future<void> _initSupabase() async {
     final client = _client = SupabaseClient(supabaseUrl, supabaseAnonKey, authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit));
     _authSub = client.auth.onAuthStateChange.listen((s) {
       final session = s.session;
@@ -327,27 +359,6 @@ class Account extends ChangeNotifier {
           await client.auth.setInitialSession(saved);
         } catch (_) {}
       }
-    }
-    _dbSub = db.changes.listen((_) => schedule());
-    _periodic = Timer.periodic(const Duration(minutes: 5), (_) => sync());
-    // Terug naar de app (of het tabblad): meteen bijwerken
-    try {
-      _lifecycle = AppLifecycleListener(onResume: () => unawaited(sync()));
-    } catch (_) {
-      // Zonder Flutter-binding (tests): niet nodig
-    }
-    _ready = true;
-    final u = user;
-    // Ook bij het opstarten: gegevens van een ander account gaan nooit mee (bv. de app werd gesloten tijdens de vraag)
-    if (u != null && !_claimData(u, atStart: true)) {
-      notifyListeners();
-      return;
-    }
-    _rejected = db.rejectedCount;
-    notifyListeners();
-    if (signedIn) {
-      _watchRemote();
-      unawaited(sync());
     }
   }
 
@@ -449,7 +460,9 @@ class Account extends ChangeNotifier {
   /// Live meldingen van de server: zodra een ander toestel iets wijzigt, haalt dit toestel het meteen op.
   void _watchRemote() {
     final u = user;
-    if (u == null || !canSync || _channel != null || _debugRemote != null) return;
+    if (u == null || _debugRemote != null) return;
+    if (_api != null) return unawaited(_watchOwnServer());
+    if (_channel != null) return;
     var channel = _client!.channel('wijzigingen-${u.id}');
     for (final t in UserDb.syncTables) {
       channel = channel.onPostgresChanges(
@@ -467,17 +480,70 @@ class Account extends ChangeNotifier {
     final c = _channel;
     _channel = null;
     if (c != null) unawaited(_client!.removeChannel(c));
+    _reconnect?.cancel();
+    _ping?.cancel();
+    final s = _socket;
+    _socket = null;
+    if (s != null) unawaited(s.sink.close());
+  }
+
+  // ── Live meldingen van de eigen server (WebSocket naar de UserHub) ──
+
+  WebSocketChannel? _socket;
+  Timer? _ping, _reconnect;
+  var _backoff = 1;
+  var _connecting = false;
+
+  Future<void> _watchOwnServer() async {
+    if (_socket != null || _connecting || _closing || !signedIn) return;
+    _connecting = true;
+    try {
+      final ws = WebSocketChannel.connect(_api!.liveUri(await _api!.liveTicket()));
+      await ws.ready;
+      if (!signedIn || _closing) return unawaited(ws.sink.close());
+      _socket = ws;
+      _backoff = 1;
+      // Houdt de verbinding open (Cloudflare antwoordt zelf "pong")
+      _ping = Timer.periodic(const Duration(seconds: 30), (_) => ws.sink.add('ping'));
+      ws.stream.listen((m) {
+        if (m != 'pong') _remoteChanged();
+      }, onDone: () => _socketLost(ws), onError: (_) => _socketLost(ws));
+      // Wat er gebeurde terwijl er geen verbinding was
+      _remoteChanged();
+    } catch (_) {
+      _socketLost(null);
+    } finally {
+      _connecting = false;
+    }
+  }
+
+  /// Verbinding weg: na een korte pauze opnieuw (1, 2, 4, ... tot 60 s).
+  void _socketLost(WebSocketChannel? ws) {
+    if (ws != null && !identical(ws, _socket)) return;
+    _socket = null;
+    _ping?.cancel();
+    if (!signedIn || _closing) return;
+    _reconnect?.cancel();
+    _reconnect = Timer(Duration(seconds: _backoff), () => unawaited(_watchOwnServer()));
+    _backoff = (_backoff * 2).clamp(1, 60);
   }
 
   void _remoteChanged() {
-    if (_status == SyncStatus.syncing || DateTime.now().isBefore(_quietUntil)) return;
+    if (DateTime.now().isBefore(_quietUntil)) return;
+    // Loopt er al een synchronisatie: daarna nog een ronde (die kan het seintje net gemist hebben). Bij de eigen
+    // server komt er één seintje per verzending, niet één per rij zoals bij Supabase.
+    if (_status == SyncStatus.syncing) {
+      _again = true;
+      return;
+    }
     _remoteDebounce?.cancel();
-    _remoteDebounce = Timer(const Duration(milliseconds: 1500), () => unawaited(sync()));
+    // Supabase stuurt een seintje per rij (even bundelen); de eigen server één per verzending
+    _remoteDebounce = Timer(Duration(milliseconds: _api != null ? 300 : 1500), () => unawaited(sync()));
   }
 
   /// Na een korte pauze synchroniseren (na wijzigingen), zodat niet elke tik een verzoek wordt.
   void schedule() {
-    if (!signedIn || _paused || !canSync) return;
+    if (!signedIn || _paused) return;
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 3), () {
       if (db.hasDirtyRows) sync();
@@ -488,7 +554,7 @@ class Account extends ChangeNotifier {
   Future<void> sync() {
     final u = user;
     // Nooit gegevens van een ander account versturen (zie [otherAccountData])
-    if (u == null || _paused || !canSync || _closing || _otherPending || _ownerId != u.id) return Future.value();
+    if (u == null || _paused || _closing || _otherPending || _ownerId != u.id) return Future.value();
     if (_running != null) {
       _again = true;
       return _running!;
@@ -518,7 +584,7 @@ class Account extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final result = await SyncEngine(db, _debugRemote?.call(uid) ?? SupabaseRemote(_client!, uid), userId: uid, active: active).run();
+      final result = await SyncEngine(db, _remoteFor(uid), userId: uid, active: active).run();
       if (result.pushed > 0) _quietUntil = DateTime.now().add(const Duration(seconds: 3));
       if (result.rejected > 0 || _rejected > 0) _rejected = db.rejectedCount;
       if (result.errors.isEmpty) {
@@ -540,12 +606,25 @@ class Account extends ChangeNotifier {
     } on PostgrestException catch (e) {
       _status = SyncStatus.error;
       _error = tr('The server rejected the data: ${e.message}', 'De server weigerde de gegevens: ${e.message}');
+      if (e.code == 'PGRST301') await _sessionRejected();
     } catch (e) {
       // Meestal geen internet: later opnieuw, er gaat niets verloren
       _status = SyncStatus.offline;
       _error = null;
     }
     notifyListeners();
+  }
+
+  /// De eigen server kent de sessie niet meer (overal uitgelogd, of het wachtwoord werd elders gewijzigd): nakijken en
+  /// zo ja naar het inlogscherm. De gegevens op dit toestel blijven staan en gaan mee na het opnieuw inloggen.
+  Future<void> _sessionRejected() async {
+    final cf = _cf;
+    if (cf == null) return;
+    await cf.restore();
+    if (cf.user != null) return;
+    _stopWatching();
+    _error = null;
+    _status = SyncStatus.idle;
   }
 
   /// Wachten tot een synchronisatie die nog loopt, gestopt is.
@@ -578,9 +657,9 @@ class Account extends ChangeNotifier {
     _stopWatching();
     // Geen battle-meldingen meer naar dit toestel
     final notify = db.setting('_notify')?['token'];
-    if (notify != null && _client != null) {
+    if (notify != null && api != null) {
       try {
-        await _client!.rpc('notify_unregister', params: {'p_token': notify});
+        await api!.rpc('notify_unregister', params: {'p_token': notify});
       } catch (_) {}
       db.deleteSetting('_notify');
     }
@@ -604,8 +683,7 @@ class Account extends ChangeNotifier {
     _generation++;
     try {
       await _settle();
-      if (_client == null) throw const AuthException('Deleting an account is not available on this server yet', code: 'not_available');
-      await _client!.rpc('delete_account');
+      await api!.rpc('delete_account');
       _stopWatching();
       db.deleteSetting('_notify');
       try {

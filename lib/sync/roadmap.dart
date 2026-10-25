@@ -13,6 +13,7 @@ import 'package:supabase/supabase.dart';
 
 import '../i18n.dart';
 import 'account.dart';
+import 'api.dart';
 import 'challenges.dart' show isMissingTable;
 
 /// Stemmen tegelijk per supporter. Moet gelijk zijn aan roadmap_vote() op de server.
@@ -104,7 +105,7 @@ abstract class RoadmapRemote {
 
 class SupabaseRoadmapRemote implements RoadmapRemote {
   SupabaseRoadmapRemote(this.client);
-  final SupabaseClient client;
+  final Rpc client;
 
   Future<T> _guard<T>(Future<T> Function() f) async {
     try {
@@ -139,7 +140,7 @@ class Roadmap extends ChangeNotifier {
   /// De server, alleen als je ingelogd bent (of de nagebootste in tests).
   RoadmapRemote? get remote {
     if (_remoteFor != null) return _remoteFor();
-    final c = account?.client;
+    final c = account?.api;
     return c == null || account?.user == null ? null : SupabaseRoadmapRemote(c);
   }
 

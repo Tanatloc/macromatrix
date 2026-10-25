@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase/supabase.dart';
 import 'package:macromatrix/nutrition/challenges.dart';
+import 'package:macromatrix/sync/api.dart';
 import 'package:macromatrix/sync/challenges.dart';
 
 /// Een server zonder de migratie voor uitdagingen: PostgREST meldt een ontbrekende functie (PGRST202) of tabel
@@ -34,7 +35,7 @@ void main() {
     tearDown(() => http.close(force: true));
 
     test('functies en tabel', () async {
-      final r = SupabaseChallengeRemote(SupabaseClient('http://127.0.0.1:${http.port}', 'anon-key'), 'user-1');
+      final r = SupabaseChallengeRemote(SupabaseRpc(SupabaseClient('http://127.0.0.1:${http.port}', 'anon-key')), 'user-1');
       await expectLater(r.list(), throwsA(isA<ChallengesMissing>()));
       await expectLater(r.create(builtinChallenges.first, DateTime(2026, 10, 24), const []), throwsA(isA<ChallengesMissing>()));
       await expectLater(r.pushDays('x', {'2026-10-24': true}), throwsA(isA<ChallengesMissing>()));

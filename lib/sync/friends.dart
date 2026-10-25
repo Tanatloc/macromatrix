@@ -13,6 +13,7 @@ import '../nutrition/badges.dart';
 import '../nutrition/supporter.dart';
 import '../state/app_state.dart';
 import 'account.dart';
+import 'api.dart';
 import 'challenges.dart';
 import 'name_filter.dart';
 import 'pro.dart';
@@ -438,7 +439,7 @@ class Friends extends ChangeNotifier {
     final key = '$title|$b';
     if (key == _sentExtra) return;
     try {
-      await account.client!.rpc('friend_extra', params: {'p_title': title, 'p_badges': b});
+      await account.api!.rpc('friend_extra', params: {'p_title': title, 'p_badges': b});
       _sentExtra = key;
     } on PostgrestException catch (e) {
       if (e.code != 'PGRST202') rethrow;
@@ -447,7 +448,7 @@ class Friends extends ChangeNotifier {
 
   /// Eigen naam (optioneel), avatar en level naar de server. Avatar en level alleen als ze veranderden.
   Future<List<Map<String, dynamic>>> _me([String? newName]) async {
-    final client = account.client!;
+    final client = account.api!;
     final avatar = state.avatar, level = state.level.level;
     final params = <String, dynamic>{
       'p_name': newName,
@@ -474,7 +475,7 @@ class Friends extends ChangeNotifier {
   /// de eindstand naar de server, en nooit meer: een later gewijzigde of gewiste regel van die week verandert de
   /// uitslag bij vrienden niet meer. Welke week al afgesloten is, staat in de lokale instelling `_scores_final`.
   Future<void> pushScores() async {
-    final client = account.client;
+    final client = account.api;
     if (client == null || !account.signedIn) return;
     if (state.avatar != _sentAvatar || state.level.level != _sentLevel) await _me();
     await _pushExtra();
@@ -489,8 +490,17 @@ class Friends extends ChangeNotifier {
       final value = s == null ? '-' : '${s.score}/${s.days}/${state.battlePoints(m)}';
       // De afgelopen week altijd één keer na het einde sturen, ook als de stand dezelfde is als vóór 03:00
       if (m != last && _pushed[week] == value) continue;
-      if (s == null) {
-        await client.from('weekly_scores').delete().eq('week', week);
+      if (client is! SupabaseRpc) {
+        // De eigen server: functies in plaats van rechtstreeks in de tabel (RLS)
+        final pts = state.battlePoints(m);
+        await (s == null
+            ? client.rpc('weekly_score_delete', params: {'p_week': week})
+            : client.rpc(
+                'weekly_score_put',
+                params: {'p_week': week, 'p_score': s.score, 'p_days': s.days, 'p_points': pts.points, 'p_mid_points': pts.mid},
+              ));
+      } else if (s == null) {
+        await client.client.from('weekly_scores').delete().eq('week', week);
       } else {
         final row = {
           'user_id': account.user!.id,
@@ -501,11 +511,11 @@ class Friends extends ChangeNotifier {
         };
         final pts = state.battlePoints(m);
         try {
-          await client.from('weekly_scores').upsert({...row, 'points': pts.points, 'mid_points': pts.mid}, onConflict: 'user_id,week');
+          await client.client.from('weekly_scores').upsert({...row, 'points': pts.points, 'mid_points': pts.mid}, onConflict: 'user_id,week');
         } on PostgrestException catch (e) {
           // Oudere databank zonder battles (migratie battles.sql nog niet uitgevoerd)
           if (e.code != 'PGRST204') rethrow;
-          await client.from('weekly_scores').upsert(row, onConflict: 'user_id,week');
+          await client.client.from('weekly_scores').upsert(row, onConflict: 'user_id,week');
         }
       }
       _pushed[week] = value;
@@ -544,7 +554,7 @@ class Friends extends ChangeNotifier {
 
   /// Eigen code en naam ophalen (maakt ze aan bij de eerste keer), score doorsturen en de lijst laden.
   Future<void> load({String? newName}) async {
-    final client = account.client;
+    final client = account.api;
     if (client == null || !account.signedIn) return;
     loading = true;
     final gen = ++_loadGen;
@@ -621,7 +631,7 @@ class Friends extends ChangeNotifier {
   }
 
   /// De supporterranden ophalen. Een server zonder de migratie (PGRST202): geen randen, geen foutmelding.
-  Future<void> _loadFrames(SupabaseClient client, int gen) async {
+  Future<void> _loadFrames(Rpc client, int gen) async {
     if (!framesAvailable) return;
     try {
       final rows = await client.rpc('friend_frames') as List;
@@ -680,7 +690,7 @@ class Friends extends ChangeNotifier {
 
   /// Een vriend toevoegen met een code. Geeft het antwoord van de server terug ([AddResult.result] null bij een fout).
   Future<AddResult> add(String code) async {
-    final client = account.client;
+    final client = account.api;
     if (client == null) return const AddResult(null, '');
     final friendsBefore = {
       for (final x in list)
@@ -720,7 +730,7 @@ class Friends extends ChangeNotifier {
   Future<String?> challenge(String friendId, {bool nextWeek = false}) async {
     final monday = mondayOf(DateTime.now()).plusDays(nextWeek ? 7 : 0);
     final r = await _run(
-      () async => await account.client!.rpc('battle_challenge', params: {'p_other': friendId, 'p_week': dayKey(monday)}) as String,
+      () async => await account.api!.rpc('battle_challenge', params: {'p_other': friendId, 'p_week': dayKey(monday)}) as String,
     );
     if (r == null) return null;
     await load();
@@ -753,7 +763,7 @@ class Friends extends ChangeNotifier {
 
   Future<void> respondBattle(Battle b, bool accept) async {
     final ok = await _run(() async {
-      await account.client!.rpc('battle_respond', params: {'p_id': b.id, 'p_accept': accept});
+      await account.api!.rpc('battle_respond', params: {'p_id': b.id, 'p_accept': accept});
       return true;
     });
     // Meteen tonen: de uitnodiging verdwijnt, of de battle staat er (ook voor het herladen klaar is)
@@ -770,7 +780,7 @@ class Friends extends ChangeNotifier {
   Future<void> cancelBattle(Battle b) async {
     _cancelled.add(b.id);
     final ok = await _run(() async {
-      await account.client!.rpc('battle_cancel', params: {'p_id': b.id});
+      await account.api!.rpc('battle_cancel', params: {'p_id': b.id});
       return true;
     });
     if (ok == true) {
@@ -785,7 +795,7 @@ class Friends extends ChangeNotifier {
 
   Future<void> respond(Friend f, bool accept) async {
     final ok = await _run(() async {
-      await account.client!.rpc('friend_respond', params: {'p_other': f.id, 'p_accept': accept});
+      await account.api!.rpc('friend_respond', params: {'p_other': f.id, 'p_accept': accept});
       return true;
     });
     // Meteen tonen: het verzoek verdwijnt en een aanvaarde vriend staat in de lijst, ook voor het herladen klaar is
@@ -801,7 +811,7 @@ class Friends extends ChangeNotifier {
 
   Future<void> remove(Friend f) async {
     final ok = await _run(() async {
-      await account.client!.rpc('friend_remove', params: {'p_other': f.id});
+      await account.api!.rpc('friend_remove', params: {'p_other': f.id});
       return true;
     });
     // Meteen weg uit de lijst (verwijderde vriend of ingetrokken verzoek)
@@ -831,7 +841,7 @@ class Friends extends ChangeNotifier {
   /// Geeft true terug als het lukte.
   Future<bool> block(String id, {String name = '', String? avatar}) async {
     final ok = await _blockRpc(() async {
-      await account.client!.rpc('friend_block', params: {'p_other': id});
+      await account.api!.rpc('friend_block', params: {'p_other': id});
       return true;
     });
     if (ok != true) return false;
@@ -853,7 +863,7 @@ class Friends extends ChangeNotifier {
   /// Een blokkade opheffen. Vrienden worden jullie pas opnieuw met een nieuw verzoek.
   Future<bool> unblock(String id) async {
     final ok = await _blockRpc(() async {
-      await account.client!.rpc('friend_unblock', params: {'p_other': id});
+      await account.api!.rpc('friend_unblock', params: {'p_other': id});
       return true;
     });
     if (ok != true) return false;
@@ -871,7 +881,7 @@ class Friends extends ChangeNotifier {
   Future<String?> report(String id, String reason, {String? note}) {
     final n = note?.trim() ?? '';
     return _blockRpc(
-      () async => await account.client!.rpc(
+      () async => await account.api!.rpc(
         'friend_report',
         params: {'p_other': id, 'p_reason': reason, 'p_note': n.isEmpty ? null : (n.length > 500 ? n.substring(0, 500) : n)},
       ) as String,

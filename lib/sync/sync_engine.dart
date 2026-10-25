@@ -14,6 +14,7 @@
 library;
 
 import '../data/user_db.dart';
+import 'api.dart' show SequenceRemote;
 
 /// Soort fout van de server.
 enum SyncErrorKind {
@@ -125,7 +126,7 @@ class SyncEngine {
     }
 
     var settingsPulled = false;
-    for (final t in UserDb.syncTables) {
+    Future<void> pull(SyncTable t) async {
       try {
         final newest = await _pullTable(t, cursors[t.name] as String?);
         if (newest != null) cursors[t.name] = newest;
@@ -133,6 +134,16 @@ class SyncEngine {
       } catch (e) {
         if (_fatal(e)) rethrow;
         errors[t.name] ??= e;
+      }
+    }
+
+    // De eigen server: alle tabellen tegelijk (één wachttijd in plaats van negen). Elke tabel schrijft in zijn eigen
+    // transactie, dus dat kan veilig door elkaar. Supabase zoals vroeger, na elkaar.
+    if (remote is SequenceRemote) {
+      await Future.wait([for (final t in UserDb.syncTables) pull(t)], eagerError: true);
+    } else {
+      for (final t in UserDb.syncTables) {
+        await pull(t);
       }
     }
 
@@ -215,6 +226,8 @@ class SyncEngine {
 
   /// Geeft de nieuwe cursor (of null als er niets was).
   Future<String?> _pullTable(SyncTable t, String? cursor) async {
+    final r = remote;
+    if (r is SequenceRemote) return _pullSequence(r, t, cursor);
     var since = cursor == null ? null : DateTime.parse(cursor).subtract(overlap).toUtc().toIso8601String();
     String? newest = cursor;
     while (true) {
@@ -231,6 +244,26 @@ class SyncEngine {
       if (newest == null || DateTime.parse(last).isAfter(DateTime.parse(newest))) newest = last;
       if (rows.length < pullPage) break;
       since = last;
+    }
+    return newest;
+  }
+
+  /// Zoals [_pullTable], met een oplopend getal als cursor (de eigen server): geen overlap nodig. Een cursor die geen
+  /// getal is (nog van Supabase), telt niet: dan alles opnieuw ophalen.
+  Future<String?> _pullSequence(SequenceRemote r, SyncTable t, String? cursor) async {
+    var since = int.tryParse(cursor ?? '') == null ? null : cursor;
+    String? newest = since;
+    while (true) {
+      final rows = await r.pull(t, since, pullPage);
+      if (rows.isEmpty) break;
+      _check();
+      db.transaction(() {
+        for (final row in rows) {
+          if (db.applyRemote(t, row)) _pulled++;
+        }
+      });
+      newest = since = r.cursorOf(rows.last);
+      if (rows.length < pullPage) break;
     }
     return newest;
   }
