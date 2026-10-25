@@ -458,6 +458,18 @@ void main() {
       expect(find.byKey(const ValueKey('coach-spent')), findsOneWidget);
     });
 
+    testWidgets('gratis: 2 per week, op = uitleg voor deze week (ook na opnieuw openen)', (tester) async {
+      final (s, f) = await setup(pro: false, public: true);
+      coach.error = AiException('quota', quota: PhotoQuota.fromJson({'used': 2, 'limit': 2, 'pro': false, 'per': 'week'}));
+      await pump(tester, s, f);
+      await tester.tap(find.byKey(const ValueKey('coach-write')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("this week's last free one"), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await pump(tester, s, f);
+      expect(find.text("You've used this week's 2 free summaries. You can write it again next week."), findsOneWidget);
+    });
+
     testWidgets('server zonder coach (not_configured): het paneel verdwijnt', (tester) async {
       final (s, f) = await setup(pro: true);
       coach.error = AiException('not_configured');
@@ -582,5 +594,16 @@ void main() {
         }
       });
     }
+  });
+  test('teller per week: de maandag (UTC) als sleutel, geldig tot en met zondag, maandag opnieuw', () {
+    expect(utcWeekKey(DateTime.utc(2026, 11, 8, 23)), '2026-11-02');
+    expect(utcWeekKey(DateTime.utc(2026, 11, 2)), '2026-11-02');
+    final q = PhotoQuota.fromJson({'used': 2, 'limit': 2, 'pro': false, 'per': 'week'}, now: DateTime.utc(2026, 11, 4, 12))!;
+    expect((q.weekly, q.day, q.allowed), (true, '2026-11-02', false));
+    expect(q.on(DateTime.utc(2026, 11, 8, 23, 59)).used, 2);
+    expect(q.on(DateTime.utc(2026, 11, 9)).used, 0);
+    // Zonder per: per dag, zoals altijd
+    final d = PhotoQuota.fromJson({'used': 1, 'limit': 3, 'pro': true}, now: DateTime.utc(2026, 11, 4, 12))!;
+    expect((d.weekly, d.day), (false, '2026-11-04'));
   });
 }

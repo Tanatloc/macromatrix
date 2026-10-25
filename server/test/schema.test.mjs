@@ -85,6 +85,40 @@ test('limiet per gebruiker: 50.000 actieve rijen; een bestaande rij bijwerken bl
   push(db, { id: 'x', user_id: 'u2', updated_at: 2 });
 });
 
+test('rijtellers (0004): blijven gelijk aan het echte aantal bij nieuw, bijwerken, wissen, terugzetten en verwijderen', () => {
+  const db = freshDb();
+  const counts = (u = 'u1') => db.prepare("SELECT total, live FROM row_counts WHERE user_id = ? AND tbl = 'diary'").get(u);
+  const real = (u = 'u1') => db.prepare('SELECT count(*) AS total, coalesce(sum(deleted = 0), 0) AS live FROM diary WHERE user_id = ?').get(u);
+  const same = () => assert.deepEqual({ ...counts() }, { ...real() });
+  for (let i = 0; i < 5; i++) push(db, { id: `r${i}`, updated_at: 1 });
+  same();
+  push(db, { id: 'r1', updated_at: 2, grams: 5 }); // bijwerken telt niet
+  push(db, { id: 'r2', updated_at: 3, deleted: 1 }); // gewist (blijft als rij voor de sync)
+  push(db, { id: 'r9', updated_at: 3, deleted: 1 }); // meteen gewist binnengekomen
+  same();
+  assert.deepEqual({ ...counts() }, { total: 6, live: 4 });
+  push(db, { id: 'r2', updated_at: 4, deleted: 0 }); // teruggezet
+  db.exec("DELETE FROM diary WHERE user_id = 'u1' AND id IN ('r3', 'r9')");
+  same();
+  // Ook in importmodus (import en herstel van een back-up)
+  db.exec('UPDATE import_mode SET active = 1');
+  push(db, { id: 'imp', updated_at: 5, server_seq: 7 });
+  db.exec('UPDATE import_mode SET active = 0');
+  same();
+  db.exec("DELETE FROM \"user\" WHERE id = 'u1'");
+  assert.equal(db.prepare("SELECT count(*) AS n FROM row_counts WHERE user_id = 'u1'").get().n, 0);
+});
+
+test('rijtellers (0004): de limiet telt geen rijen meer, alleen de teller', () => {
+  const db = freshDb();
+  db.exec("INSERT INTO row_counts (user_id, tbl, total, live) VALUES ('u1', 'diary', 200000, 10) ON CONFLICT DO UPDATE SET total = 200000, live = 10");
+  assert.throws(() => push(db, { id: 'nieuw', updated_at: 2 }), /te veel rijen in diary/);
+  db.exec("UPDATE row_counts SET total = 199999 WHERE user_id = 'u1'");
+  push(db, { id: 'nieuw', updated_at: 2 });
+  const plan = db.prepare("EXPLAIN QUERY PLAN SELECT 1 FROM row_counts WHERE user_id = 'u1' AND tbl = 'diary'").all().map((r) => r.detail).join(' ');
+  assert.match(plan, /PRIMARY KEY/);
+});
+
 test('importmodus: server_seq en updated_at komen ongewijzigd binnen', () => {
   const db = freshDb();
   db.exec('UPDATE import_mode SET active = 1');

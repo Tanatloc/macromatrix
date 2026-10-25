@@ -305,6 +305,16 @@ test('Supabase onbereikbaar: failed, geen model', async () => {
   assert.equal(aiCalls, 0);
 });
 
+test('gratis telt per week: de app hoort per week, ook als de teller op is', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 2, pro: false, per: 'week' } };
+  const res = await onRequestPost({ request: req(week()), env });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).quota, { used: 1, limit: 2, pro: false, per: 'week' });
+  rpc = { status: 200, body: { allowed: false, used: 2, limit: 2, pro: false, per: 'week' } };
+  const spent = await onRequestPost({ request: req(week()), env });
+  assert.deepEqual(await spent.json(), { error: 'quota', used: 2, limit: 2, pro: false, per: 'week' });
+});
+
 test('ongeldige JSON van het model: een nette fout met de teller', async () => {
   reply = { response: 'Sure! Here is your summary: great week' };
   const res = await onRequestPost({ request: req(week()), env });

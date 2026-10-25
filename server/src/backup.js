@@ -16,7 +16,7 @@ const BLOCK = 4 << 20; // 4 MiB gzip-gegevens per blok
 const PAGE = 1000;
 
 // Niet mee: kortstondig of opnieuw op te bouwen (sessies, codes, limieten, testpostvak) en de interne tabellen
-const SKIP = new Set(['session', 'verification', 'rateLimit', 'test_outbox', 'signup_ips', 'import_mode', 'd1_migrations']);
+const SKIP = new Set(['session', 'verification', 'rateLimit', 'test_outbox', 'signup_ips', 'import_mode', 'd1_migrations', 'row_counts']);
 // Eerst (andere tabellen verwijzen ernaar); de rest alfabetisch
 const FIRST = ['user', 'account', 'features', 'roadmap_items', 'challenges'];
 

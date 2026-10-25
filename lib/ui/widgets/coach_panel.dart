@@ -21,7 +21,7 @@ import '../../sync/account.dart';
 import '../../sync/api.dart' show Rpc;
 import '../../sync/ai_report.dart';
 import '../../sync/features.dart';
-import '../../sync/pro.dart' show PhotoQuota, utcDayKey;
+import '../../sync/pro.dart' show PhotoQuota;
 import '../theme.dart';
 import 'ai_quota_note.dart' show aiErrorText;
 import 'feature_gate.dart';
@@ -59,12 +59,19 @@ class CoachCache {
 
   CoachResult? result(DateTime monday) => CoachResult.fromJson((_raw['weeks'] as Map?)?[dayKey(monday)]);
 
-  /// De stand van de teller, of null als die van een vorige dag is (vandaag begin je opnieuw).
+  /// De stand van de teller, of null als die van een vorige dag is (vandaag begin je opnieuw), of zonder Supporter
+  /// van een vorige week.
   PhotoQuota? quota(DateTime now) {
     final q = _raw['quota'];
     if (q is! Map || q['day'] is! String || q['limit'] is! num) return null;
-    final p = PhotoQuota(used: (q['used'] as num?)?.toInt() ?? 0, limit: (q['limit'] as num).toInt(), pro: q['pro'] == true, day: q['day'] as String);
-    return p.day == utcDayKey(now) ? p : null;
+    final p = PhotoQuota(
+      used: (q['used'] as num?)?.toInt() ?? 0,
+      limit: (q['limit'] as num).toInt(),
+      pro: q['pro'] == true,
+      day: q['day'] as String,
+      weekly: q['per'] == 'week',
+    );
+    return p.day == p.periodKey(now) ? p : null;
   }
 
   void save({DateTime? monday, CoachResult? result, PhotoQuota? quota}) {
@@ -75,7 +82,10 @@ class CoachCache {
     final q = quota ?? _raw['quota'];
     s.user.setSetting('_coach', {
       'weeks': weeks,
-      if (quota != null) 'quota': {'used': quota.used, 'limit': quota.limit, 'pro': quota.pro, 'day': quota.day} else 'quota': ?q,
+      if (quota != null)
+        'quota': {'used': quota.used, 'limit': quota.limit, 'pro': quota.pro, 'day': quota.day, if (quota.weekly) 'per': 'week'}
+      else
+        'quota': ?q,
     });
   }
 }
@@ -148,7 +158,7 @@ class _CoachPanelState extends State<CoachPanel> {
     } on AiException catch (e) {
       if (coachRequest.lastQuota case final q?) cache.save(quota: q);
       if (e.code == 'not_configured') coachUnavailable = true;
-      _error = _errorText(e.code);
+      _error = _errorText(e.code, weekly: coachRequest.lastQuota?.weekly ?? false);
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -177,7 +187,11 @@ class _CoachPanelState extends State<CoachPanel> {
     );
   }
 
-  static String _errorText(String code) => switch (code) {
+  static String _errorText(String code, {bool weekly = false}) => switch (code) {
+    'quota' when weekly => tr(
+      "That was this week's last free one. You can write it again next week.",
+      'Dat was de laatste gratis voor deze week. Volgende week kan het weer.',
+    ),
     'quota' => tr("That was today's last one. You can write it again tomorrow.", 'Dat was de laatste voor vandaag. Morgen kan het weer.'),
     'too_many' => tr('You asked a few times this hour. Try again later.', 'Je vroeg het dit uur al een paar keer. Probeer later opnieuw.'),
     'network' || 'timeout' => tr(
@@ -382,13 +396,18 @@ class _CoachPanelState extends State<CoachPanel> {
               ),
             if (!_busy) ...[
               const SizedBox(height: 6),
-              if (spent && _error == null)
+              if (quota != null && spent && _error == null)
                 Text(
                   key: const ValueKey('coach-spent'),
-                  tr(
-                    "You've used today's summaries. You can write it again tomorrow.",
-                    'Je samenvattingen van vandaag zijn op. Morgen kan het weer.',
-                  ),
+                  quota.weekly
+                      ? tr(
+                          "You've used this week's ${quota.limit} free summaries. You can write it again next week.",
+                          'Je ${quota.limit} gratis samenvattingen van deze week zijn op. Volgende week kan het weer.',
+                        )
+                      : tr(
+                          "You've used today's summaries. You can write it again tomorrow.",
+                          'Je samenvattingen van vandaag zijn op. Morgen kan het weer.',
+                        ),
                   style: TextStyle(fontSize: 12.5, color: p.ink3),
                 ),
               Align(

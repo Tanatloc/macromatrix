@@ -37,7 +37,10 @@ function uuid(v) {
 /** left(btrim(s), n): btrim haalt alleen spaties weg; left telt tekens, geen UTF-16-eenheden. */
 const trimLeft = (s, n) => [...String(s ?? '').replace(/^ +| +$/g, '')].slice(0, n).join('');
 
-/** Hoeveel AI-verzoeken per dag (ai_limit). De coach is gratis 1 keer per dag zodra hij voor iedereen open is. */
+/**
+ * Hoeveel AI-verzoeken per dag (ai_limit). De coach is gratis 2 keer per week (zie aiWeekly) zodra hij voor iedereen
+ * open is, met Supporter 3 keer per dag.
+ */
 async function aiLimit(db, kind, pro, now) {
   switch (kind) {
     case 'label':
@@ -46,7 +49,7 @@ async function aiLimit(db, kind, pro, now) {
       return pro ? 20 : 0;
     case 'coach':
       if (pro) return 3;
-      return (await db.prepare("SELECT 1 FROM features WHERE id = 'coach' AND public_from <= ?").bind(now.toISOString()).first()) ? 1 : 0;
+      return (await db.prepare("SELECT 1 FROM features WHERE id = 'coach' AND public_from <= ?").bind(now.toISOString()).first()) ? 2 : 0;
     case 'voice':
       return pro ? 200 : 60;
     case 'off':
@@ -81,26 +84,32 @@ async function bump(db, table, keyCols, keyVals, lim, today, uid) {
 
 const days = (now) => ({ day: utcDay(now), old: utcDay(now, -7) });
 
+/** De coach zonder Supporter telt per week: de rij heeft dan de maandag (UTC) als dag. Al het andere telt per dag. */
+const aiWeekly = (kind, pro) => kind === 'coach' && !pro;
+const aiPeriod = (kind, pro, now) => (aiWeekly(kind, pro) ? utcDay(now, -((now.getUTCDay() + 6) % 7)) : utcDay(now));
+
 /** Stand van de dagteller voor een AI-soort, zonder iets te verhogen. */
 async function ai_quota(ctx, p) {
   const kind = text(p.p_kind);
   const pro = await proActive(ctx.db, ctx.uid, ctx.now);
   const lim = await aiLimit(ctx.db, kind, pro, ctx.now);
-  const r = await ctx.db.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND kind = ? AND day = ?').bind(ctx.uid, kind, utcDay(ctx.now)).first();
+  const r = await ctx.db.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND kind = ? AND day = ?').bind(ctx.uid, kind, aiPeriod(kind, pro, ctx.now)).first();
   const used = r?.count ?? 0;
-  return { allowed: used < lim, used, limit: lim, pro };
+  return { allowed: used < lim, used, limit: lim, pro, per: aiWeekly(kind, pro) ? 'week' : 'day' };
 }
 
-/** Eén AI-verzoek tellen (door /api/label, /api/coach, …). allowed false = op voor vandaag. */
+/** Eén AI-verzoek tellen (door /api/label, /api/coach, …). allowed false = op voor vandaag (of deze week, zie aiWeekly). */
 async function ai_quota_use(ctx, p) {
   const kind = text(p.p_kind);
   if (kind == null || !AI_KINDS.includes(kind)) raise('onbekende soort');
   const pro = await proActive(ctx.db, ctx.uid, ctx.now);
   const lim = await aiLimit(ctx.db, kind, pro, ctx.now);
-  if (lim <= 0) return { allowed: false, used: 0, limit: lim, pro };
-  const d = days(ctx.now);
+  const per = aiWeekly(kind, pro) ? 'week' : 'day';
+  if (lim <= 0) return { allowed: false, used: 0, limit: lim, pro, per };
+  // Opruimen blijft op een week: de maandag van deze week is nooit ouder dan zes dagen
+  const d = { ...days(ctx.now), day: aiPeriod(kind, pro, ctx.now) };
   const r = await bump(ctx.db, 'ai_usage', ['user_id', 'kind', 'day'], [ctx.uid, kind, d.day], lim, d, ctx.uid);
-  return { ...r, limit: lim, pro };
+  return { ...r, limit: lim, pro, per };
 }
 
 /** Stand van de fototeller. */

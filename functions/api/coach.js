@@ -7,7 +7,7 @@
 // daarmee een korte samenvatting en 2 à 3 tips voor volgende week, in het Engels of het Nederlands.
 // Alleen voor ingelogde gebruikers. Er wordt niets bewaard: niet wat de app stuurt, niet wat het model schrijft (tenzij
 // de gebruiker de tekst in de app meldt: dan bewaart ai_report die, migratie 20261105000000_ai_reports).
-// Dagteller ai_quota_use('coach'): 3 met Pro, 1 zonder Pro maar pas als de functie voor iedereen open staat
+// Teller ai_quota_use('coach'): 3 per dag met Pro, 2 per week zonder Pro maar pas als de functie voor iedereen open staat
 // (migratie 20261103000000_coach). Anders dan bij /api/label werkt dit niet zonder teller: die houdt ook de vroege
 // toegang bij. Ontbreekt de migratie, dan not_configured (de app verbergt de coach dan).
 
@@ -482,7 +482,7 @@ export async function onRequestPost({ request, env }) {
   const q = await aiQuotaStatus(who.auth, 'coach', fetcher);
   if (q.missing) return json({ error: 'not_configured' }, 503);
   if (!q.quota) return json({ error: 'failed' }, 502);
-  const quota = { used: q.quota.used, limit: q.quota.limit, pro: q.quota.pro };
+  const quota = { used: q.quota.used, limit: q.quota.limit, pro: q.quota.pro, ...(q.quota.per && { per: q.quota.per }) };
   if (!q.quota.allowed) return json({ error: 'quota', ...quota }, 429);
   await rate.count();
 

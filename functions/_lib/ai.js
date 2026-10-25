@@ -84,7 +84,7 @@ export async function aiQuotaStatus(auth, kind, fetcher = fetch, rpc = 'ai_quota
     }
     const q = await r.json();
     if (typeof q?.allowed !== 'boolean') return { down: true };
-    return { quota: { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true } };
+    return { quota: { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true, ...(q.per === 'week' && { per: 'week' }) } };
   } catch (e) {
     console.log(`${rpc}(${kind}): ${e}`);
     return { down: true };

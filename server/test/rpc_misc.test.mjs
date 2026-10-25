@@ -31,10 +31,10 @@ const fails = (promise, code, message) =>
 
 test('ai_quota_use: gratis 1 label per dag, daarna geweigerd met dezelfde stand', async () => {
   const db = setup();
-  assert.deepEqual(await rpc(db, 'a', 'ai_quota', { p_kind: 'label' }), { allowed: true, used: 0, limit: 1, pro: false });
-  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }), { allowed: true, used: 1, limit: 1, pro: false });
-  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }), { allowed: false, used: 1, limit: 1, pro: false });
-  assert.deepEqual(await rpc(db, 'a', 'ai_quota', { p_kind: 'label' }), { allowed: false, used: 1, limit: 1, pro: false });
+  assert.deepEqual(await rpc(db, 'a', 'ai_quota', { p_kind: 'label' }), { allowed: true, used: 0, limit: 1, pro: false, per: 'day' });
+  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }), { allowed: true, used: 1, limit: 1, pro: false, per: 'day' });
+  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }), { allowed: false, used: 1, limit: 1, pro: false, per: 'day' });
+  assert.deepEqual(await rpc(db, 'a', 'ai_quota', { p_kind: 'label' }), { allowed: false, used: 1, limit: 1, pro: false, per: 'day' });
   // Een andere soort en een andere gebruiker hebben hun eigen teller
   assert.equal((await rpc(db, 'a', 'ai_quota_use', { p_kind: 'voice' })).used, 1);
   assert.equal((await rpc(db, 'b', 'ai_quota_use', { p_kind: 'label' })).allowed, true);
@@ -55,16 +55,28 @@ test('ai-limieten per soort, gratis tegenover Supporter', async () => {
   assert.equal((await rpc(db, 'b', 'ai_quota', { p_kind: 'label' })).pro, true);
 });
 
-test('coach: gratis 1 per dag zodra de functie voor iedereen open is', async () => {
+test('coach: gratis 2 per week (maandag tot zondag, UTC) zodra de functie voor iedereen open is; Supporter 3 per dag', async () => {
   const db = setup();
   db.raw.prepare("INSERT INTO features (id, title_en, title_nl, public_from) VALUES ('coach', 'Coach', 'Coach', '2026-11-01T00:00:00.000Z')").run();
   assert.equal((await rpc(db, 'a', 'ai_quota', { p_kind: 'coach' })).limit, 0);
-  assert.equal((await rpc(db, 'a', 'ai_quota', { p_kind: 'coach' }, at('2026-11-01T00:00:00.000Z'))).limit, 1);
+  const use = (uid, iso) => rpc(db, uid, 'ai_quota_use', { p_kind: 'coach' }, at(iso));
+  // Maandag 2 november: twee keer, dan op voor de week, ook op zondag nog
+  assert.deepEqual(await use('a', '2026-11-02T08:00:00.000Z'), { allowed: true, used: 1, limit: 2, pro: false, per: 'week' });
+  assert.equal((await use('a', '2026-11-04T08:00:00.000Z')).used, 2);
+  assert.equal((await use('a', '2026-11-04T09:00:00.000Z')).allowed, false);
+  assert.deepEqual(await rpc(db, 'a', 'ai_quota', { p_kind: 'coach' }, at('2026-11-08T23:59:00.000Z')), { allowed: false, used: 2, limit: 2, pro: false, per: 'week' });
+  // Volgende maandag weer twee
+  assert.equal((await use('a', '2026-11-09T00:00:00.000Z')).allowed, true);
+  // Supporter: per dag
+  makePro(db, 'b');
+  for (let i = 1; i <= 3; i++) assert.equal((await use('b', '2026-11-02T08:00:00.000Z')).used, i);
+  assert.equal((await use('b', '2026-11-02T09:00:00.000Z')).allowed, false);
+  assert.deepEqual(await use('b', '2026-11-03T08:00:00.000Z'), { allowed: true, used: 1, limit: 3, pro: true, per: 'day' });
 });
 
 test('ai_quota_use: limiet 0 telt niets, onbekende soort is een fout', async () => {
   const db = setup();
-  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'recipe' }), { allowed: false, used: 0, limit: 0, pro: false });
+  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'recipe' }), { allowed: false, used: 0, limit: 0, pro: false, per: 'day' });
   assert.equal(db.raw.prepare('SELECT count(*) AS n FROM ai_usage').get().n, 0);
   await fails(rpc(db, 'a', 'ai_quota_use', { p_kind: 'photo' }), 'P0001', 'onbekende soort');
   await fails(rpc(db, 'a', 'ai_quota_use', {}), 'P0001', 'onbekende soort');
@@ -83,7 +95,7 @@ test('dag is UTC: om middernacht UTC begint de teller opnieuw, oude dagen worden
   const db = setup();
   assert.equal((await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }, at('2026-10-25T23:59:59.000Z'))).allowed, true);
   assert.equal((await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }, at('2026-10-25T23:59:59.900Z'))).allowed, false);
-  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }, at('2026-10-26T00:00:00.000Z')), { allowed: true, used: 1, limit: 1, pro: false });
+  assert.deepEqual(await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }, at('2026-10-26T00:00:00.000Z')), { allowed: true, used: 1, limit: 1, pro: false, per: 'day' });
   assert.equal((await rpc(db, 'a', 'photo_quota_use', {}, at('2026-10-26T00:00:00.000Z'))).used, 1);
   await rpc(db, 'a', 'ai_quota_use', { p_kind: 'label' }, at('2026-11-05T10:00:00.000Z'));
   assert.deepEqual(db.raw.prepare("SELECT day FROM ai_usage WHERE user_id = 'a' ORDER BY day").all().map((r) => r.day), ['2026-11-05']);

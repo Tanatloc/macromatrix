@@ -169,15 +169,27 @@ String utcDayKey(DateTime now) {
   return '${u.year.toString().padLeft(4, '0')}-${u.month.toString().padLeft(2, '0')}-${u.day.toString().padLeft(2, '0')}';
 }
 
+/// Maandag van de week in UTC (jjjj-mm-dd): de gratis coach telt per week.
+String utcWeekKey(DateTime now) {
+  final u = now.toUtc();
+  return utcDayKey(DateTime.utc(u.year, u.month, u.day - (u.weekday - 1)));
+}
+
 /// Hoeveel foto's je vandaag gebruikte en hoeveel er mogen.
 @immutable
 class PhotoQuota {
-  const PhotoQuota({required this.used, required this.limit, this.pro = false, required this.day});
+  const PhotoQuota({required this.used, required this.limit, this.pro = false, required this.day, this.weekly = false});
   final int used, limit;
   final bool pro;
 
-  /// UTC-dag waarvoor deze stand geldt.
+  /// UTC-dag waarvoor deze stand geldt, of de maandag als de teller per week telt ([weekly]).
   final String day;
+
+  /// Telt per week in plaats van per dag (de gratis coach: de server stuurt per: 'week').
+  final bool weekly;
+
+  /// De dag (of maandag) waar een stand op [now] bij hoort.
+  String periodKey(DateTime now) => weekly ? utcWeekKey(now) : utcDayKey(now);
 
   int get left => math.max(0, limit - used);
   bool get allowed => used < limit;
@@ -185,18 +197,21 @@ class PhotoQuota {
   /// Uit het antwoord van photo_quota(_use) of /api/photo.
   static PhotoQuota? fromJson(Object? j, {DateTime? now}) {
     if (j is! Map || j['limit'] is! num) return null;
+    final weekly = j['per'] == 'week';
+    final at = now ?? DateTime.now();
     return PhotoQuota(
       used: (j['used'] as num?)?.toInt() ?? 0,
       limit: (j['limit'] as num).toInt(),
       pro: j['pro'] == true,
-      day: utcDayKey(now ?? DateTime.now()),
+      day: weekly ? utcWeekKey(at) : utcDayKey(at),
+      weekly: weekly,
     );
   }
 
-  /// Een stand van een vorige dag geldt niet meer: vandaag begin je opnieuw.
+  /// Een stand van een vorige dag (of week) geldt niet meer: dan begin je opnieuw.
   PhotoQuota on(DateTime now) {
-    final today = utcDayKey(now);
-    return today == day ? this : PhotoQuota(used: 0, limit: limit, pro: pro, day: today);
+    final today = periodKey(now);
+    return today == day ? this : PhotoQuota(used: 0, limit: limit, pro: pro, day: today, weekly: weekly);
   }
 }
 
