@@ -28,6 +28,10 @@ void main() {
     expect([1, 24, 25, 50, 75, 99, 100, 150].map(starsFor), [0, 0, 1, 2, 3, 3, 4, 4]);
     expect(levelHue(100), levelHue(250));
     expect(levelHue(2), isNot(levelHue(3)));
+    // In de eerste tien levels zie je de kleur duidelijk veranderen; begin (groen) en einde (rood) blijven
+    expect(levelHue(1), 150);
+    expect(levelHue(10) - levelHue(1), 45);
+    expect(levelHue(100), closeTo(358, 0.01));
   });
 
   test('bonus-XP telt mee', () {

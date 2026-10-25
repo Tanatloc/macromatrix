@@ -29,9 +29,13 @@ int levelForXp(int xp) {
 /// Sterren rond je profielfoto: één per 25 levels, maximaal 4.
 int starsFor(int level) => math.min(4, level ~/ 25);
 
-/// Tint van de rand rond je profielfoto (graden op het kleurenwiel): elk level schuift ze een beetje op, van groen
-/// via blauw en paars naar rood. Na level 100 verandert ze niet meer.
-double levelHue(int level) => (150 + (math.min(level, 100) - 1) * 2.1) % 360;
+/// Tint van de rand rond je profielfoto (graden op het kleurenwiel): van groen via blauw en paars naar rood. De eerste
+/// tien levels schuiven elk 5° op, zodat je de kleur ook in de eerste weken ziet veranderen; daarna ongeveer 1,8° per
+/// level. Na level 100 verandert ze niet meer.
+double levelHue(int level) {
+  final steps = math.min(math.max(level, 1), 100) - 1;
+  return 150 + (steps <= 9 ? steps * 5.0 : 45 + (steps - 9) * (208 - 45) / 90);
+}
 
 class DayXp {
   const DayXp(this.day, this.score, this.bonus);
