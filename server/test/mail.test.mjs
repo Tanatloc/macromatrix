@@ -18,7 +18,7 @@ test('Cloudflare eerst: code ingevuld, afzender noreply@macromatrix.eu, met plat
   const env = { EMAIL: { send: async (m) => sent.push(m) }, BREVO_API_KEY: 'k' };
   assert.equal(await sendMail(env, { to: 'a@example.org', kind: 'confirmation', token: '123456' }), 'cloudflare');
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].from.address, 'noreply@macromatrix.eu');
+  assert.deepEqual(sent[0].from, { name: 'MacroMatrix', email: 'noreply@macromatrix.eu' });
   assert.equal(sent[0].subject, 'Your MacroMatrix code: 123456');
   assert.match(sent[0].html, /123456/);
   assert.match(sent[0].text, /123456/);

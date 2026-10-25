@@ -2,10 +2,10 @@
 // supabase/templates/make.py (mail-templates.json), dezelfde als in Supabase.
 //
 // Volgorde: testpostvak (alleen staging), Cloudflare Email Sending (binding EMAIL, als die er is), anders of bij een
-// fout Brevo. Fase 4 maakt van Cloudflare de eerste keuze; tot dan heeft de Worker geen EMAIL-binding.
+// fout Brevo (bv. het dagquotum van Cloudflare op).
 import templates from './mail-templates.json' with { type: 'json' };
 
-const FROM = { name: 'MacroMatrix', address: 'noreply@macromatrix.eu' };
+const FROM = { name: 'MacroMatrix', email: 'noreply@macromatrix.eu' };
 
 const fill = (s, vars) => s.replaceAll('{{ .Token }}', vars.token ?? '').replaceAll('{{ .Email }}', escapeHtml(vars.email ?? ''));
 const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -69,7 +69,7 @@ async function sendBrevo(env, { to, subject, html, text }) {
   const r = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': env.BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ sender: { name: FROM.name, email: FROM.address }, to: [{ email: to }], subject, htmlContent: html, textContent: text }),
+    body: JSON.stringify({ sender: FROM, to: [{ email: to }], subject, htmlContent: html, textContent: text }),
   });
   if (!r.ok) throw new Error(`Brevo ${r.status}: ${(await r.text()).slice(0, 200)}`);
   return 'brevo';
