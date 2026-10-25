@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../data/food.dart';
 import '../../data/models.dart';
 import '../../data/user_db.dart';
+import '../../nutrition/niacin.dart';
 import '../../nutrition/nutrients.dart';
 import '../../nutrition/portions.dart';
 import '../../nutrition/targets.dart';
@@ -415,16 +416,27 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     // Uitleg bij geschatte waarden: uit welk product in welke databank ze komen. "~bron:id" = vergelijkbaar product
     // (geschaald), "~~head:x" of "~~cat:x" = gemiddelde van vergelijkbare producten (zie tool/build_foods.py)
     String bare(String ref) => ref.replaceFirst(RegExp(r'^~+'), '');
+    // Met B3 als niacine-equivalenten bij een etiket (zie niacin.dart): ook dat is een schatting
+    final estimated = s.estimatedOf(_food);
     final donors = <String, Food?>{
-      for (final ref in _food.estimated.values.toSet())
+      for (final ref in estimated.values.toSet())
         if (!ref.startsWith('~~')) ref: s.foods.byRef(bare(ref)),
     };
     String donorName(String ref) =>
         '${donors[ref]?.source.labelWithCountry ?? tr('another database', 'een andere databank')}${donors[ref] == null ? '' : ' ("${donors[ref]!.name}")'}';
     final fromLabel = _food.source == FoodSource.off;
     final estimates = {
-      for (final MapEntry(key: k, value: ref) in _food.estimated.entries)
-        k: fromLabel
+      for (final MapEntry(key: k, value: ref) in estimated.entries)
+        k: ref == neFromProtein
+            ? tr(
+                'Estimated: the label gives preformed niacin only. Your body also makes niacin from tryptophan '
+                    '(60 mg = 1 mg), so this adds the tryptophan, estimated at 1.2% of the protein: '
+                    '0.2 mg per gram of protein.',
+                'Geschat: het etiket geeft alleen de voorgevormde niacine. Je lichaam maakt ook niacine uit tryptofaan '
+                    '(60 mg = 1 mg), dus telt hier de tryptofaan mee, geschat op 1,2 % van het eiwit: '
+                    '0,2 mg per gram eiwit.',
+              )
+            : fromLabel
             ? tr(
                 'Estimated: not on the label. Taken from the comparable basic product in ${donorName(ref)}, '
                     'adjusted to the protein and fat content of this product.',
@@ -450,7 +462,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                 'Geschat: ontbreekt in ${_food.source.label} en is aangevuld uit hetzelfde voedingsmiddel in ${donorName(ref)}.',
               ),
     };
-    final measured = _food.per100g.keys.where((k) => k != 'energy' && !_food.estimated.containsKey(k)).length;
+    final measured = _food.per100g.keys.where((k) => k != 'energy' && !estimated.containsKey(k)).length;
 
     final ctaLabel = widget.forPlan
         ? tr('Add to plan (${_meal.label.toLowerCase()})', 'In plan zetten (${_meal.label.toLowerCase()})')
@@ -619,10 +631,10 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                                             [
                                               _food.source.citation,
                                               '$measured ${fromLabel ? tr('values from the label', 'waarden van het etiket') : tr('measured values', 'gemeten waarden')}',
-                                              if (_food.estimated.isNotEmpty)
+                                              if (estimated.isNotEmpty)
                                                 tr(
-                                                  '${_food.estimated.length} values estimated from a similar food (marked ≈)',
-                                                  '${_food.estimated.length} waarden geschat uit een gelijkaardig product (met ≈)',
+                                                  '${estimated.length} values estimated (marked ≈)',
+                                                  '${estimated.length} waarden geschat (met ≈)',
                                                 ),
                                               if (_food.barcode != null) tr('Barcode ${_food.barcode}', 'Barcode ${_food.barcode}'),
                                             ].join('\n'),
@@ -674,6 +686,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                             estimates: estimates,
                             sourceLabel: _food.source.label,
                             fromLabel: fromLabel,
+                            onlyNe: estimated.length == 1 && estimated['b3'] == neFromProtein,
                           ),
                         ],
                       ),
@@ -1131,6 +1144,7 @@ class _ValuesPanel extends StatefulWidget {
     required this.estimates,
     required this.sourceLabel,
     required this.fromLabel,
+    this.onlyNe = false,
   });
   final NutrientMap amounts;
 
@@ -1141,6 +1155,9 @@ class _ValuesPanel extends StatefulWidget {
   final Map<String, String> estimates;
   final String sourceLabel;
   final bool fromLabel;
+
+  /// Alleen B3 is geschat (niacine-equivalenten uit het eiwit), niets uit een ander product.
+  final bool onlyNe;
 
   @override
   State<_ValuesPanel> createState() => _ValuesPanelState();
@@ -1336,7 +1353,12 @@ class _ValuesPanelState extends State<_ValuesPanel> {
           ),
           if (widget.estimates.isNotEmpty)
             Text(
-              widget.fromLabel
+              widget.onlyNe
+                  ? tr(
+                      '≈ estimated: B3 includes the niacin your body makes from the protein. Tap the value for how.',
+                      '≈ geschat: B3 telt de niacine mee die je lichaam uit het eiwit maakt. Tik op de waarde voor uitleg.',
+                    )
+                  : widget.fromLabel
                   ? tr(
                       '≈ estimated: not on the label, taken from the comparable basic product (linked by Open Food Facts). '
                           'Tap a value for the source.',

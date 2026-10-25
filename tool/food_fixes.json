@@ -1406,6 +1406,14 @@
       "b3": null,
       "_ne": null,
       "_waarom": "Gans zonder vel, gebraden (Matvaretabellen): niacine 33,2 mg (NE 82) is 5 à 8× de andere gans (4-8 mg); ook magnesium, fosfor, kalium en zink liggen ~7× te hoog (die vangt outlier_pass)"
+    },
+    "ciqual:26091": {
+      "selenium": null,
+      "_waarom": "Harder rauw (CIQUAL): selenium 168 µg komt uit dezelfde CIQUAL-bron (source_code 257) als de zeeduivel met 414 en de grenadier met 356 µg; elke andere harder ligt op 36-51 µg (CIQUAL mul 36,2 uit dezelfde bron, CoFID grijze harder 51, rode harder 46, USDA gestreepte harder 36,5). outlier_pass vangt het niet: per gram droge stof 4,1× de mediaan (grens 6×), en gegrilde harder komt boven een kwart. De grens verlagen vangt ook schar (CoFID 70 µg, maar Zweedse schol meet 62-107) en witte kool"
+    },
+    "frida:38": {
+      "molybdenum": null,
+      "_waarom": "Rode paprika rauw (Frida): molybdeen 70 µg is het gemiddelde van 2 bepalingen van 10 en ~130 µg (min 10, max 140) en het hoogste van alle groenten in Frida (mediaan 2 µg); gele paprika (zelfde soort, Capsicum annuum) heeft 0,7 µg, groenten in totaaldieetstudies 5-8 µg. Het was de enige molybdeenwaarde voor paprika in alle databanken en werd overal doorgegeven, tot 741 µg in gevriesdroogde paprika"
     }
   }
 }

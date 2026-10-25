@@ -1,6 +1,6 @@
 # Onwaarschijnlijke metingen
 
-Geschreven door `tool/build_foods.py` (zie `outlier_pass` en `tryptophan_check`). Per 100 g. Referentie: "groep" = 99e percentiel van de voedingsgroep; "soort: x" = mediaan van andere producten van dezelfde soort (zelfde labelgroep en hoofdwoord, of hetzelfde Latijnse geslacht), omgerekend naar dit product; bij tryptofaan het aandeel van het eiwit. Alle = 99,9e percentiel van alle producten. Weggelaten waarden worden daarna geschat zoals elke ontbrekende waarde. Behouden staat met de reden in `tool/outlier_keep.json` (en is nooit donor bij het aanvullen), of wordt gesteund door een andere databank.
+Geschreven door `tool/build_foods.py` (zie `outlier_pass` en `tryptophan_check`). Per 100 g. Referentie: "groep" = 99e percentiel van de voedingsgroep; "soort: x" = mediaan van andere producten van dezelfde soort (zelfde labelgroep en hoofdwoord, of hetzelfde Latijnse geslacht), omgerekend naar dit product; bij tryptofaan het aandeel van het eiwit. Alle = 99,9e percentiel van alle producten. Weggelaten waarden worden daarna geschat zoals elke ontbrekende waarde. Behouden staat met de reden in `tool/outlier_keep.json` (en is nooit donor bij het aanvullen), of wordt gesteund door een andere databank. Fouten die deze toetsen net missen (harder `ciqual:26091` met 168 µg selenium, 4× de andere harders; rode paprika `frida:38` met 70 µg molybdeen), staan met de reden in `tool/food_fixes.json`.
 
 | product | naam | groep | stof | waarde | referentie | alle | wat |
 |---|---|---|---|---|---|---|---|

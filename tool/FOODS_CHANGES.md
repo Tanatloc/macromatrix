@@ -99,3 +99,52 @@ weggelaten.
 
 Niet veranderd: USDA cheddar (173414) heeft een gemeten tryptofaan van 0,547 g (2,4 % van het eiwit, onder de grens).
 De "0,156 g" uit de controle was USDA hüttenkäse (167703, 12,4 g eiwit, 1,25 %): de schatting klopt.
+
+## Restpunten na de controle (harder, nullen, NE bij merkproducten, molybdeen, retinol uit supplementen, spirulina)
+
+Versie `f859b4474021` → `37c9dfe721a2` (20 576 producten). Drie keer gebouwd (ook met een andere `PYTHONHASHSEED`):
+dezelfde versie, dezelfde inhoud. Nauwkeurigheidstest (`HOLDOUT=3000`): 24 % / 50 % / 78 % (was 24 / 51 / 78).
+Over alle producten: 961 waarden veranderd (622 producten), 14 bijgekomen, 5 weggevallen (zetmeel en alcohol bij
+rijst die ze van voorgekookte rijst leende).
+
+| Punt | Regel | Waarden |
+|---|---|---|
+| 1. Harder | `food_fixes.json`: selenium van CIQUAL "Mullet, raw" (`ciqual:26091`) weg, daarna geschat. Zelfde CIQUAL-bron (source_code 257) als de zeeduivel en de grenadier; de andere harders meten 36-51 µg. De drempel verlagen werkt niet zuiver: per gram droge stof is het 4,1× de mediaan (grens 6×) en gegrilde harder ligt boven een kwart, dus ook de steun-regel moet om (4× en een derde). Dat vangt dan ook schar (CoFID 70 µg, maar Zweedse schol meet 62-107 µg), witte kool (20 µg) en gedroogde kervel: geen duidelijke fouten | 2 (rauw en gebakken) |
+| 2. Nullen die niet gemeten zijn | `zeros_not_measured`: calcium, ijzer, magnesium, kalium, fosfor en zink zitten in elke cel. Een 0 in een enkelvoudig voedingsmiddel (granen, rijst, pasta, brood, ontbijtgranen, peulvruchten, groenten, aardappelen, noten; vlees, gevogelte, orgaanvlees, vis, schaaldieren) valt weg en wordt geschat (en als geschat getoond). Bij vlees en vis ook selenium. Niet bij zetmeel, lutefisk, zeewierkaviaar, fruit, eiwit van ei en paddenstoelen (daar is 0 een eerlijke afronding), en een correctie in `food_fixes.json` gaat voor | 68 nullen |
+| 2. Onder de meetgrens (Matvaretabellen) | Bron 60a ("below the limit of quantification") is geen 0 maar "<": bij een enkelvoudig product (geen gerecht, mengsel, snoep of ontbijtgraan) eerst aanvullen uit hetzelfde voedingsmiddel elders, anders 0, zoals CIQUAL "<" (`mvt_below_loq`) | 165 vitaminen en mineralen, 90 daarvan aangevuld |
+| 2. Onder een bekende meetgrens | CIQUAL "<" bij de mineralen en voedingsmiddelen hierboven: zonder ander gegeven de helft van de grens in plaats van 0 (alikruik gekookt, selenium < 20 → 10 µg) | 3 |
+| 2. Selenium 0 in planten | Blijft staan (seleenarme grond, vooral Scandinavië), maar is geen donor meer: Amerikaanse gekookte rijst leende 0 µg van de Noorse | 254 producten (meestal 0 → 0,1-2 µg) |
+| 2. Voorgekookte rijst | Eigen labelvlag `parboiled` (ook "pre-boiled", "easy cook"): parboiled rijst neemt calcium op uit het weekwater (71 mg tegenover 9-28 mg, USDA en CIQUAL). Gewone rijst wordt niet meer aangevuld uit voorgekookte en omgekeerd; in de app een eigen groep | 342 waarden bij rijst (alle regels samen) |
+| 4. Paprika, molybdeen | `food_fixes.json`: molybdeen van Frida rode paprika (`frida:38`) weg. 70 µg is het gemiddelde van 2 bepalingen van 10 en ~130 µg, het hoogste van alle groenten in Frida (mediaan 2 µg); gele paprika 0,7 µg, groene 0; geen andere databank heeft molybdeen voor paprika. Het werd naar alle andere rode paprika's doorgegeven | 31 paprikaproducten |
+| 6. Verse spirulina | Een geschatte waarde die per gram basis (vetvrije droge stof) binnen het bereik van de metingen van hetzelfde voedingsmiddel valt, is geen uitschieter, bij een enkelvoudig plantaardig product, alg of paddenstoel (alleen water verschilt). Verse spirulina houdt zo het jodium van gedroogde spirulina, omgerekend | 14 |
+
+| Product | Voor | Na |
+|---|---|---|
+| Harder rauw / gebakken (CIQUAL), selenium | 168 / 198 µg | 39,7 / 46,8 µg (geschat uit USDA gestreepte harder) |
+| Witte langkorrelrijst gekookt (MVT), calcium / ijzer | 0 / 0 | 1,8 mg / 0,18 mg (geschat) |
+| Witte langkorrelrijst ongekookt (MVT), calcium / ijzer / selenium | 0 / 0 / 0 | 15,4 mg / 0,25 mg / 12,5 µg (geschat) |
+| Langkorrelrijst ongekookt (SLV), calcium / ijzer | 0 / 0 | 15,7 mg / 0,26 mg (geschat; met de parboiled-donor was het 175 mg) |
+| Zeeduivel rauw (MVT), ijzer | 0 | 0,29 mg |
+| Bleekselder rauw (USDA Foundation), ijzer | 0 | 0,21 mg |
+| Gerookte kalkoenham (MVT), selenium | 0 (60a) | 34 µg |
+| Rode paprika rauw (Frida) / gevriesdroogd (USDA), molybdeen | 70 / 741 µg | 0,37 / 3,9 µg |
+| Verse spirulina (CIQUAL), jodium | onbekend | 2,3 µg (geschat uit gedroogde spirulina, per droge stof) |
+
+### In de app
+
+- **3. B3 bij merkproducten** (`lib/nutrition/niacin.dart`): een etiket (Open Food Facts `off:`, USDA-barcode `fdc:`)
+  en een eigen product (`custom:`) geven alleen voorgevormde niacine. Bij het tellen komt er tryptofaan / 60 bij: de
+  tryptofaan van het product als die er is, anders 1,2 % van het eiwit (12 mg per g eiwit, de mediaan in de databank is
+  1,17 %), dus + 0,2 mg NE per g eiwit. Alleen als niacine en eiwit bekend zijn, en als geschat gemarkeerd (≈, met uitleg
+  bij de waarde). Niet als B3 uit het basisproduct van de databank komt (dat is al NE), niet bij supplementen. Een recept
+  telt het per ingrediënt. Het gebeurt bij het tellen (`AppState._counted`, ook voor oudere dagboekregels); de bewaarde
+  waarden blijven die van het etiket, dus nooit dubbel. Een eiwitreep met 30 g eiwit en 8 mg niacine telt 14 mg NE.
+- **5. Retinol uit supplementen** (`supplementRetinol` in `lib/nutrition/supplements.dart`): de vitamine A van een
+  supplement telt als retinol (retinylacetaat of -palmitaat, "vitamine A (retinol)", een multivitamine), behalve
+  bètacaroteen (in de naam, of apart ingevuld: vitamine A − bètacaroteen / 6). Ook bij het tellen, dus ook voor
+  supplementen die al in het dagboek staan. Eén dag 100 g runderlever per week (4948 µg) blijft onder de grens; met
+  2400 µg retinol per dag erbij gemiddeld ~3100 µg: waarschuwing. Met 2400 µg vitamine A uit bètacaroteen: geen.
+
+Niet veranderd: het selenium van planten met een 0 (seleenarme grond is echt), witte rijst van Matvaretabellen houdt
+selenium 0 (receptberekening uit ongekookte rijst onder de meetgrens). Overige CIQUAL "<"-waarden blijven 0 als er
+geen ander gegeven is.

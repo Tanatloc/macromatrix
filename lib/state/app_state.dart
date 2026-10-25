@@ -35,6 +35,7 @@ import '../nutrition/insights.dart';
 import '../nutrition/quick_parse.dart';
 import '../nutrition/report.dart';
 import '../nutrition/levels.dart';
+import '../nutrition/niacin.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/preferences.dart';
 import '../nutrition/portions.dart' show EverydayPortion, defaultServing, everydayPortions, typicalPieceGrams;
@@ -1777,6 +1778,7 @@ class AppState extends ChangeNotifier {
 
   void _refresh() {
     _novaCache.clear();
+    _savedEstimated.clear();
     _load();
     notifyListeners();
   }
@@ -2721,6 +2723,7 @@ class AppState extends ChangeNotifier {
     }
     final enriched = enrich(full);
     user.saveFood(enriched);
+    _savedEstimated.remove(enriched.ref);
     if (enriched.estimated.isNotEmpty && user.fillDiarySnapshots(enriched.ref, enriched.per100g) > 0) _refresh();
     return enriched;
   }
@@ -2729,6 +2732,7 @@ class AppState extends ChangeNotifier {
     user.saveFood(f);
     // De verwerkingsgraad kan veranderd zijn (N72)
     _novaCache.remove(f.ref);
+    _savedEstimated.remove(f.ref);
     notifyListeners();
   }
 
@@ -2785,15 +2789,76 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  NutrientMap _withSugars(NutrientMap per100g, String ref, String name, double grams) => withDerived(scale(_freeSugars(per100g, ref, name), grams));
+  NutrientMap _withSugars(NutrientMap per100g, String ref, String name, double grams) => withDerived(scale(_counted(per100g, ref, name), grams));
 
-  /// Voedingswaarden per 100 g van een product zoals ze in de totalen tellen: met afgeleide waarden en vrije suikers.
-  NutrientMap per100gWithSugars(Food f) => withDerived(_freeSugars(f.per100g, f.ref, f.name));
+  /// Voedingswaarden per 100 g van een product zoals ze in de totalen tellen: met afgeleide waarden, vrije suikers,
+  /// B3 als niacine-equivalenten en het retinol van een supplement.
+  NutrientMap per100gWithSugars(Food f) => withDerived(_counted(f.per100g, f.ref, f.name, estimated: f.estimated));
+
+  /// Per 100 g zoals het telt. Bij het tellen, niet bij het bewaren: wat op het etiket stond, blijft zoals het was,
+  /// en oudere dagboekregels tellen meteen mee.
+  ///  - een supplement: de voorgevormde vitamine A als retinol, voor de bovengrens (zie supplementRetinol);
+  ///  - een etiket of eigen product: B3 als niacine-equivalenten, met de tryptofaan uit het eiwit (zie niacin.dart);
+  ///  - de vrije suikers.
+  NutrientMap _counted(NutrientMap per100g, String ref, String name, {Map<String, String>? estimated, int depth = 0}) {
+    var n = per100g;
+    if (ref.startsWith('supp:')) n = withSupplementRetinol(n, name);
+    n = _withNe(n, ref, estimated, depth);
+    return _freeSugars(n, ref, name, depth);
+  }
+
+  /// Wat al geschat is bij een bewaard merk- of eigen product (bv. B3 uit het basisproduct, dan is het al NE).
+  final _savedEstimated = <String, Map<String, String>>{};
+
+  Map<String, String> _estimatedFor(String ref) => _savedEstimated.putIfAbsent(ref, () => user.food(ref)?.estimated ?? const {});
+
+  NutrientMap _withNe(NutrientMap n, String ref, Map<String, String>? estimated, int depth) {
+    if (n['b3'] == null) return n;
+    if (ref.startsWith('recipe:')) {
+      final perProtein = _recipeNe(ref, n, depth);
+      final protein = n['protein'];
+      if (perProtein == null || perProtein <= 0 || protein == null) return n;
+      return {...n, 'b3': n['b3']! + protein * perProtein};
+    }
+    if (!labelNiacinRef(ref)) return n;
+    return withNiacinEquivalents(n, ref, estimated: estimated ?? _estimatedFor(ref)).$1;
+  }
+
+  /// Recept: extra mg NE per g eiwit, uit de ingrediënten met alleen voorgevormde niacine. Per g eiwit en niet per
+  /// 100 g, zodat het ook klopt met een gewicht na bereiding en bij een oudere momentopname (zoals [_recipeShare]).
+  final _recipeNeCache = <String, double?>{};
+
+  double? _recipeNe(String ref, NutrientMap per100g, int depth) {
+    if (depth > 3) return null;
+    return _recipeNeCache.putIfAbsent('$ref|${per100g['protein']}|${per100g['b3']}', () {
+      final recipe = user.recipe(ref);
+      if (recipe == null) return null;
+      var protein = 0.0, extra = 0.0;
+      for (final i in recipe.ingredients) {
+        protein += (i.per100g['protein'] ?? 0) * i.grams / 100;
+        final b3 = i.per100g['b3'];
+        if (b3 != null) extra += (_withNe(i.per100g, i.foodRef, null, depth + 1)['b3']! - b3) * i.grams / 100;
+      }
+      return protein <= 0 ? null : extra / protein;
+    });
+  }
+
+  /// Wat geschat is bij dit product, zoals het in de totalen telt: ook B3 als niacine-equivalenten bij een etiket.
+  Map<String, String> estimatedOf(Food f) =>
+      labelNiacinRef(f.ref) ? withNiacinEquivalents(f.per100g, f.ref, estimated: f.estimated).$2 : f.estimated;
 
   /// Totalen van een (nog niet bewaard) recept met de vrije suikers uit de ingrediënten erbij (N80). Een ingrediënt
   /// zonder schatting telt volledig mee, zoals bij [_recipeShare].
   NutrientMap recipeTotalsWithSugars(Recipe r) {
-    final t = r.totals;
+    final t = Map.of(r.totals);
+    // B3 als niacine-equivalenten bij ingrediënten met alleen voorgevormde niacine (zie niacin.dart)
+    if (t['b3'] case final b3?) {
+      var extra = 0.0;
+      for (final i in r.ingredients) {
+        if (i.per100g['b3'] case final own?) extra += (_withNe(i.per100g, i.foodRef, null, 1)['b3']! - own) * i.grams / 100;
+      }
+      t['b3'] = b3 + extra;
+    }
     if (!t.containsKey('sugars')) return t;
     var free = 0.0;
     for (final i in r.ingredients) {

@@ -7,13 +7,17 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:macromatrix/data/fdc_client.dart';
 import 'package:macromatrix/data/food.dart';
 import 'package:macromatrix/data/food_db.dart';
+import 'package:macromatrix/data/models.dart';
+import 'package:macromatrix/data/off_client.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/nutrition/food_groups.dart';
 import 'package:macromatrix/nutrition/gap_plan.dart';
 import 'package:macromatrix/nutrition/health.dart';
 import 'package:macromatrix/nutrition/insights.dart';
+import 'package:macromatrix/nutrition/niacin.dart';
 import 'package:macromatrix/nutrition/nutrients.dart';
 import 'package:macromatrix/nutrition/quick_parse.dart';
+import 'package:macromatrix/nutrition/supplements.dart';
 import 'package:macromatrix/nutrition/targets.dart';
 import 'package:macromatrix/nutrition/values.dart';
 import 'package:macromatrix/state/app_state.dart';
@@ -401,6 +405,237 @@ void main() {
           expect(f.per100g['energy'], inInclusiveRange(100, 160), reason: '$q: ${f.name}');
         }
       }
+    });
+  });
+
+  // Wat na de controle van ronde 11 nog openstond: harder, nullen die niet gemeten zijn, NE bij merkproducten,
+  // molybdeen in paprika, retinol uit supplementen, verse spirulina
+  group('R11-restpunten', () {
+    final raw = sqlite3.open('assets/db/foods.db', mode: OpenMode.readOnly);
+    final all = [
+      for (final r in raw.select('SELECT source, source_id, name, nutrients, estimated, label FROM foods'))
+        (
+          ref: '${r['source']}:${r['source_id']}',
+          name: r['name'] as String,
+          n: (jsonDecode(r['nutrients'] as String) as Map).cast<String, num>(),
+          est: (jsonDecode(r['estimated'] as String) as Map).cast<String, String>(),
+          label: (r['label'] as String).isEmpty ? const <String, Object?>{} : (jsonDecode(r['label'] as String) as Map).cast<String, Object?>(),
+        ),
+    ];
+
+    test('1. harder rauw (CIQUAL): geen 168 µg selenium meer, maar een schatting zoals de andere harders', () {
+      for (final r in ['ciqual:26091', 'ciqual:26026']) {
+        final f = ref(r);
+        expect(f.per100g['selenium'], inInclusiveRange(25, 70), reason: '$r ${f.per100g['selenium']}');
+        expect(f.estimated, contains('selenium'), reason: r);
+      }
+      // De andere harders blijven gemeten
+      expect(ref('cofid:16-095').per100g['selenium'], 51);
+      expect(ref('ciqual:26085').estimated, isNot(contains('selenium')));
+    });
+
+    test('2. witte rijst (Matvaretabellen): calcium en ijzer 0 waren niet gemeten, nu geschat', () {
+      final rice = ref('mvt:05.289');
+      for (final k in ['calcium', 'iron']) {
+        expect(rice.estimated, contains(k), reason: k);
+        expect(rice.per100g[k]!, greaterThan(0), reason: k);
+      }
+      // Gewone witte rijst: niet het calcium van voorgekookte (parboiled) rijst (61-178 mg)
+      expect(rice.per100g['calcium'], lessThan(30));
+      expect(ref('mvt:05.212').per100g['calcium'], lessThan(40)); // ongekookt (USDA 28 mg)
+      // Voorgekookte rijst blijft gemeten
+      expect(ref('mvt:05.125').per100g['calcium'], 61);
+    });
+
+    test('2. geen gemeten 0 voor calcium, ijzer, magnesium, kalium, fosfor, zink in enkelvoudige granen, peulvruchten, groenten, vlees en vis', () {
+      const plant = {'cereal', 'rice', 'pasta', 'bread', 'breakfast cereal', 'legume', 'vegetable', 'potato/tuber', 'nut/seed'};
+      const animal = {'meat', 'poultry', 'offal', 'fish', 'shellfish'};
+      final except = RegExp(r'\b(lute?fisk|alkaline cured|seaweed caviar)\b', caseSensitive: false);
+      final fixes = (jsonDecode(File('tool/food_fixes.json').readAsStringSync())['fixes'] as Map).cast<String, Object?>();
+      var checked = 0;
+      for (final f in all) {
+        final g = f.label['g'], k = f.label['k'];
+        if (f.label.isEmpty || f.label['d'] == 1 || f.label['p'] == 'starch' || except.hasMatch(f.name) || fixes.containsKey(f.ref)) continue;
+        final keys = [
+          if ((plant.contains(g) && (k == 'plant' || k == 'algae')) || (animal.contains(g) && k == 'animal'))
+            ...['calcium', 'iron', 'magnesium', 'potassium', 'phosphorus', 'zinc'],
+          if (animal.contains(g) && k == 'animal') 'selenium',
+        ];
+        for (final key in keys) {
+          checked++;
+          if (f.n[key] == 0) expect(f.est, contains(key), reason: '${f.ref} ${f.name} $key = 0 gemeten');
+        }
+      }
+      expect(checked, greaterThan(50000));
+    });
+
+    test('2. echte nullen blijven: B12 in planten, vitamine C en vezels in vlees, mineralen in zetmeel', () {
+      expect(ref('mvt:05.289').per100g['b12'], 0);
+      expect(ref('cofid:18-323').per100g['vit_c'] ?? 0, lessThan(1)); // kipfilet
+      expect(ref('cofid:18-323').per100g['fiber'] ?? 0, 0);
+      expect(ref('mvt:05.015').per100g['zinc'], 0); // maïszetmeel: geen schatting
+      expect(ref('mvt:05.015').estimated, isNot(contains('zinc')));
+    });
+
+    test('2. Matvaretabellen "onder de meetgrens" (bron 60a) bij een enkelvoudig product: aangevuld uit hetzelfde voedingsmiddel', () {
+      // Gerookte kalkoenham: selenium 60a, aangevuld uit USDA kalkoen (vlees heeft altijd selenium)
+      final ham = ref('mvt:03.323');
+      expect(ham.per100g['selenium']!, greaterThan(10));
+      expect(ham.estimated, contains('selenium'));
+      // Een snoepmix blijft 0: daar is "hetzelfde voedingsmiddel" een ander recept (met chocolade)
+      expect(ref('mvt:09.106').per100g['calcium'], 0);
+    });
+
+    test('3. merkproduct met alleen voorgevormde niacine: NE = niacine + eiwit × 0,2 mg (geschat)', () {
+      // 20 g eiwit × 12 mg tryptofaan per g / 60 = 4 mg NE erbij
+      final (n, est) = withNiacinEquivalents({'b3': 5, 'protein': 20}, 'off:123');
+      expect(n['b3'], closeTo(9, 1e-9));
+      expect(est['b3'], neFromProtein);
+      // Zonder eiwit of zonder niacine: niets
+      expect(withNiacinEquivalents({'b3': 5}, 'off:123').$1['b3'], 5);
+      expect(withNiacinEquivalents({'protein': 20}, 'off:123').$1.containsKey('b3'), isFalse);
+      // Gemeten tryptofaan (0,3 g = 5 mg NE) gaat voor en is geen schatting
+      final (m, mest) = withNiacinEquivalents({'b3': 5, 'protein': 20, 'tryptophan': 0.3}, 'custom:x');
+      expect(m['b3'], closeTo(10, 1e-9));
+      expect(mest.containsKey('b3'), isFalse);
+      // B3 uit het basisproduct van de databank (al NE), de databank zelf en supplementen: ongewijzigd
+      expect(withNiacinEquivalents({'b3': 5, 'protein': 20}, 'off:123', estimated: {'b3': 'ciqual:19590'}).$1['b3'], 5);
+      expect(withNiacinEquivalents({'b3': 5, 'protein': 20}, 'ciqual:19590').$1['b3'], 5);
+      expect(withNiacinEquivalents({'b3': 16, 'protein': 0}, 'supp:bcomplex').$1['b3'], 16);
+      for (final r in ['off:1', 'fdc:1', 'custom:1']) {
+        expect(labelNiacinRef(r), isTrue, reason: r);
+      }
+      for (final r in ['ciqual:1', 'usda_sr:1', 'recipe:1', 'supp:1']) {
+        expect(labelNiacinRef(r), isFalse, reason: r);
+      }
+    });
+
+    test('3. in de app: Open Food Facts, USDA-barcode, eigen product en recept tellen NE, de databank niet dubbel', () {
+      final user = UserDb(sqlite3.openInMemory());
+      final app = AppState(foods: s.foods, user: user);
+      final off = foodFromOff({
+        'code': '5400000000001',
+        'product_name': 'Protein bar',
+        'nutriments': {'energy-kcal_100g': 380, 'proteins_100g': 30, 'carbohydrates_100g': 35, 'fat_100g': 12, 'vitamin-pp_100g': 0.008},
+      })!;
+      // Het etiket blijft zoals het is (8 mg voorgevormd); tellen doet 8 + 30 × 0,2 = 14 mg NE, gemarkeerd als geschat
+      expect(off.per100g['b3'], closeTo(8, 1e-9));
+      expect(app.per100gWithSugars(off)['b3'], closeTo(14, 1e-9));
+      expect(app.estimatedOf(off)['b3'], neFromProtein);
+      final fdc = productFromFdc({
+        'found': true,
+        'code': '0001',
+        'name': 'GREEK YOGURT',
+        'nutrients': [
+          [1008, 'KCAL', 97],
+          [1003, 'G', 9],
+          [1167, 'MG', 0.2],
+        ],
+      })!.food!;
+      expect(app.per100gWithSugars(fdc)['b3'], closeTo(0.2 + 9 * 0.2, 1e-9));
+      // In het dagboek: elke regel telt zo, ook een oudere
+      const day = '2026-10-20';
+      user.addEntry(day: day, meal: Meal.breakfast, food: off, grams: 50, quantity: 1);
+      const custom = Food(ref: 'custom:abc', name: 'Eigen kwark', source: FoodSource.custom, per100g: {'energy': 60, 'protein': 10, 'b3': 0.1});
+      user.addEntry(day: day, meal: Meal.lunch, food: custom, grams: 200, quantity: 1);
+      final db = ref('usda_sr:171477'); // kipfilet, al NE (19,75 mg)
+      user.addEntry(day: day, meal: Meal.dinner, food: db, grams: 100, quantity: 1);
+      final entries = user.entriesFor(day);
+      double b3(String r) => app.entryValues(entries.firstWhere((e) => e.foodRef == r))['b3']!;
+      expect(b3(off.ref), closeTo(14 / 2, 1e-9));
+      expect(b3('custom:abc'), closeTo((0.1 + 10 * 0.2) * 2, 1e-9));
+      expect(b3('usda_sr:171477'), closeTo(db.per100g['b3']!, 1e-9));
+      // Een merkproduct waarvan B3 uit het basisproduct komt (al NE): niet nog eens
+      final enriched = off.copyWith(per100g: {...off.per100g, 'b3': 3}, estimated: {'b3': 'ciqual:31000'});
+      expect(app.per100gWithSugars(enriched)['b3'], 3);
+      // Een recept met het merkproduct: de NE van dat ingrediënt telt mee, ook als het recept in het dagboek staat
+      final recipe = Recipe(
+        ref: 'recipe:r1',
+        name: 'Bowl',
+        servings: 1,
+        ingredients: [
+          ItemTemplate(foodRef: off.ref, name: off.name, grams: 50, quantity: 1, per100g: off.per100g),
+          ItemTemplate(foodRef: db.ref, name: db.name, grams: 100, quantity: 1, per100g: db.per100g),
+        ],
+      );
+      user.saveRecipe(recipe);
+      final totals = app.recipeTotalsWithSugars(recipe);
+      expect(totals['b3'], closeTo(recipe.totals['b3']! + 30 * 0.2 / 2, 1e-6));
+      expect(app.per100gWithSugars(recipe.toFood())['b3']! * recipe.totalGrams / 100, closeTo(totals['b3']!, 1e-6));
+    });
+
+    test('4. rode paprika (Frida): geen 70 µg molybdeen, dus ook geen 741 µg in gevriesdroogde paprika', () {
+      expect(ref('frida:38').per100g['molybdenum'] ?? 0, lessThan(10));
+      expect(ref('frida:38').estimated, contains('molybdenum'));
+      expect(ref('usda_sr:169373').per100g['molybdenum'] ?? 0, lessThan(60));
+      for (final f in all) {
+        if (f.est['molybdenum'] case final donor?) expect(donor, isNot(endsWith('frida:38')), reason: f.ref);
+      }
+    });
+
+    test('5. supplementen: voorgevormde vitamine A telt als retinol, bètacaroteen niet', () {
+      expect(supplementRetinol({'vit_a': 800}, 'Vitamine A (retinylpalmitaat) 800 µg'), 800);
+      expect(supplementRetinol({'vit_a': 800}, 'Vitamin A (retinol)'), 800);
+      expect(supplementRetinol(supplementCatalog.firstWhere((x) => x.id == 'multi').nutrients, 'Multivitamine'), 800);
+      expect(supplementRetinol({'vit_a': 2500}, 'Bètacaroteen 15 mg'), 0);
+      expect(supplementRetinol({'vit_a': 2500}, 'Beta-carotene 15 mg'), 0);
+      // Vitamine A met bètacaroteen ernaast: 1200 µg bètacaroteen = 200 µg RE, de rest is retinol
+      expect(supplementRetinol({'vit_a': 800, 'beta_carotene': 1200}, 'Multi'), 600);
+      expect(supplementRetinol({'vit_a': 800, 'retinol': 400}, 'Multi'), 400);
+      expect(supplementRetinol({'vit_d': 25}, 'Vitamine D'), isNull);
+    });
+
+    test('5. een week met één dag 100 g lever en een retinolsupplement: waarschuwing; met bètacaroteen niet', () {
+      final t = targetsFor(const Profile(), year: 2026);
+      expect(t['retinol']!.upper, 3000);
+      final liver = ref('usda_sr:169451'); // runderlever, 4948 µg retinol
+      List<String> tips(Supplement? supp) {
+        final user = UserDb(sqlite3.openInMemory());
+        final app = AppState(foods: s.foods, user: user);
+        final days = [for (var d = 12; d <= 18; d++) '2026-10-$d'];
+        user.addEntry(day: days.first, meal: Meal.dinner, food: liver, grams: 100, quantity: 1);
+        if (supp != null) {
+          for (final d in days) {
+            user.setSupplementTaken(d, supp, true);
+          }
+        }
+        final week = [
+          for (final d in days)
+            (
+              NutrientTotals(
+                {
+                  for (final k in stripKeys) k: (t[k]!.goal ?? 0) * 1.0,
+                  'energy': t['energy']!.goal!,
+                  'protein': t['protein']!.goal!,
+                  'fiber': 32,
+                  'sodium': 1600,
+                  'retinol': app.totalsOf(user.entriesFor(d))['retinol'],
+                },
+                const {},
+                const {},
+                10,
+              ),
+              t,
+            ),
+        ];
+        return healthCheck(week, weightKg: 75)!.factors.firstWhere((f) => f.key == 'micro').tips;
+      }
+
+      const retinyl = Supplement(id: 'c-a', name: 'Vitamine A (retinylpalmitaat) 2400 µg', dose: '1 capsule', nutrients: {'energy': 0, 'vit_a': 2400});
+      const carotene = Supplement(id: 'c-b', name: 'Bètacaroteen 15 mg', dose: '1 capsule', nutrients: {'energy': 0, 'vit_a': 2400});
+      // Lever één keer per week, zonder supplement: gemiddeld ~700 µg, geen waarschuwing
+      expect(tips(null).join(' '), isNot(contains('retinol')));
+      // Met 2400 µg retinol per dag: gemiddeld ~3100 µg, boven de bovengrens
+      expect(tips(retinyl).join(' '), contains('retinol'));
+      // Bètacaroteen telt mee voor vitamine A, niet voor retinol
+      expect(tips(carotene).join(' '), isNot(contains('retinol')));
+    });
+
+    test('6. verse spirulina: jodium geschat uit gedroogde spirulina (per gram droge stof), niet uit zeewier', () {
+      final fresh = ref('ciqual:20982');
+      expect(fresh.per100g['iodine'], isNotNull);
+      expect(fresh.per100g['iodine']!, lessThan(10));
+      expect(fresh.estimated['iodine'], '~ciqual:11086');
     });
   });
 }

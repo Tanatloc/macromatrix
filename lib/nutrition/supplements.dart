@@ -57,6 +57,32 @@ class Supplement {
   );
 }
 
+/// Bètacaroteen (provitamine A) in de naam: dan is de vitamine A van het supplement geen retinol.
+final _carotene = RegExp(r'carot|karot|provitamin', caseSensitive: false);
+
+/// Voorgevormd retinol (µg) in een supplement, voor de EFSA-bovengrens (zie `targetsFor`, 'retinol').
+///
+/// Een etiket vermeldt "vitamine A" in µg RE. In supplementen is dat bijna altijd voorgevormd: retinylacetaat of
+/// -palmitaat, "vitamine A (retinol)", ook in een multivitamine. Alleen bètacaroteen (in de naam, of apart ingevuld)
+/// is het niet: dat telt mee voor vitamine A, niet voor retinol (geen bovengrens, het lichaam zet het naar behoefte
+/// om). Staat er bètacaroteen naast vitamine A, dan telt vitamine A min bètacaroteen / 6 (1 µg RE = 6 µg). Een zelf
+/// ingevuld retinol gaat altijd voor. Null als er geen vitamine A in zit.
+double? supplementRetinol(Map<String, double> nutrients, String name) {
+  if (nutrients['retinol'] case final r?) return r;
+  final a = nutrients['vit_a'];
+  if (a == null || a <= 0) return null;
+  if (_carotene.hasMatch(name)) return 0;
+  final bc = nutrients['beta_carotene'] ?? 0;
+  return (a - bc / 6).clamp(0, a).toDouble();
+}
+
+/// De waarden van een supplementregel zoals ze tellen: met [supplementRetinol] als 'retinol'.
+Map<String, double> withSupplementRetinol(Map<String, double> nutrients, String name) {
+  if (nutrients.containsKey('retinol')) return nutrients;
+  final r = supplementRetinol(nutrients, name);
+  return r == null ? nutrients : {...nutrients, 'retinol': r};
+}
+
 /// Veelgebruikte supplementen. Hoeveelheden zijn typische Europese doseringen; kies "Eigen supplement" als je
 /// etiket anders is.
 const supplementCatalog = [

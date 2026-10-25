@@ -11,7 +11,6 @@ import '../../data/user_db.dart';
 import '../../nutrition/food_groups.dart';
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
-import '../../nutrition/values.dart';
 import '../../platform/platform.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
@@ -1021,7 +1020,9 @@ class _ResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.read<AppState>();
     final p = context.pal;
-    final v = withDerived(food.per100g);
+    // Zoals het telt (B3 als niacine-equivalenten bij een etiket, zie niacin.dart)
+    final v = s.per100gWithSugars(food);
+    final estimated = s.estimatedOf(food);
     final sub = [if (food.brand != null && food.brand!.isNotEmpty) food.brand!, ?food.localName, food.source.label].join(' · ');
 
     // Wat 100 g bijdraagt aan je tekorten, waarschuwingen voor limieten, en omega-3 als het opvalt
@@ -1037,7 +1038,7 @@ class _ResultCard extends StatelessWidget {
     for (final n in lows) {
       final g = s.targets[n.key]?.goal;
       final f = g == null || g <= 0 ? 0 : (v[n.key] ?? 0) / g;
-      if (f >= 0.15) tags.add(Tag('+ ${shortName(n)} ${food.estimated.containsKey(n.key) ? '≈ ' : ''}${fmtPct(f.toDouble())}', kind: TagKind.gap));
+      if (f >= 0.15) tags.add(Tag('+ ${shortName(n)} ${estimated.containsKey(n.key) ? '≈ ' : ''}${fmtPct(f.toDouble())}', kind: TagKind.gap));
     }
     for (final k in const ['sodium', 'sfa']) {
       final max = s.targets[k]?.upper;

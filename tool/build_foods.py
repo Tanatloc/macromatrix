@@ -449,7 +449,8 @@ CHANGES = {k: 0 for k in ('cofid_carbs', 'cofid_starch', 'cofid_sugars', 'cofid_
                           'cofid_carbs_unsplit_starchy', 'cofid_fiber_nsp', 'vit_a_re_from_rae', 'vit_a_re_computed',
                           'retinol_derived', 'tryptophan_dropped', 'tryptophan_supported', 'niacin_ne_source',
                           'niacin_ne_source_incomplete', 'niacin_ne_trp', 'niacin_ne_trp_estimated',
-                          'niacin_preformed_only', 'outliers_dropped', 'outliers_kept', 'outliers_same_food')}
+                          'niacin_preformed_only', 'outliers_dropped', 'outliers_kept', 'outliers_same_food',
+                          'mvt_below_loq', 'zero_not_measured', 'loq_half', 'est_same_food_scaled')}
 
 
 def cofid_carbs_to_weight(n):
@@ -624,6 +625,8 @@ MVT = {
     # Niacine-equivalenten zoals Matvaretabellen ze zelf publiceert (mg), zie niacin_ne
     'NIAEQ': '_ne',
 }
+# Matvaretabellen-bron (sourceId) van een 0 onder de meetgrens (https://www.matvaretabellen.no/api/en/sources.json)
+MVT_BELOW_LOQ = '60a'
 
 
 def mvt_rows(root):
@@ -644,6 +647,10 @@ def mvt_rows(root):
             key = MVT.get(c.get('nutrientId'))
             if key and c.get('quantity') is not None:
                 n[key] = float(c['quantity'])
+                # Bron 60a = "Estimated as zero value when the analysed value is below the limit of quantification":
+                # geen echte 0 maar onder de meetgrens, zoals "<" bij CIQUAL (zie mvt_below_loq)
+                if c.get('sourceId') == MVT_BELOW_LOQ and n[key] == 0 and key in SANITY_MICROS:
+                    n.setdefault('_loq60', set()).add(key)
         # Matvaretabellen geeft vitamine A als RAE (retinol + bètacaroteen / 12): naar RE (zie VIT_A_BC)
         if 'vit_a' in n:
             if 'retinol' not in n:
@@ -946,6 +953,80 @@ def plant_zeros(r):
             r.setdefault('bio0', set()).add(k)
             z += 1
     return z
+
+
+# Een 0 die geen 0 is. Calcium, ijzer, magnesium, kalium, fosfor en zink zitten in elke plantaardige en dierlijke cel
+# (celwanden, bladgroen, enzymen, bloed, botten): in een enkelvoudig, onbewerkt voedingsmiddel uit de groepen hieronder
+# is een 0 in de bron een waarde onder de meetgrens of niet gemeten, nooit echt nul. Selenium ook bij vlees en vis
+# (dieren hebben het nodig, planten niet: seleenarme grond geeft echt bijna geen selenium in granen en groenten).
+# Zo'n 0 telt als ontbrekend en wordt geschat (en als geschat getoond), zoals elke ontbrekende waarde.
+# Witte langkorrelrijst van Matvaretabellen had calcium 0, ijzer 0 en selenium 0 (USDA 10 mg, 0,2 mg en 7,5 µg).
+# Niet bij fruit, eiwit van ei en paddenstoelen: daar ligt een deel van deze mineralen echt rond de meetgrens (zink in
+# appel 0,02 mg, ijzer in eiwit 0,08 mg), en 0 is een eerlijke afronding. Niet bij zetmeel (maïszetmeel, aardappel-
+# zetmeel, arrowroot: de mineralen zijn uitgewassen) en uitgeloogde of nagemaakte producten (lutefisk, zeewierkaviaar).
+ZERO_MINERALS = ('calcium', 'iron', 'magnesium', 'potassium', 'phosphorus', 'zinc')
+ZERO_PLANT_GROUPS = {'cereal', 'rice', 'pasta', 'bread', 'breakfast cereal', 'legume', 'vegetable', 'potato/tuber', 'nut/seed'}
+ZERO_ANIMAL_GROUPS = {'meat', 'poultry', 'offal', 'fish', 'shellfish'}
+ZERO_EXCEPT = re.compile(r'\b(lute?fisk|alkaline cured|seaweed caviar)\b', re.I)
+
+
+# Matvaretabellen zet een meting onder de meetgrens op 0 (bron 60a, zie MVT_BELOW_LOQ), zonder de grens. Bij een
+# enkelvoudig voedingsmiddel (geen gerecht, geen mengsel: KIN_GROUPS en SINGLE_EXTRA_GROUPS) behandelen we zo'n 0 als "onder de
+# meetgrens" zoals bij CIQUAL: eerst aanvullen uit hetzelfde voedingsmiddel in een andere databank, anders 0 (geen
+# groepsgemiddelde, dat ligt vaak boven de grens). Bij gerechten, snoep en ontbijtgranen blijft het 0: "hetzelfde
+# voedingsmiddel" is daar vaak een ander recept (snoepmix zonder chocolade kreeg zo het calcium van de mix met).
+SINGLE_EXTRA_GROUPS = {'rice', 'pasta', 'bread', 'dairy', 'processed meat'}
+
+
+def mvt_below_loq(rows, labels):
+    single = KIN_GROUPS | SINGLE_EXTRA_GROUPS
+    for r in rows:
+        if not r['below_loq']:
+            continue
+        l = labels.get(f"{r['source']}:{r['sid']}")
+        if not l or l['d'] or l['k'] == 'mixed' or l['g'] not in single:
+            continue
+        for k in sorted(r['below_loq']):
+            if r['nut'].get(k) == 0:
+                r['nut'].pop(k)
+                r['loq'][k] = 0.0
+                CHANGES['mvt_below_loq'] += 1
+
+
+def zeros_not_measured(rows, labels):
+    """Een 0 voor ZERO_MINERALS (en selenium bij vlees en vis) in een enkelvoudig voedingsmiddel weglaten, zodat ze
+    geschat wordt (zie uitleg hierboven). Een correctie in food_fixes.json gaat altijd voor."""
+    fixed = json.loads(FIXES_FILE.read_text())['fixes'] if FIXES_FILE.exists() else {}
+    for r in rows:
+        ref = f"{r['source']}:{r['sid']}"
+        l = labels.get(ref)
+        if not l:
+            continue
+        # Selenium 0 in een plant: echt (seleenarme grond, vooral Scandinavië) of onder de meetgrens, maar het hangt
+        # af van waar het groeide. Blijft staan, maar is geen donor voor een ander product (Amerikaanse gekookte rijst
+        # kreeg zo 0 µg van de Noorse, USDA meet 7,5 µg in langkorrelrijst).
+        if l['g'] in ZERO_PLANT_GROUPS and not l['d'] and l['k'] in ('plant', 'algae') and r['nut'].get('selenium') == 0:
+            r['nodonor'].add('selenium')
+        if l['d'] or l['p'] == 'starch' or ZERO_EXCEPT.search(r['name']):
+            continue
+        if l['g'] in ZERO_PLANT_GROUPS and l['k'] in ('plant', 'algae'):
+            keys = ZERO_MINERALS
+        elif l['g'] in ZERO_ANIMAL_GROUPS and l['k'] == 'animal':
+            keys = ZERO_MINERALS + ('selenium',)
+        else:
+            continue
+        for k in keys:
+            if k in fixed.get(ref, {}):
+                continue
+            # Ook een 0 "onder de meetgrens" zonder grens (Matvaretabellen 60a): die zou anders weer 0 worden
+            if r['nut'].get(k) == 0 or r['loq'].get(k) == 0:
+                r['nut'].pop(k, None)
+                r['loq'].pop(k, None)
+                CHANGES['zero_not_measured'] += 1
+            elif r['loq'].get(k):
+                # Onder een bekende meetgrens (CIQUAL "<"): eerst aanvullen uit hetzelfde voedingsmiddel, anders de
+                # helft van de grens in plaats van 0, zoals bij de hoofdbestanddelen (zie main)
+                r.setdefault('loq_half', set()).add(k)
 
 
 def consistency(r):
@@ -1267,7 +1348,11 @@ C_CLASS = {'raw': 'raw', 'frozen': 'raw', 'boiled': 'wet', 'stewed': 'wet', 'ste
            'cooked': 'wet', 'baked': 'dry', 'roasted': 'dry', 'grilled': 'dry', 'fried': 'dry', 'deep-fried': 'dry'}
 SIG_FLAGS = {'salted', 'unsalted', 'with bone', 'sweetened', 'fortified', 'reduced fat', 'lean', 'full fat', 'breaded', 'in oil', 'in water',
              'in syrup', 'in juice', 'in brine', 'in sauce', 'diet', 'infant', 'with skin', 'without skin',
-             'decaffeinated', 'instant'}
+             'decaffeinated', 'instant', 'parboiled'}
+# Voorgekookte rijst (parboiled, "pre-boiled", "easy cook") is geweekt en gestoomd vóór het pellen: ze neemt calcium
+# op uit het weekwater (71 mg tegenover 9-28 mg in gewone witte rijst, USDA en CIQUAL) en houdt meer B1. Een eigen
+# vlag (in de labels staat het niet), zodat gewone rijst niet aangevuld wordt uit voorgekookte en omgekeerd.
+PARBOILED = re.compile(r'\b(parboiled|pre-?boiled|easy cook)\b', re.I)
 FORTIF = {'b12', 'vit_d', 'calcium', 'iron', 'b1', 'b2', 'b3', 'b6', 'b9', 'vit_c', 'vit_a', 'vit_e', 'zinc', 'iodine'}
 
 
@@ -1519,7 +1604,7 @@ def sanity_pass(rows, labels=None):
     # ook als ze ver van de groep ligt (lamslever met 15 000 µg vitamine A tegenover de mediaan van alle orgaanvlees)
     labels = labels or {}
     foods = [(labels.get(f"{r['source']}:{r['sid']}") or {}).get('f') for r in rows]
-    same = {}
+    same, same_basis = {}, {}
     for r, f in zip(rows, foods):
         key = (r['source'], r['category'] or '')
         g = groups.setdefault(key, {})
@@ -1529,12 +1614,24 @@ def sanity_pass(rows, labels=None):
                 if f and k not in r.get('bio0', ()):
                     lo, hi = same.get((f, k), (r['nut'][k], r['nut'][k]))
                     same[(f, k)] = (min(lo, r['nut'][k]), max(hi, r['nut'][k]))
+                    # Ook per gram basis (vetvrije droge stof, vet of eiwit, zie _basis): een schatting uit gedroogde
+                    # spirulina voor verse is per 100 g 10× lager, per gram droge stof dezelfde
+                    b = _basis(k, r['nut'])
+                    if b and b > (0.5 if k in FATTY or k in AMINO else 3):
+                        x = r['nut'][k] / b
+                        lo, hi = same_basis.get((f, k), (x, x))
+                        same_basis[(f, k)] = (min(lo, x), max(hi, x))
 
     def drop(r, k):
         r['nut'].pop(k, None)
         r['est'].pop(k, None)
 
     food_of = {id(r): f for r, f in zip(rows, foods)}
+    whole_plant = {}
+    for r in rows:
+        l = labels.get(f"{r['source']}:{r['sid']}") or {}
+        whole_plant[id(r)] = bool(l) and l['k'] in ('plant', 'algae', 'fungus') and l['g'] in KIN_GROUPS \
+            and not l['d'] and not _fortified(l)
     dier = plant = est_outlier = 0
     for r in rows:
         n, est, name, cat = r['nut'], r['est'], r['name'], r['category']
@@ -1568,6 +1665,14 @@ def sanity_pass(rows, labels=None):
             if lo is not None and lo / 2 <= n[k] <= hi * 2:
                 continue
             if ratio > 20 or ratio < 1 / 20:
+                # Een enkelvoudig plantaardig voedingsmiddel (of alg, paddenstoel) dat alleen in water verschilt van
+                # de metingen (vers tegenover gedroogd): het bereik per gram basis telt (verse spirulina, jodium)
+                lo, hi = same_basis.get((food_of[id(r)], k), (None, None))
+                b = _basis(k, n)
+                if (lo is not None and whole_plant[id(r)] and b and b > (0.5 if k in FATTY or k in AMINO else 3)
+                        and lo / 2 <= n[k] / b <= hi * 2):
+                    CHANGES['est_same_food_scaled'] += 1
+                    continue
                 drop(r, k)
                 est_outlier += 1
     return dier, plant, est_outlier
@@ -1796,7 +1901,9 @@ def outlier_pass(rows, labels, report=None, extra_lines=()):
             '(zelfde labelgroep en hoofdwoord, of hetzelfde Latijnse geslacht), omgerekend naar dit product; bij '
             'tryptofaan het aandeel van het eiwit. Alle = 99,9e percentiel van alle producten. Weggelaten waarden worden '
             'daarna geschat zoals elke ontbrekende waarde. Behouden staat met de reden in `tool/outlier_keep.json` (en is '
-            'nooit donor bij het aanvullen), of wordt gesteund door een andere databank.\n\n'
+            'nooit donor bij het aanvullen), of wordt gesteund door een andere databank. Fouten die deze toetsen net '
+            'missen (harder `ciqual:26091` met 168 µg selenium, 4× de andere harders; rode paprika `frida:38` met 70 µg '
+            'molybdeen), staan met de reden in `tool/food_fixes.json`.\n\n'
             '| product | naam | groep | stof | waarde | referentie | alle | wat |\n|---|---|---|---|---|---|---|---|\n'
             + '\n'.join(sorted(lines)) + '\n')
     return dropped, kept
@@ -1938,13 +2045,14 @@ def main(root, target):
     rows = []
     for gen in (ciqual_rows, slv_rows, mvt_rows, frida_rows, cofid_rows, usda_rows):
         for source, sid, name, local, category, raw, portions in gen(root):
-            loq, retinol, ne, unsplit = {}, None, None, False
+            loq, retinol, ne, unsplit, below_loq = {}, None, None, False, set()
             if source.startswith('usda'):
                 if category in USDA_SKIP_CATEGORIES:
                     continue
                 nut = usda_nutrients(raw)
             else:
                 loq = raw.pop('_loq', {})
+                below_loq = raw.pop('_loq60', set())
                 # Vitamine A die we zelf uit retinol + bètacaroteen berekenen: na het aanvullen van bètacaroteen opnieuw
                 retinol = (raw.get('retinol', 'unknown')) if 'vit_a' not in raw else None
                 # Niacine-equivalenten zoals de bron ze gaf (CoFID, Frida, Livsmedelsverket), zie niacin_ne
@@ -1957,13 +2065,19 @@ def main(root, target):
                 continue
             rows.append({'source': source, 'sid': sid, 'name': name, 'local': local, 'category': category,
                          'nut': nut, 'est': {}, 'portions': portions, 'loq': loq, 'retinol': retinol, 'ne': ne,
-                         'unsplit': unsplit, 'nodonor': set()})
+                         'unsplit': unsplit, 'nodonor': set(), 'below_loq': below_loq})
 
     print(f'correcties uit {FIXES_FILE.name}: {apply_fixes(rows)} waarden')
     for r in rows:
         validate_measured(r)
     labels = {} if os.environ.get('NOLABELS') else load_labels()
+    for r in rows:
+        l = labels.get(f"{r['source']}:{r['sid']}")
+        if l and l['g'] == 'rice' and PARBOILED.search(r['name']) and 'parboiled' not in l['fl']:
+            l['fl'].append('parboiled')
     cofid_unsplit_carbs(rows, labels)
+    mvt_below_loq(rows, labels)
+    zeros_not_measured(rows, labels)
     # Vóór het aanvullen: een foute meting mag niet doorgegeven worden aan andere producten
     trp_lines = tryptophan_check(rows, labels)
     dropped, kept = outlier_pass(rows, labels, report=None if os.environ.get('HOLDOUT') else OUTLIER_REPORT,
@@ -1994,6 +2108,11 @@ def main(root, target):
     for r in rows:
         for k in r['loq']:
             if k not in r['nut'] and not k.startswith('_'):
+                # Waar 0 niet kan (zeros_not_measured): de helft van de meetgrens
+                if k in r.get('loq_half', ()):
+                    r['nut'][k] = r['loq'][k] / 2
+                    CHANGES['loq_half'] += 1
+                    continue
                 r['nut'][k] = 0.0
                 zero += 1
     print(f'onder de meetgrens, op 0 gezet: {zero} waarden')
