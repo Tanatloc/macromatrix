@@ -738,6 +738,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
+          // Je tempo vraagt minder dan gezond is: het doel blijft op de bodem (zie energyFloor)
+          if (energyFloored(p, year, tdee: s.adaptiveTdee))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _floorNote(p, year, s.adaptiveTdee),
+                key: const ValueKey('energy-floor-note'),
+                style: TextStyle(fontSize: 12, height: 1.4, color: pal.high),
+              ),
+            ),
           const SizedBox(height: 10),
           TextField(
             controller: _energy,
@@ -792,6 +802,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  /// Waarom het dagdoel hoger ligt dan je tempo vraagt: nooit onder je ruststofwisseling en 1200 (vrouwen) of 1500
+  /// kcal (mannen), en nooit boven je onderhoud.
+  String _floorNote(Profile p, int year, double? tdee) {
+    final floor = energyFloor(p, year, tdee: tdee);
+    final minimum = math.max(bmr(p, p.ageIn(year)), minimumKcal(p.sex));
+    if (floor < minimum.roundToDouble()) {
+      return tr(
+        'Your goal stays at your maintenance (${fmtInt(floor)} kcal): eating less than ${fmtInt(minimum)} kcal a day is too little to get enough nutrients.',
+        'Je doel blijft op je onderhoud (${fmtInt(floor)} kcal): minder dan ${fmtInt(minimum)} kcal per dag eten is te weinig om genoeg voedingsstoffen binnen te krijgen.',
+      );
+    }
+    return tr(
+      'Your pace asks for less, but the app keeps your goal at ${fmtInt(floor)} kcal: less is too little to get enough nutrients. You will lose weight a bit more slowly.',
+      'Je tempo vraagt minder, maar de app houdt je doel op ${fmtInt(floor)} kcal: minder is te weinig om genoeg voedingsstoffen binnen te krijgen. Je valt wat trager af.',
     );
   }
 

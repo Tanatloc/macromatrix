@@ -99,24 +99,36 @@ class Profile {
 
   /// Tempo dat het plan vandaag vraagt: wat er nog rest gedeeld door de weken tot de datum, zonder plafond.
   /// 0 als het doel bereikt is. null zonder plan.
-  double? get planRate {
+  double? get planRate => planRateOn(logicalNow());
+
+  /// Tempo dat het plan op [day] vroeg, gerekend vanaf die dag tot de datum: zo verandert het doel van een vroegere
+  /// dag niet meer naarmate de datum dichterbij komt. Is de datum op [day] al voorbij, dan het standaardtempo van het
+  /// doel (en niet het hoogste tempo) tot je een nieuwe datum kiest.
+  double? planRateOn(DateTime day) {
     if (!hasPlan) return null;
     final left = targetWeightKg! - weightKg;
     if (goal == Goal.lose ? left > -0.05 : left < 0.05) return 0;
-    final days = daysBetween(logicalNow(), targetDate!);
+    final days = daysBetween(day, targetDate!);
+    if (days <= 0) return rateKgPerWeek ?? goal.defaultRate;
     return left / (days < 7 ? 1 : days / 7);
   }
 
   /// Tempo dat geldt: bij "behouden" altijd 0; met een plan uit het plan, begrensd tot een gezond tempo.
-  double get rate {
+  double get rate => rateOn(logicalNow());
+
+  /// Zoals [rate], voor het plan zoals het op [day] gold.
+  double rateOn(DateTime day) {
     if (goal == Goal.maintain) return 0;
-    final plan = planRate;
+    final plan = planRateOn(day);
     if (plan != null) return goal == Goal.lose ? plan.clamp(-maxLoss, 0) : plan.clamp(0, maxGain);
     return rateKgPerWeek ?? goal.defaultRate;
   }
 
   /// Dagelijks overschot of tekort voor het gekozen tempo.
-  double get goalKcal => rate * kcalPerKg / 7;
+  double get goalKcal => goalKcalOn(logicalNow());
+
+  /// Zoals [goalKcal], voor [day].
+  double goalKcalOn(DateTime day) => rateOn(day) * kcalPerKg / 7;
 
   int ageIn(int year) => year - birthYear;
 
@@ -219,8 +231,30 @@ double exerciseInActivity(Profile p, int year) => bmr(p, p.ageIn(year)) * (p.act
 /// Hoeveel kg per week je ongeveer verandert als je [kcal] per dag eet bij een verbruik van [tdee] (negatief = afvallen).
 double impliedRate(double kcal, double tdee) => (kcal - tdee) * 7 / kcalPerKg;
 
-/// Energiebehoefte per dag inclusief activiteit en doel. [tdee] = verbruik uit een andere bron (adaptief).
-double energyTarget(Profile p, int year, {double? tdee}) => p.energyOverride ?? ((tdee ?? formulaTdee(p, year)) + p.goalKcal).roundToDouble();
+/// Minimum om genoeg voedingsstoffen binnen te krijgen (kcal per dag): 1500 voor mannen, 1200 voor vrouwen. Dezelfde
+/// grens als bij het kiezen van een doelgewicht (`WeightPlan.of`).
+double minimumKcal(Sex sex) => sex == Sex.male ? 1500 : 1200;
+
+/// Bodem onder een berekend energiedoel bij afvallen: minstens je ruststofwisseling en minstens [minimumKcal]. Nooit
+/// boven je onderhoud [tdee]: wie minder verbruikt dan die grens, krijgt zijn onderhoud en geen overschot.
+double energyFloor(Profile p, int year, {double? tdee}) {
+  final maintain = (tdee ?? formulaTdee(p, year)).roundToDouble();
+  return math.max(0, math.min(math.max(bmr(p, p.ageIn(year)), minimumKcal(p.sex)).roundToDouble(), maintain));
+}
+
+/// Energiedoel zonder bodem (verbruik plus het tekort of overschot van je doel op [day]).
+double _rawEnergy(Profile p, int year, double? tdee, DateTime? day) =>
+    ((tdee ?? formulaTdee(p, year)) + p.goalKcalOn(day ?? logicalNow())).roundToDouble();
+
+/// Energiebehoefte per dag inclusief activiteit en doel. [tdee] = verbruik uit een andere bron (adaptief). [day] = de
+/// dag waarvoor het doel geldt (standaard vandaag): het tempo van een plan met een datum hangt daarvan af. Een
+/// berekend doel zakt nooit onder [energyFloor]; een eigen doel blijft zoals je het typte.
+double energyTarget(Profile p, int year, {double? tdee, DateTime? day}) =>
+    p.energyOverride ?? math.max(_rawEnergy(p, year, tdee, day), energyFloor(p, year, tdee: tdee));
+
+/// Houdt de bodem ([energyFloor]) het berekende doel op [day] tegen? Dan geeft het scherm uitleg.
+bool energyFloored(Profile p, int year, {double? tdee, DateTime? day}) =>
+    p.energyOverride == null && _rawEnergy(p, year, tdee, day) < energyFloor(p, year, tdee: tdee);
 
 /// Minimum eiwit per kg lichaamsgewicht (EFSA PRI voor volwassenen).
 const proteinMinPerKg = 0.83;
@@ -305,13 +339,17 @@ double retinolUpperLimit(int age) => switch (age) {
 /// Richtwaarden voor een profiel. [extraKcal] = verbrande energie door beweging die bij het doel komt.
 ///
 /// [proteinGoal] = een eigen eiwitdoel: koolhydraten en vet verdelen dan wat na dat eiwit overblijft.
-Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal = 0, double? tdee, double? proteinGoal}) {
+///
+/// [day] = de dag waarvoor de doelen gelden (standaard vandaag), zie [energyTarget].
+Map<String, Target> targetsFor(Profile p, {required int year, double extraKcal = 0, double? tdee, double? proteinGoal, DateTime? day}) {
   final age = p.ageIn(year);
   final male = p.sex == Sex.male;
-  final kcal = energyTarget(p, year, tdee: tdee) + extraKcal;
+  // Nooit negatief: ook de doelen die van energie afhangen (eiwit, vetten, B1, B3) blijven zo 0 of meer
+  final base = math.max(0.0, energyTarget(p, year, tdee: tdee, day: day));
+  final kcal = base + math.max(0.0, extraKcal);
   // Energieafhankelijke vitaminen (B1, B3) rekenen we op je basisdoel, niet op de extra van een training:
   // je behoefte stijgt niet merkbaar door één work-out, en zo schieten ze niet boven de veilige grens.
-  final mj = math.min(kcal, energyTarget(p, year, tdee: tdee)) * 4.184 / 1000;
+  final mj = base * 4.184 / 1000;
   final kg = p.weightKg;
   // Essentiële aminozuren: mg per kg lichaamsgewicht -> g per dag
   Target aa(double mgPerKg) => Target(goal: mgPerKg * kg / 1000);

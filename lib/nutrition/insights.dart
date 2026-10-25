@@ -101,17 +101,19 @@ int completenessScore(NutrientMap values, Map<String, Target> targets) {
   var sum = 0.0, n = 0;
   for (final k in stripKeys) {
     final t = targets[k];
-    if (t == null || (t.goal == null && t.upper == null)) continue;
+    // Een doel van 0 (of minder) is geen doel: niet delen door 0 (zoals [fractionOf])
+    final goal = (t?.goal ?? 0) > 0 ? t!.goal : null;
+    if (t == null || (goal == null && t.upper == null)) continue;
     final v = values[k] ?? 0;
     double s;
     if (t.upper != null && v > t.upper!) {
       s = t.upper! / v;
-    } else if (t.goal == null) {
+    } else if (goal == null) {
       // Alleen een bovengrens, geen streefwaarde: bij nul inname telt dit niet mee als "gehaald".
       if (v <= 0) continue;
       s = 1;
     } else {
-      s = math.min(1, v / t.goal!);
+      s = math.min(1, v / goal);
     }
     sum += s;
     n++;
@@ -167,7 +169,7 @@ int dayScore(NutrientMap values, Map<String, Target> targets, {bool closed = tru
       true,
     );
   }
-  final h = hour ?? DateTime.now().hour;
+  final h = hour ?? appClock().hour;
   final late = h >= 20 || h < dayStartHour;
   if (gap.abs() <= goal * energyScoreBand || (under && !late)) return null;
   return (
@@ -352,7 +354,7 @@ class WeightPlan {
     final rate = (target - current) / weeks;
     final change = rate * kcalPerKg / 7;
     final kcal = tdee + change;
-    final minimum = male ? 1500.0 : 1200.0;
+    final minimum = minimumKcal(male ? Sex.male : Sex.female);
     final bmi = heightCm == null || heightCm <= 0 ? null : target / ((heightCm / 100) * (heightCm / 100));
     final underweight = bmi != null && bmi < 18.5 && target < current;
     return WeightPlan._(weeks, rate, change, kcal, unsafe: kcal < minimum || underweight, [

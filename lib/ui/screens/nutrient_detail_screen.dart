@@ -126,12 +126,16 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     final upper = TextEditingController(text: current?.upper == null ? '' : _plain(current!.upper!));
     double? parse(TextEditingController c) => parseNum(c.text);
     String? goalError, upperError;
-    // Leeg mag (geen grens), maar geen tekst, geen negatief getal en geen minimum boven het maximum
+    // Leeg mag (geen grens), maar geen tekst, geen negatief getal en geen minimum boven het maximum. Een minimum van 0
+    // is geen doel (en zou elke score door 0 laten delen): dan liever leeg laten.
     bool validate() {
       String? check(TextEditingController c) => c.text.trim().isEmpty ? null : rangeError(c.text, 0, 1e6, unit: n.unit);
       goalError = check(goal);
       upperError = check(upper);
       final g = parse(goal), u = parse(upper);
+      if (goalError == null && g != null && g <= 0) {
+        goalError = tr('Must be more than 0 (empty = no minimum)', 'Moet meer dan 0 zijn (leeg = geen minimum)');
+      }
       if (goalError == null && upperError == null && g != null && u != null && g > u) {
         upperError = tr('Must be at least the minimum (${_plain(g)} ${n.unit})', 'Moet minstens het minimum zijn (${_plain(g)} ${n.unit})');
       }

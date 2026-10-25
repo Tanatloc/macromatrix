@@ -250,6 +250,7 @@ class AppState extends ChangeNotifier {
       year: _date.year,
       extraKcal: _extraKcal(burnedKcal, profileFor(_date), _date.year, _frozenFor(_date)?.$2),
       tdee: adaptiveTdee,
+      day: _date,
     );
   }
 
@@ -282,6 +283,7 @@ class AppState extends ChangeNotifier {
       extraKcal: _extraKcal(burned, p, d.year, settings),
       tdee: adaptiveTdee,
       proteinGoal: settings.overrides['protein']?.goal,
+      day: d,
     );
     final out = {...t, ...settings.overrides}..removeWhere((k, _) => hiddenNutrients.contains(k));
     // Vrije suikers zijn een deel van alle suikers: hun grens ligt nooit hoger dan een eigen grens voor alle suikers
@@ -293,6 +295,17 @@ class AppState extends ChangeNotifier {
   DateTime get _today => _dateOnly(logicalNow());
 
   double _burnedOn(DateTime d) => d == _date ? burnedKcal : user.exerciseFor(dayKey(d)).fold(0.0, (a, e) => a + e.kcal);
+
+  /// Richtwaarden voor een dag met de beweging van die dag erbij, zoals Vandaag en Trends ze tonen. Voor elke score
+  /// van een dag (XP en battlepunten, weekrapport, weekscore, overzichten, uitdagingen): zo krijgt een dag met
+  /// beweging overal dezelfde score. Voor een reeks dagen: [targetsBetween].
+  Map<String, Target> targetsWithExercise(DateTime d) => targetsForDate(d, burned: _burnedOn(d));
+
+  /// [targetsWithExercise] voor de dagen [days] (dagsleutels van [from] tot en met [to]), met één vraag voor de beweging.
+  Map<String, Map<String, Target>> _targetsWithExerciseFor(Iterable<String> days, DateTime from, DateTime to) {
+    final burned = user.exerciseKcalBetween(dayKey(from), dayKey(to));
+    return {for (final d in days) d: targetsForDate(parseDay(d), burned: burned[d] ?? 0)};
+  }
 
   /// Doelen van vandaag, los van de dag die op Vandaag of het Dashboard openstaat: het Profiel toont altijd deze.
   Map<String, Target> get todayTargets => _date == _today ? _targets : targetsForDate(_today, burned: _burnedOn(_today));
@@ -865,13 +878,15 @@ class AppState extends ChangeNotifier {
         if (!e.foodRef.startsWith('supp:')) e,
     ];
     if (entries.isEmpty) return null;
-    final daily = dailyTotals(from, end);
+    // Alleen dagen met eten: een dag met enkel (automatische) supplementen is geen gelogde dag
+    final daily = dailyTotals(from, end, foodOnly: true);
+    final targets = _targetsWithExerciseFor(daily.keys, from, end);
     final scores = <String, int>{};
     final dayKcal = <String, double>{};
     final sums = <String, double>{};
     var kcal = 0.0, goalKcal = 0.0, protein = 0.0, carbs = 0.0, fat = 0.0;
     for (final e in daily.entries) {
-      final t = targetsForDate(DateTime.parse(e.key));
+      final t = targets[e.key]!;
       scores[e.key] = dayScore(e.value.values, t, closed: e.key.compareTo(dayKey(today)) < 0);
       dayKcal[e.key] = e.value.values['energy'] ?? 0;
       kcal += e.value.values['energy'] ?? 0;
@@ -957,14 +972,15 @@ class AppState extends ChangeNotifier {
         if (!e.foodRef.startsWith('supp:')) e,
     ];
     if (entries.isEmpty) return null;
-    final daily = dailyTotals(from, end);
+    final daily = dailyTotals(from, end, foodOnly: true);
+    final targets = _targetsWithExerciseFor(daily.keys, from, end);
     final sums = {for (final k in recapHeatmapKeys) k: List<double>.filled(12, 0)};
     final days = List<int>.filled(12, 0);
     (DateTime, double)? bestScore, mostProtein, mostFiber;
     for (final e in daily.entries) {
       final d = DateTime.parse(e.key);
       final m = d.month - 1;
-      final t = targetsForDate(d);
+      final t = targets[e.key]!;
       final v = e.value.values;
       days[m]++;
       for (final k in recapHeatmapKeys) {
@@ -1132,6 +1148,7 @@ class AppState extends ChangeNotifier {
     week(DateTime m) {
       final end = DateTime(m.year, m.month, m.day + 6);
       final daily = dailyTotals(m, end);
+      final targets = _targetsWithExerciseFor(daily.keys, m, end);
       final scores = <int>[];
       final sums = <String, double>{}, goalSums = <String, double>{}, valueSums = <String, double>{}, upperSums = <String, double>{};
       final reached = <String, int>{};
@@ -1140,7 +1157,7 @@ class AppState extends ChangeNotifier {
       final dayScores = <String, int>{};
       var kcal = 0.0, kcalGoal = 0.0, partial = 0;
       for (final e in daily.entries) {
-        final t = targetsForDate(DateTime.parse(e.key));
+        final t = targets[e.key]!;
         if (e.key.compareTo(today) >= 0 || !isFullDay(e.value, t)) {
           partial++;
           continue;
@@ -1223,7 +1240,7 @@ class AppState extends ChangeNotifier {
     WeeklyTip? tip;
     for (final w in energyOff ? const <MapEntry<String, double>>[] : worst) {
       final goal = _targets[w.key]?.goal;
-      if (goal == null || w.key == 'energy' || w.key == 'sodium') continue;
+      if (goal == null || goal <= 0 || w.key == 'energy' || w.key == 'sodium') continue;
       final upper = _targets[w.key]?.upper;
       for (final (f, per100) in richestFor(w.key, limit: 40, advice: true)) {
         if (!isAdviceFood(f)) continue;
@@ -1232,8 +1249,9 @@ class AppState extends ChangeNotifier {
         final grams = portion?.grams ?? 100;
         final frac = per100 * grams / 100 / goal;
         if (frac < 0.25 || frac > 1.5 || (upper != null && per100 * grams / 100 > upper)) continue;
-        // Nooit een zout product (gezouten makreel, ansjovis) aanraden, en zeker niet als je al genoeg zout eet
-        if (tooSaltyForTip((withDerived(f.per100g)['sodium'] ?? 0) * grams / 100, now.avg['sodium'])) continue;
+        // Nooit een zout product (gezouten makreel, ansjovis) aanraden, en zeker niet als je al genoeg zout eet. Natrium
+        // heeft alleen een limiet: het deel daarvan staat in upperShare, niet in avg (dat alleen stoffen met een doel heeft)
+        if (tooSaltyForTip((withDerived(f.per100g)['sodium'] ?? 0) * grams / 100, now.upperShare['sodium'])) continue;
         // Een "cup" zegt een Europeaan weinig: dan gewoon de grammen
         final cup = portion != null && RegExp(r'\bcups?\b', caseSensitive: false).hasMatch(portion.label);
         tip = WeeklyTip(
@@ -2401,24 +2419,41 @@ class AppState extends ChangeNotifier {
 
   // ── Trends ──
 
-  /// Totalen per dag tussen twee dagen (alleen dagen waarop iets gegeten is).
-  Map<String, NutrientTotals> dailyTotals(DateTime from, DateTime to) {
+  /// Totalen per dag tussen twee dagen (alleen dagen waarop iets gelogd is). Met [foodOnly] alleen dagen met eten:
+  /// een dag met enkel (automatische) supplementen telt dan niet als gelogde dag (zoals bij XP en battlepunten). De
+  /// supplementen van een dag met eten tellen wel mee in de totalen.
+  Map<String, NutrientTotals> dailyTotals(DateTime from, DateTime to, {bool foodOnly = false}) {
     final byDay = <String, List<DiaryEntry>>{};
+    final withFood = <String>{};
     for (final e in user.entriesBetween(dayKey(from), dayKey(to))) {
       byDay.putIfAbsent(e.day, () => []).add(e);
+      if (!e.foodRef.startsWith('supp:')) withFood.add(e.day);
     }
-    return {for (final e in byDay.entries) e.key: NutrientTotals.sumOf(e.value.map(entryValues))};
+    return {
+      for (final e in byDay.entries)
+        if (!foodOnly || withFood.contains(e.key)) e.key: NutrientTotals.sumOf(e.value.map(entryValues)),
+    };
   }
 
   // ── Level en avatar ──
 
   LevelInfo? _level;
 
+  /// De app-dag waarvoor [_level] en [_dayStats] berekend zijn: om 03:00 sluit gisteren af (energie telt dan mee in
+  /// de score), dus dan opnieuw rekenen, net als de weekscore.
+  String? _levelDay;
+
   /// Je level en XP, uit wat je in de app logde (zie levels.dart voor de regels).
-  LevelInfo get level => _level ??= _computeLevel();
+  LevelInfo get level {
+    if (_levelDay != dayKey(logicalNow())) _level = null;
+    return _level ??= _computeLevel();
+  }
 
   LevelInfo _computeLevel() {
     final today = dayKey(logicalNow());
+    _levelDay = today;
+    // Beweging per dag: dezelfde doelen als op Vandaag en in Trends (een training verhoogt het energiedoel)
+    final burned = user.exerciseKcalBetween('0000-01-01', today);
     final byDay = <String, List<DiaryEntry>>{};
     final withFood = <String>{};
     for (final (e, created) in user.entriesWithCreatedAt()) {
@@ -2430,11 +2465,12 @@ class AppState extends ChangeNotifier {
     DayStat stat(String d) {
       final entries = byDay[d]!;
       final closed = d.compareTo(today) < 0;
-      final sig = '$_targetsVersion|$closed|${entries.map((e) => '${e.id}:${e.grams}').join(',')}';
+      final kcalBurned = burned[d] ?? 0;
+      final sig = '$_targetsVersion|$closed|$kcalBurned|${entries.map((e) => '${e.id}:${e.grams}').join(',')}';
       final hit = _dayScores[d];
       if (hit != null && hit.$1 == sig) return hit.$2;
       final v = NutrientTotals.sumOf(entries.map(entryValues)).values;
-      final t = targetsForDate(parseDay(d));
+      final t = targetsForDate(parseDay(d), burned: kcalBurned);
       bool ok(String k) => t[k] != null && levelOf(v[k] ?? 0, t[k]) == Level.ok;
       final o6 = v['omega6'], o3 = v['omega3'];
       final s = DayStat(
@@ -2568,19 +2604,21 @@ class AppState extends ChangeNotifier {
 
   ({int current, int longest}) get streak => loggingStreak(user.loggedDays(), logicalNow());
 
-  /// Gemiddelde volledigheidsscore van de week die op [monday] begint, over de dagen waarop iets gelogd is
-  /// (tot en met vandaag). Null als er die week nog niets gelogd is.
+  /// Gemiddelde volledigheidsscore van de week die op [monday] begint, over de dagen waarop iets gegeten is (tot en
+  /// met vandaag; een dag met alleen supplementen telt niet, net als bij de battlepunten). Null als er die week nog
+  /// niets gelogd is.
   ({int score, int days})? weekScore(DateTime monday) {
     final today = logicalNow();
     var end = monday.plusDays(6);
     if (end.isAfter(today)) end = today;
     if (end.isBefore(monday)) return null;
-    final daily = dailyTotals(monday, end);
+    final daily = dailyTotals(monday, end, foodOnly: true);
     if (daily.isEmpty) return null;
+    final targets = _targetsWithExerciseFor(daily.keys, monday, end);
     final todayKey = dayKey(today);
     final scores = [
       for (final e in daily.entries)
-        dayScore(e.value.values, targetsForDate(DateTime.parse(e.key)), closed: e.key.compareTo(todayKey) < 0),
+        dayScore(e.value.values, targets[e.key]!, closed: e.key.compareTo(todayKey) < 0),
     ];
     return (score: (scores.reduce((a, b) => a + b) / scores.length).round(), days: scores.length);
   }
