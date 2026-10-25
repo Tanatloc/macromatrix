@@ -21,7 +21,11 @@
         "TEST_OUTBOX_DOMAIN": "test.macromatrix.invalid",
         "EXTRA_ORIGINS": "http://localhost:8931,https://staging.macromatrix.eu"
       },
-      "triggers": { "crons": ["30 2 * * *"] },
+      // 02:30 opruimen + back-up, de 1e van de maand om 04:00 de hersteltest
+      "triggers": { "crons": ["30 2 * * *", "0 4 1 * *"] },
+      // Back-ups en de hersteltest lezen en schrijven de hele database: ruimer dan de standaard 30 s rekentijd
+      "limits": { "cpu_ms": 300000 },
+      "r2_buckets": [{ "binding": "BACKUP", "bucket_name": "macromatrix-backup-staging", "jurisdiction": "eu" }],
       // Cloudflare Email Sending (macromatrix.eu is aangemeld); alleen deze afzender
       "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["noreply@macromatrix.eu"] }],
       "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "UserHub" }] },
@@ -35,6 +39,13 @@
           "binding": "DB",
           "database_name": "macromatrix-staging",
           "database_id": "769e5567-132b-4aac-94fc-8e001d615d73",
+          "migrations_dir": "migrations"
+        },
+        // Alleen voor de maandelijkse hersteltest (wordt telkens leeggemaakt en opnieuw gevuld)
+        {
+          "binding": "RESTORE_DB",
+          "database_name": "macromatrix-restoretest",
+          "database_id": "85a276f0-3eb2-446f-9f7a-f36e71fc3a39",
           "migrations_dir": "migrations"
         }
       ]

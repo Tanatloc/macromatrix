@@ -4,7 +4,7 @@
 //   /v1/rpc/<naam>   de functies van de app
 //   /v1/live         WebSocket voor live meldingen (met een ticket van /v1/live/ticket)
 import { createAuth, WEB_ORIGINS } from './auth.js';
-import { cleanup } from './cron.js';
+import { cleanup, dailyBackup, restoreCheck } from './cron.js';
 import { DbError, errorResponse, json } from './errors.js';
 import { hubFor } from './hub.js';
 import { checkTicket, makeTicket, notifyUser } from './live.js';
@@ -93,9 +93,11 @@ async function api(request, env, ctx, url) {
 }
 
 export default {
-  /** Elke nacht opruimen (src/cron.js). */
-  async scheduled(_event, env, ctx) {
+  /** Geplande taken (src/cron.js): 's nachts opruimen en een back-up, elke maand een hersteltest. */
+  async scheduled(event, env, ctx) {
+    if (event.cron === '0 4 1 * *') return ctx.waitUntil(restoreCheck(env));
     ctx.waitUntil(cleanup(env.DB).then((r) => console.log('opruimen', JSON.stringify(r))));
+    if (env.BACKUP && env.BACKUP_KEY) ctx.waitUntil(dailyBackup(env));
   },
 
   async fetch(request, env, ctx) {

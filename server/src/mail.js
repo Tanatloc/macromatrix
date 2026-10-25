@@ -74,3 +74,18 @@ async function sendBrevo(env, { to, subject, html, text }) {
   if (!r.ok) throw new Error(`Brevo ${r.status}: ${(await r.text()).slice(0, 200)}`);
   return 'brevo';
 }
+
+/** Een waarschuwing voor de beheerder (ADMIN_EMAIL), bv. als een back-up mislukt. Platte tekst. */
+export async function sendAlert(env, subject, text) {
+  if (!env.ADMIN_EMAIL) return console.error(`waarschuwing zonder ADMIN_EMAIL: ${subject}`);
+  const mail = { to: env.ADMIN_EMAIL, subject: `[MacroMatrix] ${subject}`, text, html: `<pre>${escapeHtml(text)}</pre>` };
+  if (env.EMAIL) {
+    try {
+      await env.EMAIL.send({ ...mail, from: FROM });
+      return;
+    } catch (e) {
+      console.warn('waarschuwing via Cloudflare mislukt, naar Brevo:', e?.message ?? e);
+    }
+  }
+  await sendBrevo(env, mail);
+}
