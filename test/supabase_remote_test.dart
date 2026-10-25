@@ -21,7 +21,8 @@ void main() {
       req.headers.forEach((k, v) => headers[k] = v.join(','));
       requests.add((req.method, req.uri, headers, body));
       req.response.headers.contentType = ContentType.json;
-      req.response.write(req.method == 'GET' ? response : '');
+      // Een upsert met "returning": de server geeft de opgeslagen rijen terug (hier alles wat verstuurd werd)
+      req.response.write(req.method == 'GET' ? response : body);
       await req.response.close();
     });
   });
@@ -34,7 +35,7 @@ void main() {
   final fasts = UserDb.syncTables.firstWhere((t) => t.name == 'fasts');
 
   test('versturen: upsert met de gebruiker en de juiste conflictsleutel', () async {
-    await remote().push(diary, [
+    final kept = await remote().push(diary, [
       {'id': 'e1', 'grams': 100, 'updated_at': 5},
     ]);
     final (method, uri, headers, body) = requests.single;
@@ -42,6 +43,10 @@ void main() {
     expect(uri.path, '/rest/v1/diary');
     expect(uri.queryParameters['on_conflict'], 'user_id,id');
     expect(headers['prefer'], contains('resolution=merge-duplicates'));
+    // Wat de server bewaarde, komt terug (sleutel en versie), om klokverschillen en oudere versies te zien
+    expect(headers['prefer'], contains('return=representation'));
+    expect(uri.queryParameters['select'], 'id,updated_at');
+    expect(kept, {'e1': 5});
     expect(headers['apikey'], 'anon-key');
     expect(jsonDecode(body), [
       {'id': 'e1', 'grams': 100, 'updated_at': 5, 'user_id': 'user-1'},
@@ -56,6 +61,25 @@ void main() {
       {'id': 'f1', 'start': 1, 'end': 2, 'goal_hours': 16, 'updated_at': 1},
     ]);
     expect((jsonDecode(requests.last.$4) as List).single['end'], 2);
+
+    // Wat de app zelf maakte (en wijkende instellingen): alleen als het er nog niet is
+    await remote().push(notes, [
+      {'day': '2026-10-17', 'text': 'y', 'updated_at': 1},
+    ], insertOnly: true);
+    expect(requests.last.$3['prefer'], contains('resolution=ignore-duplicates'));
+  });
+
+  test('de versie op de server opvragen: per sleutel, alleen van de gebruiker', () async {
+    response = jsonEncode([
+      {'user_id': 'user-1', 'id': 'e1', 'updated_at': 9},
+    ]);
+    final rows = await remote().fetch(diary, ['e1', 'hc:weight:2026-10-16']);
+    final (method, uri, _, _) = requests.single;
+    expect(method, 'GET');
+    expect(uri.queryParameters['user_id'], 'eq.user-1');
+    expect(uri.queryParameters['id'], startsWith('in.('));
+    expect(uri.queryParameters['id'], contains('hc:weight:2026-10-16'));
+    expect(rows.single['updated_at'], 9);
   });
 
   test('ophalen: alles na de cursor, oplopend, met een limiet', () async {

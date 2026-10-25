@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:provider/provider.dart';
 
 import '../../data/food.dart';
@@ -259,6 +260,8 @@ class _CustomFoodScreenState extends State<CustomFoodScreen> {
                   ),
                 TextFormField(
                   controller: _name,
+                  // Grens van de server (langer wordt niet gesynchroniseerd)
+                  inputFormatters: [LengthLimitingTextInputFormatter(UserDb.maxNameLength)],
                   decoration: InputDecoration(labelText: tr('Name', 'Naam')),
                   textCapitalization: TextCapitalization.sentences,
                   validator: (t) => t == null || t.trim().isEmpty ? tr('Give the product a name', 'Geef het product een naam') : null,

@@ -2,8 +2,10 @@
 /// gegevens van de gebruiker in IndexedDB van de browser (blijft na herladen; met een account ook op de server).
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
@@ -33,6 +35,99 @@ Future<bool> askPersistentStorage() async {
   }
 }
 
+// ── Eén tabblad tegelijk ──
+//
+// De database van de gebruiker staat in IndexedDB, maar sqlite werkt in het geheugen van het tabblad en schrijft de
+// gewijzigde stukken later weg, zonder afspraak met andere tabbladen. Twee tabbladen tegelijk overschrijven zo
+// elkaars stukken en maken de database stuk. Daarom houdt één tabblad een "Web Lock" vast zolang het open is; een
+// tweede tabblad toont een melding (zie lib/ui/screens/other_tab_screen.dart) en kan vragen om het over te nemen.
+
+const _lockName = 'macromatrix-user-db';
+
+/// Het slot wordt vastgehouden tot het tabblad sluit of herlaadt (deze Future eindigt nooit).
+final _hold = Completer<void>();
+
+web.BroadcastChannel? _channel;
+
+/// De opslag van de gebruiker, om ze weg te schrijven voor het tabblad verdwijnt.
+IndexedDbFileSystem? _userFs;
+
+/// Kan deze browser Web Locks? Zonder (oude browser, geen https): zoals vroeger, zonder bescherming.
+bool get _hasLocks => web.window.navigator.has('locks') && web.window.navigator.locks.has('request');
+
+Future<bool> _requestLock({required bool ifAvailable}) async {
+  if (!_hasLocks) return true;
+  final granted = Completer<bool>();
+  try {
+    web.window.navigator.locks.request(
+      _lockName,
+      web.LockOptions(mode: 'exclusive', ifAvailable: ifAvailable),
+      ((web.Lock? lock) {
+        if (lock == null) {
+          granted.complete(false);
+          return null;
+        }
+        granted.complete(true);
+        _listenForRelease();
+        return _hold.future.toJS;
+      }).toJS,
+    );
+  } catch (_) {
+    return true;
+  }
+  return granted.future;
+}
+
+/// De database voor dit tabblad claimen. False: ze is al open in een ander tabblad.
+Future<bool> claimUserDatabase() => _requestLock(ifAvailable: true);
+
+/// "Hier gebruiken": het andere tabblad vragen om de database vrij te geven (het schrijft alles weg en herlaadt) en
+/// wachten tot dat gebeurd is, of tot het andere tabblad gesloten werd.
+Future<void> takeOverUserDatabase() async {
+  try {
+    final c = web.BroadcastChannel(_lockName);
+    c.postMessage('release'.toJS);
+    c.close();
+  } catch (_) {}
+  await _requestLock(ifAvailable: false);
+}
+
+/// Een ander tabblad wil de database: alles wegschrijven en herladen. Het slot gaat vrij zodra deze pagina weg is;
+/// na het herladen toont dit tabblad zelf de melding.
+void _listenForRelease() {
+  if (_channel != null) return;
+  try {
+    _channel = web.BroadcastChannel(_lockName)
+      ..onmessage = ((web.MessageEvent e) {
+        if ((e.data as JSString?)?.toDart == 'release') unawaited(_releaseAndReload());
+      }).toJS;
+  } catch (_) {}
+}
+
+Future<void> _releaseAndReload() async {
+  try {
+    await _userFs?.flush();
+  } catch (_) {}
+  web.window.location.reload();
+}
+
+/// Bij het verlaten of verbergen van de pagina meteen wegschrijven (de browser kan het tabblad daarna bevriezen).
+void _flushWhenHidden() {
+  void flush() {
+    try {
+      unawaited(_userFs?.flush());
+    } catch (_) {}
+  }
+
+  web.window.addEventListener('pagehide', ((web.Event _) => flush()).toJS);
+  web.document.addEventListener(
+    'visibilitychange',
+    ((web.Event _) {
+      if (web.document.hidden) flush();
+    }).toJS,
+  );
+}
+
 Future<(FoodDb, UserDb)> openDatabases() async {
   final sqlite = await WasmSqlite3.loadFromUrl(Uri.base.resolve('sqlite3.wasm'));
 
@@ -43,7 +138,8 @@ Future<(FoodDb, UserDb)> openDatabases() async {
   final foods = FoodDb(sqlite.open('/foods.db', vfs: 'voeding-mem', mode: OpenMode.readOnly));
 
   // Gegevens van de gebruiker: blijvend in de browser
-  final idb = await _userFileSystem();
+  final idb = _userFs = await _userFileSystem();
+  _flushWhenHidden();
   sqlite.registerVirtualFileSystem(idb, makeDefault: true);
   final user = UserDb(sqlite.open('/user.db'));
   return (foods, user);

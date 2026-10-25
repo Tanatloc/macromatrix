@@ -14,33 +14,7 @@ import 'package:macromatrix/ui/screens/auth_screens.dart';
 import 'package:macromatrix/ui/theme.dart';
 import 'package:macromatrix/ui/widgets/account_card.dart';
 import 'package:macromatrix/ui/widgets/guest_nudge.dart';
-
-/// Server zoals de Supabase-trigger: een oudere versie overschrijft nooit een nieuwere.
-class _Server implements SyncRemote {
-  final rows = <String, Map<String, Map<String, Object?>>>{};
-  var _clock = DateTime.utc(2026, 1, 1);
-
-  @override
-  Future<void> push(SyncTable table, List<Map<String, Object?>> batch) async {
-    final t = rows.putIfAbsent(table.name, () => {});
-    for (final r in batch) {
-      final key = r[table.key] as String;
-      final old = t[key];
-      if (old != null && (old['updated_at'] as int) > (r['updated_at'] as int)) continue;
-      t[key] = {...r, 'server_ts': (_clock = _clock.add(const Duration(milliseconds: 1))).toIso8601String()};
-    }
-  }
-
-  @override
-  Future<List<Map<String, Object?>>> pull(SyncTable table, String? since, int limit) async {
-    final all =
-        (rows[table.name]?.values ?? const <Map<String, Object?>>[])
-            .where((r) => since == null || (r['server_ts'] as String).compareTo(since) > 0)
-            .toList()
-          ..sort((a, b) => (a['server_ts'] as String).compareTo(b['server_ts'] as String));
-    return all.take(limit).toList();
-  }
-}
+import 'sync_test.dart' show FakeServer;
 
 const _banana = Food(ref: 'ciqual:13005', name: 'Banana, raw', source: FoodSource.ciqual, per100g: {'energy': 90});
 
@@ -155,8 +129,8 @@ void main() {
   });
 
   group('van gast naar account: gegevens gaan mee (NW-3)', () {
-    late _Server server;
-    setUp(() => server = _Server());
+    late FakeServer server;
+    setUp(() => server = FakeServer());
 
     Future<void> firstLogin(UserDb db) async {
       // Zoals Account._afterLogin bij een toestel dat nog nooit synchroniseerde

@@ -10,12 +10,15 @@ import 'package:provider/provider.dart';
 import 'package:supabase/supabase.dart' show AuthException;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../data/backup.dart';
+import '../../data/export.dart';
 import '../../nutrition/targets.dart';
-import '../../platform/platform.dart' show askPersistentStorage;
+import '../../platform/platform.dart' show askPersistentStorage, saveTextFile;
 import '../../state/app_state.dart';
 import '../../sync/account.dart';
 import '../shell.dart';
 import '../theme.dart';
+import '../widgets/account_card.dart' show signOutAsking;
 import '../widgets/activity_ask.dart';
 import '../widgets/kit.dart';
 import '../widgets/logo.dart';
@@ -40,11 +43,14 @@ bool get runsOnWeb => debugWebOverride ?? kIsWeb;
 /// Google Play wijst niet naar een APK buiten de Play Store (GP-18). Op het web gewoon de homepage.
 String get aboutPagePath => runsOnWeb ? '/' : '/about/';
 
-enum GateScreen { loading, welcome, profileSetup, app }
+enum GateScreen { loading, welcome, otherAccount, firstSync, profileSetup, app }
 
 /// Wat [AuthGate] toont. Zonder account (bewust gekozen) kom je overal in de app, ook in de browser: je gegevens
 /// staan dan in de opslag van de browser (IndexedDB, zie platform_web.dart).
 /// [fetching]: net ingelogd op een bestaand account, het profiel kan nog onderweg zijn (GP-11).
+/// [otherAccount]: op dit toestel staan nog niet-verstuurde gegevens van een ander account ([Account.otherAccountData]).
+/// [firstSync]: ingelogd, maar nog nooit iets van de server opgehaald ([Account.needsFirstSync]). Zonder profiel dan
+/// geen "Over jou" (dat zou je echte profiel overschrijven), maar wachten of opnieuw proberen.
 GateScreen gateScreen({
   required bool ready,
   required bool configured,
@@ -52,10 +58,14 @@ GateScreen gateScreen({
   required bool localOnly,
   required bool hasProfile,
   bool fetching = false,
+  bool otherAccount = false,
+  bool firstSync = false,
 }) {
   if (!ready) return GateScreen.loading;
   if (configured && !signedIn && !localOnly) return GateScreen.welcome;
+  if (configured && signedIn && otherAccount) return GateScreen.otherAccount;
   if (configured && !hasProfile && fetching) return GateScreen.loading;
+  if (configured && !hasProfile && signedIn && firstSync) return GateScreen.firstSync;
   if (configured && !hasProfile) return GateScreen.profileSetup;
   return GateScreen.app;
 }
@@ -75,12 +85,195 @@ class AuthGate extends StatelessWidget {
       localOnly: a.localOnly,
       hasProfile: s.hasProfile,
       fetching: a.fetchingAfterLogin,
+      otherAccount: a.otherAccountData,
+      firstSync: a.needsFirstSync,
     )) {
       GateScreen.loading => Scaffold(backgroundColor: context.pal.bg, body: const SizedBox.expand()),
       GateScreen.welcome => const WelcomeScreen(),
+      GateScreen.otherAccount => const OtherAccountScreen(),
+      GateScreen.firstSync => const FirstSyncScreen(),
       GateScreen.profileSetup => const ProfileSetupScreen(),
       GateScreen.app => const Shell(),
     };
+  }
+}
+
+/// Eenvoudig scherm in het midden, voor [FirstSyncScreen] en [OtherAccountScreen].
+class _GateMessage extends StatelessWidget {
+  const _GateMessage({super.key, required this.icon, required this.title, required this.text, this.busy = false, this.children = const []});
+  final IconData icon;
+  final String title, text;
+  final bool busy;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: busy
+                        ? const SizedBox(width: 40, height: 40, child: CircularProgressIndicator())
+                        : Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(color: p.brandSoft, borderRadius: BorderRadius.circular(16)),
+                            child: Icon(icon, size: 28, color: p.brand),
+                          ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 22, height: 1.2, fontWeight: FontWeight.w600, color: p.ink),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(text, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, height: 1.5, color: p.ink2)),
+                  if (children.isNotEmpty) const SizedBox(height: 24),
+                  ...children,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Ingelogd, maar je gegevens kwamen nog niet binnen (de eerste synchronisatie loopt nog of mislukte). Geen "Over
+/// jou": wie dat opnieuw invult, overschrijft zijn echte profiel.
+class FirstSyncScreen extends StatelessWidget {
+  const FirstSyncScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final a = context.watch<Account>();
+    if (a.status == SyncStatus.syncing) {
+      return _GateMessage(
+        icon: Icons.cloud_download_outlined,
+        busy: true,
+        title: tr('Fetching your data…', 'Je gegevens ophalen…'),
+        text: tr('This only takes a moment.', 'Even geduld.'),
+      );
+    }
+    return _GateMessage(
+      key: const ValueKey('first-sync-failed'),
+      icon: Icons.cloud_off_outlined,
+      title: tr('Your data has not arrived yet', 'Je gegevens zijn nog niet binnen'),
+      text: [
+        tr(
+          'We could not fetch your profile and diary from your account yet. Check your internet connection and try again.',
+          'We konden je profiel en dagboek nog niet uit je account ophalen. Controleer je internetverbinding en probeer opnieuw.',
+        ),
+        ?a.error,
+      ].join('\n\n'),
+      children: [
+        FilledButton(onPressed: a.sync, child: Text(tr('Try again', 'Opnieuw proberen'))),
+        const SizedBox(height: 8),
+        TextButton(onPressed: () => signOutAsking(context, a), child: Text(tr('Log out', 'Uitloggen'))),
+      ],
+    );
+  }
+}
+
+/// Op dit toestel staan nog gegevens van een ander account die niet (allemaal) op de server staan. Die gaan nooit
+/// naar het account waarmee je nu inlogde: eerst kiezen.
+class OtherAccountScreen extends StatefulWidget {
+  const OtherAccountScreen({super.key});
+
+  @override
+  State<OtherAccountScreen> createState() => _OtherAccountScreenState();
+}
+
+class _OtherAccountScreenState extends State<OtherAccountScreen> {
+  bool _busy = false;
+
+  Future<void> _save(String name, String content, String mime) async {
+    final message = await saveTextFile(name, content, mime: mime);
+    if (message != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _discard(Account a) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Delete that data?', 'Die gegevens wissen?')),
+        content: Text(
+          tr(
+            'What was not sent yet is lost for good. Export it first if you want to keep it.',
+            'Wat nog niet verstuurd was, ben je dan voorgoed kwijt. Exporteer het eerst als je het wilt houden.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel', 'Annuleren'))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: ctx.pal.high),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(tr('Delete', 'Wissen')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    await a.discardOtherAccountData();
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = context.watch<Account>();
+    final s = context.read<AppState>();
+    final other = a.otherAccountEmail;
+    final today = dayKey(DateTime.now());
+    return _GateMessage(
+      key: const ValueKey('other-account'),
+      icon: Icons.switch_account_outlined,
+      title: tr('This device has data from another account', 'Op dit toestel staan gegevens van een ander account'),
+      text: tr(
+        'Some changes from ${other ?? 'another account'} were never sent to that account. They will not be added to '
+            '${a.email ?? 'this account'}. What would you like to do?',
+        'Sommige wijzigingen van ${other ?? 'een ander account'} werden nooit naar dat account verstuurd. Ze komen niet in '
+            '${a.email ?? 'dit account'}. Wat wil je doen?',
+      ),
+      children: [
+        OutlinedButton.icon(
+          onPressed: _busy ? null : () => _save('macromatrix-diary-$today.csv', diaryCsv(s.user, values: s.entryValues), 'text/csv'),
+          icon: const Icon(Icons.download_rounded),
+          label: Text(tr('Export diary (CSV)', 'Dagboek exporteren (CSV)')),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : () => _save('macromatrix-backup-$today.json', backupJson(s.user), 'application/json'),
+          icon: const Icon(Icons.save_alt_rounded),
+          label: Text(tr('Save a full backup', 'Volledige back-up bewaren')),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: _busy ? null : a.switchToOtherAccount,
+          child: Text(
+            other == null
+                ? tr('Log in with that account instead', 'Toch met dat account inloggen')
+                : tr('Log in as $other instead', 'Toch inloggen als $other'),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: context.pal.high),
+          onPressed: _busy ? null : () => _discard(a),
+          child: Text(tr('Delete that data and continue', 'Die gegevens wissen en verder')),
+        ),
+      ],
+    );
   }
 }
 

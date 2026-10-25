@@ -2288,6 +2288,11 @@ class _NoteSheetState extends State<_NoteSheet> {
             autofocus: true,
             minLines: 3,
             maxLines: 8,
+            // De grens van de server: een langere notitie zou niet gesynchroniseerd worden. De teller verschijnt
+            // pas vlak bij de grens.
+            maxLength: UserDb.maxNoteLength,
+            buildCounter: (context, {required currentLength, required isFocused, maxLength}) =>
+                maxLength != null && currentLength > maxLength - 500 ? Text('$currentLength / $maxLength') : null,
             textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
               hintText: tr(
