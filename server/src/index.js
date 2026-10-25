@@ -34,6 +34,11 @@ function cors(request, env, response) {
 const SESSION_TTL = 60_000;
 const sessions = new Map();
 
+/** Alle onthouden sessies van een gebruiker vergeten (bv. na het verwijderen van het account). */
+function forgetUser(uid) {
+  for (const [k, v] of sessions) if (v.s.uid === uid) sessions.delete(k);
+}
+
 /** Ingelogde gebruiker en sessie uit de Bearer-token, of null. */
 async function session(env, request) {
   const auth = request.headers.get('authorization');
@@ -105,6 +110,7 @@ async function api(request, env, ctx, url) {
   const m = path.match(/^\/v1\/rpc\/([a-z0-9_]{1,64})$/);
   if (m && request.method === 'POST') {
     const result = await callRpc(m[1], await body(request), { db: env.DB, env, uid, waitUntil });
+    if (m[1] === 'delete_account') forgetUser(uid);
     return json(result ?? null);
   }
   return json({ code: 'NOT_FOUND', message: 'not found' }, 404);

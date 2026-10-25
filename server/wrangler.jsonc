@@ -1,4 +1,5 @@
-// Worker "macromatrix-api" (api.macromatrix.eu). Geen geheimen hier: die staan als Worker-secrets bij Cloudflare.
+// Worker "macromatrix-api" (api.macromatrix.eu) en de testomgeving (env staging). Geen geheimen hier: die staan als
+// Worker-secrets bij Cloudflare.
 // Account: via de omgevingsvariabele CLOUDFLARE_ACCOUNT_ID.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -11,6 +12,32 @@
   "placement": { "mode": "smart" },
   // UserHub: één Durable Object per gebruiker voor live meldingen (src/hub.js)
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserHub"] }],
+
+  // ── Productie (api.macromatrix.eu), sinds 25-10-2026 ──
+  "workers_dev": false,
+  "routes": [{ "pattern": "api.macromatrix.eu", "custom_domain": true }],
+  "vars": {
+    "BASE_URL": "https://api.macromatrix.eu",
+    // Voor de automatische controles (tool/*_check.mjs): mails naar dit domein gaan naar test_outbox. Het domein
+    // bestaat niet, dus niemand anders kan er codes mee ontvangen.
+    "TEST_OUTBOX_DOMAIN": "test.macromatrix.invalid"
+  },
+  // 02:30 opruimen + back-up, de 1e van de maand om 04:00 de hersteltest
+  "triggers": { "crons": ["30 2 * * *", "0 4 1 * *"] },
+  "limits": { "cpu_ms": 300000 },
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["noreply@macromatrix.eu"] }],
+  "r2_buckets": [{ "binding": "BACKUP", "bucket_name": "macromatrix-backup", "jurisdiction": "eu" }],
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "UserHub" }] },
+  "ratelimits": [
+    { "name": "AUTH_LIMIT", "namespace_id": "2001", "simple": { "limit": 300, "period": 60 } },
+    { "name": "API_LIMIT", "namespace_id": "2002", "simple": { "limit": 600, "period": 60 } }
+  ],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "macromatrix", "database_id": "a2d60c49-c7b5-4d79-9707-705074bf5261", "migrations_dir": "migrations" },
+    // Alleen voor de maandelijkse hersteltest
+    { "binding": "RESTORE_DB", "database_name": "macromatrix-restoretest-prod", "database_id": "be6ebb76-ee6a-474a-b235-195f427acef5", "migrations_dir": "migrations" }
+  ],
+
   "env": {
     // Testomgeving: kopie van de productiedata (tool/supabase_to_d1.mjs), EU-jurisdictie
     "staging": {

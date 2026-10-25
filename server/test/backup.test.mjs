@@ -101,10 +101,10 @@ test('een verschil na terugzetten wordt gevonden', async () => {
   assert.deepEqual(await verifyRestore(dst, m), ['diary: inhoud verschilt']);
 });
 
-test('nachtelijke taak naar R2 (daily + manifest, op de 1e ook monthly) en de maandelijkse hersteltest', async () => {
+test('nachtelijke taak naar R2 (daily + manifest, geen maandelijkse kopie: hoogstens 30 dagen) en de maandelijkse hersteltest', async () => {
   const env = { DB: await seeded(), BACKUP: r2(), BACKUP_KEY: KEY, RESTORE_DB: d1() };
   await dailyBackup(env, new Date('2026-11-01T03:00:00Z'));
-  assert.deepEqual([...env.BACKUP.store.keys()].sort(), ['daily/2026-11-01.mmb', 'daily/2026-11-01.mmb.json', 'monthly/2026-11.mmb']);
+  assert.deepEqual([...env.BACKUP.store.keys()].sort(), ['daily/2026-11-01.mmb', 'daily/2026-11-01.mmb.json']);
   const r = await restoreCheck(env, new Date('2026-11-01T04:00:00Z'));
   assert.equal(r.ok, true);
   assert.equal(r.backup, 'daily/2026-11-01.mmb');

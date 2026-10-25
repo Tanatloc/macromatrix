@@ -19,8 +19,8 @@ node tool/supabase_to_d1.mjs all <private dir> --env staging --local
 ## Backups and recovery
 
 - **Every night (02:30 UTC)** the Worker writes the whole database, gzipped and encrypted with AES-256-GCM
-  (`BACKUP_KEY`), to R2: `daily/YYYY-MM-DD.mmb` (kept 30 days) plus a manifest (`.json`: row count and hash per
-  table); on the 1st also `monthly/YYYY-MM.mmb` (kept 400 days). Sessions, codes and rate limits are not included.
+  (`BACKUP_KEY`), to R2: `daily/YYYY-MM-DD.mmb` plus a manifest (`.json`: row count and hash per table). R2 deletes
+  them after 30 days (the privacy policy promises that). Sessions, codes and rate limits are not included.
 - **Every month (1st, 04:00 UTC)** the latest backup is restored into a separate D1 (`RESTORE_DB`) and compared
   with its manifest; the result goes to `checks/` and a failure mails `ADMIN_EMAIL`.
 - **Weekly** a machine outside Cloudflare copies the backups with rclone (read-only R2 key for that bucket).

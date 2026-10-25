@@ -7,8 +7,11 @@ out=build/staging-site
 # Alles opnieuw, behalve de test-APK (server/tool/build_staging_apk.sh)
 mkdir -p "$out"
 find "$out" -mindepth 1 -maxdepth 1 ! -name download -exec rm -rf {} +
-flutter build web --release --no-web-resources-cdn --base-href /app/ --dart-define-from-file=supabase.json \
-  --dart-define=API_URL=https://api-staging.macromatrix.eu -o "$out/app"
+# Zelfde instellingen als supabase.json, maar met de staging-server (nooit per ongeluk productie)
+mkdir -p build
+python3 -c 'import json; d = json.load(open("supabase.json")); d["API_URL"] = "https://api-staging.macromatrix.eu"; json.dump(d, open("build/staging-defines.json", "w"))'
+flutter build web --release --no-web-resources-cdn --base-href /app/ --dart-define-from-file=build/staging-defines.json \
+  -o "$out/app"
 cp -r site/. "$out/"
 # Testomgeving: niet in zoekmachines
 printf '/*\n  X-Robots-Tag: noindex\n' >> "$out/_headers"

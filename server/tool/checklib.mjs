@@ -7,8 +7,9 @@ import https from 'node:https';
 
 export const [base, ...rest] = process.argv.slice(2);
 const env = rest.includes('--env') ? rest[rest.indexOf('--env') + 1] : undefined;
-if (env !== 'staging') throw new Error('alleen op staging of lokaal: dit script maakt en wist accounts');
-const flags = [rest.includes('--local') ? '--local' : '--remote', '--env', env];
+// Ook op productie (--env production): alleen testaccounts op het testdomein, die het script zelf weer wist
+if (env !== 'staging' && env !== 'production') throw new Error('--env staging of --env production verplicht');
+const flags = [rest.includes('--local') ? '--local' : '--remote', ...(env === 'production' ? [] : ['--env', env])];
 export const DOMAIN = 'test.macromatrix.invalid';
 export const run = Date.now().toString(36);
 export const sql = (s) => JSON.parse(execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', ...flags, '--json', '--command', s], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })).at(-1).results;

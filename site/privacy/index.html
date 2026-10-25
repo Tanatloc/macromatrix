@@ -94,9 +94,8 @@
     <h2>Where is your data?</h2>
     <table>
       <tr><th>Service</th><th>What</th><th>Where</th></tr>
-      <tr><td>Supabase</td><td>Account, database and sync</td><td>Ireland (EU)</td></tr>
-      <tr><td>Brevo</td><td>Sending the emails with your code</td><td>France (EU)</td></tr>
-      <tr><td>Cloudflare</td><td>Hosting the website and the web version of the app; passing on barcode lookups to USDA; reading meal photos, label photos, recipe pages and recipe photos, and writing the weekly coach summary, with Workers AI (not stored). Cloudflare does not store your account data</td><td>Worldwide network, company in the US (EU standard contractual clauses)</td></tr>
+      <tr><td>Cloudflare</td><td>Our server: your account, database, sync and encrypted backups; sending the emails with your code; hosting the website and the web version of the app; passing on barcode lookups to USDA; reading meal photos, label photos, recipe pages and recipe photos, and writing the weekly coach summary, with Workers AI (not stored)</td><td>Your data is stored in the EU (Cloudflare's EU jurisdiction); worldwide network, company in the US (EU standard contractual clauses)</td></tr>
+      <tr><td>Brevo</td><td>Only if Cloudflare cannot send it: the email with your code</td><td>France (EU)</td></tr>
       <tr><td>Open Food Facts</td><td>Searching branded products: only your search term or barcode, without your account. Only if you choose to share a scanned product: the barcode, name, brand, nutrition values and label photo, without your account (published openly under the ODbL)</td><td>France (EU)</td></tr>
       <tr><td>Google Play</td><td>Only if you subscribe to Supporter on Android: Google Play handles the payment as an independent party under its own privacy policy. Our server asks Google Play whether your subscription is active, using the purchase token</td><td>Ireland (EU), company group in the US</td></tr>
       <tr><td>USDA FoodData Central</td><td>Only if Open Food Facts does not know a product: the barcode, through our own server, so without your account or IP address</td><td>United States</td></tr>
@@ -104,12 +103,13 @@
     <p>Apart from Google Play (see above), these services only process your data on our behalf, under their data processing agreement (DPA), and may not use it for anything else. A copy of your data is kept on your own device, so the app also works without internet.</p>
 
     <h2>How long do we keep it?</h2>
-    <p>As long as your account exists. If you delete your account, your account and all your data are deleted right away. Copies in backups disappear within 30 days. An account you never confirmed is deleted after 30 days. To prevent abuse, when an account is created we keep a scrambled (hashed) version of the IP address it came from for at most one day, and allow at most a few new accounts per network per hour. A report is kept as long as we need it to handle the abuse, and is deleted when you or the person you reported delete their account. A report of an AI text is deleted when you delete your account.</p>
+    <p>As long as your account exists. If you delete your account, your account and all your data are deleted right away. Copies in our encrypted backups disappear within 30 days. An account you never confirmed is deleted after 30 days. To prevent abuse, when an account is created we keep a scrambled (hashed) version of the IP address it came from for at most one day, and allow at most a few new accounts per network per hour. A report is kept as long as we need it to handle the abuse, and is deleted when you or the person you reported delete their account. A report of an AI text is deleted when you delete your account.</p>
 
     <h2>Security</h2>
     <ul>
       <li>All connections are encrypted (HTTPS).</li>
-      <li>The database only lets each user see and change their own data.</li>
+      <li>Our server only lets each user see and change their own data.</li>
+      <li>Backups are encrypted, and kept for at most 30 days.</li>
       <li>Passwords are never stored in readable form.</li>
     </ul>
 

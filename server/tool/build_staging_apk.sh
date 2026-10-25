@@ -4,7 +4,10 @@
 # https://staging.macromatrix.eu/download/macromatrix-staging.apk
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-flutter build apk --release --dart-define-from-file=supabase.json --dart-define=API_URL=https://api-staging.macromatrix.eu \
+# Zelfde instellingen als supabase.json, maar met de staging-server (nooit per ongeluk productie)
+mkdir -p build
+python3 -c 'import json; d = json.load(open("supabase.json")); d["API_URL"] = "https://api-staging.macromatrix.eu"; json.dump(d, open("build/staging-defines.json", "w"))'
+flutter build apk --release --dart-define-from-file=build/staging-defines.json \
   --android-project-arg=staging=true --split-per-abi --target-platform android-arm64
 mkdir -p build/staging-site/download
 cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/staging-site/download/macromatrix-staging.apk

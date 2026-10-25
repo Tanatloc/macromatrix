@@ -25,7 +25,7 @@ export async function cleanup(db, now = new Date()) {
 
 const day = (now) => now.toISOString().slice(0, 10);
 
-/** Elke nacht: de hele database versleuteld naar R2 (daily/…); op de 1e van de maand ook monthly/…. */
+/** Elke nacht: de hele database versleuteld naar R2 (daily/…). R2 wist ze na 30 dagen (privacybeleid). */
 export async function dailyBackup(env, now = new Date()) {
   const key = `daily/${day(now)}.mmb`;
   try {
@@ -33,10 +33,6 @@ export async function dailyBackup(env, now = new Date()) {
     await putStream(env.BACKUP, key, stream);
     const rows = Object.values(manifest.tables).reduce((n, t) => n + t.rows, 0);
     await env.BACKUP.put(`${key}.json`, JSON.stringify(manifest), { httpMetadata: { contentType: 'application/json' } });
-    if (now.getUTCDate() === 1) {
-      const obj = await env.BACKUP.get(key);
-      await env.BACKUP.put(`monthly/${day(now).slice(0, 7)}.mmb`, obj.body);
-    }
     console.log(`back-up ${key}: ${rows} rijen in ${Object.keys(manifest.tables).length} tabellen`);
     return { key, rows };
   } catch (e) {

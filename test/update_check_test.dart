@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:macromatrix/app_version.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/sync/update_check.dart';
 
@@ -72,7 +73,8 @@ void main() {
 
   test('de website heeft een geldig app-version.json, dat de huidige versie niet blokkeert', () async {
     final body = await File('site/app-version.json').readAsString();
-    final u = check('1.17.4', () async => http.Response(body, 200));
+    // De versie van deze build mag nooit geblokkeerd zijn (anders blokkeert de nieuwe release zichzelf)
+    final u = check(appVersion, () async => http.Response(body, 200));
     await u.check();
     expect(u.minVersion, isNotNull);
     expect(u.required, isFalse);

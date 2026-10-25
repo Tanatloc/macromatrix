@@ -1,6 +1,6 @@
 // Back-ups van D1 naar R2, en terugzetten.
 //
-// Bestand (daily/JJJJ-MM-DD.mmb, op de 1e ook monthly/JJJJ-MM.mmb):
+// Bestand (daily/JJJJ-MM-DD.mmb, 30 dagen bewaard):
 //   "MMB1" + blokken van [lengte (4 bytes) | IV (12 bytes) | AES-256-GCM(gzip-gegevens)]
 //   Elk blok heeft als extra gegevens (AAD) zijn volgnummer en of het het laatste is: blokken verwisselen of het
 //   bestand inkorten valt op bij het ontsleutelen.
