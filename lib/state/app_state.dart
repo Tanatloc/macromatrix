@@ -38,7 +38,7 @@ import '../nutrition/levels.dart';
 import '../nutrition/niacin.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/preferences.dart';
-import '../nutrition/portions.dart' show EverydayPortion, curedName, defaultServing, everydayPortions, typicalPieceGrams;
+import '../nutrition/portions.dart' show EverydayPortion, curedName, defaultServing, everydayPortions, isDrink, mlDensity, typicalPieceGrams;
 import '../nutrition/processing.dart';
 import '../nutrition/supplements.dart';
 import '../nutrition/targets.dart';
@@ -1513,7 +1513,8 @@ class AppState extends ChangeNotifier {
     // Wat je eerder at, is bijna altijd wat je bedoelt
     final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
     var all = _candidates(q.query, first: pickedFood, sugar: sugar);
-    final words = q.query.split(RegExp(r'\s+'));
+    // Kleine letters: spraak begint met een hoofdletter ("Fried ham")
+    final words = q.query.toLowerCase().split(RegExp(r'\s+'));
     // Een bereiding die de databank bij dit product niet kent ("fried ham"): dan het product zelf, niet een ander
     // product met die bereiding (gebakken champignons, want "champignon" bevat "ham"). Kent de databank de bereiding
     // wel, dan verandert er niets: "scrambled eggs" blijft roerei (SU-5).
@@ -1522,7 +1523,8 @@ class AppState extends ChangeNotifier {
         if (!RegExp(r'^(fried|pan-fried|grilled|roast|roasted|baked|boiled|scrambled|poached|steamed|stewed|braised|toasted|cooked)$').hasMatch(w)) w,
     ];
     if (bare.isNotEmpty && bare.length < words.length) {
-      final noun = RegExp('\\b${RegExp.escape(bare.last.replaceAll(RegExp(r'(es|s)$'), ''))}(es|s)?\\b');
+      // "sausages" → "sausag" + e/es/s: vindt ook "Sausage, …"
+      final noun = RegExp('\\b${RegExp.escape(bare.last.replaceAll(RegExp(r'(es|s)$'), ''))}(e|es|s)?\\b');
       // Is er een kandidaat die dat product zelf is (niet een gerecht met ham erin, zoals een croque madame)?
       if (!all.any((f) => noun.hasMatch(f.label?.food ?? f.name.split(',').first.toLowerCase()))) {
         // Producten zonder dat woord (de champignons) vallen weg; een gerecht met het product erin blijft staan
@@ -1612,6 +1614,8 @@ class AppState extends ChangeNotifier {
       if (alt > 0) hits.insert(0, hits.removeAt(alt));
     }
     (Food, double, Portion?) amount(Food f) {
+      // "200 ml milk" weegt zoals op het productscherm: 206 g (NF-15)
+      if (q.ml != null && isDrink(f)) return (f, q.ml! * mlDensity(f), null);
       if (q.grams != null) return (f, q.grams!, null);
       final n = q.count ?? 1;
       final name = f.name.toLowerCase();
@@ -2633,14 +2637,26 @@ class AppState extends ChangeNotifier {
   List<Food> searchLocal(String q, {bool personal = true}) {
     // Een suikerwens ("sugar free", "zonder suiker") is geen voedingsmiddel: zoeken op de rest (zie splitSugarAsk)
     final SugarAsk? sugar;
+    final literal = q.toLowerCase().trim();
     (q, sugar) = splitSugarAsk(q);
     final norm = _normalQuery(q);
     final seen = <String>{};
-    // Met een alias ("oats") ook wat je letterlijk typte, erachter
+    // Met een alias ("oats") ook wat je letterlijk typte, erachter; bij een suikerwens ook de letterlijke woorden
+    // ("unsweetened cocoa" staat zo in de naam van het cacaopoeder)
     final all = [
-      for (final f in [..._candidates(norm, sugar: sugar), if (norm != q.toLowerCase().trim()) ..._candidates(q.toLowerCase().trim())])
+      for (final f in [
+        ..._candidates(norm, sugar: sugar),
+        if (norm != q.toLowerCase().trim()) ..._candidates(q.toLowerCase().trim()),
+        if (sugar != null) ..._candidates(literal),
+      ])
         if (seen.add(f.ref)) f,
     ];
+    final literalWords = [
+      for (final w in literal.split(RegExp(r'[\s,-]+')))
+        if (w.length > 2) RegExp('\\b${RegExp.escape(w)}'),
+    ];
+    // Elk woord dat je typte, staat letterlijk in de naam: dat is wat je bedoelt
+    bool literalHit(Food f) => sugar != null && literalWords.every((w) => w.hasMatch(f.name.toLowerCase()));
     // Niets gevonden: de woorden aan elkaar ("volkoren brood") of alleen het laatste woord
     final words = norm.split(' ');
     if (all.isEmpty && words.length > 1) all.addAll(_candidates(words.join()));
@@ -2656,6 +2672,7 @@ class AppState extends ChangeNotifier {
         20.0 -
         i * 0.15 +
         foodQueryScore(f, norm, sugar: sugar) +
+        (literalHit(f) ? 25 : 0) +
         // Eigen producten en recepten zijn geen "gewoon eten" voor de score, maar wel precies wat je zoekt
         (FoodDb.isDbRef(f.ref) ? 0 : (f.source == FoodSource.recipe ? 40 : 10));
     final ranked = [for (final (i, f) in all.indexed) (score(i, f), f)]..sort((a, b) => b.$1.compareTo(a.$1));

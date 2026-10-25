@@ -192,4 +192,17 @@ void main() {
     expect(box('sugar').name.toLowerCase(), startsWith('sugar'));
     expect(box('sugar free').name.toLowerCase(), contains('sugar free'));
   });
+
+  test('ml weegt in Snel loggen zoals op het productscherm (melk 1,03 g per ml), en hoofdletters tellen niet', () {
+    final (milk, grams, _) = s.resolveQuick(const QuickItem('semi-skimmed milk', grams: 200, ml: 200)).first;
+    expect(milk.name.toLowerCase(), contains('milk'));
+    expect(grams, closeTo(206, 0.01));
+    expect(s.resolveQuick(const QuickItem('Fried ham')).first.$1.name, s.resolveQuick(const QuickItem('fried ham')).first.$1.name);
+    expect(s.resolveQuick(const QuickItem('fried sausages')).first.$1.name.toLowerCase(), startsWith('sausage'));
+  });
+
+  test('hernoemde voedingsmiddelen zijn vindbaar op hun nieuwe naam', () {
+    expect(box('french fries').name.toLowerCase(), contains('french fries'));
+    expect(box('oat flour').name.toLowerCase(), contains('oat flour'));
+  });
 }

@@ -298,43 +298,61 @@ class UserDb {
     void count() => _db.updatedRows > 0 ? added++ : skipped++;
     final now = _now();
     bool isTotal(String ref) => ref.startsWith('import:') && ref.endsWith(':totaal');
-    String prefix(String ref) => ref.substring(0, ref.indexOf(':', 7) + 1);
+    // "import:cm:totaal" → "cm"
+    String code(String ref) => ref.split(':')[1];
+    // Een regel die er al is, blijft zoals ze is; een eerder verwijderde (bv. met "geïmporteerde gegevens
+    // verwijderen") komt terug. Zelfde vaste id, dus nooit dubbel.
+    void putEntry(ImportedEntry e) {
+      _db.execute(
+        'INSERT INTO diary (id, day, meal, food_ref, name, brand, grams, portion_label, quantity, nutrients, created_at, updated_at, time) '
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) '
+        'ON CONFLICT(id) DO UPDATE SET deleted = 0, updated_at = excluded.updated_at WHERE diary.deleted = 1',
+        [e.id, e.day, e.meal, e.foodRef, e.name, e.brand, e.grams, e.portionLabel, e.quantity, encodeNutrients(e.per100g), now, now, e.time],
+      );
+      count();
+    }
+
     transaction(() {
-      // Dagen (per app) met losse producten, in deze import of al in het dagboek
-      final itemDays = <String>{
-        for (final e in batch.entries)
-          if (e.foodRef.startsWith('import:') && !isTotal(e.foodRef)) '${prefix(e.foodRef)}${e.day}',
-      };
-      for (final r in _db.select(
-        "SELECT DISTINCT day, food_ref FROM diary WHERE deleted = 0 AND food_ref LIKE 'import:%' AND food_ref NOT LIKE '%:totaal'",
-      )) {
-        itemDays.add('${prefix(r['food_ref'] as String)}${r['day']}');
+      // Eerst de losse producten
+      for (final e in batch.entries) {
+        if (!isTotal(e.foodRef)) putEntry(e);
       }
+      // Dagen van deze import waarop nu geïmporteerde producten uit dezelfde app staan (herkend aan de id van de
+      // import, niet aan food_ref: wat je zelf kopieerde van een geïmporteerde dag telt niet mee)
+      final itemDays = <String>{};
+      final batchDays = {for (final e in batch.entries) if (e.foodRef.startsWith('import:')) '${code(e.foodRef)}|${e.day}'};
+      for (final key in batchDays) {
+        final [c, day] = key.split('|');
+        final has = _db.select(
+          "SELECT 1 FROM diary WHERE deleted = 0 AND day = ? AND id LIKE ? AND food_ref NOT LIKE '%:totaal' LIMIT 1",
+          [day, 'import-$c-%'],
+        );
+        if (has.isNotEmpty) itemDays.add(key);
+      }
+      // Een dagtotaal dat er al stond, maakt plaats voor die producten
       var replaced = 0;
       for (final key in itemDays) {
-        final cut = key.lastIndexOf(':') + 1;
-        _db.execute('UPDATE diary SET deleted = 1, updated_at = ? WHERE deleted = 0 AND day = ? AND food_ref = ?', [
-          now,
-          key.substring(cut),
-          '${key.substring(0, cut)}totaal',
-        ]);
+        final [c, day] = key.split('|');
+        _db.execute(
+          "UPDATE diary SET deleted = 1, updated_at = ? WHERE deleted = 0 AND day = ? AND id LIKE ? AND food_ref LIKE '%:totaal'",
+          [now, day, 'import-$c-%'],
+        );
         replaced += _db.updatedRows;
       }
       batch.replacedTotals = replaced;
+      // Dan de totalen, behalve op dagen met producten
       for (final e in batch.entries) {
-        if (isTotal(e.foodRef) && itemDays.contains('${prefix(e.foodRef)}${e.day}')) {
+        if (!isTotal(e.foodRef)) continue;
+        if (itemDays.contains('${code(e.foodRef)}|${e.day}')) {
           skipped++;
           continue;
         }
-        _db.execute(
-          'INSERT OR IGNORE INTO diary (id, day, meal, food_ref, name, brand, grams, portion_label, quantity, nutrients, created_at, updated_at, time) '
-          'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-          [e.id, e.day, e.meal, e.foodRef, e.name, e.brand, e.grams, e.portionLabel, e.quantity, encodeNutrients(e.per100g), now, now, e.time],
-        );
-        count();
+        putEntry(e);
       }
       for (final x in batch.exercises) {
-        _db.execute('INSERT OR IGNORE INTO exercise (id, day, name, minutes, kcal, updated_at) VALUES (?,?,?,?,?,?)', [
+        _db.execute(
+            'INSERT INTO exercise (id, day, name, minutes, kcal, updated_at) VALUES (?,?,?,?,?,?) '
+            'ON CONFLICT(id) DO UPDATE SET deleted = 0, updated_at = excluded.updated_at WHERE exercise.deleted = 1', [
           x.id,
           x.day,
           x.name,
@@ -345,7 +363,9 @@ class UserDb {
         count();
       }
       for (final b in batch.biometrics) {
-        _db.execute('INSERT OR IGNORE INTO biometrics (id, day, time, type, value, value2, updated_at) VALUES (?,?,?,?,?,?,?)', [
+        _db.execute(
+            'INSERT INTO biometrics (id, day, time, type, value, value2, updated_at) VALUES (?,?,?,?,?,?,?) '
+            'ON CONFLICT(id) DO UPDATE SET deleted = 0, updated_at = excluded.updated_at WHERE biometrics.deleted = 1', [
           b.id,
           b.day,
           b.time,
@@ -370,11 +390,12 @@ class UserDb {
   }
 
   /// Wat ooit uit een andere app werd geïmporteerd (zie [importBatch]) en nog in je gegevens staat: (dagboekregels,
-  /// beweging, metingen). Herkend aan food_ref "import:<code>:" en de ids "import-<code>-".
+  /// beweging, metingen). Herkend aan de ids "import-<code>-": wat je zelf kopieerde van een geïmporteerde dag, krijgt
+  /// een nieuwe id en blijft dus buiten schot.
   (int, int, int) importedCounts(String code) {
     int n(String sql, String arg) => _db.select(sql, [arg]).first.columnAt(0) as int;
     return (
-      n('SELECT COUNT(*) FROM diary WHERE deleted = 0 AND food_ref LIKE ?', 'import:$code:%'),
+      n('SELECT COUNT(*) FROM diary WHERE deleted = 0 AND id LIKE ?', 'import-$code-%'),
       n('SELECT COUNT(*) FROM exercise WHERE deleted = 0 AND id LIKE ?', 'import-$code-%'),
       n('SELECT COUNT(*) FROM biometrics WHERE deleted = 0 AND id LIKE ?', 'import-$code-%'),
     );
@@ -386,7 +407,7 @@ class UserDb {
     final now = _now();
     var removed = 0;
     transaction(() {
-      _db.execute('UPDATE diary SET deleted = 1, updated_at = ? WHERE deleted = 0 AND food_ref LIKE ?', [now, 'import:$code:%']);
+      _db.execute('UPDATE diary SET deleted = 1, updated_at = ? WHERE deleted = 0 AND id LIKE ?', [now, 'import-$code-%']);
       removed += _db.updatedRows;
       for (final t in ['exercise', 'biometrics']) {
         _db.execute('UPDATE $t SET deleted = 1, updated_at = ? WHERE deleted = 0 AND id LIKE ?', [now, 'import-$code-%']);

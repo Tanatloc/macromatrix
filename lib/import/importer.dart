@@ -138,9 +138,10 @@ class Importer {
         csvs.add((name, parseCsv(_text(bytes))));
       }
     }
-    // Cronometer: dagtotalen alleen gebruiken als er geen producten (servings) zijn
+    // Cronometer: dagtotalen alleen voor dagen zonder producten (servings). Daarom de producten eerst.
     final kinds = {for (final (name, rows) in csvs) name: _kind(rows)};
     final hasItems = kinds.values.any((k) => k == _Kind.items);
+    csvs.sort((a, b) => (kinds[a.$1] == _Kind.items ? 0 : 1).compareTo(kinds[b.$1] == _Kind.items ? 0 : 1));
     for (final (name, rows) in csvs) {
       final kind = kinds[name]!;
       final before = (batch.entries.length, batch.exercises.length, batch.biometrics.length, batch.notes.length);
@@ -148,9 +149,9 @@ class Importer {
         case _Kind.items:
           _items(rows, batch);
         case _Kind.mealTotals:
-          if (!hasItems) _totals(rows, batch, perMeal: true);
+          _totals(rows, batch, perMeal: true);
         case _Kind.dayTotals:
-          if (!hasItems) _totals(rows, batch, perMeal: false);
+          _totals(rows, batch, perMeal: false);
         case _Kind.biometrics:
           _biometrics(rows, batch);
         case _Kind.measurements:
@@ -175,11 +176,11 @@ class Importer {
         _Kind.items => tr('diary per product', 'dagboek per product'),
         _Kind.mealTotals =>
           hasItems
-              ? tr('totals per meal (not needed: products are listed separately)', 'totalen per maaltijd (niet nodig: producten staan apart)')
+              ? tr('totals per meal (only for days without separate products)', 'totalen per maaltijd (alleen voor dagen zonder losse producten)')
               : tr('diary, totals per meal', 'dagboek, totalen per maaltijd'),
         _Kind.dayTotals =>
           hasItems
-              ? tr('daily totals (not needed: products are listed separately)', 'dagtotalen (niet nodig: producten staan apart)')
+              ? tr('daily totals (only for days without separate products)', 'dagtotalen (alleen voor dagen zonder losse producten)')
               : tr('diary, totals per day', 'dagboek, totalen per dag'),
         _Kind.biometrics || _Kind.measurements => tr('measurements', 'metingen'),
         _Kind.exercise => tr('exercise', 'beweging'),
@@ -513,9 +514,12 @@ class Importer {
     final columns = _nutrientColumns(header, batch);
     if (day == null) return;
     final mealNames = [for (final m in Meal.values) m.label];
+    // Dagen waarvoor de producten apart al in deze import zitten: daar is een totaal dubbel
+    final itemDays = {for (final e in batch.entries) e.day};
+    var added = 0;
     for (final r in rows.skip(1)) {
       final d = _date(_at(r, day));
-      if (d == null) continue;
+      if (d == null || itemDays.contains(d)) continue;
       final totals = _nutrients(r, columns);
       if ((totals['energy'] ?? 0) <= 0) continue;
       final m = perMeal && meal != null ? _meal(_at(r, meal)) : 3;
@@ -535,8 +539,10 @@ class Importer {
           foodRef: 'import:${source.code}:totaal',
         ),
       );
+      added++;
       if (note != null) _addNote(batch, d, _at(r, note));
     }
+    if (added == 0) return;
     batch.warnings.add(
       perMeal
           ? tr(

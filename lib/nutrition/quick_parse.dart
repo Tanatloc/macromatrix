@@ -3,11 +3,15 @@
 library;
 
 class QuickItem {
-  const QuickItem(this.query, {this.grams, this.count, this.unitGrams, this.unit, this.after, this.afterCount});
+  const QuickItem(this.query, {this.grams, this.count, this.unitGrams, this.unit, this.after, this.afterCount, this.ml});
   final String query;
 
   /// Gewicht als het gezegd werd (gram, ml of kg).
   final double? grams;
+
+  /// Als het gezegd werd in ml, cl of l: het volume (dan staat het ook in [grams], als 1 g per ml). Een drank weegt
+  /// per ml iets meer of minder (zie mlDensity).
+  final double? ml;
 
   /// Aantal stuks of porties ("2 eggs", "een kom").
   final double? count;
@@ -25,7 +29,8 @@ class QuickItem {
   final double? afterCount;
 
   /// Hetzelfde met een andere zoekterm (na een alias).
-  QuickItem withQuery(String q) => QuickItem(q, grams: grams, count: count, unitGrams: unitGrams, unit: unit, after: after, afterCount: afterCount);
+  QuickItem withQuery(String q) =>
+      QuickItem(q, grams: grams, count: count, unitGrams: unitGrams, unit: unit, after: after, afterCount: afterCount, ml: ml);
 
   @override
   String toString() => 'QuickItem($query, grams: $grams, count: $count, unit: ${unit ?? '-'} $unitGrams, after: $after)';
@@ -133,7 +138,7 @@ List<QuickItem> parseQuick(String text) {
   for (var (part, withPrevious) in _parts(text.trim())) {
     part = part.trim().replaceAll(RegExp(r'[.!?]+$'), '');
     if (part.isEmpty) continue;
-    double? grams, count, unitGrams;
+    double? grams, count, unitGrams, ml;
     String? unit;
     var rest = part;
     final m = _amount.firstMatch(part);
@@ -142,10 +147,14 @@ List<QuickItem> parseQuick(String text) {
       final u = m.group(2)?.toLowerCase();
       rest = m.group(3)!.trim();
       switch (u) {
-        case 'kg' || 'l':
+        case 'kg':
           grams = n * 1000;
+        case 'l':
+          grams = ml = n * 1000;
         case 'cl':
-          grams = n * 10;
+          grams = ml = n * 10;
+        case 'ml':
+          grams = ml = n;
         case null:
           count = n;
         default:
@@ -193,6 +202,7 @@ List<QuickItem> parseQuick(String text) {
       unit: unit,
       after: withPrevious ? previous?.query : null,
       afterCount: withPrevious ? previous?.count : null,
+      ml: ml,
     );
     out.add(item);
     previous = item;

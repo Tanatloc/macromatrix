@@ -229,4 +229,47 @@ void main() {
       expect(db.hasDirtyRows, isTrue, reason: 'het verwijderen gaat ook naar je andere toestellen');
     });
   });
+
+  group('import ongedaan maken en opnieuw importeren (review)', () {
+    const daily = 'Date,Energy (kcal),Protein (g)\n2026-10-14,957,40\n2026-10-15,1800,80\n';
+    ImportBatch read(List<(String, Uint8List)> files) => Importer(ImportSource.cronometer).read(files);
+
+    test('na verwijderen komt dezelfde import gewoon terug', () {
+      final db = UserDb(sqlite3.openInMemory());
+      db.importBatch(read([file('servings.csv', cronometerServings), file('exercises.csv', cronometerExercises)]));
+      db.removeImported('cm');
+      expect(db.entriesFor('2026-10-14'), isEmpty);
+      expect(db.importBatch(read([file('servings.csv', cronometerServings), file('exercises.csv', cronometerExercises)])), (5, 0));
+      expect(db.entriesFor('2026-10-14'), hasLength(4));
+      expect(db.importedCounts('cm').$2, 1);
+    });
+
+    test('wat je zelf kopieerde van een geïmporteerde dag blijft staan en telt niet als import', () {
+      final db = UserDb(sqlite3.openInMemory());
+      db.importBatch(read([file('servings.csv', cronometerServings)]));
+      db.copyMealMerged(fromDay: '2026-10-14', meal: Meal.breakfast, toDay: '2026-10-25');
+      expect(db.importedCounts('cm').$1, 4);
+      db.removeImported('cm');
+      expect(db.entriesFor('2026-10-25'), hasLength(1));
+    });
+
+    test('een latere import zonder producten laat dagtotalen staan, ook naast gekopieerde producten', () {
+      final db = UserDb(sqlite3.openInMemory());
+      db.importBatch(read([file('dailysummary.csv', daily)]));
+      db.importBatch(read([file('servings.csv', cronometerServings)]));
+      db.copyMealMerged(fromDay: '2026-10-14', meal: Meal.breakfast, toDay: '2026-10-15');
+      db.importBatch(read([file('biometrics.csv', cronometerBiometrics)]));
+      expect(db.entriesFor('2026-10-15').where((e) => e.foodRef == 'import:cm:totaal'), hasLength(1));
+    });
+
+    test('dagtotalen, producten, verwijderen, alles opnieuw: elke dag klopt weer', () {
+      final db = UserDb(sqlite3.openInMemory());
+      db.importBatch(read([file('dailysummary.csv', daily)]));
+      db.importBatch(read([file('servings.csv', cronometerServings)]));
+      db.removeImported('cm');
+      db.importBatch(read([file('dailysummary.csv', daily), file('servings.csv', cronometerServings)]));
+      expect(db.entriesFor('2026-10-14'), hasLength(4));
+      expect(db.entriesFor('2026-10-15').single.foodRef, 'import:cm:totaal');
+    });
+  });
 }

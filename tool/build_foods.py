@@ -2162,13 +2162,25 @@ def main(root, target):
         out['n'] = len(spread[x['f']])
         return json.dumps(out, separators=(',', ':'), ensure_ascii=False)
 
+    # Namen die in het Engels iets anders betekenen dan wat het is: Brits "potato chips" zijn frieten (NF-7), Noors
+    # "Havremel" is havermeel, geen havermout (NW-13). De oude naam blijft zoekbaar.
+    def display_name(r):
+        n = r['name']
+        if r['source'] == 'cofid':
+            n = re.sub(r'^Potato chips\b', 'French fries', n)
+        if r['source'] == 'mvt' and (r['local'] or '').startswith('Havremel'):
+            n = re.sub(r'^Oatmeal\b', 'Oat flour', n)
+        return n
+
     counts = {}
     for r in rows:
         nut, est = r['nut'], r['est']
         derive(nut, est)
+        name = display_name(r)
+        search = f"{name} {r['name']} {r['local']}" if name != r['name'] else f"{r['name']} {r['local']}"
         cur = db.execute(
             'INSERT INTO foods (source, source_id, name, name_local, search, category, nutrients, estimated, label) VALUES (?,?,?,?,?,?,?,?,?)',
-            (r['source'], r['sid'], r['name'], r['local'], f"{r['name']} {r['local']}".lower(), r['category'],
+            (r['source'], r['sid'], name, r['local'], search.lower(), r['category'],
              json.dumps({k: sig(v) for k, v in nut.items()}, separators=(',', ':'), ensure_ascii=False),
              json.dumps(est, separators=(',', ':')), app_label(r)),
         )

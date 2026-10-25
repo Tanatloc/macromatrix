@@ -17,4 +17,17 @@ void main() {
     expect(daysBetween(DateTime(2026, 3, 29), DateTime(2026, 3, 30)), 1);
     expect(daysBetween(DateTime(2026, 10, 25), DateTime(2026, 10, 26)), 1);
   });
+
+  test('logicalNow rekent op de klok, ook in de nacht van de klokwissel', () {
+    final old = appClock;
+    addTearDown(() => appClock = old);
+    appClock = () => DateTime(2026, 3, 29, 3, 30);
+    expect(logicalNow().day, 29);
+    appClock = () => DateTime(2026, 3, 29, 1, 59);
+    expect(logicalNow().day, 28);
+    appClock = () => DateTime(2026, 10, 25, 2, 30);
+    expect(logicalNow().day, 24);
+    appClock = () => DateTime(2026, 10, 25, 3, 0);
+    expect(logicalNow().day, 25);
+  });
 }

@@ -6,7 +6,15 @@ DateTime Function() appClock = DateTime.now;
 
 /// Het moment van nu, verschoven naar de dag waarin je zit: vóór [dayStartHour] is het nog gisteren.
 /// Gebruik dit voor alles wat bepaalt welke dag "vandaag" is, niet voor kloktijden.
-DateTime logicalNow() => appClock().subtract(Duration(hours: dayStartHour));
+///
+/// Op de klok gerekend, niet in echte uren: in de nacht dat de klok verspringt, is 03:30 al vandaag en het tweede
+/// 02:30 nog gisteren.
+DateTime logicalNow() {
+  final n = appClock();
+  return n.isUtc
+      ? DateTime.utc(n.year, n.month, n.day, n.hour - dayStartHour, n.minute, n.second, n.millisecond)
+      : DateTime(n.year, n.month, n.day, n.hour - dayStartHour, n.minute, n.second, n.millisecond);
+}
 
 /// Aantal kalenderdagen van [from] tot [to], los van de klok (een dag met zomer- of wintertijd telt ook als één).
 int daysBetween(DateTime from, DateTime to) =>
