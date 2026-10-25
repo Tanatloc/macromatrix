@@ -23,7 +23,13 @@ export async function onRequestGet({ request, env }) {
   const res = await fetch(target, { cf: { cacheTtl: 86400, cacheEverything: true } });
   if (res.status === 429) return json({ error: 'limiet' }, 429);
   if (!res.ok) return json({ error: `FDC ${res.status}` }, 502);
-  const data = await res.json();
+  // Een kapot of afgebroken antwoord van FDC: een nette fout in plaats van een uitzondering
+  let data;
+  try {
+    data = await res.json();
+  } catch (_) {
+    return json({ error: 'FDC: geen geldige JSON' }, 502);
+  }
   // Nieuwste versie van het product eerst
   const foods = (data.foods ?? [])
     .filter((f) => (f.gtinUpc ?? '').replace(/^0+/, '') === bare)

@@ -11,6 +11,7 @@
 // Secrets: PLAY_RTDN_SECRET, GOOGLE_PLAY_SA en SUPABASE_SERVICE_ROLE_KEY.
 
 import { json } from '../_lib/ai.js';
+import { readJson } from '../_lib/body.js';
 import { PACKAGE } from '../_lib/google.js';
 import { applyPurchase, playConfig } from '../_lib/play.js';
 
@@ -36,18 +37,19 @@ export function decodeNotification(body) {
   }
 }
 
+// Een bericht van Pub/Sub is klein (data hoogstens 20000 tekens, zie decodeNotification)
+const MAX_BODY = 64_000;
+
 export async function rtdn(request, env, fetcher = fetch, now = Date.now()) {
   const cfg = playConfig(env);
   if (!cfg || !env?.PLAY_RTDN_SECRET) return json({ ok: false, reason: 'not_configured' }, 503);
   const secret = new URL(request.url).searchParams.get('secret');
   if (!secret || !sameSecret(secret, env.PLAY_RTDN_SECRET)) return json({ ok: false, reason: 'forbidden' }, 403);
 
-  let body;
-  try {
-    body = await request.json();
-  } catch (_) {
-    return json({ ok: true, ignored: 'bad_message' });
-  }
+  // Te groot of kapot: bewust genegeerd (200), want opnieuw proberen maakt het bericht niet beter
+  const read = await readJson(request, MAX_BODY);
+  if (read.error || read.bad) return json({ ok: true, ignored: 'bad_message' });
+  const body = read.value;
   const n = decodeNotification(body);
   if (!n || n.packageName !== PACKAGE) return json({ ok: true, ignored: 'other' });
   // Een abonnement dat verandert, of een terugbetaling (productType 1 = abonnement)

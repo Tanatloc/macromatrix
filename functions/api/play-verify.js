@@ -11,11 +11,14 @@
 // SUPABASE_SERVICE_ROLE_KEY. Uitleg: voedingsapp-data/playstore/PLAYSTORE.md, "Google Play Billing instellen".
 
 import { checkLogin, hourly, json } from '../_lib/ai.js';
+import { readJson } from '../_lib/body.js';
 import { PACKAGE } from '../_lib/google.js';
 import { applyPurchase, playConfig, PRODUCTS } from '../_lib/play.js';
 
 // Ruim genoeg voor herstellen op een paar toestellen; houdt misbruik van de Google-API tegen
 const PER_HOUR = 30;
+// Een token is hoogstens 4096 tekens; de rest van de vraag is klein
+const MAX_BODY = 16_000;
 
 export async function verify(request, env, fetcher = fetch, now = Date.now()) {
   const cfg = playConfig(env);
@@ -23,12 +26,10 @@ export async function verify(request, env, fetcher = fetch, now = Date.now()) {
   const login = await checkLogin(request, fetcher);
   if (login.error) return json({ ok: false, reason: 'login' }, login.error.status);
 
-  let body;
-  try {
-    body = await request.json();
-  } catch (_) {
-    return json({ ok: false, reason: 'bad_request' }, 400);
-  }
+  const read = await readJson(request, MAX_BODY, { ok: false, reason: 'too_big' });
+  if (read.error) return read.error;
+  if (read.bad) return json({ ok: false, reason: 'bad_request' }, 400);
+  const body = read.value;
   const token = body?.purchaseToken;
   if (typeof token !== 'string' || token.length < 10 || token.length > 4096) return json({ ok: false, reason: 'bad_request' }, 400);
   if (!PRODUCTS.includes(body?.productId)) return json({ ok: false, reason: 'product' }, 400);

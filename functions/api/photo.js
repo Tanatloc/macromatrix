@@ -4,7 +4,11 @@
 // zin daarna op zoals bij Snel loggen, zodat de gebruiker alles nakijkt voor er iets toegevoegd wordt.
 // Alleen voor ingelogde gebruikers: het Supabase-token wordt eerst gecontroleerd. De foto wordt niet bewaard.
 // Per account geldt een dagteller (3 gratis, 50 met Pro) in Supabase (photo_quota_use, migratie 20261026000000_pro).
-// Is die er nog niet, dan werkt het zoals vroeger: alleen de rem per uur.
+// Is die er nog niet (PGRST202), dan werkt het zoals vroeger: alleen de rem per uur. Antwoordt de teller niet (storing),
+// dan geen foto (503): anders is er geen grens aan wat het beeldmodel kost.
+
+import { quotaDown } from '../_lib/ai.js';
+import { readBytes } from '../_lib/body.js';
 
 const SUPABASE_URL = 'https://hvqbqgxpksxmavopngap.supabase.co';
 const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2cWJxZ3hwa3N4bWF2b3BuZ2FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTk1ODAsImV4cCI6MjEwNzczNTU4MH0.SY50CM-HSMNYWOxidnFS8yjve46NdbmKhFwZDPPTI3g';
@@ -44,10 +48,9 @@ function cleanSentence(raw) {
   return t.slice(0, 500);
 }
 
-// De dagteller verhogen met het token van de gebruiker zelf (auth.uid() in Supabase). Geeft {allowed, used, limit,
-// pro} terug, of null als de teller niet beschikbaar is: de functie bestaat nog niet (PGRST202, migratie niet
-// uitgevoerd) of Supabase antwoordt niet. Dan geldt alleen de rem per uur, zodat loggen met een foto niet stukgaat
-// door een storing bij de teller.
+// De dagteller verhogen met het token van de gebruiker zelf (auth.uid() in Supabase). Geeft {quota: {allowed, used,
+// limit, pro}} terug, {missing: true} als de functie nog niet bestaat (PGRST202, migratie niet uitgevoerd: dan
+// alleen de rem per uur), of {down: true} als Supabase niet (goed) antwoordt.
 export async function useQuota(auth, fetcher = fetch) {
   try {
     const r = await fetcher(`${SUPABASE_URL}/rest/v1/rpc/photo_quota_use`, {
@@ -60,15 +63,16 @@ export async function useQuota(auth, fetcher = fetch) {
       try {
         code = (await r.json())?.code ?? '';
       } catch (_) {}
-      if (code !== 'PGRST202') console.log(`photo_quota_use: ${r.status} ${code}`);
-      return null;
+      if (code === 'PGRST202') return { missing: true };
+      console.log(`photo_quota_use: ${r.status} ${code}`);
+      return { down: true };
     }
     const q = await r.json();
-    if (typeof q?.allowed !== 'boolean') return null;
-    return { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true };
+    if (typeof q?.allowed !== 'boolean') return { down: true };
+    return { quota: { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true } };
   } catch (e) {
     console.log(`photo_quota_use: ${e}`);
-    return null;
+    return { down: true };
   }
 }
 
@@ -80,12 +84,11 @@ export async function onRequestPost({ request, env }) {
   if (!who.ok) return json({ error: 'login' }, 401);
   const user = (await who.json()).id;
 
-  // Eerst de grootte (via de header, zodat een te groot bestand niet eerst helemaal ingelezen wordt)
-  const declared = Number(request.headers.get('Content-Length') ?? 0);
-  if (declared > MAX_BYTES) return json({ error: 'too_big' }, 413);
-
-  const photo = new Uint8Array(await request.arrayBuffer());
-  if (photo.length > MAX_BYTES) return json({ error: 'too_big' }, 413);
+  // Hoogstens MAX_BYTES, ook zonder Content-Length (de stroom wordt afgebroken zodra het te veel is)
+  const read = await readBytes(request, MAX_BYTES);
+  if (read.error) return read.error;
+  if (read.bad) return json({ error: 'bad_image' }, 400);
+  const photo = read.bytes;
   // Een JPEG begint met FF D8, een PNG met 89 50
   const jpeg = photo[0] === 0xff && photo[1] === 0xd8;
   const png = photo[0] === 0x89 && photo[1] === 0x50;
@@ -101,7 +104,9 @@ export async function onRequestPost({ request, env }) {
   if (count >= PER_HOUR) return json({ error: 'too_many' }, 429);
 
   // De dagteller pas na de controles hierboven, zodat een kapotte foto geen foto van vandaag kost
-  const quota = await useQuota(auth);
+  const q = await useQuota(auth);
+  if (q.down) return quotaDown();
+  const quota = q.quota ?? null;
   if (quota && !quota.allowed) return json({ error: 'quota', used: quota.used, limit: quota.limit, pro: quota.pro }, 429);
   await cache.put(key, new Response(String(count + 1), { headers: { 'Cache-Control': 'max-age=3600' } }));
 

@@ -5,6 +5,9 @@
 // pro_status en play_purchases worden geschreven met de service-role (secret SUPABASE_SERVICE_ROLE_KEY); de app kan
 // daar zelf niets in zetten. Een langere Pro (bv. levenslang met de hand, 9999-12-31) wordt nooit ingekort, en bij
 // een terugbetaling of einde raken we alleen een status aan die van Google Play komt (source 'play').
+// Verlengt Play een kortere Pro met de hand of als geschenk, dan onthoudt pro_status die in base_until/base_source
+// (migratie 20261107000000_quota_voice_off); na een terugbetaling of einde komt die terug in plaats van "tot nu".
+// Zonder die kolommen werkt het zoals vroeger.
 
 import { SUPABASE_URL } from './ai.js';
 import { acknowledgeSubscription, getSubscription, GoogleError, googleAccessToken, parseServiceAccount } from './google.js';
@@ -90,27 +93,50 @@ async function savePurchase(cfg, row, fetcher) {
   });
 }
 
-// Pro verlengen tot [untilIso], maar nooit inkorten. Eerst alleen bijwerken als de huidige rij korter loopt (één
-// stap, dus ook veilig als er tegelijk met de hand iets toegekend wordt); is er nog geen rij, dan een nieuwe.
+async function proRow(cfg, user, fetcher) {
+  // select=*: zo werkt het ook zonder de kolommen base_until/base_source (oudere migratie)
+  const rows = await rest(cfg, fetcher, `pro_status?user_id=${eq(user)}&select=*`);
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+// Pro verlengen tot [untilIso], maar nooit inkorten. Alleen bijwerken als de rij nog zo is als net gelezen en korter
+// loopt (dus ook veilig als er tegelijk met de hand iets toegekend wordt: dan opnieuw); is er nog geen rij, dan een
+// nieuwe. Een kortere Pro met de hand (of als geschenk, via het web) wordt onthouden in base_until/base_source.
 export async function grantPro(cfg, user, untilIso, fetcher = fetch) {
   const now = new Date().toISOString();
-  const changed = await rest(cfg, fetcher, `pro_status?user_id=${eq(user)}&until=lt.${encodeURIComponent(untilIso)}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=representation' },
-    body: JSON.stringify({ until: untilIso, source: 'play', updated_at: now }),
-  });
-  if (Array.isArray(changed) && changed.length) return;
-  // Geen rij, of een die al langer loopt: bij een bestaande rij doet dit niets
-  await rest(cfg, fetcher, 'pro_status?on_conflict=user_id', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
-    body: JSON.stringify({ user_id: user, until: untilIso, source: 'play', updated_at: now }),
-  });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const row = await proRow(cfg, user, fetcher);
+    if (!row) {
+      // Bestaat de rij intussen toch (tegelijk toegekend), dan doet dit niets; daarna opnieuw lezen (en zo nodig
+      // die rij verlengen)
+      await rest(cfg, fetcher, 'pro_status?on_conflict=user_id', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+        body: JSON.stringify({ user_id: user, until: untilIso, source: 'play', updated_at: now }),
+      });
+      continue;
+    }
+    if (!(Date.parse(row.until) < Date.parse(untilIso))) return;
+    const patch = { until: untilIso, source: 'play', updated_at: now };
+    if (row.source !== 'play' && 'base_until' in row) {
+      patch.base_until = row.until;
+      patch.base_source = row.source;
+    }
+    const changed = await rest(
+      cfg,
+      fetcher,
+      `pro_status?user_id=${eq(user)}&until=eq.${encodeURIComponent(row.until)}&source=eq.${encodeURIComponent(row.source)}`,
+      { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) },
+    );
+    if (Array.isArray(changed) && changed.length) return;
+  }
+  throw new SupabaseError(409, 'pro_status');
 }
 
 // Pro stopzetten na een einde of terugbetaling: tot nu, of tot de vervaldatum van een ander lopend Play-abonnement
 // van hetzelfde account (bv. de nieuwe aankoop na een wissel van maand naar jaar). Alleen een rij met source 'play':
-// Pro met de hand, als geschenk of via het web blijft staan.
+// Pro met de hand, als geschenk of via het web blijft staan. Liep er onder Play nog een Pro met de hand die later
+// eindigt (base_until), dan komt die terug, met zijn eigen bron.
 export async function revokePro(cfg, user, exceptToken, fetcher = fetch, now = Date.now()) {
   const nowIso = new Date(now).toISOString();
   const others = await rest(
@@ -119,11 +145,30 @@ export async function revokePro(cfg, user, exceptToken, fetcher = fetch, now = D
     `play_purchases?user_id=${eq(user)}&purchase_token=neq.${encodeURIComponent(exceptToken)}&expiry=gt.${encodeURIComponent(nowIso)}&select=expiry&order=expiry.desc&limit=1`,
   );
   const floor = Array.isArray(others) && others.length ? new Date(others[0].expiry).toISOString() : nowIso;
+  const row = await proRow(cfg, user, fetcher);
+  if (!row || row.source !== 'play' || !(Date.parse(row.until) > Date.parse(floor))) return;
+  const base = row.base_until && row.base_source && Date.parse(row.base_until) > Date.parse(floor);
+  const patch = base
+    ? { until: new Date(row.base_until).toISOString(), source: row.base_source, base_until: null, base_source: null, updated_at: nowIso }
+    : { until: floor, updated_at: nowIso };
+  // Zelfde voorwaarde als hierboven in de update zelf: is er intussen met de hand iets veranderd, dan niets
   await rest(cfg, fetcher, `pro_status?user_id=${eq(user)}&source=eq.play&until=gt.${encodeURIComponent(floor)}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ until: floor, updated_at: nowIso }),
+    body: JSON.stringify(patch),
   });
+}
+
+// Een aankoop zonder obfuscatedAccountId aan [user] koppelen, maar alleen als nog niemand ze heeft: invoegen met
+// "bij een conflict niets doen" en daarna teruglezen wie ze heeft. Zo kunnen twee accounts die hetzelfde token
+// tegelijk melden, het niet allebei krijgen. Geeft de eigenaar terug.
+async function claimPurchase(cfg, row, fetcher) {
+  await rest(cfg, fetcher, 'play_purchases?on_conflict=purchase_token', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify(row),
+  });
+  return (await findPurchase(cfg, row.purchase_token, fetcher))?.user_id ?? null;
 }
 
 // Een aankoop nakijken bij Google en verwerken.
@@ -155,18 +200,19 @@ export async function applyPurchase(cfg, { token, user = null }, fetcher = fetch
 
     if (ev.entitled || existing) {
       const expiry = ev.until !== null ? Math.min(ev.until, ev.entitled ? ev.until : now) : now;
-      await savePurchase(
-        cfg,
-        {
-          purchase_token: token,
-          user_id: uid,
-          product: ev.product,
-          linked_purchase_token: linkedToken,
-          expiry: new Date(expiry).toISOString(),
-          updated_at: new Date(now).toISOString(),
-        },
-        fetcher,
-      );
+      const row = {
+        purchase_token: token,
+        user_id: uid,
+        product: ev.product,
+        linked_purchase_token: linkedToken,
+        expiry: new Date(expiry).toISOString(),
+        updated_at: new Date(now).toISOString(),
+      };
+      // Nog van niemand en zonder label van het account: eerst claimen, en alleen verder als het van ons is
+      if (user && !owner && !sub.externalAccountIdentifiers?.obfuscatedExternalAccountId) {
+        if ((await claimPurchase(cfg, row, fetcher)) !== user) return { ok: false, reason: 'other_account', status: 409 };
+      }
+      await savePurchase(cfg, row, fetcher);
     }
 
     if (!ev.entitled) {

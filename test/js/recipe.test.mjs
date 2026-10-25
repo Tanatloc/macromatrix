@@ -168,10 +168,14 @@ test('alleen Pro: gratis → pro_required, Pro op → quota, Pro → toegestaan'
 
 let rpc;
 let aiCalls;
+let useCalls;
+let peekCalls;
 const store = new Map();
 
 beforeEach(() => {
   aiCalls = 0;
+  useCalls = 0;
+  peekCalls = 0;
   store.clear();
   globalThis.caches = {
     default: {
@@ -183,11 +187,19 @@ beforeEach(() => {
     const u = String(url);
     if (u.endsWith('/auth/v1/user')) return Response.json({ id: 'user-1' });
     if (u.endsWith('/rest/v1/rpc/ai_quota_use')) {
+      useCalls++;
+      assert.deepEqual(JSON.parse(init.body), { p_kind: 'recipe' });
+      return Response.json(rpc.body, { status: rpc.status });
+    }
+    // Alleen lezen (ai_quota): dezelfde stand, zonder te tellen
+    if (u.endsWith('/rest/v1/rpc/ai_quota')) {
+      peekCalls++;
       assert.deepEqual(JSON.parse(init.body), { p_kind: 'recipe' });
       return Response.json(rpc.body, { status: rpc.status });
     }
     if (u.startsWith('https://cloudflare-dns.com')) return Response.json({});
     if (u === 'https://example.com/soup') return new Response(fixture, { headers: { 'Content-Type': 'text/html' } });
+    if (u === 'https://example.com/gone') return new Response('not found', { status: 404 });
     if (u === 'https://example.com/plain') {
       return new Response(`<html><body><h1>Pancakes</h1><p>${'Mix it all together and bake. '.repeat(5)}</p></body></html>`, {
         headers: { 'Content-Type': 'text/html' },
@@ -269,4 +281,115 @@ test('foto van een kookboek met Pro', async () => {
   assert.equal(j.source, 'photo');
   assert.equal(j.name, 'Pancakes');
   assert.deepEqual(j.quota, { allowed: true, used: 2, limit: 20, pro: true });
+});
+
+test('een link die niet opengaat, kost geen import van vandaag (pas geteld na het ophalen)', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 3, limit: 20, pro: true } };
+  const res = await onRequestPost({ request: linkRequest('https://example.com/gone'), env });
+  assert.equal(res.status, 422);
+  assert.deepEqual(await res.json(), { error: 'fetch_failed', quota: { allowed: true, used: 3, limit: 20, pro: true } });
+  assert.equal(peekCalls, 1);
+  assert.equal(useCalls, 0);
+  // Een link die wel werkt: één keer gelezen en één keer geteld
+  assert.equal((await onRequestPost({ request: linkRequest('https://example.com/soup'), env })).status, 200);
+  assert.equal(peekCalls, 2);
+  assert.equal(useCalls, 1);
+});
+
+test('gratis account: pro_required zonder de pagina op te halen', async () => {
+  rpc = { status: 200, body: { allowed: false, used: 0, limit: 0, pro: false } };
+  const res = await onRequestPost({ request: linkRequest('https://example.com/gone'), env });
+  assert.deepEqual(await res.json(), { error: 'pro_required' });
+  assert.equal(useCalls, 0);
+});
+
+test('vraag te groot (ook zonder Content-Length): 413', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 20, pro: true } };
+  const body = new ReadableStream({
+    start(c) {
+      c.enqueue(new TextEncoder().encode(JSON.stringify({ url: `https://example.com/${'a'.repeat(40_000)}` })));
+      c.close();
+    },
+  });
+  const req = new Request('https://app.test/api/recipe', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer tok', 'Content-Type': 'application/json' },
+    body,
+    duplex: 'half',
+  });
+  assert.equal((await onRequestPost({ request: req, env })).status, 413);
+  assert.equal(peekCalls + useCalls, 0);
+});
+
+test('SSRF: 6to4, Teredo, site-local en IPv4 in IPv6 worden geweigerd', () => {
+  for (const bad of [
+    'http://[2002:7f00:1::]/',
+    'http://[2002:a9fe:a9fe::]/',
+    'http://[2002:c0a8:101::1]/',
+    'http://[fec0::1]/',
+    'http://[feff::1]/',
+    'http://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/',
+    'http://[::127.0.0.1]/',
+    'http://[::ffff:a9fe:a9fe]/',
+    'http://[64:ff9b::7f00:1]/',
+    'http://[ff02::1]/',
+    'http://[100::1]/',
+  ]) {
+    assert.equal(safeUrl(bad), null, bad);
+  }
+  // 6to4 met een publiek IPv4-adres mag; gewone publieke IPv6 ook
+  assert.ok(safeUrl('http://[2002:808:808::1]/'));
+  assert.ok(safeUrl('http://[2606:4700::1111]/'));
+  assert.equal(isPrivateAddress('2001:4860:4860::8888'), false);
+  assert.equal(isPrivateAddress('2001:0:4136:e378::1'), true);
+  assert.equal(isPrivateAddress('fec0:0:0:1::1'), true);
+  assert.equal(isPrivateAddress('not:an:ip:::x'), true);
+});
+
+test('SSRF: lukt het opzoeken van de naam niet, dan wordt de pagina niet opgehaald', async () => {
+  const seen = [];
+  const make = (dns) => async (url) => {
+    seen.push(String(url));
+    if (String(url).includes('cloudflare-dns')) return dns();
+    return new Response('<html>x</html>', { headers: { 'Content-Type': 'text/html' } });
+  };
+  for (const dns of [
+    () => {
+      throw new Error('down');
+    },
+    () => new Response('busy', { status: 503 }),
+    () => Response.json({ Status: 2, Answer: [] }),
+  ]) {
+    seen.length = 0;
+    assert.equal(await resolvesPrivate('rebind.example.com', make(dns)), true);
+    assert.deepEqual(await fetchPage('https://rebind.example.com/', make(dns)), { error: 'bad_url' });
+    assert.ok(seen.every((u) => u.includes('cloudflare-dns')), seen.join(' '));
+  }
+  // Bestaat niet (NXDOMAIN): geen privéadres; het ophalen zelf faalt dan
+  assert.equal(await resolvesPrivate('nope.example.com', async () => Response.json({ Status: 3 })), false);
+});
+
+test('een vijandige pagina blijft snel (geen kwadratische regexen)', () => {
+  for (const evil of ['<nav', '<script', '<!--', '<p', '<', '<title', '<script type="application/ld+json">', '<a <p']) {
+    const html = evil.repeat(Math.ceil(320_000 / evil.length));
+    const t0 = performance.now();
+    visibleText(html);
+    parseJsonLd(html);
+    const ms = performance.now() - t0;
+    assert.ok(ms < 200, `${evil}: ${ms.toFixed(0)} ms`);
+  }
+  // Een enorme ingrediëntregel vol "<" in de JSON-LD
+  const ld = `<script type="application/ld+json">${JSON.stringify({ '@type': 'Recipe', recipeIngredient: ['<'.repeat(300_000), '2 eggs'] })}</script>`;
+  const t0 = performance.now();
+  assert.ok(parseJsonLd(ld).ingredients.includes('2 eggs'));
+  assert.ok(performance.now() - t0 < 200);
+});
+
+test('zichtbare tekst: blokken, opmerkingen en tags zoals vroeger', () => {
+  const t = visibleText(
+    '<html><head><title>T</title></head><body><nav>menu</nav><!-- weg --><h1>Soep</h1><p>Lekker<br>warm</p><FOOTER x>f</FOOTER><div>einde</div><nav>open',
+  );
+  assert.deepEqual(t.split('\n'), ['T', 'Soep', 'Lekker', 'warm', 'einde open']);
+  // Een blok zonder einde blijft staan (zoals de regex vroeger), een "<" zonder ">" ook
+  assert.equal(visibleText('<p>a < b'), 'a < b');
 });

@@ -167,9 +167,42 @@ test('migratie ontbreekt (PGRST202): werkt verder zonder teller', async () => {
   assert.equal(aiCalls, 1);
 });
 
-test('Supabase onbereikbaar: ook dan werkt het', async () => {
-  rpc = 'throw';
+test('Supabase onbereikbaar of een andere fout: 503, zonder het model (alleen PGRST202 werkt verder zonder teller)', async () => {
+  for (const r of ['throw', { status: 500, body: { code: '57014', message: 'timeout' } }, { status: 400, body: { code: 'P0001', message: 'niet ingelogd' } }, { status: 200, body: [] }]) {
+    rpc = r;
+    const res = await onRequestPost({ request: labelRequest(), env });
+    assert.equal(res.status, 503);
+    assert.deepEqual(await res.json(), { error: 'unavailable' });
+  }
+  assert.equal(aiCalls, 0);
+});
+
+test('een oudere migratie die de soort niet kent ("onbekende soort"): werkt verder zonder teller', async () => {
+  rpc = { status: 400, body: { code: 'P0001', message: 'onbekende soort' } };
   assert.equal((await onRequestPost({ request: labelRequest(), env })).status, 200);
+});
+
+test('te groot zonder Content-Length (gestreamd): 413 zonder alles in te lezen', async () => {
+  let pulled = 0;
+  const body = new ReadableStream({
+    pull(c) {
+      pulled++;
+      c.enqueue(new Uint8Array(64_000));
+      if (pulled > 200) c.close();
+    },
+  });
+  const req = new Request('https://app.test/api/label', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer tok', 'Content-Type': 'multipart/form-data; boundary=x' },
+    body,
+    duplex: 'half',
+  });
+  assert.equal(req.headers.get('Content-Length'), null);
+  const res = await onRequestPost({ request: req, env });
+  assert.equal(res.status, 413);
+  assert.equal((await res.json()).error, 'too_big');
+  assert.ok(pulled < 60, `${pulled} stukken gelezen`);
+  assert.equal(aiCalls, 0);
 });
 
 test('zonder token: login', async () => {

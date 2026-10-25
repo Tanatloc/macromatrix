@@ -73,11 +73,14 @@ test('functie bestaat nog niet (PGRST202): werkt zoals vroeger, zonder teller', 
   assert.equal(aiCalls, 1);
 });
 
-test('Supabase onbereikbaar: ook dan blijft loggen met een foto werken', async () => {
-  rpc = 'throw';
-  const res = await onRequestPost({ request: photoRequest(), env });
-  assert.equal(res.status, 200);
-  assert.equal(aiCalls, 1);
+test('Supabase onbereikbaar of een fout van de teller: 503, zonder het model (geen onbeperkte foto\'s)', async () => {
+  for (const r of ['throw', { status: 500, body: { code: '57014', message: 'canceling statement due to statement timeout' } }, { status: 200, body: [] }]) {
+    rpc = r;
+    const res = await onRequestPost({ request: photoRequest(), env });
+    assert.equal(res.status, 503);
+    assert.deepEqual(await res.json(), { error: 'unavailable' });
+  }
+  assert.equal(aiCalls, 0);
 });
 
 test('de rem per uur blijft gelden, ook zonder teller', async () => {
@@ -96,11 +99,28 @@ test('een kapotte foto kost geen foto van vandaag', async () => {
   assert.equal(rpcCalls, 0);
 });
 
-test('useQuota: een vreemd antwoord telt als geen teller', async () => {
+test('useQuota: een vreemd antwoord is een storing, alleen PGRST202 is "geen teller"', async () => {
   const f = async () => Response.json([]);
-  assert.equal(await useQuota('Bearer tok', f), null);
+  assert.deepEqual(await useQuota('Bearer tok', f), { down: true });
+  const missing = async () => Response.json({ code: 'PGRST202' }, { status: 404 });
+  assert.deepEqual(await useQuota('Bearer tok', missing), { missing: true });
   const pro = async () => Response.json({ allowed: true, used: 7, limit: 50, pro: true });
-  assert.deepEqual(await useQuota('Bearer tok', pro), { allowed: true, used: 7, limit: 50, pro: true });
+  assert.deepEqual(await useQuota('Bearer tok', pro), { quota: { allowed: true, used: 7, limit: 50, pro: true } });
+});
+
+test('te groot zonder Content-Length (gestreamd): 413', async () => {
+  rpc = { status: 200, body: { allowed: true, used: 1, limit: 3, pro: false } };
+  const body = new ReadableStream({
+    start(c) {
+      for (let i = 0; i < 30; i++) c.enqueue(new Uint8Array(64_000));
+      c.close();
+    },
+  });
+  const req = new Request('https://app.test/api/photo', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body, duplex: 'half' });
+  const res = await onRequestPost({ request: req, env });
+  assert.equal(res.status, 413);
+  assert.equal(rpcCalls, 0);
+  assert.equal(aiCalls, 0);
 });
 
 test('de vraag aan het model: bereiding en soort noemen, sausen apart, grammen voor vlees (SU-5)', async () => {

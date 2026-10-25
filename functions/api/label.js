@@ -5,9 +5,10 @@
 // formulier voor een eigen product, zodat de gebruiker alles nakijkt voor het bewaard wordt.
 // Alleen voor ingelogde gebruikers. De foto's worden hier niet bewaard.
 // Dagteller ai_quota_use('label'): 1 gratis, 30 met Pro (migratie 20261027000000_ai_quota). Is die er nog niet,
-// dan werkt het zoals /api/photo zonder teller: alleen de rem per uur.
+// dan werkt het zoals /api/photo zonder teller: alleen de rem per uur. Antwoordt de teller niet (storing): 503.
 
-import { MODEL, MAX_IMAGE_BYTES, checkLogin, dataUrl, hourly, imageType, json, modelObject, useAiQuota } from '../_lib/ai.js';
+import { MODEL, MAX_IMAGE_BYTES, aiQuotaStatus, checkLogin, dataUrl, hourly, imageType, json, modelObject, quotaDown } from '../_lib/ai.js';
+import { readForm as readBody } from '../_lib/body.js';
 
 const PER_HOUR = 20;
 
@@ -165,14 +166,10 @@ export function normaliseLabel(raw) {
 }
 
 async function readForm(request) {
-  const declared = Number(request.headers.get('Content-Length') ?? 0);
-  if (declared > MAX_IMAGE_BYTES * 2 + 20_000) return { error: json({ error: 'too_big' }, 413) };
-  let form;
-  try {
-    form = await request.formData();
-  } catch (_) {
-    return { error: json({ error: 'bad_image' }, 400) };
-  }
+  const read = await readBody(request, MAX_IMAGE_BYTES * 2 + 20_000);
+  if (read.error) return { error: read.error };
+  if (read.bad) return { error: json({ error: 'bad_image' }, 400) };
+  const form = read.form;
   const file = async (name) => {
     const f = form.get(name);
     if (!f || typeof f === 'string') return null;
@@ -217,8 +214,10 @@ export async function onRequestPost({ request, env }) {
   if (!rate.allowed) return json({ error: 'too_many' }, 429);
 
   // De dagteller pas na de controles hierboven, zodat een kapotte foto geen scan van vandaag kost.
-  // Geen teller (migratie niet uitgevoerd of storing): verder zoals zonder teller.
-  const quota = await useAiQuota(who.auth, 'label');
+  // Geen teller (migratie niet uitgevoerd): verder zoals zonder teller. Een storing bij de teller: 503.
+  const q = await aiQuotaStatus(who.auth, 'label');
+  if (q.down) return quotaDown();
+  const quota = q.quota ?? null;
   if (quota && !quota.allowed) return json({ error: 'quota', used: quota.used, limit: quota.limit, pro: quota.pro }, 429);
   await rate.count();
 

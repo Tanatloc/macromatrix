@@ -12,6 +12,7 @@
 // toegang bij. Ontbreekt de migratie, dan not_configured (de app verbergt de coach dan).
 
 import { aiQuotaStatus, checkLogin, hourly, json, modelObject, stripMarkdown, TimeoutError, withTimeout } from '../_lib/ai.js';
+import { readBytes } from '../_lib/body.js';
 
 // Groot en goed in het Nederlands, en snel genoeg voor een paar honderd woorden
 // Gekozen na een vergelijking op echte weekcijfers: concretere tips dan Llama 3.3 70B, en goedkoper per antwoord
@@ -450,18 +451,12 @@ export async function askCoach(ai, week, ms) {
 }
 
 async function readWeek(request) {
-  const declared = Number(request.headers.get('Content-Length') ?? 0);
-  if (declared > MAX_INPUT_BYTES) return { error: json({ error: 'too_big' }, 413) };
-  let text;
-  try {
-    text = await request.text();
-  } catch (_) {
-    return { error: json({ error: 'bad_input' }, 400) };
-  }
-  if (new TextEncoder().encode(text).length > MAX_INPUT_BYTES) return { error: json({ error: 'too_big' }, 413) };
+  const read = await readBytes(request, MAX_INPUT_BYTES);
+  if (read.error) return { error: read.error };
+  if (read.bad) return { error: json({ error: 'bad_input' }, 400) };
   let raw;
   try {
-    raw = JSON.parse(text);
+    raw = JSON.parse(new TextDecoder().decode(read.bytes));
   } catch (_) {
     return { error: json({ error: 'bad_input' }, 400) };
   }

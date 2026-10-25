@@ -449,3 +449,90 @@ test('decodeNotification: kapot of leeg geeft null', () => {
   assert.equal(decodeNotification({ message: { data: '!!!' } }), null);
   assert.deepEqual(decodeNotification({ message: { data: Buffer.from('{"a":1}').toString('base64') } }), { a: 1 });
 });
+
+// --- Pro met de hand onder een Play-abonnement (base_until/base_source, migratie 20261107000000_quota_voice_off)
+
+test('Play verlengt een kortere Pro met de hand: die wordt onthouden en komt terug na een terugbetaling', async () => {
+  // Met de migratie: de kolommen bestaan (leeg)
+  db.pro_status.push({ user_id: A, until: iso(NOW + 40 * day), source: 'gift', show_badge: true, base_until: null, base_source: null });
+  subs.set('tok-gift-0001', sub({ expiry: NOW + 365 * day }));
+  assert.equal((await call(buy('tok-gift-0001'))).body.ok, true);
+  assert.equal(db.pro_status[0].until, iso(NOW + 365 * day));
+  assert.equal(db.pro_status[0].source, 'play');
+  assert.equal(db.pro_status[0].base_until, iso(NOW + 40 * day));
+  assert.equal(db.pro_status[0].base_source, 'gift');
+  // Een verlenging door Play houdt de onthouden Pro
+  subs.set('tok-gift-0001', sub({ expiry: NOW + 400 * day, ack: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED' }));
+  await rcall(push(note('tok-gift-0001', 2)));
+  assert.equal(db.pro_status[0].until, iso(NOW + 400 * day));
+  assert.equal(db.pro_status[0].base_until, iso(NOW + 40 * day));
+  // Terugbetaald: het geschenk loopt weer tot zijn eigen einde, niet tot nu
+  subs.set('tok-gift-0001', sub({ state: 'SUBSCRIPTION_STATE_EXPIRED', expiry: NOW - 1000 }));
+  assert.deepEqual((await rcall(push(note('tok-gift-0001', 12)))).body, { ok: true, result: 'expired' });
+  assert.equal(db.pro_status[0].until, iso(NOW + 40 * day));
+  assert.equal(db.pro_status[0].source, 'gift');
+  assert.equal(db.pro_status[0].base_until, null);
+  assert.equal(db.pro_status[0].base_source, null);
+  assert.equal(db.pro_status[0].show_badge, true);
+  // Een tweede melding van hetzelfde einde raakt het geschenk niet meer aan
+  await rcall(push(note('tok-gift-0001', 12)));
+  assert.equal(db.pro_status[0].until, iso(NOW + 40 * day));
+});
+
+test('de onthouden Pro is intussen voorbij: dan stopt Pro gewoon op het einde van het abonnement', async () => {
+  db.pro_status.push({ user_id: A, until: iso(NOW + day), source: 'manual', base_until: null, base_source: null });
+  subs.set('tok-short-001', sub({ expiry: NOW + 30 * day }));
+  await call(buy('tok-short-001'));
+  assert.equal(db.pro_status[0].base_until, iso(NOW + day));
+  subs.set('tok-short-001', sub({ state: 'SUBSCRIPTION_STATE_EXPIRED', expiry: NOW + 30 * day }));
+  await rcall(push(note('tok-short-001', 13)), env, NOW + 31 * day);
+  assert.equal(db.pro_status[0].until, iso(NOW + 30 * day));
+  assert.equal(db.pro_status[0].source, 'play');
+});
+
+test('een Play-rij wordt niet als "met de hand" onthouden; nieuwe rij zonder base', async () => {
+  subs.set('tok-plain-001', sub({ expiry: NOW + 30 * day }));
+  await call(buy('tok-plain-001'));
+  db.pro_status[0].base_until = null;
+  db.pro_status[0].base_source = null;
+  subs.set('tok-plain-001', sub({ expiry: NOW + 60 * day, ack: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED' }));
+  await call(buy('tok-plain-001'));
+  assert.equal(db.pro_status[0].until, iso(NOW + 60 * day));
+  assert.equal(db.pro_status[0].base_until, null);
+  assert.equal(db.pro_status[0].base_source, null);
+});
+
+// --- Een aankoop zonder obfuscatedAccountId: claimen
+
+test('zonder accountlabel en tegelijk door twee accounts gemeld: maar één krijgt de aankoop en Pro', async () => {
+  subs.set('tok-race-0001', sub({ ack: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED' }));
+  // Beide lezen eerst "nog van niemand" voor een van de twee iets schrijft (de eerste twee keer opzoeken wachten op
+  // elkaar)
+  let waiting = 0;
+  let release;
+  const both = new Promise((r) => (release = r));
+  const racing = async (url, init = {}) => {
+    const u = new URL(String(url));
+    if (u.pathname.endsWith('/play_purchases') && (init.method ?? 'GET') === 'GET' && u.searchParams.get('purchase_token') && waiting < 2) {
+      if (++waiting === 2) release();
+      await both;
+    }
+    return fetcher(url, init);
+  };
+  const run = async (auth) => {
+    const res = await verify(buy('tok-race-0001', 'pro_yearly', auth), env, racing, NOW);
+    return { status: res.status, body: await res.json() };
+  };
+  const [a, b] = await Promise.all([run('Bearer user-a'), run('Bearer user-b')]);
+  const oks = [a, b].filter((r) => r.body.ok);
+  assert.equal(oks.length, 1, JSON.stringify([a, b]));
+  const loser = [a, b].find((r) => !r.body.ok);
+  assert.equal(loser.status, 409);
+  assert.equal(loser.body.reason, 'other_account');
+  assert.equal(db.play_purchases.length, 1);
+  const owner = db.play_purchases[0].user_id;
+  assert.deepEqual(
+    db.pro_status.map((s) => s.user_id),
+    [owner],
+  );
+});

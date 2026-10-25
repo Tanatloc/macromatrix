@@ -1,6 +1,6 @@
-// Gedeelde stukken voor de AI-functies (/api/label, /api/recipe, /api/off-contribute, /api/coach): inloggen nakijken, de rem per
-// uur, foto's nakijken en de dagteller ai_quota_use (migratie 20261027000000_ai_quota). Dit bestand heeft geen
-// onRequest-functies en wordt dus geen eigen adres op de site.
+// Gedeelde stukken voor de AI-functies (/api/label, /api/recipe, /api/off-contribute, /api/coach, /api/voice):
+// inloggen nakijken, de rem per uur, foto's nakijken en de dagteller ai_quota_use (migratie 20261027000000_ai_quota).
+// Dit bestand heeft geen onRequest-functies en wordt dus geen eigen adres op de site.
 
 export const SUPABASE_URL = 'https://hvqbqgxpksxmavopngap.supabase.co';
 export const ANON =
@@ -30,7 +30,8 @@ export async function checkLogin(request, fetcher = fetch) {
 }
 
 // Rem per gebruiker per uur (teller in de cache van Cloudflare; bij benadering per datacenter). check() zegt of het
-// nog mag; count() telt er één bij, pas als alle andere controles goed zijn.
+// nog mag; count() telt er één bij, pas als alle andere controles goed zijn. Lezen en schrijven zijn twee stappen, dus
+// veel verzoeken tegelijk lezen allemaal dezelfde stand: alleen een tweede rem naast de dagteller in de database.
 export async function hourly(name, user, max) {
   const hour = Math.floor(Date.now() / 3_600_000);
   const key = new Request(`https://ratelimit.local/${name}/${user}/${hour}`);
@@ -57,41 +58,52 @@ export function dataUrl(bytes, mime) {
   return `data:${mime};base64,${btoa(b64)}`;
 }
 
-// De dagteller voor een soort (label, recipe of coach) verhogen met het token van de gebruiker zelf (auth.uid()).
-// Geeft {quota: {allowed, used, limit, pro}} terug, {missing: true} als de functie nog niet bestaat (PGRST202,
-// migratie niet uitgevoerd), of {down: true} als Supabase niet (goed) antwoordt. Voor wie dat onderscheid nodig
-// heeft (/api/coach: zonder teller geen vroege toegang, dus dan niet).
-export async function aiQuotaStatus(auth, kind, fetcher = fetch) {
+// De dagteller voor een soort (label, recipe, coach, voice of off) verhogen met het token van de gebruiker zelf
+// (auth.uid()). Geeft {quota: {allowed, used, limit, pro}} terug, {missing: true} als de functie of de soort nog niet
+// bestaat (PGRST202, of "onbekende soort" van een oudere migratie), of {down: true} als Supabase niet (goed)
+// antwoordt. Een storing is nooit hetzelfde als een ontbrekende migratie: wie een teller nodig heeft, weigert dan.
+// [rpc] = 'ai_quota' leest de stand zonder iets te verhogen (voor /api/recipe vóór het ophalen van de pagina).
+export async function aiQuotaStatus(auth, kind, fetcher = fetch, rpc = 'ai_quota_use') {
   try {
-    const r = await fetcher(`${SUPABASE_URL}/rest/v1/rpc/ai_quota_use`, {
+    const r = await fetcher(`${SUPABASE_URL}/rest/v1/rpc/${rpc}`, {
       method: 'POST',
       headers: { apikey: ANON, Authorization: auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_kind: kind }),
     });
     if (!r.ok) {
-      let code = '';
+      let err = null;
       try {
-        code = (await r.json())?.code ?? '';
+        err = await r.json();
       } catch (_) {}
+      const code = err?.code ?? '';
       if (code === 'PGRST202') return { missing: true };
-      console.log(`ai_quota_use(${kind}): ${r.status} ${code}`);
-      // Een database met de oude migratie kent de soort niet ("onbekende soort"): ook dan ontbreekt de migratie
-      return code === 'P0001' ? { missing: true } : { down: true };
+      // Een database met een oudere migratie kent de soort niet: ook dan ontbreekt de migratie
+      if (code === 'P0001' && /onbekende soort/.test(String(err?.message ?? ''))) return { missing: true };
+      console.log(`${rpc}(${kind}): ${r.status} ${code}`);
+      return { down: true };
     }
     const q = await r.json();
     if (typeof q?.allowed !== 'boolean') return { down: true };
     return { quota: { allowed: q.allowed, used: Number(q.used) || 0, limit: Number(q.limit) || 0, pro: q.pro === true } };
   } catch (e) {
-    console.log(`ai_quota_use(${kind}): ${e}`);
+    console.log(`${rpc}(${kind}): ${e}`);
     return { down: true };
   }
 }
 
-// Zoals aiQuotaStatus, maar alleen de stand of null als de teller niet beschikbaar is (ontbreekt of storing). Wat
-// null betekent, beslist de functie zelf: /api/label werkt dan verder (alleen de rem per uur), /api/recipe weigert
-// (Pro kan niet nagekeken worden).
-export async function useAiQuota(auth, kind, fetcher = fetch) {
-  return (await aiQuotaStatus(auth, kind, fetcher)).quota ?? null;
+// Antwoord als de dagteller niet antwoordt: liever even niets dan onbeperkt (rekenkracht en schrijven kosten echt).
+export const quotaDown = () => json({ error: 'unavailable' }, 503);
+
+// De dagteller voor [kind], met de rem per uur als terugval zolang de migratie ontbreekt (alleen PGRST202 of een
+// onbekende soort). [rate] = hourly(...) van de functie zelf. Geeft {quota} (of {quota: null} zonder teller), of
+// {error: antwoord}: 429 quota/too_many als het op is, 503 bij een storing. Telt de rem per uur er één bij.
+export async function useQuotaOrHourly(auth, kind, rate, fetcher = fetch, overLimit = (q) => ({ error: 'quota', used: q.used, limit: q.limit, pro: q.pro })) {
+  const q = await aiQuotaStatus(auth, kind, fetcher);
+  if (q.down) return { error: quotaDown() };
+  if (q.quota && !q.quota.allowed) return { error: json(overLimit(q.quota), 429) };
+  if (!rate.allowed) return { error: json({ error: 'too_many' }, 429) };
+  await rate.count();
+  return { quota: q.quota ?? null };
 }
 
 export class TimeoutError extends Error {}

@@ -7,9 +7,11 @@
 // ingrediënten.
 // Antwoord: {name, servings, ingredients: [regels], image, source}. De app zoekt elke regel op zoals bij Snel loggen.
 // Niets wordt bewaard. Dagteller ai_quota_use('recipe'): gratis 0, met Pro 20 per dag (migratie
-// 20261027000000_ai_quota). Zonder die teller kan Pro niet nagekeken worden: dan pro_required.
+// 20261027000000_ai_quota). Zonder die teller kan Pro niet nagekeken worden: dan pro_required. Voor een link wordt
+// eerst alleen de stand gelezen (ai_quota) en pas geteld als de pagina opgehaald is.
 
-import { MODEL, MAX_IMAGE_BYTES, checkLogin, dataUrl, hourly, imageType, json, modelObject, useAiQuota } from '../_lib/ai.js';
+import { MODEL, MAX_IMAGE_BYTES, aiQuotaStatus, checkLogin, dataUrl, hourly, imageType, json, modelObject } from '../_lib/ai.js';
+import { readBytes, readJson } from '../_lib/body.js';
 
 const PER_HOUR = 20;
 const MAX_PAGE_BYTES = 2_000_000;
@@ -17,6 +19,8 @@ const FETCH_TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 3;
 const MAX_TEXT = 12_000;
 const MAX_LINES = 60;
+// {"url": "..."}: ruim genoeg voor een lange link
+const MAX_LINK_BODY = 16_000;
 
 const USER_AGENT = 'MacroMatrix/1.13.0 (macromatrix.eu)';
 
@@ -41,21 +45,50 @@ function ipv4Private(ip) {
   );
 }
 
-function ipv6Private(ip) {
-  const h = ip.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === '::' || h === '::1') return true;
-  // IPv4 in IPv6 (::ffff:127.0.0.1 of ::ffff:7f00:1)
-  const mapped = h.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return ipv4Private(mapped[1]);
-  if (/^::ffff:/.test(h)) {
-    const parts = h.slice(7).split(':');
-    if (parts.length === 2) {
-      const n = parts.map((x) => parseInt(x, 16));
-      return ipv4Private(`${n[0] >> 8}.${n[0] & 255}.${n[1] >> 8}.${n[1] & 255}`);
-    }
-    return true;
+// Een IPv6-adres als 8 getallen van 16 bits (ook met :: en met een IPv4-adres achteraan), of null als het geen
+// geldig adres is.
+export function ipv6Groups(ip) {
+  let h = ip.toLowerCase().replace(/^\[|\]$/g, '');
+  const zone = h.indexOf('%');
+  if (zone >= 0) h = h.slice(0, zone);
+  const v4 = h.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4) {
+    const p = v4[2].split('.').map(Number);
+    if (p.some((n) => n > 255)) return null;
+    h = `${v4[1]}${((p[0] << 8) | p[1]).toString(16)}:${((p[2] << 8) | p[3]).toString(16)}`;
   }
-  return /^(fc|fd|fe[89ab]|ff)/.test(h) || /^::/.test(h) || /^64:ff9b:/.test(h) || /^2001:db8:/.test(h);
+  const halves = h.split('::');
+  if (halves.length > 2) return null;
+  const part = (x) => (x === '' ? [] : x.split(':'));
+  const head = part(halves[0]);
+  const tail = halves.length === 2 ? part(halves[1]) : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
+  const all = [...head, ...Array(halves.length === 2 ? fill : 0).fill('0'), ...tail];
+  if (all.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null;
+  return all.map((g) => parseInt(g, 16));
+}
+
+const v4of = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+
+function ipv6Private(ip) {
+  const g = ipv6Groups(ip);
+  if (!g) return true;
+  // ::ffff:a.b.c.d (IPv4 in IPv6): de regels voor IPv4
+  if (g.slice(0, 5).every((n) => n === 0) && g[5] === 0xffff) return ipv4Private(v4of(g[6], g[7]));
+  // ::, ::1, ::a.b.c.d en alles in 0::/16
+  if (g[0] === 0) return true;
+  // 6to4 (2002::/16): het IPv4-adres zit in de volgende 32 bits
+  if (g[0] === 0x2002) return ipv4Private(v4of(g[1], g[2]));
+  return (
+    (g[0] === 0x2001 && g[1] === 0) || // Teredo (2001::/32)
+    (g[0] === 0x2001 && g[1] === 0xdb8) || // documentatie
+    (g[0] === 0x64 && g[1] === 0xff9b) || // NAT64
+    g[0] === 0x100 || // weggooien (100::/64)
+    (g[0] & 0xfe00) === 0xfc00 || // uniek lokaal (fc00::/7)
+    (g[0] & 0xff80) === 0xfe80 || // link-local en site-local (fe80::/10, fec0::/10)
+    (g[0] & 0xff00) === 0xff00 // multicast
+  );
 }
 
 export function isPrivateAddress(host) {
@@ -87,7 +120,8 @@ export function safeUrl(input) {
 }
 
 // De naam opzoeken via DNS over HTTPS en weigeren als een antwoord in een privénetwerk ligt (een publieke naam die
-// naar 127.0.0.1 wijst). Lukt het opzoeken niet, dan beslist fetch zelf (Workers kan geen privénetwerk bereiken).
+// naar 127.0.0.1 wijst). Lukt het opzoeken niet (geen antwoord, of een DNS-fout anders dan "bestaat niet"), dan telt
+// de naam ook als privé: liever een recept niet importeren dan blind een adres ophalen.
 export async function resolvesPrivate(host, fetcher = fetch) {
   if (isPrivateAddress(host)) return true;
   for (const type of ['A', 'AAAA']) {
@@ -95,13 +129,15 @@ export async function resolvesPrivate(host, fetcher = fetch) {
       const r = await fetcher(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`, {
         headers: { Accept: 'application/dns-json' },
       });
-      if (!r.ok) continue;
+      if (!r.ok) return true;
       const j = await r.json();
+      // Status 0 = goed, 3 = bestaat niet (dan faalt het ophalen zelf); de rest (bv. 2 = SERVFAIL) is een fout
+      if (j?.Status != null && j.Status !== 0 && j.Status !== 3) return true;
       for (const a of j?.Answer ?? []) {
         if ((a.type === 1 || a.type === 28) && isPrivateAddress(String(a.data))) return true;
       }
     } catch (_) {
-      // verder
+      return true;
     }
   }
   return false;
@@ -178,8 +214,97 @@ export function decodeEntities(s) {
   });
 }
 
+// Zonder regexen die bij een vijandige pagina kwadratisch worden (veel "<" zonder ">", veel "<nav" zonder "</nav>"):
+// alles hieronder zoekt met indexOf of met een vaste regex vanaf een positie, en komt elk stuk tekst maar één keer
+// voorbij.
+
+// Elke tag (<...>) vervangen: [repl] krijgt de tag en geeft de vervanging. Een "<" zonder ">" erna blijft staan.
+export function replaceTags(s, repl) {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const lt = s.indexOf('<', at);
+    if (lt < 0) break;
+    const gt = s.indexOf('>', lt + 1);
+    if (gt < 0) break;
+    // Zoals <[^>]+>: minstens één teken ertussen; "<>" is geen tag
+    if (gt === lt + 1) {
+      out += s.slice(at, gt + 1);
+      at = gt + 1;
+      continue;
+    }
+    out += s.slice(at, lt) + repl(s.slice(lt, gt + 1));
+    at = gt + 1;
+  }
+  return out + s.slice(at);
+}
+
+// Blokken zoals <nav ...>...</nav> weglaten (vervangen door een spatie). Een blok zonder einde blijft staan; per
+// soort wordt maar één keer tot het einde gezocht naar een sluittag die er niet is.
+export function dropBlocks(s, tags) {
+  const open = new RegExp(`<(${tags.join('|')})\\b`, 'gi');
+  const noEnd = new Set();
+  let out = '';
+  let at = 0;
+  for (;;) {
+    open.lastIndex = at;
+    const m = open.exec(s);
+    if (!m) break;
+    const tag = m[1].toLowerCase();
+    let end = -1;
+    if (!noEnd.has(tag)) {
+      const close = new RegExp(`</${tag}>`, 'gi');
+      close.lastIndex = m.index + m[0].length;
+      const c = close.exec(s);
+      end = c ? c.index + c[0].length : -1;
+      if (end < 0) noEnd.add(tag);
+    }
+    if (end < 0) {
+      out += s.slice(at, m.index + m[0].length);
+      at = m.index + m[0].length;
+      continue;
+    }
+    out += `${s.slice(at, m.index)} `;
+    at = end;
+  }
+  return out + s.slice(at);
+}
+
+// <!-- ... --> weglaten (een spatie); een opmerking zonder einde blijft staan.
+function dropComments(s) {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = s.indexOf('<!--', at);
+    if (open < 0) break;
+    const close = s.indexOf('-->', open + 4);
+    if (close < 0) break;
+    out += `${s.slice(at, open)} `;
+    at = close + 3;
+  }
+  return out + s.slice(at);
+}
+
+// Tags die een nieuwe regel beginnen (<p ...>, <br>, <li>, ...) vervangen door een regeleinde.
+function lineBreaks(s) {
+  const open = /<(br|p|li|div|h[1-6]|tr)\b/gi;
+  let out = '';
+  let at = 0;
+  for (;;) {
+    open.lastIndex = at;
+    const m = open.exec(s);
+    if (!m) break;
+    const gt = s.indexOf('>', m.index);
+    if (gt < 0) break;
+    out += `${s.slice(at, m.index)}\n`;
+    at = gt + 1;
+  }
+  return out + s.slice(at);
+}
+
 function cleanLine(s, max = 200) {
-  return decodeEntities(String(s).replace(/<[^>]*>/g, ' '))
+  // Een regel is kort; een enorme "regel" eerst inkorten (ruim, want tags en entiteiten vallen nog weg)
+  return decodeEntities(replaceTags(String(s).slice(0, max * 20), () => ' '))
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);
@@ -248,11 +373,24 @@ export function cleanIngredients(list) {
 
 // Het schema.org-recept uit de JSON-LD van een pagina. Geeft {name, servings, ingredients, image} of null.
 export function parseJsonLd(html) {
-  const re = /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi;
-  for (const m of String(html).matchAll(re)) {
+  const s = String(html);
+  const open = /<script\b/gi;
+  const close = /<\/script>/gi;
+  let at = 0;
+  for (;;) {
+    open.lastIndex = at;
+    const m = open.exec(s);
+    if (!m) break;
+    const gt = s.indexOf('>', m.index);
+    if (gt < 0) break;
+    close.lastIndex = gt + 1;
+    const c = close.exec(s);
+    if (!c) break;
+    at = c.index + c[0].length;
+    if (!/type\s*=\s*["']?application\/ld\+json/i.test(s.slice(m.index, gt))) continue;
     let data;
     try {
-      data = JSON.parse(m[1].trim().replace(/^<!\[CDATA\[|\]\]>$/g, ''));
+      data = JSON.parse(s.slice(gt + 1, c.index).trim().replace(/^<!\[CDATA\[|\]\]>$/g, ''));
     } catch (_) {
       continue;
     }
@@ -272,13 +410,25 @@ export function parseJsonLd(html) {
 }
 
 // De zichtbare tekst van een pagina, ingekort voor het model.
+const HIDDEN = ['script', 'style', 'noscript', 'svg', 'template', 'iframe', 'head', 'nav', 'footer'];
+
+// De tekst van de eerste <title>, of ''.
+function titleOf(s) {
+  const open = /<title/i.exec(s);
+  if (!open) return '';
+  const gt = s.indexOf('>', open.index);
+  if (gt < 0) return '';
+  const close = /<\/title>/gi;
+  close.lastIndex = gt + 1;
+  const c = close.exec(s);
+  return c ? s.slice(gt + 1, c.index) : '';
+}
+
 export function visibleText(html, max = MAX_TEXT) {
-  const title = String(html).match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '';
-  const body = String(html)
-    .replace(/<(script|style|noscript|svg|template|iframe|head|nav|footer)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<(br|p|li|div|h[1-6]|tr)\b[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ');
+  const s = String(html);
+  const title = titleOf(s);
+  // In dezelfde volgorde als vroeger: blokken, opmerkingen, regeleindes, en dan alle andere tags
+  const body = replaceTags(lineBreaks(dropComments(dropBlocks(s, HIDDEN))), () => ' ');
   const t = decodeEntities(`${title}\n${body}`)
     .split('\n')
     .map((l) => l.replace(/\s+/g, ' ').trim())
@@ -317,8 +467,10 @@ export function normaliseRecipe(raw) {
 // ---------------------------------------------------------------------------------------------------------------
 
 // Alleen met Pro: zonder teller (migratie niet uitgevoerd of storing) kan dat niet nagekeken worden.
-export async function checkRecipeQuota(auth, fetcher = fetch) {
-  const quota = await useAiQuota(auth, 'recipe', fetcher);
+// [peek] = alleen de stand lezen (ai_quota), zonder te tellen: voor een link wordt pas geteld als de pagina opgehaald
+// is, zodat een link die niet werkt geen import van vandaag kost.
+export async function checkRecipeQuota(auth, fetcher = fetch, peek = false) {
+  const quota = (await aiQuotaStatus(auth, 'recipe', fetcher, peek ? 'ai_quota' : 'ai_quota_use')).quota ?? null;
   if (!quota) return { error: json({ error: 'pro_required' }, 403) };
   if (!quota.allowed) {
     if (!quota.pro) return { error: json({ error: 'pro_required' }, 403) };
@@ -338,10 +490,10 @@ export async function onRequestPost({ request, env }) {
   // Foto van een kookboekpagina
   if (/^image\//i.test(type)) {
     if (!env.AI) return json({ error: 'not_configured' }, 503);
-    const declared = Number(request.headers.get('Content-Length') ?? 0);
-    if (declared > MAX_IMAGE_BYTES) return json({ error: 'too_big' }, 413);
-    const photo = new Uint8Array(await request.arrayBuffer());
-    if (photo.length > MAX_IMAGE_BYTES) return json({ error: 'too_big' }, 413);
+    const read = await readBytes(request, MAX_IMAGE_BYTES);
+    if (read.error) return read.error;
+    if (read.bad) return json({ error: 'bad_image' }, 400);
+    const photo = read.bytes;
     const mime = imageType(photo);
     if (!mime) return json({ error: 'bad_image' }, 400);
     const q = await checkRecipeQuota(who.auth);
@@ -370,19 +522,20 @@ export async function onRequestPost({ request, env }) {
   }
 
   // Link
-  let body;
-  try {
-    body = await request.json();
-  } catch (_) {
-    return json({ error: 'bad_url' }, 400);
-  }
-  if (!safeUrl(body?.url)) return json({ error: 'bad_url' }, 400);
-  const q = await checkRecipeQuota(who.auth);
-  if (q.error) return q.error;
+  const read = await readJson(request, MAX_LINK_BODY);
+  if (read.error) return read.error;
+  const body = read.value;
+  if (read.bad || !safeUrl(body?.url)) return json({ error: 'bad_url' }, 400);
+  // Eerst alleen kijken of het mag (Pro en nog niet op), zodat gratis accounts geen pagina's laten ophalen
+  const peek = await checkRecipeQuota(who.auth, undefined, true);
+  if (peek.error) return peek.error;
   await rate.count();
 
   const page = await fetchPage(body.url);
-  if (page.error) return json({ error: page.error, quota: q.quota }, page.error === 'bad_url' ? 400 : 422);
+  if (page.error) return json({ error: page.error, quota: peek.quota }, page.error === 'bad_url' ? 400 : 422);
+  // Pas nu tellen (in één stap in de database): een link die niet opengaat, kost niets
+  const q = await checkRecipeQuota(who.auth);
+  if (q.error) return q.error;
   const fromLd = parseJsonLd(page.html);
   if (fromLd) return json({ ...fromLd, source: 'jsonld', url: page.url, quota: q.quota });
 
