@@ -469,17 +469,26 @@ class Friends extends ChangeNotifier {
   }
 
   /// Score van deze en vorige week naar de server (alleen wat veranderd is).
+  ///
+  /// Een battleweek loopt tot maandag 03:00 (de app-dag, zie [logicalNow]). Daarna gaat de vorige week nog één keer met
+  /// de eindstand naar de server, en nooit meer: een later gewijzigde of gewiste regel van die week verandert de
+  /// uitslag bij vrienden niet meer. Welke week al afgesloten is, staat in de lokale instelling `_scores_final`.
   Future<void> pushScores() async {
     final client = account.client;
     if (client == null || !account.signedIn) return;
     if (state.avatar != _sentAvatar || state.level.level != _sentLevel) await _me();
     await _pushExtra();
-    final monday = mondayOf(DateTime.now());
-    for (final m in [monday, monday.plusDays(-7)]) {
+    final uid = account.user!.id;
+    final monday = mondayOf(logicalNow());
+    final last = monday.plusDays(-7);
+    final done = state.user.setting('_scores_final');
+    final lastDone = done?['user'] == uid && ((done?['week'] as String?) ?? '').compareTo(dayKey(last)) >= 0;
+    for (final m in [monday, if (!lastDone) last]) {
       final week = dayKey(m);
       final s = state.weekScore(m);
       final value = s == null ? '-' : '${s.score}/${s.days}/${state.battlePoints(m)}';
-      if (_pushed[week] == value) continue;
+      // De afgelopen week altijd één keer na het einde sturen, ook als de stand dezelfde is als vóór 03:00
+      if (m != last && _pushed[week] == value) continue;
       if (s == null) {
         await client.from('weekly_scores').delete().eq('week', week);
       } else {
@@ -500,6 +509,7 @@ class Friends extends ChangeNotifier {
         }
       }
       _pushed[week] = value;
+      if (m == last) state.user.setSetting('_scores_final', {'user': uid, 'week': week});
     }
   }
 

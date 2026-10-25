@@ -961,7 +961,7 @@ class _ImpactPanel extends StatelessWidget {
     // Suiker telt als vrije suikers (zoals in de dagscore): de suiker van heel fruit of gewone melk kleurt niets
     // rood (N63). Met "Let op suiker" staat die regel altijd bovenaan, ook als het product geen vrije suiker heeft (N28).
     final freeTarget = s.targets['free_sugars']?.upper;
-    final useFree = freeTarget != null && added.containsKey('free_sugars');
+    final useFree = freeTarget != null && freeTarget > 0 && added.containsKey('free_sugars');
     final sugarFirst = s.sugarFocus && useFree;
     (Nutrient, double, double, bool)? sugarRow;
     for (final n in nutrients) {
@@ -975,13 +975,13 @@ class _ImpactPanel extends StatelessWidget {
       final t = s.targets[n.key];
       final add = added[n.key] ?? 0;
       if (t == null || add <= 0) continue;
-      if (t.goal != null) {
+      if (t.goal != null && t.goal! > 0) {
         final over = t.upper != null && before(n.key) + add > t.upper!;
         // Een obscure stof die al boven de grens zat, alleen tonen als dit product er merkbaar bij doet
         if (obscure.contains(n.key) && add / t.goal! < 0.5 && !(over && add / t.upper! >= 0.05)) continue;
         if (over) overMax[n.key] = t.upper!;
         rows.add((n, before(n.key) / t.goal!, (before(n.key) + add) / t.goal!, false));
-      } else if (t.upper != null) {
+      } else if (t.upper != null && t.upper! > 0) {
         final after = (before(n.key) + add) / t.upper!;
         // Limieten alleen tonen als ze ertoe doen
         if (after > 0.5 && add / t.upper! >= 0.05) rows.add((n, before(n.key) / t.upper!, after, true));

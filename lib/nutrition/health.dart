@@ -320,7 +320,8 @@ String eatMoreAdvice(double gapKcal, {bool ifLogged = false}) {
 }) {
   final gapKcal = (eaten - goal).abs();
   final gap = fmtGrouped(gapKcal, 0);
-  final round = '${fmtNum(gapKcal / 100, 0)}00';
+  // Afgerond op honderdtallen, met duizendtallen ("1.300", niet "1300"); een klein verschil gewoon zoals het is
+  final round = gapKcal < 100 ? fmtNum(gapKcal, 0) : fmtGrouped((gapKcal / 100).round() * 100, 0);
   final at = fmtGrouped((eaten / 50).round() * 50, 0);
   final under = eaten < goal;
   final moved = trend == null

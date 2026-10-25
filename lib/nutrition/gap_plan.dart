@@ -258,7 +258,7 @@ GapPlan? planGaps({
   final now = Map<String, double>.of(totals);
   final keys = [
     for (final k in stripKeys)
-      if (targets[k]?.goal != null) k,
+      if ((targets[k]?.goal ?? 0) > 0) k,
   ];
   double remaining(String k) => math.max(0, 1 - (now[k] ?? 0) / targets[k]!.goal!);
   if (keys.every((k) => remaining(k) < 0.15)) return null;

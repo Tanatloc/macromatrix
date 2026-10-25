@@ -79,7 +79,7 @@ extension ChallengeDays on AppState {
     } else {
       value = NutrientTotals.sumOf(entries.map(entryValues)).values[nutrient] ?? 0;
     }
-    return ChallengeDayInput(logged: true, value: value, goal: targetsForDate(day)[nutrient]?.goal);
+    return ChallengeDayInput(logged: true, value: value, goal: targetsWithExercise(day)[nutrient]?.goal);
   }
 
   /// Porties groenten (80 g) in [entries]; peulvruchten tellen hoogstens één portie. Een recept telt met de

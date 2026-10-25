@@ -29,7 +29,8 @@ void main() {
 
   test('a passed date does not blow up and maintain ignores the plan', () {
     final late = Profile(weightKg: 80, goal: Goal.lose, targetWeightKg: 78, targetDate: inDays(-10));
-    expect(late.rate, -Profile.maxLoss);
+    // Datum voorbij: het standaardtempo van het doel tot je een nieuwe datum kiest, niet het hoogste tempo
+    expect(late.rate, Goal.lose.defaultRate);
     final maintain = Profile(weightKg: 80, goal: Goal.maintain, targetWeightKg: 70, targetDate: inDays(100));
     expect(maintain.hasPlan, isFalse);
     expect(maintain.rate, 0);

@@ -34,7 +34,7 @@ const tipSodiumMax = 400.0;
 const tipSodiumMaxWhenHigh = 120.0;
 
 /// Te zout voor een tip: veel natrium in de portie, of al genoeg zout gegeten ([sodiumFraction] = gemiddeld deel
-/// van je natriumdoel) en toch merkbaar natrium in de portie.
+/// van je natriumlimiet, 1 = op de limiet) en toch merkbaar natrium in de portie.
 bool tooSaltyForTip(double sodiumInPortion, double? sodiumFraction) =>
     sodiumInPortion > tipSodiumMax || ((sodiumFraction ?? 0) >= 1 && sodiumInPortion > tipSodiumMaxWhenHigh);
 
