@@ -95,27 +95,27 @@ void main() {
     debugWebOverride = true;
     final (_, account) = await pump(tester, const WelcomeScreen());
     expect(find.text('Use without an account'), findsOneWidget);
-    expect(find.text('Your data is then kept in this browser only.'), findsOneWidget);
+    // De uitleg staat vóór je kiest onder de knop, niet meer in een venster erna (eerste-maaltijdmeting 25-10)
+    expect(find.textContaining('Saved in this browser only'), findsOneWidget);
+    expect(find.textContaining('lost in a private window or when you clear browsing data'), findsOneWidget);
+    expect(find.textContaining('what you logged comes along'), findsOneWidget);
+    expect(account.localOnly, isFalse);
 
     await tester.tap(find.text('Use without an account'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Your data is kept in this browser only.'), findsOneWidget);
-    expect(find.textContaining('What you logged here comes along.'), findsOneWidget);
-    expect(account.localOnly, isFalse);
-
-    await tester.tap(find.text('Continue without account'));
-    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
     expect(account.localOnly, isTrue);
   });
 
   testWidgets('app (niet web): zelfde knop, zonder de browsernoot', (tester) async {
     debugWebOverride = false;
-    await pump(tester, const WelcomeScreen());
+    final (_, account) = await pump(tester, const WelcomeScreen());
     expect(find.text('Use without an account'), findsOneWidget);
-    expect(find.text('Your data is then kept in this browser only.'), findsNothing);
+    expect(find.textContaining('this browser'), findsNothing);
+    expect(find.textContaining('Saved on this device only.'), findsOneWidget);
     await tester.tap(find.text('Use without an account'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Everything stays on this device only.'), findsOneWidget);
+    expect(account.localOnly, isTrue);
   });
 
   testWidgets('gast in Instellingen: uitleg en account maken, met de belofte dat alles meegaat', (tester) async {

@@ -28,11 +28,12 @@ import 'undo.dart';
 bool get speechSupported => kIsWeb || defaultTargetPlatform == TargetPlatform.android;
 
 /// Snel loggen: zeg of typ wat je at ("200 g chicken and a bowl of rice"), controleer en voeg alles toe.
-/// Met [photo] vraagt het venster meteen een foto van je bord (loggen met een foto, vanuit het +-menu).
-Future<void> showQuickLog(BuildContext context, {Meal? meal, bool photo = false}) => showModalBottomSheet<void>(
+/// Met [photo] vraagt het venster meteen een foto van je bord (loggen met een foto, vanuit het +-menu). Met [text]
+/// (al getypt in het veld op een lege Vandaag) staan de producten meteen klaar om toe te voegen.
+Future<void> showQuickLog(BuildContext context, {Meal? meal, bool photo = false, String? text}) => showModalBottomSheet<void>(
   context: context,
   isScrollControlled: true,
-  builder: (_) => _QuickLogSheet(meal: meal ?? context.read<AppState>().suggestedMeal, photo: photo),
+  builder: (_) => _QuickLogSheet(meal: meal ?? context.read<AppState>().suggestedMeal, photo: photo, text: text),
 );
 
 /// Een foto van je bord nemen of kiezen, al verkleind voor de server; null = geannuleerd. Te vervangen in tests.
@@ -99,9 +100,10 @@ Future<Uint8List?> _pickPlatePhoto(BuildContext context) async {
 
 
 class _QuickLogSheet extends StatefulWidget {
-  const _QuickLogSheet({required this.meal, this.photo = false});
+  const _QuickLogSheet({required this.meal, this.photo = false, this.text});
   final Meal meal;
   final bool photo;
+  final String? text;
 
   @override
   State<_QuickLogSheet> createState() => _QuickLogSheetState();
@@ -137,8 +139,10 @@ class _QuickLogSheetState extends State<_QuickLogSheet> {
   @override
   void initState() {
     super.initState();
+    if (widget.text case final t? when t.trim().isNotEmpty) _text.text = t.trim();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (_text.text.isNotEmpty) _parse();
       // De fototeller verversen (een nieuwe dag, of een foto op een ander toestel)
       final pro = proOf(context, listen: false);
       final refreshed = pro?.refreshQuota();

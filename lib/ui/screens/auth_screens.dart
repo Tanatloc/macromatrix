@@ -16,11 +16,10 @@ import '../../state/app_state.dart';
 import '../../sync/account.dart';
 import '../shell.dart';
 import '../theme.dart';
-import '../widgets/allergen_picker.dart';
+import '../widgets/activity_ask.dart';
 import '../widgets/kit.dart';
 import '../widgets/logo.dart';
 import '../../i18n.dart';
-import '../../nutrition/allergens.dart';
 import '../widgets/number_input.dart';
 
 const siteUrl = 'https://macromatrix.eu';
@@ -293,15 +292,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen(register: false))),
                     child: Text(tr('Log in', 'Inloggen')),
                   ),
-                  // Zonder account: in de app (gsm, pc) en in de browser
+                  // Zonder account: in de app (gsm, pc) en in de browser. Wat dat betekent staat er meteen onder, vóór
+                  // je kiest, in plaats van in een apart venster erna (eerste-maaltijdmeting 25-10).
                   const SizedBox(height: 6),
                   TextButton(onPressed: () => withoutAccount(context), child: Text(tr('Use without an account', 'Gebruiken zonder account'))),
-                  if (runsOnWeb)
-                    Text(
-                      tr('Your data is then kept in this browser only.', 'Je gegevens blijven dan alleen in deze browser.'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12.5, color: p.ink3),
-                    ),
+                  Text(
+                    guestNote,
+                    key: const ValueKey('guest-note'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink3),
+                  ),
                   const SizedBox(height: 12),
                   Wrap(
                     alignment: WrapAlignment.center,
@@ -862,13 +862,14 @@ class ProfileSetupScreen extends StatefulWidget {
 }
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
+  // Alleen wat nodig is voor je doelen en de 18+-controle. Activiteit (standaard licht actief) vragen we na je eerste
+  // maaltijd op Vandaag, allergieën met de kaart onder de maaltijden, en het thema volgt het toestel (zie Instellingen).
   Sex _sex = Sex.male;
-  Activity _activity = Activity.light;
   Goal _goal = Goal.maintain;
-  Set<Allergen> _allergies = {};
   final _birth = TextEditingController();
   final _height = TextEditingController();
   final _weight = TextEditingController();
+  final _heightFocus = FocusNode(), _weightFocus = FocusNode();
   String? _error;
 
   @override
@@ -876,7 +877,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     for (final c in [_birth, _height, _weight]) {
       c.dispose();
     }
+    _heightFocus.dispose();
+    _weightFocus.dispose();
     super.dispose();
+  }
+
+  /// Volledig ingevuld (een jaartal van 4 cijfers, een lengte van 3 cijfers in cm): meteen naar het volgende veld,
+  /// zonder extra tik. Gewicht heeft geen vaste lengte, dus daar niet.
+  void _advance(String v, int digits, FocusNode next, {double? min, double? max}) {
+    if (!RegExp('^[0-9]{$digits}\$').hasMatch(v)) return;
+    final n = double.parse(v);
+    if ((min != null && n < min) || (max != null && n > max)) return;
+    next.requestFocus();
   }
 
   double? _num(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
@@ -892,24 +904,28 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         ? tr('Enter your weight in kilograms.', 'Vul je gewicht in kilogram in.')
         : null;
     if (problem != null) return setState(() => _error = problem);
-    context.read<AppState>().setAllergies(_allergies);
-    context.read<AppState>().saveProfile(
-      Profile(sex: _sex, birthYear: birth!, heightCm: height!, weightKg: weight!, activity: _activity, goal: _goal),
-    );
+    final s = context.read<AppState>();
+    s.saveProfile(Profile(sex: _sex, birthYear: birth!, heightCm: height!, weightKg: weight!, activity: Activity.light, goal: _goal));
+    askActivityLater(s);
   }
 
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    Widget field(String label, TextEditingController c, String suffix) => Expanded(
-      child: TextField(
-        controller: c,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: decimalInput,
-        onTap: selectAllOnTap(c),
-        decoration: InputDecoration(labelText: label, suffixText: suffix),
-      ),
-    );
+    Widget field(String label, TextEditingController c, String suffix, {FocusNode? focus, ValueChanged<String>? onChanged, bool last = false}) =>
+        Expanded(
+          child: TextField(
+            controller: c,
+            focusNode: focus,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: decimalInput,
+            textInputAction: last ? TextInputAction.done : TextInputAction.next,
+            onTap: selectAllOnTap(c),
+            onChanged: onChanged,
+            onSubmitted: last ? (_) => _save() : null,
+            decoration: InputDecoration(labelText: label, suffixText: suffix),
+          ),
+        );
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -927,8 +943,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   const SizedBox(height: 8),
                   Text(
                     tr(
-                      'We use this to calculate your goals for energy, protein, vitamins and minerals (EFSA). You can change everything later.',
-                      'Hiermee berekenen we je doelen voor energie, eiwit, vitaminen en mineralen (EFSA). Je kunt alles later aanpassen.',
+                      'This sets your daily goals (EFSA). You can change everything later.',
+                      'Hiermee berekenen we je dagelijkse doelen (EFSA). Je kunt alles later aanpassen.',
                     ),
                     style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
                   ),
@@ -937,54 +953,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      field(tr('Born in', 'Geboren in'), _birth, ''),
+                      field(tr('Born in', 'Geboren in'), _birth, '', onChanged: (v) => _advance(v, 4, _heightFocus)),
                       const SizedBox(width: 10),
-                      field(tr('Height', 'Lengte'), _height, 'cm'),
+                      field(
+                        tr('Height', 'Lengte'),
+                        _height,
+                        'cm',
+                        focus: _heightFocus,
+                        onChanged: (v) => _advance(v, 3, _weightFocus, min: 120, max: 230),
+                      ),
                       const SizedBox(width: 10),
-                      field(tr('Weight', 'Gewicht'), _weight, 'kg'),
+                      field(tr('Weight', 'Gewicht'), _weight, 'kg', focus: _weightFocus, last: true),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Text(
-                    tr('How active are you?', 'Hoe actief ben je?'),
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
-                  ),
-                  const SizedBox(height: 8),
-                  for (final a in Activity.values)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Material(
-                        color: _activity == a ? p.brandSoft : p.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: _activity == a ? p.brand : p.line, width: _activity == a ? 1.5 : 1),
-                        ),
-                        child: InkWell(
-                          customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          onTap: () => setState(() => _activity = a),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        a.label,
-                                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
-                                      ),
-                                      Text(a.description, style: TextStyle(fontSize: 12, color: p.ink3)),
-                                    ],
-                                  ),
-                                ),
-                                if (_activity == a) Icon(Icons.check_rounded, size: 18, color: p.brand),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                   const SizedBox(height: 12),
                   Text(
                     tr('Your goal', 'Je doel'),
@@ -992,34 +973,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   ),
                   const SizedBox(height: 8),
                   Segmented<Goal>(items: [for (final g in Goal.values) (g, g.label)], selected: _goal, onChanged: (g) => setState(() => _goal = g)),
-                  const SizedBox(height: 18),
-                  Text(
-                    tr('Appearance', 'Weergave'),
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tr('Light or dark? You can change it later in the settings.', 'Licht of donker? Je kunt het later wijzigen in de instellingen.'),
-                    style: TextStyle(fontSize: 12.5, color: p.ink3),
-                  ),
-                  const SizedBox(height: 8),
-                  Segmented<String>(
-                    items: [('light', tr('Light', 'Licht')), ('dark', tr('Dark', 'Donker')), ('system', tr('Like my device', 'Zoals toestel'))],
-                    selected: context.watch<AppState>().themeMode,
-                    onChanged: context.read<AppState>().setThemeMode,
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    tr('Allergies (optional)', 'Allergieën (optioneel)'),
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tr('Select only what you react to, e.g. just peanuts.', 'Duid alleen aan waarop je reageert, bv. enkel pinda.'),
-                    style: TextStyle(fontSize: 12.5, color: p.ink3),
-                  ),
-                  const SizedBox(height: 8),
-                  AllergenPicker(selected: _allergies, onChanged: (v) => setState(() => _allergies = v)),
                   if (_error != null) ...[
                     const SizedBox(height: 14),
                     Container(
@@ -1053,42 +1006,22 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   }
 }
 
-/// Zonder account verder: eerst uitleggen wat je dan mist.
-/// Bewust zonder account beginnen, na uitleg wat dat betekent. In de browser eerlijk zeggen dat alles alleen in
-/// die browser staat (browsergegevens wissen of een privévenster = weg), en de browser vragen het niet zelf op te
-/// ruimen.
-Future<void> withoutAccount(BuildContext context) async {
-  final web = runsOnWeb;
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(tr('Use without an account?', 'Zonder account gebruiken?')),
-      content: Text(
-        web
-            ? tr(
-                'Your data is kept in this browser only. If you clear your browsing data, use a private window or switch to another browser or device, you start over.\n\n'
-                    'Without an account there is no sync, no friends or battles, and logging with a photo is not available.\n\n'
-                    'Create a free account later in Settings to keep your data safe and use it on your phone. What you logged here comes along.',
-                'Je gegevens blijven alleen in deze browser. Wis je je browsergegevens, gebruik je een privévenster of stap je over naar een andere browser of toestel, dan begin je opnieuw.\n\n'
-                    'Zonder account is er geen synchronisatie, geen vrienden of battles, en loggen met een foto kan niet.\n\n'
-                    'Maak later in de Instellingen een gratis account om je gegevens veilig te bewaren en ze op je gsm te gebruiken. Wat je hier logde, gaat mee.',
-              )
-            : tr(
-                'Everything stays on this device only. Without an account there is no sync between devices, no friends or battles, '
-                    'and voice logging only works if your phone has its own speech recognition. If you lose or reset this device, your data is gone.\n\n'
-                    'You can create an account later in the settings; your data then comes along.',
-                'Alles blijft alleen op dit toestel. Zonder account is er geen synchronisatie tussen toestellen, geen vrienden of battles, '
-                    'en spraak werkt alleen als je gsm zelf spraakherkenning heeft. Verlies of reset je dit toestel, dan zijn je gegevens weg.\n\n'
-                    'Je kunt later in de instellingen alsnog een account maken; je gegevens gaan dan mee.',
-              ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel', 'Annuleren'))),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Continue without account', 'Verder zonder account'))),
-      ],
-    ),
-  );
-  if (ok != true || !context.mounted) return;
+/// Wat "zonder account" betekent, onder de knop op het welkomscherm. In de browser eerlijk zeggen dat alles alleen in
+/// die browser staat (een privévenster of browsergegevens wissen = weg).
+String get guestNote => runsOnWeb
+    ? tr(
+        'Saved in this browser only: lost in a private window or when you clear browsing data. Add an account anytime; what you logged comes along.',
+        'Alleen bewaard in deze browser: weg in een privévenster of als je je browsergegevens wist. Een account kan altijd later; wat je logde, gaat mee.',
+      )
+    : tr(
+        'Saved on this device only. Add an account anytime; what you logged comes along.',
+        'Alleen bewaard op dit toestel. Een account kan altijd later; wat je logde, gaat mee.',
+      );
+
+/// Bewust zonder account beginnen: de uitleg ([guestNote]) staat al onder de knop, dus meteen verder. Vraag de
+/// browser om de gegevens niet zelf op te ruimen. Meer uitleg (geen synchronisatie, vrienden of foto's) staat in
+/// Instellingen ([GuestAccountPanel]) en komt na 3 dagen terug ([GuestNudgeCard]).
+void withoutAccount(BuildContext context) {
   context.read<Account>().setLocalOnly(true);
-  if (web) unawaited(askPersistentStorage());
+  if (runsOnWeb) unawaited(askPersistentStorage());
 }
