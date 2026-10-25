@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'nutrients.dart';
 import 'targets.dart';
 import 'values.dart';
+import '../day_clock.dart';
 import '../i18n.dart';
 
 /// Status van een voedingsstof ten opzichte van de richtwaarde.
@@ -116,6 +117,65 @@ int completenessScore(NutrientMap values, Map<String, Target> targets) {
     n++;
   }
   return n == 0 ? 0 : (sum / n * 100).round();
+}
+
+/// Energieregel voor de Voedingsscore van een dag (SP-7: 98 terwijl je 1.000 kcal onder je doel zit om aan te komen).
+/// Binnen ±[energyScoreBand] van je doel telt niets af. Eronder zakt de factor lineair tot [energyScoreMinUnder] bij
+/// [energyScoreFullAt] onder je doel (en blijft daar); erboven milder, tot [energyScoreMinOver]. Hier bijstellen.
+const energyScoreBand = 0.15;
+const energyScoreFullAt = 0.50;
+const energyScoreMinUnder = 0.75;
+const energyScoreMinOver = 0.85;
+
+/// Factor op de Voedingsscore van een dag naar hoe ver je naast je energiedoel zat (zie [energyScoreBand]). Wie
+/// afvalt, heeft het tekort al in zijn doel: dezelfde regel tegenover dat doel. Zonder energiedoel: 1.
+double energyScoreFactor(double kcal, double? goal) {
+  if (goal == null || goal <= 0) return 1;
+  final d = (kcal - goal) / goal;
+  if (d.abs() <= energyScoreBand) return 1;
+  final min = d < 0 ? energyScoreMinUnder : energyScoreMinOver;
+  final t = math.min(1.0, (d.abs() - energyScoreBand) / (energyScoreFullAt - energyScoreBand));
+  return 1 - t * (1 - min);
+}
+
+/// De Voedingsscore van een dag: [completenessScore] (vitaminen en mineralen) maal [energyScoreFactor]. Eén regel voor
+/// Vandaag, het Dashboard, het weekrapport, de overzichten, de deelkaarten en de weekscore bij Vrienden.
+/// [closed] = false voor vandaag: die dag loopt nog (na het ontbijt zit iedereen ver onder zijn doel), dus energie
+/// telt pas mee als de dag voorbij is.
+int dayScore(NutrientMap values, Map<String, Target> targets, {bool closed = true}) {
+  final micro = completenessScore(values, targets);
+  if (!closed) return micro;
+  return (micro * energyScoreFactor(values['energy'] ?? 0, targets['energy']?.goal)).round();
+}
+
+/// Eén regel onder de score over je energie, of null: (tekst, waarschuwing). Een afgesloten dag waar de energiefactor
+/// iets afnam: "Score verlaagd: 1.000 kcal onder je doel". Vandaag: dat energie pas meetelt als de dag voorbij is, als
+/// je al duidelijk boven je doel zit, of 's avonds ([hour] ≥ 20 of na middernacht) nog duidelijk eronder.
+(String, bool)? scoreEnergyNote(NutrientMap values, Map<String, Target> targets, {bool closed = true, int? hour}) {
+  final goal = targets['energy']?.goal;
+  final kcal = values['energy'] ?? 0;
+  if (goal == null || goal <= 0 || kcal <= 0) return null;
+  final gap = kcal - goal;
+  final amount = fmtGrouped((gap.abs() / 10).round() * 10, 0);
+  final under = gap < 0;
+  if (closed) {
+    if (energyScoreFactor(kcal, goal) >= 1) return null;
+    return (
+      under
+          ? tr('Score lowered: $amount kcal under your goal', 'Score verlaagd: $amount kcal onder je doel')
+          : tr('Score lowered: $amount kcal over your goal', 'Score verlaagd: $amount kcal boven je doel'),
+      true,
+    );
+  }
+  final h = hour ?? DateTime.now().hour;
+  final late = h >= 20 || h < dayStartHour;
+  if (gap.abs() <= goal * energyScoreBand || (under && !late)) return null;
+  return (
+    under
+        ? tr('Energy counts once the day is over: now $amount kcal under your goal', 'Energie telt mee als de dag voorbij is: nu $amount kcal onder je doel')
+        : tr('Energy counts once the day is over: now $amount kcal over your goal', 'Energie telt mee als de dag voorbij is: nu $amount kcal boven je doel'),
+    false,
+  );
 }
 
 /// Deel van je kcal waarvoor gegevens bestaan, gemiddeld over de 25 stoffen (1 = alles bekend).

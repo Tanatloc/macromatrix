@@ -113,13 +113,11 @@ final _notCake = RegExp(
   r'pork|meat|fish|crab|potato|mince|cupcakes?|snack cakes?|fried|madeleine|shortcake)\b',
 );
 
-/// Havermout (vlokken, droog of gekookt), ook "Oatmeal" uit de Noorse tabel (eigenlijk havermeel). Geen koek, reep,
-/// brood of haverdrank.
+/// Havermout (vlokken, droog of gekookt). Geen havermeel, koek, reep, brood of haverdrank.
 bool isOats(Food f) {
   final name = f.name.toLowerCase();
   final l = f.label;
-  final oatsLike =
-      _oats.hasMatch(name) || const {'oats', 'rolled oats'}.contains(l?.food) || (l?.food == 'oat flour' && RegExp(r'^oatmeal\b').hasMatch(name));
+  final oatsLike = _oats.hasMatch(name) || const {'oats', 'rolled oats'}.contains(l?.food);
   return oatsLike &&
       (l == null || const {'cereal', 'breakfast cereal'}.contains(l.group)) &&
       !RegExp(r'\b(bars?|biscuits?|cookies?|bread|drink|porridge)\b').hasMatch(name);
@@ -164,9 +162,25 @@ const _pieceGroups = {'fruit', 'egg', 'bakery', 'bread', 'vegetable', 'snack', '
 
 String _approx(double g) => g == g.roundToDouble() ? '${g.round()}' : g.toStringAsFixed(1);
 
-EverydayPortion _p(String en, String nl, double grams, {String unit = 'g'}) {
+/// [amount] in [unit]; bij ml rekent [density] (g per ml) om naar gram: een glas melk van 200 ml weegt 206 g (NF-15).
+EverydayPortion _p(String en, String nl, double amount, {String unit = 'g', double density = 1}) {
   final short = tr(en, nl);
-  return EverydayPortion(short, '$short (≈${_approx(grams)} $unit)', grams);
+  return EverydayPortion(short, '$short (≈${_approx(amount)} $unit)', amount * density);
+}
+
+final _sweetDrink = RegExp(r'\b(juice|nectar|smoothie|soda|cola|lemonade|soft drink|iced tea)\b');
+final _noSugar = RegExp(r'\b(zero|light|diet|sugar[- ]free|sweetener|unsweetened)\b');
+
+/// Hoeveel een ml van een drank weegt (NF-15: ml telde als gram). Melk en andere zuiveldranken 1,03 g per ml, sap
+/// en gesuikerde frisdrank 1,04; water, koffie, thee, light-frisdrank, bier en wijn ongeveer 1.
+double mlDensity(Food f) {
+  final name = f.name.toLowerCase();
+  if (f.label?.group == 'dairy' || RegExp(r'\b(milk|buttermilk|kefir|yogh?urt drink|ayran|lassi)\b').hasMatch(name)) {
+    // Plantaardige "melk" weegt ongeveer als water
+    if (!RegExp(r'\b(oat|soy|soya|almond|rice|coconut|cashew|hazelnut|pea)\b').hasMatch(name)) return 1.03;
+  }
+  if ((f.label?.part == 'juice' || _sweetDrink.hasMatch(name)) && !_noSugar.hasMatch(name)) return 1.04;
+  return 1;
 }
 
 /// Een drank (melk, sap, water, bier, koffie): hoeveelheden in ml in plaats van gram (N85). Poeder, concentraat en
@@ -202,25 +216,26 @@ List<EverydayPortion> everydayPortions(Food f) {
 
   // Dranken: een glas (wijn kleiner, sterkedrank een borrel), koffie en thee een mok
   if (isDrink(f)) {
+    final d = mlDensity(f);
     // Kokosmelk uit blik is om mee te koken: een eetlepel of een blik, geen glas van 400 kcal (N84)
     if (_coconutMilk.hasMatch(name) && !RegExp(r'\bdrink\b').hasMatch(name)) {
-      return unless([(_tbsp, _p('1 tablespoon', '1 eetlepel', 15, unit: 'ml')), (r'\b(can|tin|box)\b', _p('1 can', '1 blik', 400, unit: 'ml'))]);
+      return unless([(_tbsp, _p('1 tablespoon', '1 eetlepel', 15, unit: 'ml', density: d)), (r'\b(can|tin|box)\b', _p('1 can', '1 blik', 400, unit: 'ml', density: d))]);
     }
-    if (_spirits.hasMatch(name)) return unless([(r'\b(shot|glass|measure|fl oz)\b', _p('1 shot', '1 borrel', 35, unit: 'ml'))]);
-    if (_wine.hasMatch(name)) return unless([(_glass, _p('1 glass', '1 glas', 150, unit: 'ml'))]);
+    if (_spirits.hasMatch(name)) return unless([(r'\b(shot|glass|measure|fl oz)\b', _p('1 shot', '1 borrel', 35, unit: 'ml', density: d))]);
+    if (_wine.hasMatch(name)) return unless([(_glass, _p('1 glass', '1 glas', 150, unit: 'ml', density: d))]);
     // Bier: een glas en een Britse pint van 568 ml (N48, N84)
     if (_beer.hasMatch(name)) {
-      return unless([(_glass, _p('1 glass', '1 glas', 250, unit: 'ml')), (r'\bpint\b', _p('1 pint', '1 pint', 568, unit: 'ml'))]);
+      return unless([(_glass, _p('1 glass', '1 glas', 250, unit: 'ml', density: d)), (r'\bpint\b', _p('1 pint', '1 pint', 568, unit: 'ml', density: d))]);
     }
-    if (_hotDrink.hasMatch(name)) return unless([(_glass, _p('1 mug', '1 mok', 250, unit: 'ml'))]);
-    return unless([(_glass, _p('1 glass', '1 glas', 200, unit: 'ml'))]);
+    if (_hotDrink.hasMatch(name)) return unless([(_glass, _p('1 mug', '1 mok', 250, unit: 'ml', density: d))]);
+    return unless([(_glass, _p('1 glass', '1 glas', 200, unit: 'ml', density: d))]);
   }
   // Poeder of concentraat van een drank: geen glas
   if (const {'beverage', 'alcohol'}.contains(group)) return const [];
 
-  // Havermout: droog een kom en een eetlepel, gekookt een kom pap. Vóór bloem: "Oatmeal" uit de Noorse tabel is
-  // havermeel, maar wie "oatmeal" zoekt, eet een kom pap en geen eetlepel (NW-12). Een kom komt er altijd bij, ook
-  // als de databank alleen een eetlepel, een deciliter of een "portie" van 100 g heeft.
+  // Havermout: droog een kom en een eetlepel, gekookt een kom pap (NW-12). Een kom komt er altijd bij, ook als de
+  // databank alleen een eetlepel, een deciliter of een "portie" van 100 g heeft. Noors "Havremel" heet nu "Oat flour"
+  // (NW-13): dat is meel, met een eetlepel.
   if (isOats(f)) {
     final cookedOats = _cooked.hasMatch(name) || const {'boiled', 'cooked', 'prepared', 'steamed'}.contains(l?.state);
     if (cookedOats) return unless([(_bowl, _p('1 bowl', '1 kom', 250))]);
@@ -335,10 +350,15 @@ double stepQuantity(double q, {required bool up, required bool portion}) {
 final _tinyUnit = RegExp(r'\b(tsp|tbsp|teaspoons?|tablespoons?|eetlepels?|koffielepels?|theelepels?|pinch|dash|drops?)\b');
 
 /// Een gewone portie voor een soort product: het gewicht dat erbij hoort ([min]–[max]), het woord dat we liefst zien
-/// ([prefer]: kom, bord, stuk ...) en hoeveel gram als er geen passende portie is.
-typedef _Serving = ({RegExp prefer, double min, double max, double grams});
+/// ([prefer]: kom, bord, stuk ...) en hoeveel gram als er geen passende portie is. [anyFit] = false: alleen een portie
+/// met dat woord, anders gram (geen Amerikaanse "1 cup" linzen, NF-14).
+typedef _Serving = ({RegExp prefer, double min, double max, double grams, bool anyFit});
 
-_Serving _kind(String prefer, double min, double max, double grams) => (prefer: RegExp(prefer), min: min, max: max, grams: grams);
+_Serving _kind(String prefer, double min, double max, double grams, {bool anyFit = true}) =>
+    (prefer: RegExp(prefer), min: min, max: max, grams: grams, anyFit: anyFit);
+
+/// Gerookt, gezouten of gemarineerd: dat eet je in kleine porties, op brood (NF-19: geen 120 g gravad zalm).
+final curedName = RegExp(r'\b(smoked|gravad|gravlax|gravlaks|salted|cured|marinated|pickled|kippered|dried)\b');
 
 final _berries = RegExp(r'(berr(y|ies)|\bgrapes?\b|\bcherr(y|ies)\b|\bcurrants?\b)');
 
@@ -365,6 +385,14 @@ _Serving? _servingKind(Food f) {
   }
   if ((group == 'bread' || (l == null && _bread.hasMatch(name))) && !_notSlice.hasMatch(name)) {
     return _kind(r'\bslices?\b', 20, 60, 35);
+  }
+  // Vis: een filet van 125 g, gerookt of gezouten 50 g; gekookte peulvruchten 150 g, in gram (NF-14)
+  if (const {'fish', 'shellfish'}.contains(group) && !(l?.dish ?? false) && l?.state != 'canned') {
+    if (curedName.hasMatch(name)) return _kind(r'\b(slice|portion|serving)\b', 20, 80, 50, anyFit: false);
+    if (group == 'fish') return _kind(r'\b(fillet|portion|serving|piece)\b', 80, 200, 125, anyFit: false);
+  }
+  if (group == 'legume' && !dried && (_cooked.hasMatch(name) || const {'boiled', 'cooked', 'canned'}.contains(l?.state))) {
+    return _kind(r'\b(portion|serving)\b', 100, 200, 150, anyFit: false);
   }
   if (group == 'fruit' && !const {'puree', 'juice', 'powder', 'concentrate', 'peel'}.contains(part) && !(l?.dish ?? false)) {
     if (dried) return _kind(r'\bhandful\b', 20, 50, 30);
@@ -402,7 +430,9 @@ bool _smallUnitFood(Food f) {
   bool tiny(Portion p) => p.grams < 5 || _tinyUnit.hasMatch(p.label.toLowerCase());
   if (kind != null) {
     bool fits(Portion p) => p.grams >= kind.min && p.grams <= kind.max && !tiny(p);
-    final pick = options.where((p) => fits(p) && kind.prefer.hasMatch(p.label.toLowerCase())).firstOrNull ?? options.where(fits).firstOrNull;
+    final pick =
+        options.where((p) => fits(p) && kind.prefer.hasMatch(p.label.toLowerCase())).firstOrNull ??
+        (kind.anyFit ? options.where(fits).firstOrNull : null);
     if (pick != null) return (portion: pick, quantity: 1);
     return (portion: null, quantity: kind.grams);
   }

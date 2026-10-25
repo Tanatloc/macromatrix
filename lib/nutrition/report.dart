@@ -113,7 +113,12 @@ class WeeklyReport {
     this.sugar,
     this.upperShare = const {},
     this.topFoods = const [],
+    this.dayScores = const {},
   });
+
+  /// Voedingsscore per volledig gelogde dag die meetelt (jjjj-mm-dd → score): dezelfde dagen als [score] en [days].
+  /// Vandaag en te weinig gelogde dagen staan er niet in (SU-4: de deelkaart toont deze dagen).
+  final Map<String, int> dayScores;
 
   /// Gemiddelde inname tegenover de gemiddelde veilige bovengrens, per stof met een bovengrens (1,3 = 30% erboven).
   final Map<String, double> upperShare;

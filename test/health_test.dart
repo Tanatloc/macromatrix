@@ -74,6 +74,25 @@ void main() {
     expect(factor(healthCheck(week(day({'alcohol': 30}), 4), weightKg: 75)!, 'alcohol').rating, HealthRating.poor);
   });
 
+  test('SP-16: geen alcohol gelogd is geen "0 glazen" naast "onbekend"', () {
+    final f = factor(healthCheck(week(day(), 3), weightKg: 75)!, 'alcohol');
+    expect(f.rating, HealthRating.unknown);
+    expect(f.value, 'Geen alcohol gelogd in 3 dagen');
+  });
+
+  test('SP-8: wie wil aankomen of traint, ziet eiwit bij de werkpunten', () {
+    HealthFactor ok(String key, double gain) =>
+        HealthFactor(key: key, title: key, value: '', rating: HealthRating.ok, effect: '', gain: gain);
+    final factors = [ok('omega3', 5), ok('exercise', 4), ok('fiber', 3), ok('protein', 1)];
+    HealthCheck c({bool focus = false}) =>
+        HealthCheck(days: 3, factors: factors, score: 70, rating: HealthRating.ok, proteinFocus: focus);
+    expect(c().toWorkOn.take(maxWorkPoints).map((f) => f.key), isNot(contains('protein')));
+    expect(c(focus: true).toWorkOn.first.key, 'protein');
+    expect(healthCheck(week(day()), weightKg: 75, plan: Goal.gain)!.proteinFocus, isTrue);
+    expect(healthCheck(week(day()), weightKg: 75, trains: true)!.proteinFocus, isTrue);
+    expect(healthCheck(week(day()), weightKg: 75)!.proteinFocus, isFalse);
+  });
+
   test('alcohol in het Engels ook in Britse units van 8 g (N48)', () {
     setAppLang(AppLang.en);
     addTearDown(() => setAppLang(AppLang.nl));
@@ -235,8 +254,13 @@ void main() {
   group('beweging', () {
     // Bij 75 kg: kcal per minuut = MET × 3,5 × 75 / 200
     double kcal(double met, double minutes) => met * 3.5 * 75 / 200 * minutes;
-    ({String day, double? minutes, double kcal, bool strength}) ex(String day, double met, double minutes, {bool strength = false}) =>
-        (day: day, minutes: minutes, kcal: kcal(met, minutes), strength: strength);
+    ({String day, double? minutes, double kcal, bool strength, bool intense}) ex(
+      String day,
+      double met,
+      double minutes, {
+      bool strength = false,
+      bool intense = false,
+    }) => (day: day, minutes: minutes, kcal: kcal(met, minutes), strength: strength, intense: intense);
     HealthCheck check(ActivityWeek a, {int? age}) => healthCheck(week(day()), weightKg: 75, age: age, activity: a)!;
 
     test('niets bijgehouden: geen oordeel over beweging', () {
@@ -252,6 +276,13 @@ void main() {
       final walk = check(ActivityWeek(exercises: [ex('a', 4, 30), ex('b', 4, 30), ex('c', 2, 60)]));
       expect(factor(walk, 'exercise').value, '120 min gelogd, telt als 60 min per week');
       expect(factor(walk, 'exercise').rating, HealthRating.poor);
+    });
+
+    test('SP-5: "intensief" in de naam telt dubbel, ook onder 6 MET', () {
+      // 75 min krachttraining (intensief) is 5 MET: zonder de naam zou dat 75 min zijn, "wat weinig beweging"
+      final c = check(ActivityWeek(exercises: [ex('a', 5, 75, strength: true, intense: true)]));
+      expect(factor(c, 'exercise').value, '75 min gelogd, telt als 150 min per week');
+      expect(factor(c, 'exercise').rating, HealthRating.good);
     });
 
     test('je houdt activiteiten bij maar bewoog niet: slecht, niet onbekend', () {

@@ -25,8 +25,9 @@ void main() {
     }
 
     test('havermout: een kom, geen eetlepel', () {
-      // "Oatmeal" uit de Noorse tabel (havermeel, met eetlepel en deciliter) en gewone havervlokken
-      for (final ref in ['mvt:05.004', 'mvt:05.003']) {
+      // Havervlokken uit de Franse en de Noorse tabel. Noors "Havremel" heet nu "Oat flour" (NW-13): havermeel mag
+      // wel met een eetlepel
+      for (final ref in ['ciqual:9311', 'mvt:05.003']) {
         final f = byRef(ref);
         final d = start(f);
         expect(d.portion?.label, contains('bowl'), reason: f.name);
@@ -78,7 +79,7 @@ void main() {
 
     test('de laatste hoeveelheid van een product gaat voor', () {
       final s = newState();
-      final oats = byRef('mvt:05.004');
+      final oats = byRef('ciqual:9311');
       expect(s.startServing(oats).portion?.label, contains('bowl'));
       s.addFood(oats, meal: Meal.breakfast, grams: 60, quantity: 60);
       expect(s.startServing(oats).portion, isNull);

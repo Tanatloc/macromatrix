@@ -210,8 +210,8 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   String _describe(Target? t) {
     if (t == null || (t.goal == null && t.upper == null)) return tr('no reference value', 'geen richtwaarde');
     return [
-      if (t.goal != null) tr('at least ${formatAmount(t.goal!, n)} ${n.unit}', 'minstens ${formatAmount(t.goal!, n)} ${n.unit}'),
-      if (t.upper != null) tr('at most ${formatAmount(t.upper!, n)} ${n.unit}', 'hoogstens ${formatAmount(t.upper!, n)} ${n.unit}'),
+      if (t.goal != null) tr('at least ${formatAmount(t.goal!, n)} ${n.shownUnit}', 'minstens ${formatAmount(t.goal!, n)} ${n.shownUnit}'),
+      if (t.upper != null) tr('at most ${formatAmount(t.upper!, n)} ${n.shownUnit}', 'hoogstens ${formatAmount(t.upper!, n)} ${n.shownUnit}'),
     ].join(', ');
   }
 
@@ -223,7 +223,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     return kcal < 15 ? 0 : v / kcal * 100;
   }
 
-  String _amount(double v) => '${formatAmount(v, n)} ${n.unit}';
+  String _amount(double v) => '${formatAmount(v, n)} ${n.shownUnit}';
 
   @override
   Widget build(BuildContext context) {
@@ -350,7 +350,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        ref == null ? n.unit : '/ ${target!.isLimit ? 'max ' : ''}${formatAmount(ref, n)} ${n.unit}',
+                        ref == null ? n.shownUnit : '/ ${target!.isLimit ? 'max ' : ''}${formatAmount(ref, n)} ${n.shownUnit}',
                         style: numStyle(15, weight: FontWeight.w400, color: p.ink3),
                       ),
                     ),

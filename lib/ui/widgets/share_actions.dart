@@ -108,8 +108,8 @@ Future<void> shareAllMicros(BuildContext context, {required NutrientMap values, 
 Future<void> shareWeek(BuildContext context, WeeklyReport r, {String? copyText}) {
   final s = context.read<AppState>();
   final profile = _profile(context, s);
-  final stats = s.dayStats;
-  final scores = [for (var i = 0; i < 7; i++) stats[dayKey(DateTime(r.monday.year, r.monday.month, r.monday.day + i))]?.score];
+  // Dezelfde dagen als de kop en het gemiddelde: volledig gelogd en voorbij (SU-4), niet de battleregel "op tijd"
+  final scores = [for (var i = 0; i < 7; i++) r.dayScores[dayKey(r.monday.plusDays(i))]];
   final streak = s.streak.current;
   return showShareSheet(
     context,

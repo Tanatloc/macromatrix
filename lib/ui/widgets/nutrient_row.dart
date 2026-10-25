@@ -65,7 +65,7 @@ class NutrientRow extends StatelessWidget {
             text: amountText,
             style: TextStyle(fontStyle: estimate == null ? null : FontStyle.italic, color: estimate == null ? p.ink2 : p.ink),
           ),
-          TextSpan(text: '$refText ${nutrient.unit}'),
+          TextSpan(text: '$refText ${nutrient.shownUnit}'),
         ],
       ),
       maxLines: 1,

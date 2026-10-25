@@ -129,3 +129,19 @@ bool containsAllergen(Food f, Set<Allergen> mine) {
   final text = _noPlantDairy('${f.name} ${f.localName ?? ''} ${f.category ?? ''}');
   return mine.any((a) => a.pattern.hasMatch(text));
 }
+
+/// Alle EU-allergenen op het etiket van een product, los van je eigen allergieën (NF-3: de productcheck toonde niets
+/// zonder ingestelde allergie): wat het bevat (etiket of ingrediënten) en wat er in sporen in kan zitten.
+({List<Allergen> contains, List<Allergen> traces}) labelAllergens(LabelInfo label) {
+  final hits = allergenHits(Allergen.values.toSet(), name: '', label: label);
+  return (
+    contains: [
+      for (final h in hits)
+        if (h.level == AllergenLevel.contains) h.allergen,
+    ],
+    traces: [
+      for (final h in hits)
+        if (h.level == AllergenLevel.traces) h.allergen,
+    ],
+  );
+}

@@ -17,6 +17,8 @@ import 'food_detail_screen.dart';
 import 'label_scan_screen.dart';
 import 'scan_screen.dart';
 import '../widgets/number_input.dart';
+import '../../nutrition/allergens.dart';
+import 'custom_food_screen.dart';
 
 /// Tabblad Scan: een product scannen en zien wat erin zit (additieven, allergenen, Nutri-Score, bewerkingsgraad
 /// en herkomst), zoals Yuka, maar met de knop om het meteen in je dagboek te zetten.
@@ -268,11 +270,13 @@ Color riskColor(AdditiveLevel l) => switch (l) {
   AdditiveLevel.high => const Color(0xFFE03131),
 };
 
+// Matig en hoog gaan over de inname (EFSA: kan boven de aanvaardbare dagelijkse hoeveelheid komen), niet over gif
+// (NF-13: "High risk" bij E481 las als gevaarlijk)
 String riskLabel(AdditiveLevel l) => switch (l) {
   AdditiveLevel.free => tr('No known risk', 'Geen gekend risico'),
   AdditiveLevel.limited => tr('Limited risk', 'Beperkt risico'),
-  AdditiveLevel.moderate => tr('Moderate risk', 'Matig risico'),
-  AdditiveLevel.high => tr('High risk', 'Hoog risico'),
+  AdditiveLevel.moderate => tr('Intake risk', 'Innamerisico'),
+  AdditiveLevel.high => tr('High intake risk', 'Hoog innamerisico'),
 };
 
 /// Productdetails na een scan.
@@ -305,6 +309,21 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
   /// Niet gevonden: het etiket scannen en daarna meteen toevoegen aan het dagboek (als het bewaard werd).
   Future<void> _scanLabel() async {
     final food = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => LabelScanScreen(barcode: widget.code)));
+    if (food != null && mounted) await _addToDiary(food);
+  }
+
+  /// Geen voedingswaarden bij Open Food Facts: zelf invullen als eigen product met deze naam en barcode, daarna
+  /// meteen toevoegen.
+  Future<void> _enterLabel(ProductInfo info) async {
+    final prefill = Food(
+      ref: '',
+      name: info.name,
+      brand: info.brand,
+      barcode: info.code,
+      source: FoodSource.custom,
+      per100g: const {},
+    );
+    final food = await Navigator.of(context).push<Food>(MaterialPageRoute(builder: (_) => CustomFoodScreen(prefill: prefill)));
     if (food != null && mounted) await _addToDiary(food);
   }
 
@@ -379,10 +398,13 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
                             ingredients: info.ingredients,
                           ),
                     ),
+                    _AllergensCard(info: info),
+                    const SizedBox(height: 12),
                     _OriginCard(origin: info.origin),
                     const SizedBox(height: 12),
                     _QualityCard(info: info),
                     const SizedBox(height: 12),
+                    if (info.food != null) ...[_NutritionCard(food: info.food!), const SizedBox(height: 12)],
                     if (info.offline) ...[
                       Text(
                         tr(
@@ -394,18 +416,31 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
                       const SizedBox(height: 12),
                     ],
                     _AdditivesCard(info: info, catalog: catalog),
-                    if (!info.offline && info.source == 'off' && (info.score(catalog) ?? 100) < 50) ...[
+                    // Ook bij een middelmatige score (50–70) kan er iets beters zijn (NF-9)
+                    if (!info.offline && info.source == 'off' && (info.score(catalog) ?? 100) < 70) ...[
                       const SizedBox(height: 12),
                       _BetterChoices(info: info, catalog: catalog),
                     ],
                     if (info.ingredients != null) ...[const SizedBox(height: 12), _IngredientsCard(text: info.ingredients!)],
                     const SizedBox(height: 16),
-                    if (info.food == null)
+                    // Geen voedingswaarden: zelf de waarden van het etiket invullen, met de barcode al ingevuld (NF-11)
+                    if (info.food == null) ...[
                       Text(
-                        tr('No nutrition values known, so it cannot be logged yet.', 'Geen voedingswaarden bekend, dus je kunt het nog niet loggen.'),
-                        style: TextStyle(color: p.ink3),
+                        tr(
+                          'No nutrition values known yet. Enter them from the label to log it; next time you scan it, it is there.',
+                          'Nog geen voedingswaarden bekend. Vul ze in van het etiket om het te loggen; de volgende keer dat je het scant, staat het er.',
+                        ),
+                        style: TextStyle(color: p.ink2),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 10),
+                      FilledButton.icon(
+                        key: const ValueKey('product-enter-label'),
+                        onPressed: () => _enterLabel(info),
+                        icon: const Icon(Icons.edit_note_rounded),
+                        label: Text(tr('Enter the label values', 'Waarden van het etiket invullen')),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     Text(
                       info.source == 'usda'
@@ -524,11 +559,22 @@ class _Header extends StatelessWidget {
                         decoration: BoxDecoration(color: scoreColor(score!), shape: BoxShape.circle),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        '$score/100 · ${scoreWord(score!)}',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: scoreColor(score!)),
+                      Flexible(
+                        child: Text(
+                          info.scoreIncomplete ? '$score/100 · ${tr('incomplete', 'onvolledig')}' : '$score/100 · ${scoreWord(score!)}',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: scoreColor(score!)),
+                        ),
                       ),
                     ],
+                  ),
+                // Zonder ingrediëntenlijst geen eindoordeel: de additieven zijn onbekend (NF-4)
+                if (score != null && info.scoreIncomplete)
+                  Text(
+                    tr(
+                      'Without an ingredient list the additives are unknown, so the score only uses the Nutri-Score.',
+                      'Zonder ingrediëntenlijst zijn de additieven onbekend, dus de score steunt alleen op de Nutri-Score.',
+                    ),
+                    style: TextStyle(fontSize: 12.5, color: p.ink3, height: 1.3),
                   )
                 else
                   Text(tr('Not enough data for a score', 'Te weinig gegevens voor een score'), style: TextStyle(fontSize: 13, color: p.ink3)),
@@ -552,6 +598,7 @@ class _OriginCard extends StatelessWidget {
       Region.eu => ('EU', const Color(0xFF1D4ED8), tr('From the EU', 'Uit de EU')),
       Region.us => ('US', const Color(0xFFB91C1C), tr('From the US', 'Uit de VS')),
       Region.other => ('', p.ink2, tr('From outside the EU and US', 'Van buiten de EU en de VS')),
+      Region.mixed => ('EU+', const Color(0xFF1D4ED8), tr('From the EU and elsewhere', 'Uit de EU en daarbuiten')),
       Region.unknown => ('?', p.ink3, tr('Origin unknown', 'Herkomst onbekend')),
     };
     final note = switch (origin.basis) {
@@ -736,6 +783,16 @@ class _AdditivesCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(text),
+            if (a.level == AdditiveLevel.moderate || a.level == AdditiveLevel.high) ...[
+              const SizedBox(height: 8),
+              Text(
+                tr(
+                  'Source: the EFSA intake assessment in its re-evaluation of this additive, as listed by Open Food Facts. It says how likely people are to get too much, not that a normal amount is harmful.',
+                  'Bron: de innameschatting van EFSA bij de herbeoordeling van dit additief, zoals Open Food Facts die vermeldt. Ze zegt hoe makkelijk mensen te veel binnenkrijgen, niet dat een gewone hoeveelheid schadelijk is.',
+                ),
+                style: TextStyle(fontSize: 12.5, color: ctx.pal.ink3),
+              ),
+            ],
           ],
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Close', 'Sluiten')))],
@@ -747,7 +804,7 @@ class _AdditivesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final adds = info.additives(catalog)..sort((a, b) => b.level.index.compareTo(a.level.index));
-    final known = info.source == 'off' && (info.ingredients != null || info.additiveTags.isNotEmpty);
+    final known = info.additivesKnown;
     return Panel(
       padding: const EdgeInsets.fromLTRB(6, 14, 6, 8),
       child: Column(
@@ -924,6 +981,159 @@ class _BetterChoicesState extends State<_BetterChoices> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Allergenen op het etiket, altijd (NF-3): wat het bevat en wat er in sporen in kan zitten, uit Open Food Facts en
+/// de ingrediënten. Wat bij je eigen allergieën staat, staat vet in rood.
+class _AllergensCard extends StatelessWidget {
+  const _AllergensCard({required this.info});
+  final ProductInfo info;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final mine = context.select<AppState, Set<Allergen>>((s) => s.allergies);
+    final label = LabelInfo(allergens: info.allergenTags, traces: info.traceTags, ingredients: info.ingredients);
+    final found = labelAllergens(label);
+    Widget line(String head, List<Allergen> list) => Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$head ',
+              style: TextStyle(fontWeight: FontWeight.w600, color: p.ink),
+            ),
+            for (final (i, a) in list.indexed)
+              TextSpan(
+                text: '${i == 0 ? '' : ', '}${a.label}',
+                style: mine.contains(a) ? TextStyle(fontWeight: FontWeight.w700, color: p.high) : null,
+              ),
+          ],
+        ),
+        style: TextStyle(fontSize: 14, color: p.ink2, height: 1.35),
+      ),
+    );
+    return Panel(
+      shadow: false,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(tr('Allergens', 'Allergenen')),
+          if (!label.hasData)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                tr(
+                  'Unknown: no allergen or ingredient list available. Check the label.',
+                  'Onbekend: geen allergenen of ingrediëntenlijst beschikbaar. Kijk het etiket na.',
+                ),
+                style: TextStyle(fontSize: 14, color: p.ink2),
+              ),
+            )
+          else ...[
+            if (found.contains.isNotEmpty) line(tr('Contains:', 'Bevat:'), found.contains),
+            if (found.traces.isNotEmpty) line(tr('May contain:', 'Kan sporen bevatten van:'), found.traces),
+            if (found.contains.isEmpty && found.traces.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  tr('None of the 14 EU allergens listed.', 'Geen van de 14 EU-allergenen vermeld.'),
+                  style: TextStyle(fontSize: 14, color: p.ink2),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Voedingswaarden zoals op de verpakking, per 100 g en per portie (NF-10). Ingeklapt tot je erop tikt.
+class _NutritionCard extends StatefulWidget {
+  const _NutritionCard({required this.food});
+  final Food food;
+
+  @override
+  State<_NutritionCard> createState() => _NutritionCardState();
+}
+
+class _NutritionCardState extends State<_NutritionCard> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final v = widget.food.per100g;
+    final portion = widget.food.portions.where((x) => x.grams > 0 && x.grams != 100).firstOrNull;
+    final rows = <(String, String, double?, bool)>[
+      (tr('Energy', 'Energie'), 'kcal', v['energy'], false),
+      (tr('Fat', 'Vet'), 'g', v['fat'], false),
+      (tr('of which saturated', 'waarvan verzadigd'), 'g', v['sfa'], true),
+      (tr('Carbohydrates', 'Koolhydraten'), 'g', v['carbs'], false),
+      (tr('of which sugars', 'waarvan suikers'), 'g', v['sugars'], true),
+      (tr('Fibre', 'Vezels'), 'g', v['fiber'], false),
+      (tr('Protein', 'Eiwit'), 'g', v['protein'], false),
+      (tr('Salt', 'Zout'), 'g', v['sodium'] == null ? null : v['sodium']! * 2.5 / 1000, false),
+    ];
+    String amount(double? x, String unit, double factor) {
+      if (x == null) return '–';
+      final y = x * factor;
+      return '${unit == 'kcal' ? fmtInt(y) : fmtDec(y, y < 10 ? 1 : 0)} $unit';
+    }
+
+    final head = TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.ink3);
+    Widget cell(String text, {Color? color}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Text(
+        text,
+        textAlign: TextAlign.right,
+        style: numStyle(14, weight: FontWeight.w400, color: color ?? p.ink),
+      ),
+    );
+    return Panel(
+      onTap: () => setState(() => _open = !_open),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PanelTitle(
+            tr('Nutrition facts', 'Voedingswaarden'),
+            subtitle: _open
+                ? null
+                : tr('${amount(v['energy'], 'kcal', 1)} per 100 g · tap for the full table', '${amount(v['energy'], 'kcal', 1)} per 100 g · tik voor de hele tabel'),
+            trailing: Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: p.ink3),
+          ),
+          if (_open) ...[
+            const SizedBox(height: 8),
+            Table(
+              columnWidths: {0: const FlexColumnWidth(1.6), 1: const FlexColumnWidth(1), if (portion != null) 2: const FlexColumnWidth(1.2)},
+              children: [
+                TableRow(
+                  children: [
+                    const SizedBox.shrink(),
+                    Text('100 g', textAlign: TextAlign.right, style: head),
+                    if (portion != null) Text('${portion.label} (${fmtInt(portion.grams)} g)', textAlign: TextAlign.right, maxLines: 2, style: head),
+                  ],
+                ),
+                for (final (name, unit, x, sub) in rows)
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(sub ? 12 : 0, 5, 0, 5),
+                        child: Text(name, style: TextStyle(fontSize: 14, color: sub ? p.ink2 : p.ink)),
+                      ),
+                      cell(amount(x, unit, 1)),
+                      if (portion != null) cell(amount(x, unit, portion.grams / 100), color: p.ink2),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

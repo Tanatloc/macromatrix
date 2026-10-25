@@ -146,8 +146,8 @@ class _OracleScreenState extends State<OracleScreen> {
                           subtitle: goal == null || goal <= 0
                               ? null
                               : tr(
-                                  '% = share of your daily goal (${formatAmount(goal, n)} ${n.unit})',
-                                  '% = deel van je dagdoel (${formatAmount(goal, n)} ${n.unit})',
+                                  '% = share of your daily goal (${formatAmount(goal, n)} ${n.shownUnit})',
+                                  '% = deel van je dagdoel (${formatAmount(goal, n)} ${n.shownUnit})',
                                 ),
                         ),
                         const SizedBox(height: 6),
@@ -421,7 +421,7 @@ class _OracleScreenState extends State<OracleScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('${formatAmount(v, n)} ${n.unit}', style: numStyle(14, color: p.ink)),
+                  Text('${formatAmount(v, n)} ${n.shownUnit}', style: numStyle(14, color: p.ink)),
                   if (goal != null && goal > 0)
                     Text(
                       fmtPct(v / goal),
@@ -508,7 +508,7 @@ class _NutrientSearchSheetState extends State<_NutrientSearchSheet> {
       title: Text(n.name),
       trailing: n.key == widget.current
           ? Icon(Icons.check_rounded, size: 18, color: p.brand)
-          : Text(n.unit, style: TextStyle(fontSize: 12, color: p.ink3)),
+          : Text(n.shownUnit, style: TextStyle(fontSize: 12, color: p.ink3)),
       selected: n.key == widget.current,
       onTap: () => Navigator.of(context).pop(n.key),
     );

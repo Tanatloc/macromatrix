@@ -1160,8 +1160,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String describe(Nutrient n, Target? t) => t == null || (t.goal == null && t.upper == null)
         ? '–'
         : t.goal != null
-        ? '${formatAmount(t.goal!, n)} ${n.unit}'
-        : 'max ${formatAmount(t.upper!, n)} ${n.unit}';
+        ? '${formatAmount(t.goal!, n)} ${n.shownUnit}'
+        : 'max ${formatAmount(t.upper!, n)} ${n.shownUnit}';
     return Panel(
       shadow: false,
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),

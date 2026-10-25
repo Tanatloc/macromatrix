@@ -183,12 +183,17 @@ double foodQueryScore(Food f, String rawQuery) {
   var s = 0.0;
   // Hele woorden tellen: "egg" is geen eggplant, "cola" geen chocolate
   final head = n.split(',').first;
+  // Samen één woord: "apple sauce" is "applesauce" (NF-8), geen ander product
+  final compound = queryWords.length > 1 && RegExp('\\b${RegExp.escape(queryWords.join())}').hasMatch(n);
   for (final w in queryWords) {
     final stem = w.replaceAll(RegExp(r'(es|s)$'), '');
     final whole = RegExp('\\b${RegExp.escape(stem)}(es|s|ed)?\\b');
     if (whole.hasMatch(n)) {
       s += 4;
       if (whole.hasMatch(head)) s += 6;
+    } else if (compound) {
+      s += 4;
+      if (head.contains(queryWords.join())) s += 6;
     } else if (n.contains(stem)) {
       s -= 14;
     }
@@ -212,6 +217,8 @@ double foodQueryScore(Food f, String rawQuery) {
       !RegExp(r'\b(with|sauce|pudding|pie|soup|salad|sandwich)\b').hasMatch(query)) {
     s -= 10;
   }
+  // Alleen de vulling: "doughnut filled w/ apple sauce" is geen appelmoes (NF-8)
+  if (RegExp(r'\b(filled|stuffed)\b').hasMatch(n) && !RegExp(r'fill|stuff').hasMatch(query)) s -= 12;
   if (RegExp(r'\b(coated|breaded|battered|french|swedish)\b').hasMatch(n) && !RegExp(r'coat|bread|batter|french|swedish').hasMatch(query)) {
     s -= 12;
   }

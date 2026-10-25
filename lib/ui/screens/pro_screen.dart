@@ -246,7 +246,12 @@ class _ProScreenState extends State<ProScreen> {
                         color: p.brand,
                       ),
                       // Vroege toegang en meestemmen over de roadmap (sync/features.dart, sync/roadmap.dart)
-                      bullet(Icons.bolt_rounded, tr('Early access to new features', 'Vroege toegang tot nieuwe functies'), color: p.brand),
+                      // De coach bij naam: de kaart in het weekrapport stuurt hierheen (SP-9)
+                      bullet(
+                        Icons.bolt_rounded,
+                        tr('Early access to new features, now the weekly coach', 'Vroege toegang tot nieuwe functies, nu de wekelijkse coach'),
+                        color: p.brand,
+                      ),
                       bullet(Icons.how_to_vote_outlined, tr('Vote on what we build next', 'Mee stemmen over wat we hierna maken'), color: p.brand),
                       Align(
                         alignment: Alignment.centerLeft,

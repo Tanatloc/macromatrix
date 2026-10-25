@@ -133,16 +133,25 @@ class _PeriodTrendsState extends State<PeriodTrends> {
 
   /// Eén regel bovenaan: op hoeveel dagen de tellers en gemiddelden steunen, met vandaag apart.
   Widget _basis(Palette p, int full, int partial, bool today) {
+    // Alleen vandaag gelogd (je eerste dag van de periode): geen rij streepjes zonder uitleg (NW-18)
+    final onlyToday = full == 0 && partial == 0 && today;
     final parts = [
-      full == 0
-          ? tr(
-              'No fully logged days yet: averages use what you logged so far',
-              'Nog geen volledig gelogde dagen: gemiddelden over wat je tot nu logde',
-            )
-          : tr('Based on $full fully logged ${full == 1 ? 'day' : 'days'}', 'Op basis van $full volledig gelogde ${full == 1 ? 'dag' : 'dagen'}'),
-      if (today) tr('today counts from tomorrow', 'vandaag telt vanaf morgen'),
-      if (partial > 0)
-        tr('$partial ${partial == 1 ? 'day' : 'days'} with too little logged', '$partial ${partial == 1 ? 'dag' : 'dagen'} met te weinig gelogd'),
+      if (onlyToday)
+        tr(
+          'Today is logged. Averages, the ±10% count and the score start tomorrow, once today is over',
+          'Vandaag is gelogd. Gemiddelden, de telling binnen ±10% en de score beginnen morgen, als vandaag voorbij is',
+        )
+      else ...[
+        full == 0
+            ? tr(
+                'No fully logged days yet: averages use what you logged so far',
+                'Nog geen volledig gelogde dagen: gemiddelden over wat je tot nu logde',
+              )
+            : tr('Based on $full fully logged ${full == 1 ? 'day' : 'days'}', 'Op basis van $full volledig gelogde ${full == 1 ? 'dag' : 'dagen'}'),
+        if (today) tr('today counts from tomorrow', 'vandaag telt vanaf morgen'),
+        if (partial > 0)
+          tr('$partial ${partial == 1 ? 'day' : 'days'} with too little logged', '$partial ${partial == 1 ? 'dag' : 'dagen'} met te weinig gelogd'),
+      ],
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -848,10 +857,13 @@ class _PeriodTrendsState extends State<PeriodTrends> {
 
   Widget _minis(Palette p, List<String> keys, Map<String, NutrientTotals> daily, Map<String, Map<String, Target>> targets) {
     // Eén score voor de periode, met dezelfde regel als het weekrapport: het gemiddelde van de volledig gelogde dagen
-    final scores = [for (final k in keys) _full.contains(k) ? completenessScore(daily[k]!.values, targets[k]!).toDouble() : null];
+    final today = dayKey(logicalNow());
+    final scores = [
+      for (final k in keys)
+        _full.contains(k) ? dayScore(daily[k]!.values, targets[k]!, closed: k.compareTo(today) < 0).toDouble() : null,
+    ];
     final known = scores.whereType<double>().toList();
     final avg = known.isEmpty ? null : known.reduce((a, b) => a + b) / known.length;
-    final today = dayKey(logicalNow());
     final perRow = keys.length <= 7 ? 7 : 16;
 
     return Row(

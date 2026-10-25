@@ -21,8 +21,8 @@ void main() {
     final c = await AdditiveCatalog.load();
     expect(c.lookup('en:e330')!.level, AdditiveLevel.free);
     expect(c.lookup('en:e172')!.level, AdditiveLevel.limited);
-    expect(const ProductInfo(code: '1', name: 'x', nutriscore: 'a').score(c), 90);
-    expect(const ProductInfo(code: '1', name: 'x', nutriscore: 'a', organic: true).score(c), 100);
+    expect(const ProductInfo(code: '1', name: 'x', nutriscore: 'a', ingredients: 'oats').score(c), 90);
+    expect(const ProductInfo(code: '1', name: 'x', nutriscore: 'a', ingredients: 'oats', organic: true).score(c), 100);
     expect(const ProductInfo(code: '1', name: 'x').score(c), isNull);
     expect(const ProductInfo(code: '1', name: 'x', additiveTags: ['en:e322', 'en:e322i', 'en:e150d']).additives(c).map((a) => a.code), [
       'e322',

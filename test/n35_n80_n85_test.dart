@@ -60,7 +60,8 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(app(s, FoodDetailScreen(food: milk, meal: Meal.breakfast)));
       await tester.pump();
-      expect(find.textContaining(RegExp(r'^= \d+ ml$')), findsOneWidget);
+      // Een glas is 200 ml; melk weegt 1,03 g per ml, dus 206 g (NF-15)
+      expect(find.textContaining(RegExp(r'^= \d+ ml \(\d+ g\)$')), findsOneWidget);
       expect(find.textContaining(RegExp(r'^= \d+ g$')), findsNothing);
     });
   });

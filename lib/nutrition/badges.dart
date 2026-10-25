@@ -15,6 +15,7 @@ import 'levels.dart';
 class DayStat {
   const DayStat({
     required this.score,
+    this.microScore,
     this.vitD = false,
     this.fiber = false,
     this.iron = false,
@@ -22,7 +23,14 @@ class DayStat {
     this.protein = false,
     this.foods = const {},
   });
+
+  /// Voedingsscore van de dag, met de energiefactor ([dayScore]): wat je ziet en wat in een battle telt.
   final int score;
+
+  /// De score zonder energiefactor ([completenessScore]): XP en badges steunen hierop, zodat een level of badge die
+  /// je al had niet verdwijnt door de energieregel (SP-7).
+  int get micro => microScore ?? score;
+  final int? microScore;
 
   /// Vitamine D, vezels, ijzer en eiwit op doel; omega-6 : omega-3 hoogstens 4 : 1.
   final bool vitD, fiber, iron, omega, protein;
@@ -282,7 +290,7 @@ Map<String, int> badgeValues({
   for (final e in days.entries) {
     final d = DateTime.parse(e.key);
     final monday = DateTime(d.year, d.month, d.day - (d.weekday - 1));
-    weeks.putIfAbsent('$monday', () => []).add(e.value.score);
+    weeks.putIfAbsent('$monday', () => []).add(e.value.micro);
   }
   final perfectWeeks = weeks.values.where((s) => s.length >= 5 && s.reduce((a, b) => a + b) / s.length >= 90).length;
   return {
@@ -293,7 +301,7 @@ Map<String, int> badgeValues({
     'social': friends,
     'days': days.length,
     'streak': loggingStreak(days.keys.toSet(), today ?? logicalNow()).longest,
-    'perfect': count((d) => d.score >= 95),
+    'perfect': count((d) => d.micro >= 95),
     'vitd': count((d) => d.vitD),
     'fiber': count((d) => d.fiber),
     'iron': count((d) => d.iron),

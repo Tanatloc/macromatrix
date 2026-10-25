@@ -239,7 +239,13 @@ class _CoachPanelState extends State<CoachPanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              title,
+              // Een slotje: een tik opent de Supporter-pagina, niet de coach zelf (SP-9)
+              Row(
+                children: [
+                  Expanded(child: title),
+                  Icon(Icons.lock_outline_rounded, size: 18, color: p.ink3),
+                ],
+              ),
               const SizedBox(height: 4),
               Text(
                 date == null

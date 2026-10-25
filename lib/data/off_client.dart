@@ -242,7 +242,8 @@ class OffClient {
   }
 
   /// Betere keuzes: populaire producten uit dezelfde (zo specifiek mogelijke) categorie met een betere
-  /// Nutri-Score, eerst uit België, Nederland en Frankrijk. Geeft de barcodes, beste kandidaten eerst.
+  /// Nutri-Score, eerst wat in België of Nederland verkocht wordt (NF-9: geen Franse huismerken vooraan). Geeft de
+  /// barcodes, beste kandidaten eerst.
   Future<List<String>> betterCandidates(ProductInfo p, {int max = 6}) async {
     final ns = p.nutriscore;
     if (p.categories.isEmpty) return const [];
@@ -252,7 +253,7 @@ class OffClient {
     ];
     if (grades.isEmpty) grades.add('a');
     final gradeQ = 'nutrition_grades:(${grades.join(' OR ')})';
-    const near = 'countries_tags:("en:belgium" OR "en:netherlands" OR "en:france")';
+    const near = 'countries_tags:("en:belgium" OR "en:netherlands")';
     final out = <String>[];
     // Van specifiek naar iets algemener (hoogstens twee niveaus terug)
     for (final cat in p.categories.reversed.take(3)) {

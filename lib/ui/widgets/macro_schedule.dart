@@ -139,7 +139,27 @@ class MacroScheduleCard extends StatelessWidget {
     final s = context.watch<AppState>();
     final pal = context.pal;
     final base = s.profile;
-    final today = DateTime.now().weekday;
+    final now = logicalNow();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    final today = todayDate.weekday;
+    // De echte verdeling van je doel die dag (SP-4): eiwit volgt je onderhoudsenergie (en minstens een minimum per kg),
+    // dus bij aankomen of afvallen schuiven de procenten wat t.o.v. de stijl. Zo staat hier hetzelfde als in Profiel.
+    (double, double, double)? actual(int weekday) {
+      final date = todayDate.plusDays((weekday - today) % 7);
+      final t = date == todayDate ? s.todayTargets : s.targetsForDate(date);
+      final kcal = t['energy']?.goal ?? 0;
+      if (kcal <= 0) return null;
+      double share(String k) => macroShare(k, t[k]?.goal ?? t[k]?.upper ?? 0, kcal) * 100;
+      return (share('protein'), share('carbs'), share('fat'));
+    }
+
+    final shown = {for (var d = 1; d <= 7; d++) d: actual(d)};
+    bool differs((double, double, double) a, (double, double, double) b) =>
+        a.$1.round() != b.$1.round() || a.$2.round() != b.$2.round() || a.$3.round() != b.$3.round();
+    final shifted = [
+      for (var d = 1; d <= 7; d++)
+        if (shown[d] case final a?) differs(a, s.settings.schedule[d] ?? (base.proteinPct, base.carbsPct, base.fatPct)),
+    ].any((x) => x);
     return Panel(
       shadow: false,
       child: Column(
@@ -160,6 +180,7 @@ class MacroScheduleCard extends StatelessWidget {
               builder: (context) {
                 final sched = s.settings.schedule[d];
                 final split = sched ?? (base.proteinPct, base.carbsPct, base.fatPct);
+                final real = shown[d] ?? split;
                 final label = sched == null
                     ? _defaultLabel(base)
                     : (_presetOf(split.$1, split.$2, split.$3)?.label ?? tr('Custom split', 'Eigen verdeling'));
@@ -190,7 +211,7 @@ class MacroScheduleCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              MacroSplitBar(split: split, compact: true),
+                              MacroSplitBar(split: real, compact: true),
                             ],
                           ),
                         ),
@@ -201,6 +222,16 @@ class MacroScheduleCard extends StatelessWidget {
                 );
               },
             ),
+          if (shifted) ...[
+            const SizedBox(height: 4),
+            Text(
+              tr(
+                'These are the real shares of your daily goal. Protein follows your maintenance energy (and a minimum per kg of body weight), so when you aim to gain or lose weight they differ a little from the style.',
+                'Dit zijn de echte delen van je dagdoel. Eiwit volgt je onderhoudsenergie (en een minimum per kg lichaamsgewicht), dus als je wilt aankomen of afvallen wijken ze wat af van de stijl.',
+              ),
+              style: TextStyle(fontSize: 12, height: 1.4, color: pal.ink3),
+            ),
+          ],
           const SizedBox(height: 6),
           Wrap(
             spacing: 14,

@@ -105,7 +105,15 @@ class HealthFactor {
 }
 
 class HealthCheck {
-  const HealthCheck({required this.days, required this.factors, required this.score, required this.rating, this.labDay, this.energyFirst = false});
+  const HealthCheck({
+    required this.days,
+    required this.factors,
+    required this.score,
+    required this.rating,
+    this.labDay,
+    this.energyFirst = false,
+    this.proteinFocus = false,
+  });
 
   /// Dag (jjjj-mm-dd) van de bloedafname waarop het advies steunt, of null zonder bloedwaarden.
   final String? labDay;
@@ -121,6 +129,9 @@ class HealthCheck {
   /// Je gewicht gaat tegen je plan in en je energie verklaart dat: dan is energie het eerste punt.
   final bool energyFirst;
 
+  /// Je wilt aankomen of je traint: eiwit staat dan bij de werkpunten bovenaan, niet onder "Meer punten" (SP-8).
+  final bool proteinFocus;
+
   /// Wat goed gaat, zwaarste factoren eerst.
   List<HealthFactor> get goingWell => [
     for (final f in factors)
@@ -130,7 +141,9 @@ class HealthCheck {
   /// Alles wat beter kan, belangrijkste eerst: energie als die ver van je doel zit, dan wat het meeste oplevert.
   /// Het rapport toont er hooguit [maxWorkPoints]; de rest staat onder "Meer punten".
   List<HealthFactor> get toWorkOn {
-    int energy(HealthFactor f) => f.key == 'energy' && (energyFirst || f.rating == HealthRating.poor) ? 0 : 1;
+    int energy(HealthFactor f) => f.key == 'energy' && (energyFirst || f.rating == HealthRating.poor)
+        ? 0
+        : (proteinFocus && f.key == 'protein' ? 1 : 2);
     return [
       for (final f in factors)
         if (f.rating == HealthRating.ok || f.rating == HealthRating.poor) f,
@@ -402,7 +415,9 @@ class ActivityWeek {
 
   /// Stappen per dag, alleen dagen met gegevens.
   final List<double> steps;
-  final List<({String day, double? minutes, double kcal, bool strength})> exercises;
+  /// [intense]: de naam zegt dat het intensief was ("Krachttraining (intensief)"); dat telt dubbel, ook als de
+  /// verbrande energie onder 6 MET blijft (krachttraining heeft veel rust tussen de sets).
+  final List<({String day, double? minutes, double kcal, bool strength, bool intense})> exercises;
 
   /// Dagen van de week die al bezig of voorbij zijn (1–7): een lopende week wordt naar 7 dagen omgerekend.
   final int days;
@@ -865,6 +880,9 @@ HealthCheck? healthCheck(
       alcoholKnown
           // In het Engels ook Britse units van 8 g (N48): een glas van 10 g is 1,25 unit
           ? tr('${fmtGrouped(glasses)} drinks per week (${fmtGrouped(glasses * 10 / ukUnitGrams)} UK units)', '${fmtGrouped(glasses)} glazen per week')
+          // Geen "0 glazen" naast "onbekend" (SP-16)
+          : drinksLogged <= 0
+          ? tr('No alcohol logged in $n days', 'Geen alcohol gelogd in $n dagen')
           : tr(
               '${fmtGrouped(drinksLogged)} drinks in $n days (${fmtGrouped(drinksLogged * 10 / ukUnitGrams)} UK units)',
               '${fmtGrouped(drinksLogged)} glazen in $n dagen',
@@ -907,15 +925,15 @@ HealthCheck? healthCheck(
         )
       : '';
   if (activity.tracksExercise || activity.exercises.isNotEmpty) {
-    // Intensiteit uit de verbrande energie: MET = kcal per minuut × 200 / (3,5 × kg). Intensief (≥ 6 MET) telt dubbel,
-    // licht (< 3 MET) niet mee
+    // Intensiteit uit de verbrande energie: MET = kcal per minuut × 200 / (3,5 × kg). Intensief (≥ 6 MET, of
+    // "intensief" in de naam: SP-5) telt dubbel, licht (< 3 MET) niet mee
     var minutes = 0.0, logged = 0.0;
     for (final e in activity.exercises) {
       final m = e.minutes;
       if (m == null || m <= 0) continue;
       logged += m;
       final met = weightKg > 0 ? e.kcal / m * 200 / (3.5 * weightKg) : 4;
-      minutes += m * (met >= 6 ? 2 : (met >= 3 ? 1 : 0));
+      minutes += m * (met >= 6 || e.intense ? 2 : (met >= 3 ? 1 : 0));
     }
     minutes *= days7;
     exerciseMinutes = minutes;
@@ -946,8 +964,8 @@ HealthCheck? healthCheck(
         ),
         note:
             tr(
-              'Intense exercise counts double, as in the WHO guideline; the app estimates the intensity from the energy you burned.',
-              'Intensief bewegen telt dubbel, zoals in de WHO-richtlijn; de app schat de intensiteit uit de verbrande energie.',
+              'Intense exercise counts double, as in the WHO guideline; the app takes the intensity from the name ("intense") or estimates it from the energy you burned.',
+              'Intensief bewegen telt dubbel, zoals in de WHO-richtlijn; de app haalt de intensiteit uit de naam ("intensief") of schat ze uit de verbrande energie.',
             ) +
             running,
       ),
@@ -1058,6 +1076,7 @@ HealthCheck? healthCheck(
     score: score,
     rating: rating,
     energyFirst: kcalGoal > 0 && eCase == EnergyCase.againstPlan,
+    proteinFocus: plan == Goal.gain || trains,
   );
 }
 
