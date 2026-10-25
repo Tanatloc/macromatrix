@@ -12,8 +12,15 @@ import 'search_terms.dart';
 
 /// Een verhaspelde naam uit de bron rechtzetten zonder de databank opnieuw te bouwen (N85):
 /// "Milk, whole, 3.5, (UHT), % fat" wordt "Milk, whole, 3.5% fat (UHT)".
-String tidyFoodName(String name) =>
-    name.replaceFirstMapped(RegExp(r', (\d+(?:\.\d+)?), (\([^)]*\)), % fat'), (m) => ', ${m[1]}% fat ${m[2]}');
+///
+/// Met [source] ook namen die in het Engels iets anders betekenen: Britse "Potato chips" (CoFID) zijn frietjes, geen
+/// zakje chips (NF-7), en Noors "Havremel" (MVT, "Oatmeal") is havermeel, geen havermout (NW-13).
+String tidyFoodName(String name, {String? source, String? local}) {
+  var n = name.replaceFirstMapped(RegExp(r', (\d+(?:\.\d+)?), (\([^)]*\)), % fat'), (m) => ', ${m[1]}% fat ${m[2]}');
+  if (source == 'cofid') n = n.replaceFirst(RegExp(r'^Potato chips\b'), 'French fries');
+  if (source == 'mvt' && (local ?? '').startsWith('Havremel')) n = n.replaceFirst(RegExp(r'^Oatmeal\b'), 'Oat flour');
+  return n;
+}
 
 class FoodDb {
   /// Openen gebeurt per platform (lib/platform/): als bestand op gsm en pc, in het geheugen in de browser.
@@ -41,7 +48,7 @@ class FoodDb {
     final local = r['name_local'] as String;
     return Food(
       ref: '${r['source']}:${r['source_id']}',
-      name: tidyFoodName(r['name'] as String),
+      name: tidyFoodName(r['name'] as String, source: r['source'] as String, local: local),
       localName: local.isEmpty ? null : local,
       category: (r['category'] as String).isEmpty ? null : r['category'] as String,
       source: FoodSource.fromDb(r['source'] as String),

@@ -81,17 +81,19 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       _portion = e.portionLabel == null
           ? null
           : [..._food.portions, ...everydayPortions(_food)].where((p) => samePortion(p.label, e.portionLabel)).firstOrNull;
-      _qty = TextEditingController(text: _fmt(_portion == null ? e.grams : e.quantity));
+      _qty = TextEditingController(text: _fmt(_portion == null ? e.grams / _density : e.quantity));
     } else if (widget.initialGrams != null) {
       _portion = widget.initialPortion;
       // Met een portie: het aantal porties dat bij de meegegeven grammen hoort (2 sneetjes, niet altijd 1)
-      _qty = TextEditingController(text: _fmt(_portion == null ? widget.initialGrams! : widget.initialGrams! / _portion!.grams));
+      _qty = TextEditingController(
+        text: _fmt(_portion == null ? widget.initialGrams! / _density : widget.initialGrams! / _portion!.grams),
+      );
     } else {
       // Wat je de vorige keer nam, anders een gewone portie (een kom havermout, een bord spaghetti, 1 appel): wie
       // meteen op Toevoegen tikt, logt zo geen eetlepel havermout of 100 g van een bord pasta (NW-12)
       final start = context.read<AppState>().startServing(_food);
       _portion = start.portion;
-      _qty = TextEditingController(text: _fmt(start.quantity));
+      _qty = TextEditingController(text: _fmt(start.portion == null ? start.quantity / _density : start.quantity));
     }
     _initial = (qty: _qty.text, portion: _portion?.label, meal: _meal, time: _time);
   }
@@ -126,13 +128,23 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     super.dispose();
   }
 
-  static String _fmt(double v) => v == v.roundToDouble() ? v.round().toString() : double.parse(v.toStringAsFixed(2)).toString().dec;
+  static String _fmt(double v) {
+    // Eerst op 2 decimalen: 200 ml melk × 1,03 is 206,00000000000003 g, dat moet "206" tonen
+    final r = (v * 100).round() / 100;
+    return r == r.roundToDouble() ? r.round().toString() : r.toString().dec;
+  }
 
   double get _quantity => double.tryParse(_qty.text.replaceAll(',', '.')) ?? 0;
-  double get _grams => _portion == null ? _quantity : _quantity * _portion!.grams;
+  double get _grams => _portion == null ? _quantity * _density : _quantity * _portion!.grams;
 
-  /// Dranken in ml, de rest in gram (N85); 1 g drank telt als 1 ml.
+  /// Dranken in ml, de rest in gram (N85). Een ml weegt niet altijd een gram: melk 1,03 g (NF-15, [mlDensity]).
   String get _unit => isDrink(_food) ? 'ml' : 'g';
+  double get _density => isDrink(_food) ? mlDensity(_food) : 1;
+
+  /// Een hoeveelheid in gram zoals op het scherm: bij een drank in ml, met het gewicht erbij als dat verschilt
+  /// ("200 ml (206 g)").
+  String _amountText(double grams) =>
+      _density == 1 ? '${_fmt(grams)} $_unit' : '${_fmt(grams / _density)} $_unit (${_fmt(grams)} g)';
 
   void _setQuantity(double v) => setState(() => _qty.text = _fmt(math.max(0, v)));
 
@@ -146,7 +158,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     setState(() {
       final grams = _grams;
       _portion = p;
-      _qty.text = _fmt(p == null ? (grams > 0 ? grams.roundToDouble() : 100) : 1);
+      _qty.text = _fmt(p == null ? (grams > 0 ? (grams / _density).roundToDouble() : 100) : 1);
     });
   }
 
@@ -271,8 +283,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final s = context.read<AppState>();
     var mask = 0x7f;
     final days = weekdayShort;
-    final unitGrams = _portion?.grams ?? 1;
-    final amount = TextEditingController(text: _fmt(_portion == null ? _grams : _quantity));
+    final unitGrams = _portion?.grams ?? _density;
+    final amount = TextEditingController(text: _fmt(_portion == null ? _grams / _density : _quantity));
     double qty() => double.tryParse(amount.text.replaceAll(',', '.')) ?? 0;
     final existing = _repeatsOf(s);
     final ok = await showDialog<bool>(
@@ -305,7 +317,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(_portion == null ? _unit : '× ${portionInLang(_portion!.label)}  (= ${_fmt(qty() * unitGrams)} $_unit)', overflow: TextOverflow.ellipsis),
+                    child: Text(_portion == null ? _unit : '× ${portionInLang(_portion!.label)}  (= ${_amountText(qty() * unitGrams)})', overflow: TextOverflow.ellipsis),
                   ),
                 ],
               ),
@@ -396,7 +408,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
       _portion = fresh;
     } else if (hadPortion) {
       // Geen portie meer: de grammen van wat er stond
-      _qty.text = _fmt(_grams > 0 ? _grams : 100);
+      _qty.text = _fmt(_grams > 0 ? _grams / _density : 100);
       _portion = null;
     }
     // In gram: die grammen blijven gelden
@@ -706,7 +718,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final options = <(Portion?, String, String)>[
       (null, _unit == 'ml' ? 'ml' : tr('Grams', 'Gram'), ''),
       // Porties uit de databank, aangevuld met gewone porties (sneetje, glas, kom ...) als geschatting (P19)
-      for (final x in portionOptions(_food)) x is EverydayPortion ? (x, x.short, '≈${_fmt(x.grams)} $_unit') : (x, portionInLang(x.label), '${_fmt(x.grams)} $_unit'),
+      for (final x in portionOptions(_food))
+        x is EverydayPortion ? (x, x.short, '≈${_fmt(x.grams / _density)} $_unit') : (x, portionInLang(x.label), '${_fmt(x.grams / _density)} $_unit'),
     ];
     // Op label: geschatte porties worden bij elke opbouw opnieuw gemaakt
     bool selected(Portion? x) => x == null ? _portion == null : _portion?.label == x.label;
@@ -759,11 +772,11 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
               StepButton(icon: Icons.add_rounded, tooltip: tr('More', 'Meer'), size: 44, onTap: () => _stepBy(up: true)),
             ],
           ),
-          if (_portion != null)
+          if (_portion != null || (_density != 1 && _grams > 0))
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                '= ${_fmt(_grams)} $_unit',
+                _portion == null ? '= ${_fmt(_grams)} g' : '= ${_amountText(_grams)}',
                 textAlign: TextAlign.center,
                 style: numStyle(12, weight: FontWeight.w400, color: p.ink3),
               ),
@@ -1030,8 +1043,8 @@ class _ImpactPanel extends StatelessWidget {
                         if (overMax[n.key] case final max?)
                           Text(
                             tr(
-                              'Above the safe upper limit of ${formatAmount(max, n)} ${n.unit}',
-                              'Boven de veilige bovengrens van ${formatAmount(max, n)} ${n.unit}',
+                              'Above the safe upper limit of ${formatAmount(max, n)} ${n.shownUnit}',
+                              'Boven de veilige bovengrens van ${formatAmount(max, n)} ${n.shownUnit}',
                             ),
                             style: TextStyle(fontSize: 11, color: p.high),
                           ),
@@ -1245,7 +1258,7 @@ class _ValuesPanelState extends State<_ValuesPanel> {
           ),
           const SizedBox(width: 6),
           Text(
-            v == null ? '–' : '${formatAmount(v, n)} ${n.unit}',
+            v == null ? '–' : '${formatAmount(v, n)} ${n.shownUnit}',
             style: numStyle(12, weight: FontWeight.w500, color: p.ink, style: est == null ? null : FontStyle.italic),
           ),
           SizedBox(

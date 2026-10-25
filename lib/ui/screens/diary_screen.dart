@@ -635,7 +635,7 @@ class _ShortfallCard extends StatelessWidget {
     final v = s.totals.values;
     final low = KeyNutrients.shortfalls(v, s.targets, limit: 8);
     final logged = s.entries.any((e) => !e.foodRef.startsWith('supp:'));
-    final score = completenessScore(v, s.targets);
+    final score = dayScore(v, s.targets, closed: s.dateClosed);
     return Panel(
       shadow: false,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -1245,7 +1245,10 @@ class _WeekCard extends StatelessWidget {
                   values: kcal,
                   target: energyGoal,
                   color: p.ink,
-                  note: tr('$inBand of $logged days within ±10%', '$inBand van $logged dagen binnen ±10%'),
+                  note: tr(
+                    '$inBand of $logged ${logged == 1 ? 'day' : 'days'} within ±10%',
+                    '$inBand van $logged ${logged == 1 ? 'dag' : 'dagen'} binnen ±10%',
+                  ),
                 ),
               ),
               const SizedBox(width: 18),

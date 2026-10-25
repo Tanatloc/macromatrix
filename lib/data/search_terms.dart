@@ -66,7 +66,7 @@ const _nlToEn = <String, String>{
   'pure chocolade': 'chocolate, dark', 'jam': 'jam', 'stroop': 'syrup', 'koffie': 'coffee', 'thee': 'tea', 'water': 'water',
   'bier': 'beer', 'wijn': 'wine', 'rode wijn': 'wine, red', 'witte wijn': 'wine, white', 'sap': 'juice',
   'sinaasappelsap': 'orange juice', 'appelsap': 'apple juice', 'sojamelk': 'soymilk', 'amandelmelk': 'almond milk',
-  'havermelk': 'oat milk', 'cola': 'cola',
+  'havermelk': 'oat milk', 'cola': 'cola', 'appelmoes': 'apple sauce', 'appelcompote': 'apple compote', 'compote': 'compote',
   // Bereiding
   'rauw': 'raw', 'gekookt': 'cooked', 'gebakken': 'fried', 'geroosterd': 'roasted', 'gegrild': 'grilled', 'gestoomd': 'steamed',
   'gedroogd': 'dried', 'diepvries': 'frozen', 'blik': 'canned',

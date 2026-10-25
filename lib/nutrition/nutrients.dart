@@ -40,8 +40,16 @@ class Nutrient {
   /// Berekend uit andere voedingsstoffen (bv. omega-3 = ALA + EPA + DPA + DHA).
   final bool derived;
 
+  /// EPA, DPA en DHA staan in g (zoals in de bronnen), maar op het scherm in mg, zoals EPA + DHA erboven: geen
+  /// "EPA + DHA 3,195 mg" naast "EPA 1.095 g" (NF-18).
+  static const _shownInMg = {'epa', 'dpa', 'dha'};
+
+  /// Eenheid op het scherm, samen met [formatAmount] (dat de waarde omrekent met [shownFactor]).
+  String get shownUnit => _shownInMg.contains(key) ? 'mg' : unit;
+  double get shownFactor => _shownInMg.contains(key) ? 1000 : 1;
+
   int get displayDecimals =>
-      decimals ??
+      _shownInMg.contains(key) ? 0 : decimals ??
       switch (unit) {
         'kcal' => 0,
         'g' => 1,

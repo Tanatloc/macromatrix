@@ -350,7 +350,7 @@ class ScoreCard extends StatelessWidget {
     final p = context.pal;
     final v = s.totals.values;
     final empty = (v['energy'] ?? 0) <= 0;
-    final score = completenessScore(v, s.targets);
+    final score = dayScore(v, s.targets, closed: s.dateClosed);
     // Dezelfde regel als de balken en percentages (levelOf / isTooMuch), maar alleen over de vitaminen en mineralen:
     // dat staat erbij, zodat rood vet of verzadigd vet niet tegen "0 te veel" lijkt in te gaan (NW-15)
     final levels = [
@@ -359,6 +359,7 @@ class ScoreCard extends StatelessWidget {
     ];
     int count(Level l) => levels.where((x) => x == l).length;
     final coverage = dataCoverage(s.totals);
+    final reason = empty ? null : scoreEnergyNote(v, s.targets, closed: s.dateClosed);
 
     final body = Row(
       children: [
@@ -388,9 +389,11 @@ class ScoreCard extends StatelessWidget {
                     title: tr('Nutrient score', 'Voedingsscore'),
                     message: tr(
                       'How close you are to your goal for ${stripKeys.length} vitamins and minerals, on average. '
-                          'Each nutrient counts up to 100%; above an upper limit the score drops.',
+                          'Each nutrient counts up to 100%; above an upper limit the score drops. '
+                          'Once the day is over, energy counts too: more than ${fmtPct(energyScoreBand)} under or over your energy goal lowers the score.',
                       'Hoe dicht je bij je doel zit voor ${stripKeys.length} vitaminen en mineralen, gemiddeld. '
-                          'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score.',
+                          'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score. '
+                          'Als de dag voorbij is, telt ook energie: meer dan ${fmtPct(energyScoreBand)} onder of boven je energiedoel verlaagt de score.',
                     ),
                   ),
                 ],
@@ -446,6 +449,11 @@ class ScoreCard extends StatelessWidget {
                     : tr('Data complete for ${fmtPct(coverage)} of your kcal', 'Gegevens compleet voor ${fmtPct(coverage)} van je kcal'),
                 style: TextStyle(fontSize: 11.5, color: p.ink3),
               ),
+              if (reason != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(reason.$1, style: TextStyle(fontSize: 11.5, color: reason.$2 ? p.low : p.ink3)),
+                ),
             ],
           ),
         ),

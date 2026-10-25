@@ -38,7 +38,7 @@ import '../nutrition/levels.dart';
 import '../nutrition/niacin.dart';
 import '../nutrition/nutrients.dart';
 import '../nutrition/preferences.dart';
-import '../nutrition/portions.dart' show EverydayPortion, defaultServing, everydayPortions, typicalPieceGrams;
+import '../nutrition/portions.dart' show EverydayPortion, curedName, defaultServing, everydayPortions, typicalPieceGrams;
 import '../nutrition/processing.dart';
 import '../nutrition/supplements.dart';
 import '../nutrition/targets.dart';
@@ -158,6 +158,9 @@ class AppState extends ChangeNotifier {
 
   DateTime _date = _dateOnly(logicalNow());
   DateTime get date => _date;
+
+  /// De open dag is voorbij (niet vandaag): de Voedingsscore telt dan ook energie mee ([dayScore]).
+  bool get dateClosed => _date.isBefore(_dateOnly(logicalNow()));
   String get day => dayKey(_date);
   bool get isToday => _date == _dateOnly(logicalNow());
 
@@ -744,6 +747,8 @@ class AppState extends ChangeNotifier {
       'fruit' => 120.0,
       'vegetable' => 80.0,
       'legume' => dried ? 60.0 : 120.0,
+      // Gerookte, gezouten of gemarineerde vis en vlees: een kleine portie op brood (NF-19)
+      'meat' || 'fish' when curedName.hasMatch(name) => 50.0,
       'meat' || 'fish' => 120.0,
       'beverage' => 250.0,
       _ => null,
@@ -866,7 +871,7 @@ class AppState extends ChangeNotifier {
     var kcal = 0.0, goalKcal = 0.0, protein = 0.0, carbs = 0.0, fat = 0.0;
     for (final e in daily.entries) {
       final t = targetsForDate(DateTime.parse(e.key));
-      scores[e.key] = completenessScore(e.value.values, t);
+      scores[e.key] = dayScore(e.value.values, t, closed: e.key.compareTo(dayKey(today)) < 0);
       dayKcal[e.key] = e.value.values['energy'] ?? 0;
       kcal += e.value.values['energy'] ?? 0;
       goalKcal += t['energy']?.goal ?? 0;
@@ -965,7 +970,7 @@ class AppState extends ChangeNotifier {
         final g = t[k]?.goal;
         if (g != null && g > 0) sums[k]![m] += math.min(1.5, (v[k] ?? 0) / g);
       }
-      final score = completenessScore(v, t).toDouble();
+      final score = dayScore(v, t, closed: d.isBefore(today)).toDouble();
       if (bestScore == null || score > bestScore.$2) bestScore = (d, score);
       final p = v['protein'] ?? 0, f = v['fiber'] ?? 0;
       if (p > 0 && (mostProtein == null || p > mostProtein.$2)) mostProtein = (d, p);
@@ -1055,6 +1060,7 @@ class AppState extends ChangeNotifier {
   }
 
   static final _strength = RegExp(r'kracht|gewicht|fitness|strength|weight|crossfit', caseSensitive: false);
+  static final _intense = RegExp(r'intensie|intense|vigorous|hiit', caseSensitive: false);
 
   /// Train je in de week van [monday]: veel sport in je profiel, of krachttraining gelogd.
   bool _trainsIn(DateTime monday) {
@@ -1076,7 +1082,7 @@ class AppState extends ChangeNotifier {
     final exercises = [
       for (var i = 0; i < days; i++)
         for (final e in user.exerciseFor(dayKey(DateTime(monday.year, monday.month, monday.day + i))))
-          (day: e.day, minutes: e.minutes, kcal: e.kcal, strength: _strength.hasMatch(e.name)),
+          (day: e.day, minutes: e.minutes, kcal: e.kcal, strength: _strength.hasMatch(e.name), intense: _intense.hasMatch(e.name)),
     ];
     // Houdt je activiteiten bij? Dan telt een week zonder ook mee (anders weet de app niet of je bewoog)
     var tracks = exercises.isNotEmpty || user.setting('_health')?['on'] == true;
@@ -1117,6 +1123,7 @@ class AppState extends ChangeNotifier {
       Set<String> rarelyReached,
       List<(NutrientTotals, Map<String, Target>)> full,
       List<String> fullDays,
+      Map<String, int> dayScores,
       double kcal,
       double kcalGoal,
       HealthCheck? health,
@@ -1129,6 +1136,7 @@ class AppState extends ChangeNotifier {
       final reached = <String, int>{};
       final withTargets = <(NutrientTotals, Map<String, Target>)>[];
       final fullDays = <String>[];
+      final dayScores = <String, int>{};
       var kcal = 0.0, kcalGoal = 0.0, partial = 0;
       for (final e in daily.entries) {
         final t = targetsForDate(DateTime.parse(e.key));
@@ -1138,7 +1146,8 @@ class AppState extends ChangeNotifier {
         }
         withTargets.add((e.value, t));
         fullDays.add(e.key);
-        scores.add(completenessScore(e.value.values, t));
+        scores.add(dayScore(e.value.values, t));
+        dayScores[e.key] = scores.last;
         kcal += e.value['energy'];
         kcalGoal += t['energy']?.goal ?? 0;
         // Ook koolhydraten, vet en vezels: voor de wekelijkse coach (macro's tegenover je doel)
@@ -1179,6 +1188,7 @@ class AppState extends ChangeNotifier {
         },
         full: withTargets,
         fullDays: fullDays,
+        dayScores: dayScores,
         kcal: kcal / n,
         kcalGoal: kcalGoal / n,
         health: healthCheck(
@@ -1308,6 +1318,7 @@ class AppState extends ChangeNotifier {
       sugar: sugar,
       upperShare: now.upperShare,
       topFoods: _topFoodsByEnergy(now.fullDays),
+      dayScores: now.dayScores,
     );
   }
 
@@ -1373,8 +1384,11 @@ class AppState extends ChangeNotifier {
     'cola light': 'cola sweetener',
     'diet coke': 'cola sweetener',
     'pepsi max': 'cola sweetener',
-    // Britse chips zijn een zakje chips, geen knäckebröd ("crispbread")
+    // Britse chips zijn een zakje chips, geen knäckebröd ("crispbread"). In België, Nederland en de VS heten die
+    // "chips" ("potato chips"); de Britse "chips" van CoFID zijn frietjes (NF-7)
     'crisps': 'potato crisps',
+    'chips': 'potato crisps',
+    'potato chips': 'potato crisps',
     // Frietjes: "fries" is geen gebakken ei of vis ("fried"), en in België en Nederland heten ze friet of patat
     'fries': 'french fries',
     'friet': 'french fries',
@@ -1772,8 +1786,17 @@ class AppState extends ChangeNotifier {
     final low = avg.entries.where((e) => e.value < 0.7).toList()..sort((a, b) => a.value.compareTo(b.value));
     return [
       for (final e in low.take(limit))
-        if (nutrientByKey[e.key] case final n?) (n, e.value, [for (final r in richestFor(e.key, perKcal: true, limit: 3, advice: true)) r.$1]),
+        if (nutrientByKey[e.key] case final n?) (n, e.value, _distinctFoods(richestFor(e.key, perKcal: true, limit: 15, advice: true), 3)),
     ];
+  }
+
+  /// Hoogstens [take] verschillende voedingsmiddelen: geen drie keer cantharel of schelvis uit drie bronnen (SU-15).
+  static List<Food> _distinctFoods(List<(Food, double)> list, int take) {
+    final seen = <String>{};
+    return [
+      for (final (f, _) in list)
+        if (seen.add(f.label?.food ?? f.name.toLowerCase().split(',').first.trim())) f,
+    ].take(take).toList();
   }
 
   void _refresh() {
@@ -2353,7 +2376,8 @@ class AppState extends ChangeNotifier {
     // Per dag de score en de badge-gegevens onthouden zolang de regels van die dag en je doelen niet veranderen
     DayStat stat(String d) {
       final entries = byDay[d]!;
-      final sig = '$_targetsVersion|${entries.map((e) => '${e.id}:${e.grams}').join(',')}';
+      final closed = d.compareTo(today) < 0;
+      final sig = '$_targetsVersion|$closed|${entries.map((e) => '${e.id}:${e.grams}').join(',')}';
       final hit = _dayScores[d];
       if (hit != null && hit.$1 == sig) return hit.$2;
       final v = NutrientTotals.sumOf(entries.map(entryValues)).values;
@@ -2361,7 +2385,8 @@ class AppState extends ChangeNotifier {
       bool ok(String k) => t[k] != null && levelOf(v[k] ?? 0, t[k]) == Level.ok;
       final o6 = v['omega6'], o3 = v['omega3'];
       final s = DayStat(
-        score: completenessScore(v, t),
+        score: dayScore(v, t, closed: closed),
+        microScore: completenessScore(v, t),
         vitD: ok('vit_d'),
         fiber: (v['fiber'] ?? 0) >= (t['fiber']?.goal ?? 25),
         iron: ok('iron'),
@@ -2378,7 +2403,8 @@ class AppState extends ChangeNotifier {
 
     _dayStats = {for (final d in withFood) d: stat(d)};
     final bonus = (user.setting('xp_bonus')?['xp'] as num?)?.toInt() ?? 0;
-    return levelFromScores({for (final e in _dayStats.entries) e.key: e.value.score}, bonus: bonus);
+    // XP uit de score zonder energiefactor: een level of badge die je al had, verdwijnt niet door die regel (SP-7)
+    return levelFromScores({for (final e in _dayStats.entries) e.key: e.value.micro}, bonus: bonus);
   }
 
   final _dayScores = <String, (String, DayStat)>{};
@@ -2498,7 +2524,11 @@ class AppState extends ChangeNotifier {
     if (end.isBefore(monday)) return null;
     final daily = dailyTotals(monday, end);
     if (daily.isEmpty) return null;
-    final scores = [for (final e in daily.entries) completenessScore(e.value.values, targetsForDate(DateTime.parse(e.key)))];
+    final todayKey = dayKey(today);
+    final scores = [
+      for (final e in daily.entries)
+        dayScore(e.value.values, targetsForDate(DateTime.parse(e.key)), closed: e.key.compareTo(todayKey) < 0),
+    ];
     return (score: (scores.reduce((a, b) => a + b) / scores.length).round(), days: scores.length);
   }
 
@@ -2661,9 +2691,12 @@ class AppState extends ChangeNotifier {
     final out = <(ProductInfo, int)>[];
     for (final i in infos.nonNulls) {
       final s = i.score(catalog);
-      if (s != null && s >= mine + 10 && s >= 50 && hitsForAllergies(i).isEmpty) out.add((i, s));
+      // Een echt betere samenstelling (betere Nutri-Score), niet alleen hoger door de bio-bonus (NF-9)
+      final betterNs = p.nutriscore == null || (i.nutriscore != null && i.nutriscore!.compareTo(p.nutriscore!) < 0);
+      if (s != null && betterNs && s >= mine + 10 && s >= 50 && hitsForAllergies(i).isEmpty) out.add((i, s));
     }
-    out.sort((a, b) => b.$2.compareTo(a.$2));
+    // Eerst wat in België of Nederland te koop is, dan de hoogste score
+    out.sort((a, b) => a.$1.soldNearby != b.$1.soldNearby ? (a.$1.soldNearby ? -1 : 1) : b.$2.compareTo(a.$2));
     return out.take(3).toList();
   }
 

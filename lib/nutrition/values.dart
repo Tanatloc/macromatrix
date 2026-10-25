@@ -90,7 +90,9 @@ class NutrientTotals {
 }
 
 /// Getal netjes tonen met de decimalen van de voedingsstof (nl-BE: komma als decimaalteken).
+/// In de eenheid op het scherm ([Nutrient.shownUnit]): toon er altijd die eenheid bij, niet [Nutrient.unit].
 String formatAmount(double value, Nutrient n) {
+  value *= n.shownFactor;
   var d = n.displayDecimals;
   // Kleine hoeveelheden met wat meer precisie, zodat er geen "0" staat bij sporen
   if (value != 0 && value.abs() < 1 && d < 2) d = 2;

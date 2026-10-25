@@ -370,7 +370,7 @@ void main() {
       final s = newState();
       final p = (await tester.runAsync(() => _pro(s, active: false)))!;
       await _pump(tester, s, p, const ProScreen());
-      expect(find.text('Early access to new features'), findsOneWidget);
+      expect(find.text('Early access to new features, now the weekly coach'), findsOneWidget);
       expect(find.text('Vote on what we build next'), findsOneWidget);
       expect(find.byKey(const ValueKey('pro-roadmap')), findsOneWidget);
       await _pump(
