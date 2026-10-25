@@ -1443,8 +1443,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// Kandidaten voor een zoekterm, in de volgorde van de databank: bij een meervoud ("breads", "eieren") eerst het
-  /// enkelvoud. Een energiedrank alleen als je die vraagt (P151).
-  List<Food> _candidates(String query, {Food? first}) {
+  /// enkelvoud. Een energiedrank alleen als je die vraagt (P151). Met een suikerwens ([splitSugarAsk]) altijd ook de
+  /// vormen met suiker in de naam ("no added sugars", "unsweetened", "reduced sugar"), ook bij een woord met honderden
+  /// treffers (yoghurt).
+  List<Food> _candidates(String query, {Food? first, SugarAsk? sugar}) {
     // Een kort woord op -ies: "fries" wordt "fry", niet "fri" (dat ook "fried" vindt: gebakken ei bij frietjes, N15)
     final singular = query.endsWith('ies') && query.length <= 6
         ? '${query.substring(0, query.length - 3)}y'
@@ -1455,7 +1457,7 @@ class AppState extends ChangeNotifier {
         ?first,
         if (singular != query && singular.length > 2) ...[...user.searchSaved(singular), ...foods.search(singular, limit: 150)],
         ...user.searchSaved(query),
-        ...foods.search(query, limit: 200),
+        ...foods.search(query, limit: 200, alsoWith: sugar == null ? const [] : const ['sugar', 'sweet', 'sucre']),
       ])
         if (!unaskedEnergyDrink(f, query) && !unaskedFree(f, query) && seen.add(f.ref)) f,
     ];
@@ -1491,7 +1493,9 @@ class AppState extends ChangeNotifier {
 
   List<(Food, double, Portion?)> resolveQuick(QuickItem q) {
     final typed = q.query.toLowerCase().trim();
-    var norm = _normalQuery(q.query);
+    // "Sugar free muesli": muesli zoeken, de vorm zonder suiker vooraan (geen suiker of kauwgom)
+    final (base, sugar) = splitSugarAsk(typed);
+    var norm = _normalQuery(base);
     // Gewone woorden met een vaste bedoeling: een kroket is een aardappelkroket (geen falafel), melk halfvolle melk,
     // thee gezette thee (geen ijsthee), whey eiwitpoeder
     for (final (pattern, alias) in const [
@@ -1508,7 +1512,7 @@ class AppState extends ChangeNotifier {
     final pickedFood = picked == null ? null : (FoodDb.isDbRef(picked) ? foods.byRef(picked) : user.food(picked));
     // Wat je eerder at, is bijna altijd wat je bedoelt
     final mine = {for (final e in user.recent(limit: 300)) e.foodRef};
-    var all = _candidates(q.query, first: pickedFood);
+    var all = _candidates(q.query, first: pickedFood, sugar: sugar);
     final words = q.query.split(RegExp(r'\s+'));
     // Een bereiding die de databank bij dit product niet kent ("fried ham"): dan het product zelf, niet een ander
     // product met die bereiding (gebakken champignons, want "champignon" bevat "ham"). Kent de databank de bereiding
@@ -1546,7 +1550,7 @@ class AppState extends ChangeNotifier {
     // Eén woord met een tikfout ("porrige"): wat het zoekvak dan vindt
     if (all.isEmpty && words.length == 1) all = searchLocal(q.query).take(25).toList();
     // Hetzelfde basisproduct als bovenaan in het zoekvak, zodat Snel loggen en zoeken geen twee eierregels geven (N10)
-    final boxTop = all.isEmpty || partial ? null : groupFoods(searchLocal(q.query)).firstOrNull?.main;
+    final boxTop = all.isEmpty || partial ? null : groupFoods(searchLocal(sugar == null ? q.query : typed)).firstOrNull?.main;
     if (boxTop != null && !all.any((f) => f.ref == boxTop.ref)) all = [...all, boxTop];
     // Woorden die een product niet heeft, als niets alle woorden had
     int missing(Food f) {
@@ -1556,7 +1560,7 @@ class AppState extends ChangeNotifier {
 
     // Dezelfde score als het zoekvak (P152), plus je eigen keuzes en wat je eerder at
     double rank(int i, Food f) {
-      var s = 20.0 - i * 0.15 + foodQueryScore(f, q.query);
+      var s = 20.0 - i * 0.15 + foodQueryScore(f, q.query, sugar: sugar);
       if (f.ref == picked) s += 200;
       if (f.ref == boxTop?.ref) s += 20;
       if (mine.contains(f.ref)) s += 25;
@@ -2620,11 +2624,14 @@ class AppState extends ChangeNotifier {
   /// het gewone, bereide product boven rauwe rijst, kipgehakt of melkpoeder. Favorieten eerst, dan wat je al eens
   /// at, dan de rest. Met [personal] uit alleen de gewone volgorde, die niet verschuift na het loggen (N82).
   List<Food> searchLocal(String q, {bool personal = true}) {
+    // Een suikerwens ("sugar free", "zonder suiker") is geen voedingsmiddel: zoeken op de rest (zie splitSugarAsk)
+    final SugarAsk? sugar;
+    (q, sugar) = splitSugarAsk(q);
     final norm = _normalQuery(q);
     final seen = <String>{};
     // Met een alias ("oats") ook wat je letterlijk typte, erachter
     final all = [
-      for (final f in [..._candidates(norm), if (norm != q.toLowerCase().trim()) ..._candidates(q.toLowerCase().trim())])
+      for (final f in [..._candidates(norm, sugar: sugar), if (norm != q.toLowerCase().trim()) ..._candidates(q.toLowerCase().trim())])
         if (seen.add(f.ref)) f,
     ];
     // Niets gevonden: de woorden aan elkaar ("volkoren brood") of alleen het laatste woord
@@ -2635,13 +2642,13 @@ class AppState extends ChangeNotifier {
     // Nederlands woord dat de vertaling kent.
     if (words.length == 1 && searchTokens(norm).join(' ') == norm && !all.any((f) => f.name.toLowerCase().contains(norm))) {
       final (fix, found) = _typoFix(norm);
-      if (fix != null && fix != norm) return searchLocal(fix);
+      if (fix != null && fix != norm) return searchLocal(sugar == null ? fix : '$fix ${sugar == SugarAsk.low ? 'low sugar' : 'no added sugar'}');
       if (all.isEmpty) all.addAll(found);
     }
     double score(int i, Food f) =>
         20.0 -
         i * 0.15 +
-        foodQueryScore(f, norm) +
+        foodQueryScore(f, norm, sugar: sugar) +
         // Eigen producten en recepten zijn geen "gewoon eten" voor de score, maar wel precies wat je zoekt
         (FoodDb.isDbRef(f.ref) ? 0 : (f.source == FoodSource.recipe ? 40 : 10));
     final ranked = [for (final (i, f) in all.indexed) (score(i, f), f)]..sort((a, b) => b.$1.compareTo(a.$1));

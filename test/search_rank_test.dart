@@ -4,6 +4,7 @@ import 'package:macromatrix/data/food.dart';
 import 'package:macromatrix/data/food_db.dart';
 import 'package:macromatrix/data/user_db.dart';
 import 'package:macromatrix/nutrition/food_groups.dart';
+import 'package:macromatrix/nutrition/free_sugars.dart';
 import 'package:macromatrix/nutrition/quick_parse.dart';
 import 'package:macromatrix/state/app_state.dart';
 
@@ -116,5 +117,79 @@ void main() {
     expect(s.searchLocal('protein bar').map((f) => f.name.toLowerCase()), everyElement(isNot(contains('protein free'))));
     // Een Nederlands woord blijft gewoon vertaald, geen "tikfout"
     expect(box('appel').name.toLowerCase(), contains('apple'));
+  });
+  test('muesli is muesli, geen granola, in elke spelling', () {
+    for (final q in ['muesli', 'müsli', 'musli', 'Muesli']) {
+      for (final f in [box(q), quick(q)]) {
+        final n = f.name.toLowerCase();
+        expect(n, allOf(matches(RegExp(r'm(ue|ü|u)sli')), isNot(matches(RegExp(r'granola|\bbar\b|bread|yog')))), reason: '$q: ${f.name}');
+      }
+    }
+    // Geen mossel ("musling" in het Deens)
+    expect(s.searchLocal('musli').map((f) => f.name.toLowerCase()), everyElement(isNot(contains('mussel'))));
+  });
+
+  test('een suikerwens is geen voedingsmiddel: muesli zonder suiker, nooit suiker of kauwgom', () {
+    for (final q in [
+      'sugar free muesli',
+      'sugar-free muesli',
+      'muesli no added sugar',
+      'muesli no added sugars',
+      'muesli without sugar',
+      'muesli without added sugar',
+      'muesli with no added sugar',
+      'unsweetened muesli',
+      'muesli zonder suiker',
+      'muesli zonder toegevoegde suiker',
+      'suikervrije muesli',
+      'ongezoete müsli',
+    ]) {
+      for (final f in [box(q), quick(q)]) {
+        expect(f.name.toLowerCase(), matches(RegExp(r'm(ue|ü|u)sli')), reason: '$q: ${f.name}');
+        expect(noAddedSugarName.hasMatch(f.name), isTrue, reason: '$q: ${f.name}');
+      }
+    }
+    // Minder suiker: er is geen muesli "reduced sugar", dan die zonder toegevoegde suiker (en nooit granola)
+    for (final q in ['low sugar muesli', 'reduced sugar muesli', 'muesli minder suiker']) {
+      for (final f in [box(q), quick(q)]) {
+        expect(f.name.toLowerCase(), allOf(matches(RegExp(r'm(ue|ü|u)sli')), isNot(contains('granola'))), reason: '$q: ${f.name}');
+        expect(noAddedSugarName.hasMatch(f.name) || lowSugarName.hasMatch(f.name), isTrue, reason: '$q: ${f.name}');
+      }
+    }
+    expect(parseQuick('50 g muesli with no added sugar').single.query, 'muesli with no added sugar');
+  });
+
+  test('suikerwens bij andere producten: de variant als die bestaat, anders het gewone product', () {
+    final want = {
+      'sugar free jam': (RegExp(r'\bjam\b'), noAddedSugarName),
+      'jam zonder suiker': (RegExp(r'\bjam\b'), noAddedSugarName),
+      'reduced sugar jam': (RegExp(r'\bjam\b'), lowSugarName),
+      'low sugar ketchup': (RegExp(r'ketchup'), lowSugarName),
+      'almond milk unsweetened': (RegExp(r'almond milk'), noAddedSugarName),
+      'unsweetened almond milk': (RegExp(r'almond milk'), noAddedSugarName),
+      'sugar free cola': (RegExp(r'\bcola\b'), noAddedSugarName),
+      'sugar free chewing gum': (RegExp(r'chewing gum'), noAddedSugarName),
+    };
+    for (final MapEntry(key: q, value: (food, form)) in want.entries) {
+      for (final f in [box(q), quick(q)]) {
+        expect(f.name.toLowerCase(), matches(food), reason: '$q: ${f.name}');
+        expect(form.hasMatch(f.name), isTrue, reason: '$q: ${f.name}');
+      }
+    }
+    // Geen ongezoete gewone yoghurt of pindakaas zonder suiker in de databank: dan de gewone, geen fruityoghurt of koekje
+    for (final q in ['unsweetened yoghurt', 'unsweetened yogurt', 'ongezoete yoghurt', 'yoghurt no added sugar']) {
+      for (final f in [box(q), quick(q)]) {
+        expect(f.name.toLowerCase(), allOf(matches(RegExp(r'yog(h)?urt.*plain|plain.*yog(h)?urt')), isNot(matches(RegExp(r'fruit|vanilla')))),
+            reason: '$q: ${f.name}');
+      }
+    }
+    for (final f in [box('peanut butter no added sugar'), quick('peanut butter no added sugar')]) {
+      expect(f.name.toLowerCase(), allOf(startsWith('peanut butter'), isNot(matches(RegExp(r'cookie|sugar')))), reason: f.name);
+    }
+    // Alleen de suikerwens, of gewoon suiker: geen woorden om weg te laten
+    expect(splitSugarAsk('sugar free'), ('sugar free', null));
+    expect(splitSugarAsk('brown sugar'), ('brown sugar', null));
+    expect(box('sugar').name.toLowerCase(), startsWith('sugar'));
+    expect(box('sugar free').name.toLowerCase(), contains('sugar free'));
   });
 }

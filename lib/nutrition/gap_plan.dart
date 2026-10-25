@@ -38,8 +38,9 @@ class GapPlan {
 }
 
 final _measure = RegExp(r'\b(cup|cups|tbsp|tsp|oz|fl|ml|dl|l|quart|pint|decilitres?|tablespoons?|teaspoons?)\b', caseSensitive: false);
+// Zout en zoetstof als product, niet een product "without salt", "no added sugar or salt" of "with sweetener(s)"
 final _notAFood = RegExp(
-  r'\b(oil|supplement|powder|shake mix|meal replacement|protein shake|extract|fortified|infant|babyfood|yeast extract|spice|spices|salt|seasoning|herbs?|gelatin(e|ou)?|gelatine|sweetener|aspartame|stevia|saccharin|meat extender|protein isolate|cod liver|fish oil|raising agent|baking|leaven)\b',
+  r'\b(oil|supplement|powder|shake mix|meal replacement|protein shake|extract|fortified|infant|babyfood|yeast extract|spice|spices|(?<!(no|without|or|and|added|low|less|reduced) )salt|seasoning|herbs?|gelatin(e|ou)?|gelatine|(?<!(with|and|contains|artificial|calorie) )sweetener|aspartame|stevia|saccharin|meat extender|protein isolate|cod liver|fish oil|raising agent|baking|leaven)\b',
   caseSensitive: false,
 );
 

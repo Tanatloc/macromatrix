@@ -42,7 +42,7 @@ const _nlToEn = <String, String>{
   'zilvervliesrijst': 'rice, brown',
   'havermout': 'oat', 'haver': 'oat', 'havervlokken': 'oat', 'pasta': 'pasta', 'spaghetti': 'spaghetti', 'macaroni': 'macaroni', 'noedels': 'noodles',
   'quinoa': 'quinoa', 'boekweit': 'buckwheat', 'gierst': 'millet', 'couscous': 'couscous', 'bulgur': 'bulgur', 'gerst': 'barley',
-  'bloem': 'wheat flour', 'meel': 'flour', 'muesli': 'granola', 'cornflakes': 'corn flakes', 'tarwe': 'wheat', 'rogge': 'rye',
+  'bloem': 'wheat flour', 'meel': 'flour', 'müsli': 'muesli', 'musli': 'muesli', 'cornflakes': 'corn flakes', 'tarwe': 'wheat', 'rogge': 'rye',
   // Zuivel en eieren
   'ei': 'egg', 'eieren': 'egg', 'eigeel': 'egg, yolk', 'eiwit': 'egg, white', 'melk': 'milk', 'halfvolle melk': 'milk, reduced fat',
   'magere melk': 'milk, nonfat', 'volle melk': 'milk, whole', 'karnemelk': 'buttermilk', 'yoghurt': 'yogurt', 'kaas': 'cheese',
@@ -71,6 +71,16 @@ const _nlToEn = <String, String>{
   'rauw': 'raw', 'gekookt': 'cooked', 'gebakken': 'fried', 'geroosterd': 'roasted', 'gegrild': 'grilled', 'gestoomd': 'steamed',
   'gedroogd': 'dried', 'diepvries': 'frozen', 'blik': 'canned',
 };
+
+/// Hetzelfde woord in een andere spelling in de namen van de bronnen (Deens en Zweeds "müsli", Brits "yoghurt"):
+/// het zoekwoord vindt ook die (zie FoodDb.search). Alleen spellingen die niet midden in iets anders staan ("musli"
+/// zit in het Deense "musling", mossel; die namen hebben daarnaast toch "müsli").
+const otherSpellings = <String, List<String>>{'muesli': ['müsli'], 'yogurt': ['yoghurt']};
+
+final _spellingOf = RegExp(r'müsli|musli(?!ng)|yoghurt');
+
+/// Een naam in de spelling van de zoekwoorden ("Müsli" wordt "muesli"), om te vergelijken met [searchTokens].
+String sameSpelling(String s) => s.replaceAllMapped(_spellingOf, (m) => m[0]!.startsWith('y') ? 'yogurt' : 'muesli');
 
 /// Zoekwoorden (in het Engels) voor een Nederlandse of Engelse zoekopdracht.
 /// Woordcombinaties ("zoete aardappel") gaan voor losse woorden.

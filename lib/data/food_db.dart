@@ -73,23 +73,48 @@ class FoodDb {
     return rows.isEmpty ? null : _food(rows.first);
   }
 
-  /// Zoeken op naam (Engels of de taal van de bron). Nederlandse woorden worden vertaald (zie search_terms.dart).
-  List<Food> search(String query, {int limit = 50}) {
+  /// Zoeken op naam (Engels of de taal van de bron). Nederlandse woorden worden vertaald (zie search_terms.dart), en
+  /// een woord vindt ook zijn andere spellingen ([otherSpellings]: "muesli" ook "müsli"). Namen waarin ook één van
+  /// [alsoWith] staat (bv. "sugar" of "sweet" bij "sugar free muesli") vallen nooit weg door [limit]: ze staan op hun
+  /// plaats in de rangschikking, ook bij een woord met honderden treffers (yoghurt).
+  List<Food> search(String query, {int limit = 50, List<String> alsoWith = const []}) {
     final tokens = searchTokens(query);
     if (tokens.isEmpty) return const [];
-    final where = List.filled(tokens.length, 'search LIKE ?').join(' AND ');
-    final rows = _db.select('SELECT * FROM foods WHERE $where LIMIT 600', [for (final t in tokens) '%$t%']);
+    final words = [for (final t in tokens) [t, ...?otherSpellings[t]]];
+    final where = [for (final w in words) '(${List.filled(w.length, 'search LIKE ?').join(' OR ')})'].join(' AND ');
+    final params = [
+      for (final w in words)
+        for (final t in w) '%$t%',
+    ];
+    final rows = _db.select('SELECT * FROM foods WHERE $where LIMIT 600', params);
+    final also = alsoWith.isEmpty
+        ? const <Row>[]
+        : _db.select('SELECT * FROM foods WHERE $where AND (${List.filled(alsoWith.length, 'search LIKE ?').join(' OR ')}) LIMIT 600', [
+            ...params,
+            for (final a in alsoWith) '%$a%',
+          ]);
+    final alsoIds = {for (final r in also) r['id']};
+    final seen = <Object?>{};
+    final all = [
+      for (final r in [...rows, ...also])
+        if (seen.add(r['id'])) r,
+    ];
     // Bij gelijke stand de volgorde van de databank (sort is niet stabiel)
-    final ranked = [for (final (i, r) in rows.indexed) (_rank(r, tokens) * 1000 + i, r)]..sort((a, b) => a.$1.compareTo(b.$1));
-    return [for (final (_, r) in ranked.take(limit)) _food(r)];
+    final ranked = [for (final (i, r) in all.indexed) (_rank(r, tokens, sugar: alsoWith.isNotEmpty) * 1000 + i, r)]
+      ..sort((a, b) => a.$1.compareTo(b.$1));
+    return [
+      for (final (i, (_, r)) in ranked.indexed)
+        if (i < limit || alsoIds.contains(r['id'])) _food(r),
+    ];
   }
 
   /// Lager = beter.
   /// 1. Hoe goed de naam overeenkomt: "Banana, raw" voor "banana" vóór "Pepper, banana".
   /// 2. Bij een goede overeenkomst: Europese bronnen vóór USDA.
   /// 3. De gewone vorm (fruit rauw, rijst en pasta gekookt), dan producten met veel gegevens, dan kortere namen.
-  static int _rank(Row r, List<String> tokens) {
-    final name = (r['name'] as String).toLowerCase();
+  /// Met [sugar] (een suikerwens bij het zoeken) is "reduced sugar" geen bijzondere vorm.
+  static int _rank(Row r, List<String> tokens, {bool sugar = false}) {
+    final name = sameSpelling((r['name'] as String).toLowerCase());
     final source = FoodSource.fromDb(r['source'] as String);
     final nutrientCount = ':'.allMatches(r['nutrients'] as String).length;
 
@@ -129,6 +154,7 @@ class FoodDb {
         ? 0
         : 1;
     // Wat je zoekt is de drank of het product zelf, niet een ingrediënt of cocktail ervan (tenzij je dat typt)
+    final special = sugar ? name.replaceAll(RegExp(r'reduced[- ]sugars?'), '') : name;
     final odd =
         (RegExp(r'\b(irish|liqueur|cocktail|bulk|powder(ed)?|dehydrated|concentrate)\b').hasMatch(name) &&
                 !RegExp(r'irish|liqueur|cocktail|bulk|powder|dehydrated|concentrate|whey|protein').hasMatch(q)) ||
@@ -136,7 +162,7 @@ class FoodDb {
                 RegExp(r'\b(ground|beans?|leaves|leaf|instant|granules)\b').hasMatch(name) &&
                 !RegExp(r'ground|bean|lea[fv]|instant|granule').hasMatch(q)) ||
             // Gehakt, diepvries, lactosevrij, "light" en energiedrank alleen als je ze noemt
-            (RegExp(r'\b(minced?|frozen|lactose|reduced|energy drink)\b').hasMatch(name) &&
+            (RegExp(r'\b(minced?|frozen|lactose|reduced|energy drink)\b').hasMatch(special) &&
                 !RegExp(r'minc|frozen|lactose|reduced|energy').hasMatch(q))
         ? 1
         : 0;
