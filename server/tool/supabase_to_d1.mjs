@@ -224,7 +224,9 @@ export function compareRows(snap, d1, { seqBase = 0 } = {}) {
       for (const c of Object.keys(w)) {
         if (skip.includes(c)) continue;
         const a = w[c], b = c === 'server_seq' ? r[c] - seqBase : r[c];
-        if (a !== b) diffs.push(`${t} ${k}: ${c} ${JSON.stringify(a).slice(0, 80)} != ${JSON.stringify(b).slice(0, 80)}`);
+        // Wachtwoord-hashes nooit in de uitvoer
+        const show = (v) => (c === 'password' ? (v ? '<hash>' : String(v)) : JSON.stringify(v).slice(0, 80));
+        if (a !== b) diffs.push(`${t} ${k}: ${c} ${show(a)} != ${show(b)}`);
       }
     }
     for (const k of g.keys()) diffs.push(`${t}: extra in D1: ${k}`);
