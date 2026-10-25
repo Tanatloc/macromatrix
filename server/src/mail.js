@@ -3,7 +3,7 @@
 //
 // Volgorde: testpostvak (alleen staging), Cloudflare Email Sending (binding EMAIL, als die er is), anders of bij een
 // fout Brevo. Fase 4 maakt van Cloudflare de eerste keuze; tot dan heeft de Worker geen EMAIL-binding.
-import templates from './mail-templates.json';
+import templates from './mail-templates.json' with { type: 'json' };
 
 const FROM = { name: 'MacroMatrix', address: 'noreply@macromatrix.eu' };
 
@@ -31,7 +31,18 @@ function plain(html) {
  * Een mail sturen volgens een sjabloon. [kind]: confirmation | recovery | password_changed_notification |
  * existing_account.
  */
-export async function sendMail(env, { to, kind, token }) {
+export async function sendMail(env, mail) {
+  try {
+    const route = await deliver(env, mail);
+    console.log(`mail ${mail.kind}: ${route}`);
+    return route;
+  } catch (e) {
+    console.error(`mail ${mail.kind} mislukt: ${e?.message ?? e}`);
+    throw e;
+  }
+}
+
+async function deliver(env, { to, kind, token }) {
   const t = templates[kind];
   if (!t) throw new Error(`onbekend sjabloon ${kind}`);
   const testDomain = env.TEST_OUTBOX_DOMAIN;

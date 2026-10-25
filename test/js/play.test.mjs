@@ -536,3 +536,56 @@ test('zonder accountlabel en tegelijk door twee accounts gemeld: maar één krij
     [owner],
   );
 });
+
+// --- De eigen server (service binding API, functions/_lib/backend.js): zelfde stroom zonder Supabase-sleutel, met
+// de echte ingang Internal (server/src/internal.js) op een nagebootste D1.
+
+await import('../../server/test/workers-stub.mjs');
+const { d1, addUser } = await import('../../server/test/d1.mjs');
+const { Internal } = await import('../../server/src/internal.js');
+
+function ownServer() {
+  const db = d1();
+  addUser(db, A);
+  addUser(db, B);
+  const internal = new Internal({ waitUntil() {} }, { DB: db, BETTER_AUTH_SECRET: 'x'.repeat(40) });
+  // De sessie nabootsen (Better Auth zit in Internal.session); de rest is de echte code
+  internal.session = async (auth) => (users[auth] ? { id: users[auth], email: null } : null);
+  const e = { GOOGLE_PLAY_SA: env.GOOGLE_PLAY_SA, PLAY_RTDN_SECRET: env.PLAY_RTDN_SECRET, API: internal };
+  const pro = (u) => db.raw.prepare('SELECT until, source FROM pro_status WHERE user_id = ?').get(u);
+  return { db, e, pro };
+}
+
+test('eigen server: aankoop nakijken zonder Supabase-sleutel, Supporter in D1', async () => {
+  const { e, pro } = ownServer();
+  subs.set('token-eigen-1', sub({ tag: await accountHash(A) }));
+  const r = await call(buy('token-eigen-1'), e);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+  assert.deepEqual({ ...pro(A) }, { until: iso(NOW + 300 * day), source: 'play' });
+  assert.equal(db.play_purchases.length, 0, 'Supabase niet gebruikt');
+});
+
+test('eigen server: een aankoop van A kan B niet claimen; een melding van Google na afloop zet Supporter stop', async () => {
+  const { e, pro } = ownServer();
+  subs.set('token-eigen-2', sub());
+  assert.equal((await call(buy('token-eigen-2'), e)).body.ok, true);
+  const other = await call(buy('token-eigen-2', 'pro_yearly', 'Bearer user-b'), e);
+  assert.equal(other.body.reason, 'other_account');
+  subs.set('token-eigen-2', sub({ state: 'SUBSCRIPTION_STATE_EXPIRED', expiry: NOW - day }));
+  const data = Buffer.from(JSON.stringify({ packageName: PACKAGE, subscriptionNotification: { purchaseToken: 'token-eigen-2', notificationType: 13 } })).toString('base64');
+  const res = await rtdn(
+    new Request(`https://macromatrix.eu/api/play-rtdn?secret=${env.PLAY_RTDN_SECRET}`, { method: 'POST', body: JSON.stringify({ message: { data } }) }),
+    e,
+    fetcher,
+    NOW,
+  );
+  assert.equal(res.status, 200);
+  assert.equal(pro(A).until, iso(NOW));
+});
+
+test('eigen server: zonder geldige sessie geen aankoop', async () => {
+  const { e } = ownServer();
+  subs.set('token-eigen-3', sub());
+  assert.equal((await call(buy('token-eigen-3', 'pro_yearly', 'Bearer onbekend'), e)).status, 401);
+});

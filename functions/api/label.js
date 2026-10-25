@@ -8,6 +8,7 @@
 // dan werkt het zoals /api/photo zonder teller: alleen de rem per uur. Antwoordt de teller niet (storing): 503.
 
 import { MODEL, MAX_IMAGE_BYTES, aiQuotaStatus, checkLogin, dataUrl, hourly, imageType, json, modelObject, quotaDown } from '../_lib/ai.js';
+import { backendFetch } from '../_lib/backend.js';
 import { readForm as readBody } from '../_lib/body.js';
 
 const PER_HOUR = 20;
@@ -204,7 +205,8 @@ async function ask(env, prompt, bytes, mime, maxTokens) {
 
 export async function onRequestPost({ request, env }) {
   if (!env.AI) return json({ error: 'not_configured' }, 503);
-  const who = await checkLogin(request);
+  const fetcher = backendFetch(env);
+  const who = await checkLogin(request, fetcher);
   if (who.error) return who.error;
 
   const form = await readForm(request);
@@ -215,7 +217,7 @@ export async function onRequestPost({ request, env }) {
 
   // De dagteller pas na de controles hierboven, zodat een kapotte foto geen scan van vandaag kost.
   // Geen teller (migratie niet uitgevoerd): verder zoals zonder teller. Een storing bij de teller: 503.
-  const q = await aiQuotaStatus(who.auth, 'label');
+  const q = await aiQuotaStatus(who.auth, 'label', fetcher);
   if (q.down) return quotaDown();
   const quota = q.quota ?? null;
   if (quota && !quota.allowed) return json({ error: 'quota', used: quota.used, limit: quota.limit, pro: quota.pro }, 429);

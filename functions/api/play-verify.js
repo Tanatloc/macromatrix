@@ -11,6 +11,7 @@
 // SUPABASE_SERVICE_ROLE_KEY. Uitleg: voedingsapp-data/playstore/PLAYSTORE.md, "Google Play Billing instellen".
 
 import { checkLogin, hourly, json } from '../_lib/ai.js';
+import { backendFetch } from '../_lib/backend.js';
 import { readJson } from '../_lib/body.js';
 import { PACKAGE } from '../_lib/google.js';
 import { applyPurchase, playConfig, PRODUCTS } from '../_lib/play.js';
@@ -21,6 +22,7 @@ const PER_HOUR = 30;
 const MAX_BODY = 16_000;
 
 export async function verify(request, env, fetcher = fetch, now = Date.now()) {
+  fetcher = backendFetch(env, fetcher);
   const cfg = playConfig(env);
   if (!cfg) return json({ ok: false, reason: 'not_configured' }, 503);
   const login = await checkLogin(request, fetcher);

@@ -1,0 +1,20 @@
+// Staging-site (staging.macromatrix.eu): de webapp gebouwd met API_URL=https://api-staging.macromatrix.eu, plus de
+// functies uit functions/api. Bouwen en uitrollen: tool/deploy_staging_web.sh.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "macromatrix-staging-web",
+  "main": "index.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "staging.macromatrix.eu", "custom_domain": true }],
+  "assets": {
+    "directory": "../../build/staging-site",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "ai": { "binding": "AI" },
+  "services": [{ "binding": "API", "service": "macromatrix-api-staging", "entrypoint": "Internal" }],
+  "observability": { "enabled": true }
+}

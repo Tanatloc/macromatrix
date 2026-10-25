@@ -7,6 +7,7 @@
 // Is die er nog niet (PGRST202), dan werkt het zoals vroeger: alleen de rem per uur. Antwoordt de teller niet (storing),
 // dan geen foto (503): anders is er geen grens aan wat het beeldmodel kost.
 
+import { backendFetch } from '../_lib/backend.js';
 import { quotaDown } from '../_lib/ai.js';
 import { readBytes } from '../_lib/body.js';
 
@@ -77,10 +78,11 @@ export async function useQuota(auth, fetcher = fetch) {
 }
 
 export async function onRequestPost({ request, env }) {
+  const fetcher = backendFetch(env);
   if (!env.AI) return json({ error: 'not_configured' }, 503);
   const auth = request.headers.get('Authorization') ?? '';
   if (!auth.startsWith('Bearer ')) return json({ error: 'login' }, 401);
-  const who = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: ANON, Authorization: auth } });
+  const who = await fetcher(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: ANON, Authorization: auth } });
   if (!who.ok) return json({ error: 'login' }, 401);
   const user = (await who.json()).id;
 
@@ -104,7 +106,7 @@ export async function onRequestPost({ request, env }) {
   if (count >= PER_HOUR) return json({ error: 'too_many' }, 429);
 
   // De dagteller pas na de controles hierboven, zodat een kapotte foto geen foto van vandaag kost
-  const q = await useQuota(auth);
+  const q = await useQuota(auth, fetcher);
   if (q.down) return quotaDown();
   const quota = q.quota ?? null;
   if (quota && !quota.allowed) return json({ error: 'quota', used: quota.used, limit: quota.limit, pro: quota.pro }, 429);

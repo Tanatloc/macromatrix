@@ -10,6 +10,7 @@
 //
 // Secrets: PLAY_RTDN_SECRET, GOOGLE_PLAY_SA en SUPABASE_SERVICE_ROLE_KEY.
 
+import { backendFetch } from '../_lib/backend.js';
 import { json } from '../_lib/ai.js';
 import { readJson } from '../_lib/body.js';
 import { PACKAGE } from '../_lib/google.js';
@@ -41,6 +42,7 @@ export function decodeNotification(body) {
 const MAX_BODY = 64_000;
 
 export async function rtdn(request, env, fetcher = fetch, now = Date.now()) {
+  fetcher = backendFetch(env, fetcher);
   const cfg = playConfig(env);
   if (!cfg || !env?.PLAY_RTDN_SECRET) return json({ ok: false, reason: 'not_configured' }, 503);
   const secret = new URL(request.url).searchParams.get('secret');

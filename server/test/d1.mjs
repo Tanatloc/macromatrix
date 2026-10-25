@@ -17,7 +17,9 @@ class Statement {
   _run(mode) {
     try {
       const st = this.db.prepare(this.sql);
-      if (mode === 'run' && !/\breturning\b/i.test(this.sql)) {
+      // Zoals D1: een opdracht zonder resultaatrijen (INSERT/UPDATE/DELETE zonder RETURNING) geeft changes terug
+      const noRows = !/\breturning\b/i.test(this.sql) && !/^\s*(select|pragma|with)\b/i.test(this.sql);
+      if ((mode === 'run' || mode === 'auto') && noRows) {
         const r = st.run(...this.params);
         return { results: [], success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } };
       }
@@ -52,7 +54,7 @@ export function d1() {
     async batch(stmts) {
       db.exec('BEGIN');
       try {
-        const out = stmts.map((s) => s._run('all'));
+        const out = stmts.map((s) => s._run('auto'));
         db.exec('COMMIT');
         return out;
       } catch (e) {

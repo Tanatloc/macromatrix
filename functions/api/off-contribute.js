@@ -15,6 +15,7 @@
 // ai_quota_use('off'): 10 per dag (migratie 20261107000000_quota_voice_off); zonder die migratie alleen de rem per uur.
 
 import { ANON, SUPABASE_URL, checkLogin, hourly, imageType, json, quotaDown, useQuotaOrHourly, MAX_IMAGE_BYTES } from '../_lib/ai.js';
+import { backendFetch } from '../_lib/backend.js';
 import { readForm } from '../_lib/body.js';
 import { checkPer100, num } from './label.js';
 
@@ -126,6 +127,7 @@ export async function onRequestGet({ env }) {
 }
 
 export async function onRequestPost({ request, env }, fetcher = fetch) {
+  fetcher = backendFetch(env, fetcher);
   if (!configured(env)) return json({ error: 'not_configured' }, 503);
   const who = await checkLogin(request, fetcher);
   if (who.error) return who.error;

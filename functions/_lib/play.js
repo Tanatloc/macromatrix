@@ -18,9 +18,11 @@ export const PRODUCTS = ['pro_monthly', 'pro_yearly'];
 // Toestanden waarin je betaald hebt (CANCELED = opgezegd, maar betaald tot de vervaldatum)
 const ENTITLED = new Set(['SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD', 'SUBSCRIPTION_STATE_CANCELED']);
 
-// De secrets voor Google en Supabase, of null als er een ontbreekt.
+// De secrets voor Google en Supabase, of null als er een ontbreekt. Met de service binding API naar de eigen server
+// (functions/_lib/backend.js) is er geen Supabase-sleutel nodig: dan schrijft die server zelf (internal).
 export function playConfig(env) {
   const sa = parseServiceAccount(env?.GOOGLE_PLAY_SA);
+  if (sa && env?.API) return { sa, internal: env.API };
   const key = env?.SUPABASE_SERVICE_ROLE_KEY;
   if (!sa || typeof key !== 'string' || !key) return null;
   return { sa, key };
@@ -81,11 +83,13 @@ async function rest(cfg, fetcher, path, init = {}, where = path.split('?')[0]) {
 const eq = (v) => `eq.${encodeURIComponent(v)}`;
 
 export async function findPurchase(cfg, token, fetcher = fetch) {
+  if (cfg.internal) return cfg.internal.findPurchase(token);
   const rows = await rest(cfg, fetcher, `play_purchases?purchase_token=${eq(token)}&select=user_id,product,expiry`);
   return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
 async function savePurchase(cfg, row, fetcher) {
+  if (cfg.internal) return cfg.internal.savePurchase(row);
   await rest(cfg, fetcher, 'play_purchases?on_conflict=purchase_token', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -103,6 +107,7 @@ async function proRow(cfg, user, fetcher) {
 // loopt (dus ook veilig als er tegelijk met de hand iets toegekend wordt: dan opnieuw); is er nog geen rij, dan een
 // nieuwe. Een kortere Pro met de hand (of als geschenk, via het web) wordt onthouden in base_until/base_source.
 export async function grantPro(cfg, user, untilIso, fetcher = fetch) {
+  if (cfg.internal) return cfg.internal.grantPro(user, untilIso);
   const now = new Date().toISOString();
   for (let attempt = 0; attempt < 3; attempt++) {
     const row = await proRow(cfg, user, fetcher);
@@ -138,6 +143,7 @@ export async function grantPro(cfg, user, untilIso, fetcher = fetch) {
 // Pro met de hand, als geschenk of via het web blijft staan. Liep er onder Play nog een Pro met de hand die later
 // eindigt (base_until), dan komt die terug, met zijn eigen bron.
 export async function revokePro(cfg, user, exceptToken, fetcher = fetch, now = Date.now()) {
+  if (cfg.internal) return cfg.internal.revokePro(user, exceptToken, now);
   const nowIso = new Date(now).toISOString();
   const others = await rest(
     cfg,
@@ -163,6 +169,7 @@ export async function revokePro(cfg, user, exceptToken, fetcher = fetch, now = D
 // "bij een conflict niets doen" en daarna teruglezen wie ze heeft. Zo kunnen twee accounts die hetzelfde token
 // tegelijk melden, het niet allebei krijgen. Geeft de eigenaar terug.
 async function claimPurchase(cfg, row, fetcher) {
+  if (cfg.internal) return cfg.internal.claimPurchase(row);
   await rest(cfg, fetcher, 'play_purchases?on_conflict=purchase_token', {
     method: 'POST',
     headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },

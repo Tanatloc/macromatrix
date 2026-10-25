@@ -6,12 +6,14 @@
 // geen opname (503).
 
 import { checkLogin, hourly, json, useQuotaOrHourly } from '../_lib/ai.js';
+import { backendFetch } from '../_lib/backend.js';
 import { readBytes } from '../_lib/body.js';
 
 const MAX_BYTES = 1_500_000; // ongeveer 45 s WAV aan 16 kHz mono
 const PER_HOUR = 60;
 
 export async function onRequestPost({ request, env }, fetcher = fetch) {
+  fetcher = backendFetch(env, fetcher);
   if (!env.AI) return json({ error: 'not_configured' }, 503);
   const who = await checkLogin(request, fetcher);
   if (who.error) return who.error;

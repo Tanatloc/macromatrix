@@ -11,6 +11,7 @@
 // eerst alleen de stand gelezen (ai_quota) en pas geteld als de pagina opgehaald is.
 
 import { MODEL, MAX_IMAGE_BYTES, aiQuotaStatus, checkLogin, dataUrl, hourly, imageType, json, modelObject } from '../_lib/ai.js';
+import { backendFetch } from '../_lib/backend.js';
 import { readBytes, readJson } from '../_lib/body.js';
 
 const PER_HOUR = 20;
@@ -480,7 +481,8 @@ export async function checkRecipeQuota(auth, fetcher = fetch, peek = false) {
 }
 
 export async function onRequestPost({ request, env }) {
-  const who = await checkLogin(request);
+  const fetcher = backendFetch(env);
+  const who = await checkLogin(request, fetcher);
   if (who.error) return who.error;
   const type = request.headers.get('Content-Type') ?? '';
 
@@ -496,7 +498,7 @@ export async function onRequestPost({ request, env }) {
     const photo = read.bytes;
     const mime = imageType(photo);
     if (!mime) return json({ error: 'bad_image' }, 400);
-    const q = await checkRecipeQuota(who.auth);
+    const q = await checkRecipeQuota(who.auth, fetcher);
     if (q.error) return q.error;
     await rate.count();
     try {
@@ -527,14 +529,14 @@ export async function onRequestPost({ request, env }) {
   const body = read.value;
   if (read.bad || !safeUrl(body?.url)) return json({ error: 'bad_url' }, 400);
   // Eerst alleen kijken of het mag (Pro en nog niet op), zodat gratis accounts geen pagina's laten ophalen
-  const peek = await checkRecipeQuota(who.auth, undefined, true);
+  const peek = await checkRecipeQuota(who.auth, fetcher, true);
   if (peek.error) return peek.error;
   await rate.count();
 
   const page = await fetchPage(body.url);
   if (page.error) return json({ error: page.error, quota: peek.quota }, page.error === 'bad_url' ? 400 : 422);
   // Pas nu tellen (in één stap in de database): een link die niet opengaat, kost niets
-  const q = await checkRecipeQuota(who.auth);
+  const q = await checkRecipeQuota(who.auth, fetcher);
   if (q.error) return q.error;
   const fromLd = parseJsonLd(page.html);
   if (fromLd) return json({ ...fromLd, source: 'jsonld', url: page.url, quota: q.quota });

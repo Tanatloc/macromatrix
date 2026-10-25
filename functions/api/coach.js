@@ -12,6 +12,7 @@
 // toegang bij. Ontbreekt de migratie, dan not_configured (de app verbergt de coach dan).
 
 import { aiQuotaStatus, checkLogin, hourly, json, modelObject, stripMarkdown, TimeoutError, withTimeout } from '../_lib/ai.js';
+import { backendFetch } from '../_lib/backend.js';
 import { readBytes } from '../_lib/body.js';
 
 // Groot en goed in het Nederlands, en snel genoeg voor een paar honderd woorden
@@ -467,7 +468,8 @@ async function readWeek(request) {
 
 export async function onRequestPost({ request, env }) {
   if (!env.AI) return json({ error: 'not_configured' }, 503);
-  const who = await checkLogin(request);
+  const fetcher = backendFetch(env);
+  const who = await checkLogin(request, fetcher);
   if (who.error) return who.error;
 
   const input = await readWeek(request);
@@ -477,7 +479,7 @@ export async function onRequestPost({ request, env }) {
   if (!rate.allowed) return json({ error: 'too_many' }, 429);
 
   // De dagteller pas na de controles hierboven. Zonder teller geen coach: die zegt ook of je al mag (vroege toegang).
-  const q = await aiQuotaStatus(who.auth, 'coach');
+  const q = await aiQuotaStatus(who.auth, 'coach', fetcher);
   if (q.missing) return json({ error: 'not_configured' }, 503);
   if (!q.quota) return json({ error: 'failed' }, 502);
   const quota = { used: q.quota.used, limit: q.quota.limit, pro: q.quota.pro };

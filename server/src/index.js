@@ -4,6 +4,7 @@
 //   /v1/rpc/<naam>   de functies van de app
 //   /v1/live         WebSocket voor live meldingen (met een ticket van /v1/live/ticket)
 import { createAuth, WEB_ORIGINS } from './auth.js';
+import { cleanup } from './cron.js';
 import { DbError, errorResponse, json } from './errors.js';
 import { hubFor } from './hub.js';
 import { checkTicket, makeTicket, notifyUser } from './live.js';
@@ -11,6 +12,7 @@ import { callRpc } from './rpc/index.js';
 import { fetchRows, pull, push } from './sync.js';
 
 export { UserHub } from './hub.js';
+export { Internal } from './internal.js';
 
 /** CORS voor de webversie; de app zelf stuurt geen Origin. */
 function cors(request, env, response) {
@@ -91,6 +93,11 @@ async function api(request, env, ctx, url) {
 }
 
 export default {
+  /** Elke nacht opruimen (src/cron.js). */
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(cleanup(env.DB).then((r) => console.log('opruimen', JSON.stringify(r))));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return cors(request, env, new Response(null, { status: 204 }));
