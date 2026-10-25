@@ -102,12 +102,13 @@ void main() {
       expect(s.themeMode, 'light');
     });
 
-    testWidgets('de eerste stap zegt "Last step" en staat op "Like my device"', (tester) async {
-      await pump(tester, const ProfileSetupScreen());
+    testWidgets('de eerste stap zegt "Last step"; het thema volgt het toestel zonder vraag', (tester) async {
+      final (s, _) = await pump(tester, const ProfileSetupScreen());
       expect(find.text('Step 2 of 2'.toUpperCase()), findsNothing);
       expect(find.textContaining(RegExp('last step', caseSensitive: false)), findsOneWidget);
-      final theme = tester.widget<Segmented<String>>(find.byWidgetPredicate((w) => w is Segmented<String>));
-      expect(theme.selected, 'system');
+      // Geen themakeuze meer in de eerste stap (eerste-maaltijdmeting 25-10): in Instellingen → Weergave
+      expect(find.byWidgetPredicate((w) => w is Segmented<String>), findsNothing);
+      expect(s.themeMode, 'system');
     });
   });
 

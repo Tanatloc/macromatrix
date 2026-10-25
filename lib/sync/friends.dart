@@ -565,10 +565,13 @@ class Friends extends ChangeNotifier {
         battlesAvailable = true;
         _checkSentBattles();
         // Wat je hier al ziet, hoeft geen melding meer; en meldingen voor nieuwe uitdagingen inplannen
-        BattleNotify.markSeen(state, [
+        final challenged = [
           for (final b in battles)
             if (b.pending && !b.challengedByMe) b.id,
-        ]);
+        ];
+        BattleNotify.markSeen(state, challenged);
+        // Toestemming voor meldingen pas als iemand je uitdaagt (niet al bij je eerste start)
+        if (challenged.isNotEmpty) unawaited(BattleNotify.askPermission());
         if (!_notifySetup) {
           _notifySetup = true;
           unawaited(BattleNotify.setup(state, account));

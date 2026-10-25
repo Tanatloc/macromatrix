@@ -25,6 +25,7 @@ import 'settings_screen.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
 import '../widgets/undo.dart';
+import '../widgets/activity_ask.dart';
 
 /// Vraag om het Profiel bij de doelen (energie en macro's) te tonen in plaats van bovenaan bij je level (P03).
 /// Elke verhoging is één vraag; een profielscherm dat nog niet bestond, handelt een openstaande vraag af bij het openen.
@@ -178,7 +179,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Text('${a.label}: ${a.description}', overflow: TextOverflow.ellipsis),
                       ),
                   ],
-                  onChanged: (a) => setS(() => _update(ctx.read<AppState>().profile.copyWith(activity: a))),
+                  onChanged: (a) => setS(() {
+                    _update(ctx.read<AppState>().profile.copyWith(activity: a));
+                    // Zelf gekozen: de vraag op Vandaag is dan beantwoord
+                    activityAsked(ctx.read<AppState>());
+                  }),
                 ),
                 const SizedBox(height: 10),
                 Text(

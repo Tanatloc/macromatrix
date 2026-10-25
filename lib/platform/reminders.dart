@@ -69,9 +69,7 @@ class Reminders {
         ),
       );
       _ready = true;
-      if (_android && (settings.log || settings.streak)) {
-        await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
-      }
+      await _askPermissionWhenUseful();
     } catch (e) {
       debugPrint('herinneringen: $e');
     }
@@ -81,7 +79,27 @@ class Reminders {
 
   void _changed() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(seconds: 2), () => unawaited(reschedule()));
+    _debounce = Timer(const Duration(seconds: 2), () {
+      unawaited(_askPermissionWhenUseful());
+      unawaited(reschedule());
+    });
+  }
+
+  bool _askedPermission = false;
+
+  /// Toestemming voor meldingen (Android 13+) pas vragen als je iets gelogd hebt: dan heeft een herinnering zin.
+  /// Niet meer bij de allereerste start, waar het venster over het welkomscherm kwam (eerste-maaltijdmeting 25-10).
+  /// Zet je herinneringen zelf aan in de instellingen, dan vraagt [save] het meteen.
+  Future<void> _askPermissionWhenUseful() async {
+    if (_askedPermission || !_android || !_ready) return;
+    final s = settings;
+    if (!(s.log || s.streak) || state.user.loggedDays().isEmpty) return;
+    _askedPermission = true;
+    try {
+      await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    } catch (e) {
+      debugPrint('herinneringen: $e');
+    }
   }
 
   Future<void> save(ReminderSettings s) async {

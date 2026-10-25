@@ -26,6 +26,7 @@ import 'supplements_screen.dart';
 import 'recap_screen.dart';
 import 'weekly_report_screen.dart';
 import '../../nutrition/allergens.dart';
+import '../widgets/activity_ask.dart';
 import '../widgets/allergen_picker.dart';
 import '../widgets/bio_tips_view.dart';
 import '../widgets/exercise_view.dart';
@@ -36,6 +37,7 @@ import '../widgets/info_tip.dart';
 import '../widgets/nutrient_row.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
+import '../widgets/quick_log.dart';
 import '../widgets/undo.dart';
 
 /// Vandaag: energie en macro's, de 25 vitaminen en mineralen, wat aandacht vraagt, een suggestie,
@@ -103,6 +105,7 @@ class DiaryScreen extends StatelessWidget {
           const SizedBox(height: 8),
           const _ExerciseCard(),
           // Alles wat geen loggen is, komt onder de maaltijden
+          if (s.isToday && !empty && activityAskDue(s)) ...[const SizedBox(height: 20), const ActivityAskCard()],
           if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const SizedBox(height: 20), const _AllergyAsk()],
           if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[gap, const WeeklyReportCard()],
           if (s.isToday && RecapCard.due(s) != null) ...[gap, const RecapCard()],
@@ -545,6 +548,7 @@ class _DesktopDiary extends StatelessWidget {
           final two = c.maxWidth >= twoColumnWidth;
           final log = <Widget>[
             if (!s.hasProfile) ...[_ProfileHint(onOpenProfile: onOpenProfile), gap],
+            if (s.isToday && !empty && activityAskDue(s)) ...[const ActivityAskCard(), gap],
             if (s.isToday && s.hasProfile && !s.allergiesAsked) ...[const _AllergyAsk(), gap],
             if (s.isToday && WeeklyReportCard.shouldShow(s)) ...[const WeeklyReportCard(), gap],
             if (s.isToday && RecapCard.due(s) != null) ...[const RecapCard(), gap],
@@ -1467,8 +1471,30 @@ String savedMealTitle(SavedMeal m, Meal target) {
   return name.toLowerCase() == target.label.toLowerCase() || mealInName(name) == target ? name : '${target.label} · $name';
 }
 
-class _StartCard extends StatelessWidget {
+class _StartCard extends StatefulWidget {
   const _StartCard();
+
+  @override
+  State<_StartCard> createState() => _StartCardState();
+}
+
+/// Een lege dag: bovenaan meteen "Wat at je?" met een veld. Wat je typt, opent Snel loggen met de producten al
+/// gevonden, zodat je eerste maaltijd één zin en één tik is (eerste-maaltijdmeting 25-10).
+class _StartCardState extends State<_StartCard> {
+  final _text = TextEditingController();
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _quickLog(Meal meal) {
+    final text = _text.text.trim();
+    _text.clear();
+    FocusScope.of(context).unfocus();
+    showQuickLog(context, meal: meal, text: text.isEmpty ? null : text);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1553,18 +1579,33 @@ class _StartCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            tr('Start your day', 'Begin je dag'),
+            meal == Meal.snacks
+                ? tr('What did you snack on?', 'Wat at je tussendoor?')
+                : tr('What did you have for ${meal.label.toLowerCase()}?', 'Wat at je als ${meal.label.toLowerCase()}?'),
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: -0.4, color: p.ink),
           ),
-          const SizedBox(height: 6),
-          Text(
-            tr(
-              'After your first meal you\'ll see how close you are to all 25 vitamins and minerals, right here on Today.',
-              'Na je eerste maaltijd zie je hier meteen hoe dicht je bij alle 25 vitaminen en mineralen zit.',
+          const SizedBox(height: 10),
+          TextField(
+            key: const ValueKey('start-quick-log'),
+            controller: _text,
+            textInputAction: TextInputAction.go,
+            decoration: InputDecoration(
+              hintText: tr('e.g. 2 eggs and a slice of toast', 'bv. 2 eieren en een sneetje toast'),
+              suffixIcon: IconButton(
+                key: const ValueKey('start-quick-log-go'),
+                tooltip: tr('Find foods', 'Producten zoeken'),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                onPressed: () => _quickLog(meal),
+              ),
             ),
-            style: TextStyle(fontSize: 14, height: 1.5, color: p.ink2),
+            onSubmitted: (_) => _quickLog(meal),
           ),
           const SizedBox(height: 8),
+          Text(
+            tr('Type it in your own words.', 'Typ het in je eigen woorden.'),
+            style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink3),
+          ),
+          const SizedBox(height: 4),
           for (final m in saved.take(2))
             action(
               icon: Icons.restaurant_menu_rounded,

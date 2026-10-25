@@ -28,9 +28,6 @@ class BattleNotify {
       if (token == null) {
         token = await client.rpc('notify_register') as String;
         state.user.setSetting('_notify', {'token': token, 'seen': const []});
-        await FlutterLocalNotificationsPlugin()
-            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-            ?.requestNotificationsPermission();
       }
       await Workmanager().initialize(battleNotifyDispatcher);
       await Workmanager().registerPeriodicTask(
@@ -43,6 +40,19 @@ class BattleNotify {
     } catch (_) {
       // Functie nog niet in Supabase (migratie niet uitgevoerd) of geen internet: later opnieuw
     }
+  }
+
+  /// Toestemming voor meldingen pas vragen als iemand je echt uitdaagt, niet meteen bij je eerste start
+  /// (eerste-maaltijdmeting 25-10). Eén keer per sessie; Android toont het venster zelf niet opnieuw als het al mag.
+  static bool _asked = false;
+  static Future<void> askPermission() async {
+    if (!Platform.isAndroid || _asked) return;
+    _asked = true;
+    try {
+      await FlutterLocalNotificationsPlugin()
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    } catch (_) {}
   }
 
   /// Uitdagingen die je al in de app zag: daarvoor geen melding meer.
