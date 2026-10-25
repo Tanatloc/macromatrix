@@ -131,7 +131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final (from, _) = _range;
         final end = DateTime(from.year, from.month, from.day + 6);
         final f = DateFormat('d MMM', appLocale);
-        final thisWeek = _atToday && today.difference(from).inDays < 7;
+        final thisWeek = _atToday && daysBetween(from, today) < 7;
         return thisWeek ? tr('This week', 'Deze week') : '${f.format(from)} – ${f.format(end)}';
       case _Period.month:
         final now = logicalNow();

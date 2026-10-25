@@ -200,7 +200,7 @@ class _CoachPanelState extends State<CoachPanel> {
 
     final range =
         '${DateFormat('d MMM', appLocale).format(widget.report.monday)} – '
-        '${DateFormat('d MMM', appLocale).format(widget.report.monday.add(const Duration(days: 6)))}';
+        '${DateFormat('d MMM', appLocale).format(widget.report.monday.plusDays(6))}';
     final title = Row(
       children: [
         Container(

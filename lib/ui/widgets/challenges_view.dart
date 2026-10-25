@@ -38,7 +38,7 @@ String challengeTodayText(ChallengeProgress p) {
   final t = p.challenge.template;
   final today = _today();
   if (!p.challenge.startedOn(today)) {
-    return p.challenge.start == today.add(const Duration(days: 1))
+    return p.challenge.start == today.plusDays(1)
         ? tr('Starts tomorrow', 'Begint morgen')
         : tr('Starts ${_date(p.challenge.start)}', 'Begint ${_date(p.challenge.start)}');
   }
@@ -632,7 +632,7 @@ class _NewChallengeSheetState extends State<_NewChallengeSheet> {
     final c = context.read<Friends>().challenges;
     final messenger = ScaffoldMessenger.of(context);
     final nav = Navigator.of(context);
-    final start = _today().add(Duration(days: _tomorrow ? 1 : 0));
+    final start = _today().plusDays(_tomorrow ? 1 : 0);
     setState(() => _busy = true);
     String? msg;
     if (_invite.isEmpty) {

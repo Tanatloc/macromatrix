@@ -94,7 +94,7 @@ extension WeekMenuPlanning on AppState {
   /// Met weinig geschiedenis: ontbijt, lunch, avondeten en een snack.
   MealPattern mealPattern() {
     final today = _dayOnly(logicalNow());
-    final history = user.entriesBetween(dayKey(today.subtract(const Duration(days: 28))), dayKey(today.subtract(const Duration(days: 1))));
+    final history = user.entriesBetween(dayKey(today.plusDays(-28)), dayKey(today.plusDays(-1)));
     final perDay = <String, List<double>>{};
     for (final e in history) {
       if (e.foodRef.startsWith('supp:')) continue;
@@ -124,7 +124,7 @@ extension WeekMenuPlanning on AppState {
   /// Stoffen die je de laatste 14 dagen vaak te weinig had: sleutel → gewicht (0..1), 1 = gemiddeld onder 30%.
   Map<String, double> usualShortfalls() {
     final today = _dayOnly(logicalNow());
-    final daily = dailyTotals(today.subtract(const Duration(days: 14)), today.subtract(const Duration(days: 1)));
+    final daily = dailyTotals(today.plusDays(-14), today.plusDays(-1));
     if (daily.length < 3) return const {};
     final avg = <String, double>{};
     for (final e in daily.entries) {
@@ -184,7 +184,7 @@ extension WeekMenuPlanning on AppState {
     // 1. Wat je zelf at (28 dagen): hele maaltijden die terugkomen en losse producten die je vaak bij een maaltijd eet
     final today = _dayOnly(logicalNow());
     final history = [
-      for (final e in user.entriesBetween(dayKey(today.subtract(const Duration(days: 28))), dayKey(today.subtract(const Duration(days: 1)))))
+      for (final e in user.entriesBetween(dayKey(today.plusDays(-28)), dayKey(today.plusDays(-1))))
         if (!e.foodRef.startsWith('supp:')) e,
     ];
     final loggedDays = {for (final e in history) e.day}.length;

@@ -390,9 +390,9 @@ class AppState extends ChangeNotifier {
   EnergyEstimate? get energyEstimate {
     if (_estimated) return _estimate;
     final today = _dateOnly(logicalNow());
-    final to = today.subtract(const Duration(days: 1));
-    final from = to.subtract(const Duration(days: 27));
-    final days = [for (var i = 0; i < 28; i++) dayKey(from.add(Duration(days: i)))];
+    final to = today.plusDays(-1);
+    final from = to.plusDays(-27);
+    final days = [for (var i = 0; i < 28; i++) dayKey(from.plusDays(i))];
     final kcal = {for (final e in dailyTotals(from, to).entries) e.key: e.value['energy']};
     final weights = {for (final b in user.biometricHistory('weight', from: dayKey(from))) b.day: b.value};
     _estimate = estimateEnergy(kcal, weights, days);
@@ -1071,7 +1071,7 @@ class AppState extends ChangeNotifier {
     final today = _dateOnly(logicalNow());
     final sunday = DateTime(monday.year, monday.month, monday.day + 6);
     final last = sunday.isAfter(today) ? today : sunday;
-    final days = last.difference(monday).inDays + 1;
+    final days = daysBetween(monday, last) + 1;
     if (days <= 0) return const ActivityWeek();
     final exercises = [
       for (var i = 0; i < days; i++)
@@ -1654,7 +1654,7 @@ class AppState extends ChangeNotifier {
 
   void _savePlans(Map<String, List<PlannedItem>> plans) {
     // Oude plannen (meer dan een week geleden) opruimen
-    final oldest = dayKey(_dateOnly(logicalNow()).subtract(const Duration(days: 7)));
+    final oldest = dayKey(_dateOnly(logicalNow()).plusDays(-7));
     user.setSetting('plan', {
       for (final e in plans.entries)
         if (e.value.isNotEmpty && e.key.compareTo(oldest) >= 0) e.key: [for (final i in e.value) i.toJson()],
@@ -1759,7 +1759,7 @@ class AppState extends ChangeNotifier {
   /// grootste tekort eerst, met voor elk een paar gewone producten die er rijk aan zijn.
   List<(Nutrient, double, List<Food>)> shoppingTips({int limit = 4}) {
     final today = _dateOnly(logicalNow());
-    final daily = dailyTotals(today.subtract(const Duration(days: 14)), today.subtract(const Duration(days: 1)));
+    final daily = dailyTotals(today.plusDays(-14), today.plusDays(-1));
     if (daily.length < 3) return const [];
     final avg = <String, double>{};
     for (final e in daily.entries) {
@@ -1853,7 +1853,7 @@ class AppState extends ChangeNotifier {
     _refresh();
   }
 
-  void shiftDay(int days) => setDate(_date.add(Duration(days: days)));
+  void shiftDay(int days) => setDate(_date.plusDays(days));
 
   void saveProfile(Profile p) {
     _freezePastDays();
@@ -2030,7 +2030,7 @@ class AppState extends ChangeNotifier {
   /// logde, met de hoeveelheid van de laatste keer. Zonder wat vandaag al in die maaltijd staat.
   List<DiaryEntry> usualFor(Meal meal, {int limit = 3}) {
     final today = _dateOnly(logicalNow());
-    final history = user.entriesBetween(dayKey(today.subtract(const Duration(days: 30))), dayKey(today.subtract(const Duration(days: 1))));
+    final history = user.entriesBetween(dayKey(today.plusDays(-30)), dayKey(today.plusDays(-1)));
     final days = <String, Set<String>>{};
     final last = <String, DiaryEntry>{};
     for (final e in history) {
@@ -2054,7 +2054,7 @@ class AppState extends ChangeNotifier {
   /// [meal] van gisteren kopiëren, met samenvoegen zoals [copyDayFromYesterday]. Geef het resultaat aan [undoAdds].
   List<AddedEntry> copyMealFromYesterday(Meal meal) {
     final added = [
-      for (final c in user.copyMealMerged(fromDay: dayKey(_date.subtract(const Duration(days: 1))), meal: meal, toDay: day))
+      for (final c in user.copyMealMerged(fromDay: dayKey(_date.plusDays(-1)), meal: meal, toDay: day))
         AddedEntry(c.id, prevGrams: c.prevGrams, prevQuantity: c.prevQuantity),
     ];
     _refresh();
@@ -2171,7 +2171,7 @@ class AppState extends ChangeNotifier {
   List<RepeatItem> repeats() => user.repeats();
 
   void addRepeat(DiaryEntry e, int weekdays) {
-    user.saveRepeat(mealIndex: e.meal.index, item: templateOf(e), weekdays: weekdays, startDay: dayKey(_date.add(const Duration(days: 1))));
+    user.saveRepeat(mealIndex: e.meal.index, item: templateOf(e), weekdays: weekdays, startDay: dayKey(_date.plusDays(1)));
     notifyListeners();
   }
 
@@ -2493,7 +2493,7 @@ class AppState extends ChangeNotifier {
   /// (tot en met vandaag). Null als er die week nog niets gelogd is.
   ({int score, int days})? weekScore(DateTime monday) {
     final today = logicalNow();
-    var end = monday.add(const Duration(days: 6));
+    var end = monday.plusDays(6);
     if (end.isAfter(today)) end = today;
     if (end.isBefore(monday)) return null;
     final daily = dailyTotals(monday, end);

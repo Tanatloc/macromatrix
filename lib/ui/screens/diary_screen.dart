@@ -691,7 +691,7 @@ Future<void> openAddFood(BuildContext context, Meal meal) => Navigator.of(contex
 int isoWeek(DateTime d) {
   // In UTC rekenen: anders scheelt de overgang naar zomertijd een uur en valt de deling een dag te kort
   final day = DateTime.utc(d.year, d.month, d.day);
-  final thursday = day.add(Duration(days: 4 - day.weekday));
+  final thursday = day.plusDays(4 - day.weekday);
   return thursday.difference(DateTime.utc(thursday.year)).inDays ~/ 7 + 1;
 }
 
@@ -1203,9 +1203,9 @@ class _WeekCard extends StatelessWidget {
     final s = context.watch<AppState>();
     final p = context.pal;
     final to = s.date;
-    final from = to.subtract(const Duration(days: 6));
+    final from = to.plusDays(-6);
     final daily = s.dailyTotals(from, to);
-    final days = [for (var i = 0; i < 7; i++) dayKey(from.add(Duration(days: i)))];
+    final days = [for (var i = 0; i < 7; i++) dayKey(from.plusDays(i))];
     // Elke dag met het doel dat toen gold (vroegere dagen zijn bevroren), niet met het doel van nu
     final perDay = s.targetsBetween(from, to);
     final targets = s.targetsForDate(to);
@@ -1469,11 +1469,11 @@ class _StartCard extends StatelessWidget {
     final p = context.pal;
     final meal = context.read<AppState>().suggestedMeal;
     final yesterday = s.user
-        .entriesFor(dayKey(s.date.subtract(const Duration(days: 1))))
+        .entriesFor(dayKey(s.date.plusDays(-1)))
         .where((e) => e.meal == meal && !e.foodRef.startsWith('supp:'))
         .toList();
     final saved = s.savedMeals();
-    final yesterdayAll = s.user.entriesFor(dayKey(s.date.subtract(const Duration(days: 1)))).where((e) => !e.foodRef.startsWith('supp:')).toList();
+    final yesterdayAll = s.user.entriesFor(dayKey(s.date.plusDays(-1))).where((e) => !e.foodRef.startsWith('supp:')).toList();
 
     Widget action({required IconData icon, required String title, required String sub, String meta = '', required VoidCallback onTap}) => Padding(
       padding: const EdgeInsets.only(top: 8),

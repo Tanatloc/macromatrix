@@ -22,8 +22,8 @@ class DayAxis extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final f = DateFormat('d MMM', appLocale);
-    final last = from.add(Duration(days: days - 1));
-    final mid = from.add(Duration(days: (days - 1) ~/ 2));
+    final last = from.plusDays(days - 1);
+    final mid = from.plusDays((days - 1) ~/ 2);
     final now = logicalNow();
     final lastIsToday = last.year == now.year && last.month == now.month && last.day == now.day;
     final style = numStyle(10.5, weight: FontWeight.w400, color: p.ink3);

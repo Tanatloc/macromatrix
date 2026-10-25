@@ -441,7 +441,7 @@ class Friends extends ChangeNotifier {
     if (state.avatar != _sentAvatar || state.level.level != _sentLevel) await _me();
     await _pushExtra();
     final monday = mondayOf(DateTime.now());
-    for (final m in [monday, monday.subtract(const Duration(days: 7))]) {
+    for (final m in [monday, monday.plusDays(-7)]) {
       final week = dayKey(m);
       final s = state.weekScore(m);
       final value = s == null ? '-' : '${s.score}/${s.days}/${state.battlePoints(m)}';

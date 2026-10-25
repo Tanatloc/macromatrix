@@ -439,14 +439,14 @@ class _BodyScreenState extends State<BodyScreen> {
     // niet tegen de rechterrand gedrukt staan (N79, N44)
     final first = history.isEmpty ? null : parseDay(history.first.day);
     var from = periodFrom;
-    if (first != null && first.difference(periodFrom).inDays > 2) from = first.subtract(const Duration(days: 1));
+    if (first != null && first.difference(periodFrom).inDays > 2) from = first.plusDays(-1);
     final weekAgo = DateTime(today.year, today.month, today.day - 7);
     if (from.isAfter(weekAgo)) from = weekAgo;
     final zoomed = first != null && from != periodFrom;
     // Gewicht: dezelfde trendlijn als op Dashboard, ingelopen vanaf een maand eerder, tot je laatste weging (N44)
     List<(DateTime, double)>? trend;
     if (chartType.key == 'weight' && history.length >= 2) {
-      final warm = from.subtract(const Duration(days: 30));
+      final warm = from.plusDays(-30);
       final byDay = {for (final b in s.user.biometricHistory('weight', from: dayKey(warm))) b.day: b.value};
       final days = [
         for (var d = warm; d.compareTo(parseDay(history.last.day)) <= 0; d = DateTime(d.year, d.month, d.day + 1)) dayKey(d),

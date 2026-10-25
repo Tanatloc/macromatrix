@@ -57,7 +57,7 @@ class HealthSync {
     try {
       await _health.configure();
       final now = DateTime.now();
-      final from = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
+      final from = DateTime(now.year, now.month, now.day).plusDays(-6);
       var changed = 0;
       final db = state.user;
 

@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:sqlite3/common.dart';
 import 'package:uuid/uuid.dart';
 
+import '../day_clock.dart';
 import '../nutrition/supplements.dart';
 import '../nutrition/values.dart';
 import 'food.dart';
@@ -538,7 +539,7 @@ class UserDb {
 
   /// Hoe vaak elk product de laatste [days] dagen gelogd werd (voor "vaak gegeten" bovenaan).
   Map<String, int> logCounts({int days = 60}) {
-    final d = DateTime.now().subtract(Duration(days: days));
+    final d = DateTime.now().plusDays(-days);
     final from = '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     return {
       for (final r in _db.select(

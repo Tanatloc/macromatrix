@@ -44,8 +44,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
 
   /// Geopend voor een week of maand in plaats van één dag.
   bool get _isPeriod => widget.from != null && widget.to != null;
-  int get _periodDays => _isPeriod ? _dateOnly(widget.to!).difference(_dateOnly(widget.from!)).inDays + 1 : 1;
-  static DateTime _dateOnly(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+  int get _periodDays => _isPeriod ? daysBetween(widget.from!, widget.to!) + 1 : 1;
 
   /// Laatste dag van wat je bekijkt: het einde van de periode, of de gekozen dag.
   DateTime _end(AppState s) => _isPeriod ? widget.to! : s.date;
@@ -432,9 +431,9 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
 
   Widget _stats(AppState s) {
     final to = _end(s);
-    final daily = s.dailyTotals(to.subtract(const Duration(days: 29)), to);
+    final daily = s.dailyTotals(to.plusDays(-29), to);
     double? avg(int days) {
-      final keys = [for (var i = 0; i < days; i++) dayKey(to.subtract(Duration(days: i)))];
+      final keys = [for (var i = 0; i < days; i++) dayKey(to.plusDays(-i))];
       final vals = [
         for (final k in keys)
           if (daily[k] case final t?) t[n.key],
@@ -442,7 +441,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
       return vals.isEmpty ? null : vals.reduce((a, b) => a + b) / vals.length;
     }
 
-    final burned = s.user.exerciseKcalBetween(dayKey(to.subtract(const Duration(days: 29))), dayKey(to));
+    final burned = s.user.exerciseKcalBetween(dayKey(to.plusDays(-29)), dayKey(to));
     final ok = daily.entries.where((e) => levelOf(e.value[n.key], _targetOn(s, e.key, burned)) == Level.ok).length;
     final target = s.targetsForDate(to)[n.key];
     return Row(
@@ -467,14 +466,14 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
 
   Widget _history(AppState s, Palette p, Target? target) {
     final to = _end(s);
-    var from = to.subtract(Duration(days: _days - 1));
+    var from = to.plusDays(1 - _days);
     var daily = s.dailyTotals(from, to);
     // Bij 30 en 90 dagen met pas recent gegevens begint de as bij de eerste gelogde dag (minstens een week), in
     // plaats van driekwart lege grafiek; het gemiddelde heet dan "sinds" die dag (N95)
     DateTime? since;
     if (_days > 7 && daily.isNotEmpty) {
       final first = parseDay(daily.keys.reduce((a, b) => a.compareTo(b) <= 0 ? a : b));
-      final weekStart = to.subtract(const Duration(days: 6));
+      final weekStart = to.plusDays(-6);
       final start = first.isAfter(weekStart) ? weekStart : first;
       if (start.isAfter(from)) {
         from = DateTime(start.year, start.month, start.day, to.hour, to.minute);
@@ -483,7 +482,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
       }
     }
     final span = since == null ? _days : (to.difference(from).inHours / 24).round() + 1;
-    final keys = [for (var i = 0; i < span; i++) dayKey(from.add(Duration(days: i)))];
+    final keys = [for (var i = 0; i < span; i++) dayKey(from.plusDays(i))];
     final values = [for (final k in keys) daily[k]?[n.key]];
     final t = s.targetsForDate(to)[n.key];
     final burned = s.user.exerciseKcalBetween(keys.first, keys.last);
@@ -535,7 +534,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             )
           else ...[
             if (long) ...[
-              _historyLine(p, picked == null ? null : from.add(Duration(days: picked)), picked == null ? null : values[picked], mean, goal, t),
+              _historyLine(p, picked == null ? null : from.plusDays(picked), picked == null ? null : values[picked], mean, goal, t),
               const SizedBox(height: 8),
             ],
             DayBarsChart(
@@ -573,7 +572,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
                 ),
               ),
             if (_days <= 7)
-              DayLabels(days: [for (var i = 0; i < _days; i++) from.add(Duration(days: i))])
+              DayLabels(days: [for (var i = 0; i < _days; i++) from.plusDays(i)])
             else
               Padding(
                 padding: const EdgeInsets.only(right: DayBarsChart.axisGutter),

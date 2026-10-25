@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../day_clock.dart';
 import '../../i18n.dart';
 import '../theme.dart';
 
@@ -48,7 +49,7 @@ class TimeSeriesChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    final days = to.difference(from).inDays.clamp(1, 10000);
+    final days = daysBetween(from, to).clamp(1, 10000);
     final values = [
       for (final p in points) p.$2,
       ...?second?.map((p) => p.$2),
@@ -132,7 +133,7 @@ class TimeSeriesChart extends StatelessWidget {
           interval: step.toDouble(),
           reservedSize: 24,
           getTitlesWidget: (v, meta) {
-            final d = from.add(Duration(days: v.round()));
+            final d = from.plusDays(v.round());
             return SideTitleWidget(
               meta: meta,
               child: Text('${d.day}/${d.month}', style: TextStyle(fontSize: 10, color: muted)),

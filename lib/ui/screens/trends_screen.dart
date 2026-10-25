@@ -733,10 +733,10 @@ class _PeriodTrendsState extends State<PeriodTrends> {
       names.length <= 1 ? names.join() : '${names.sublist(0, names.length - 1).join(', ')} ${tr('and', 'en')} ${inSentence(names.last)}';
 
   Widget _weight(AppState s, Palette p, List<String> keys, DateTime from, {required bool logged}) {
-    final history = {for (final b in s.user.biometricHistory('weight', from: dayKey(from.subtract(const Duration(days: 30))))) b.day: b.value};
+    final history = {for (final b in s.user.biometricHistory('weight', from: dayKey(from.plusDays(-30)))) b.day: b.value};
     final weights = [for (final k in keys) history[k]];
     // Trend vanaf een maand vóór de periode, zodat de lijn aan het begin al ingelopen is
-    final warm = [for (var i = 30; i > 0; i--) dayKey(from.subtract(Duration(days: i)))];
+    final warm = [for (var i = 30; i > 0; i--) dayKey(from.plusDays(-i))];
     final trendAll = weightTrend(history, [...warm, ...keys]);
     final trend = trendAll.sublist(warm.length);
     final known = trend.whereType<double>().toList();
