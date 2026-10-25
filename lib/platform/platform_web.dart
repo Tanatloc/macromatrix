@@ -4,6 +4,7 @@ library;
 
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
@@ -49,10 +50,13 @@ Future<(FoodDb, UserDb)> openDatabases() async {
   return (foods, user);
 }
 
-/// De voedingsdatabase. Op de website staat ze in stukken (Cloudflare Pages: max. 25 MiB per bestand, zie
-/// tool/build_site.sh); lokaal (flutter run) als één bestand.
+/// De voedingsdatabase. Op de website staat ze gecomprimeerd (46 MB wordt ± 7 MB, zie tool/build_site.sh) en
+/// pakt de browser ze zelf uit; een browser zonder DecompressionStream haalt de stukken van 20 MiB (Cloudflare Pages:
+/// max. 25 MiB per bestand). Lokaal (flutter run) als één bestand.
 Future<Uint8List> _foodDbBytes() async {
   final base = Uri.base.resolve('assets/${FoodDb.asset}');
+  final packed = await _gunzipped('$base.gz');
+  if (packed != null) return packed;
   final parts = await web.window.fetch('$base.parts'.toJS).toDart;
   if (parts.ok) {
     final n = int.tryParse((await parts.text().toDart).toDart.trim()) ?? 0;
@@ -68,6 +72,27 @@ Future<Uint8List> _foodDbBytes() async {
   }
   final data = await rootBundle.load(FoodDb.asset);
   return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+}
+
+/// Een gzip-bestand ophalen en in de browser uitpakken. Null als het er niet is of de browser het niet kan.
+Future<Uint8List?> _gunzipped(String url) async {
+  try {
+    if (!globalContext.has('DecompressionStream')) return null;
+    final r = await web.window.fetch(url.toJS).toDart;
+    if (!r.ok) return null;
+    final raw = (await r.arrayBuffer().toDart).toDart.asUint8List();
+    // Heeft de server het al uitgepakt (Content-Encoding), dan is het meteen de database
+    if (raw.length > 16 && ascii.decode(raw.sublist(0, 15), allowInvalid: true) == 'SQLite format 3') return raw;
+    if (raw.length < 2 || raw[0] != 0x1f || raw[1] != 0x8b) return null;
+    final unzip = web.DecompressionStream('gzip');
+    final stream = web.Blob([raw.toJS].toJS).stream().pipeThrough(
+      web.ReadableWritablePair(readable: unzip.readable, writable: unzip.writable),
+    );
+    return (await web.Response(stream).arrayBuffer().toDart).toDart.asUint8List();
+  } catch (_) {
+    // Kapotte download of oude browser: dan de stukken
+    return null;
+  }
 }
 
 /// Opslag van de gebruiker in de browser. Vroeger heette die "voedingsapp": bestaat de nieuwe nog niet, dan

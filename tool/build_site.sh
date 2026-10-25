@@ -16,6 +16,8 @@ cp -r build/web build/site/app
 # Cloudflare Pages neemt geen bestanden boven 25 MiB: de voedingsdatabase in stukken van 20 MiB (de webapp plakt ze
 # weer aan elkaar, zie lib/platform/platform_web.dart)
 db=build/site/app/assets/assets/db/foods.db
+# Gecomprimeerd (± 7 MB in plaats van 46): dat haalt de webapp eerst; de stukken blijven voor oude browsers
+gzip -9 -n -c "$db" > "$db.gz"
 split -b 20M -d -a 1 "$db" "$db."
 ls "$db".[0-9] | wc -l | tr -d ' ' > "$db.parts"
 rm "$db"
