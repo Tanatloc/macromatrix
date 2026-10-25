@@ -55,14 +55,14 @@ void main() {
     await tester.enterText(find.byType(TextField), '2 eggs');
     await tester.pump(const Duration(seconds: 1));
     expect(find.textContaining('Total'), findsOneWidget);
-    expect(find.textContaining('110 g'), findsWidgets);
+    expect(find.textContaining('112 g'), findsWidgets); // 2 × 56 g (gekookt ei, Matvaretabellen)
     await tester.tap(find.byTooltip('More'));
     await tester.pump();
-    expect(find.textContaining('165 g'), findsWidgets);
+    expect(find.textContaining('168 g'), findsWidgets);
 
     await tester.tap(find.text('Add 1 to breakfast'));
     await tester.pumpAndSettle();
-    expect(s.entriesFor(Meal.breakfast).single.grams, 165);
+    expect(s.entriesFor(Meal.breakfast).single.grams, 168);
   });
 
   testWidgets('wisknop maakt het veld leeg; 1000 bananen vraagt eerst', (tester) async {

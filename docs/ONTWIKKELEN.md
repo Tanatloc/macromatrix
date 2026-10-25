@@ -136,6 +136,17 @@ Wat het bouwscript doet met ontbrekende of foute waarden:
 5. Onder de meetgrens (CIQUAL "< x") en nergens anders gevonden: 0.
 6. Geschatte deelwaarden worden ingekort tot ze niet boven het totaal uitkomen.
 
+Eenheden en conventies (sinds 2026-10-25, zie `tool/FOODS_CHANGES.md`):
+
+- CoFID-koolhydraten van monosacharide-equivalenten naar gewicht (zetmeel ÷ 1,10, disachariden ÷ 1,05).
+- Vitamine A in RE (retinol + bètacaroteen / 6), zoals de EFSA-doelen; USDA en Matvaretabellen (RAE) omgerekend.
+- B3 in niacine-equivalenten (niacine + tryptofaan / 60), zoals het EFSA-doel.
+- Voorgevormd retinol apart (`retinol`), voor de EFSA-bovengrens van 3000 µg per dag; geen bovengrens op het totaal.
+- B3 = max(NE van de bron, niacine + tryptofaan / 60); tryptofaan boven 2,5 % van het eiwit geldt als meetfout.
+- Onwaarschijnlijke metingen (ver boven de voedingsgroep en alle andere producten, of een piek binnen dezelfde soort,
+  zonder steun van hetzelfde voedingsmiddel elders) worden vóór het aanvullen weggelaten. Nagekeken uitzonderingen
+  staan met reden in `tool/outlier_keep.json` en zijn nooit donor; elk bouwen schrijft `tool/outlier_report.md`.
+
 Labels maken (eenmalig, of voor nieuwe producten): `tool/export_for_labels.py` maakt de invoer, het labelen gebeurt
 volgens een vaste opdracht (voedingsmiddel, deel, …), `tool/check_labels.py` controleert op verschoven regels en
 `tool/merge_labels.py` maakt er `tool/food_labels.jsonl` van.

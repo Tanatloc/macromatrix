@@ -115,10 +115,11 @@ Set<String> _disagreeing(List<Food> members) {
   };
 }
 
-/// Een bijzondere vorm van het gewone product: diepvries, gehakt, poeder, lactosevrij, "light" (P156), of uit een
-/// fastfoodzaak (frietjes van de frituur thuis vóór die van een keten).
+/// Een bijzondere vorm van het gewone product: diepvries, gehakt, poeder, lactosevrij, "light" (P156), voorgekookt
+/// (parboiled rijst neemt kalk op uit het weekwater: 61 mg tegenover 6 à 10 mg), of uit een fastfoodzaak (frietjes van
+/// de frituur thuis vóór die van een keten).
 final _variant = RegExp(
-  r'\b(frozen|minced?|powder(ed)?|dried|dehydrated|concentrate|reduced|lactose[- ]?(free|reduced)|low lactose|flavou?red|long eggs|organic|fast food|restaurant|takeaway)\b',
+  r'\b(frozen|minced?|powder(ed)?|dried|dehydrated|concentrate|reduced|lactose[- ]?(free|reduced)|low lactose|flavou?red|long eggs|organic|parboiled|pre-?boiled|easy[- ]cook|fast food|restaurant|takeaway)\b',
   caseSensitive: false,
 );
 
@@ -129,16 +130,34 @@ final _prepared = RegExp(
   caseSensitive: false,
 );
 
-/// Beter = niet gewogen met afval, de gewone vorm (geen diepvries-ei of kipgehakt), Europees, meer gemeten (niet
-/// geschatte) waarden; anders de zoekvolgorde.
+/// Melk met een EU-benaming waarbij het vetgehalte niet past (Verordening (EU) nr. 1308/2013, bijlage VII, deel IV):
+/// magere melk hooguit 0,5 % vet, halfvolle melk 1,5 tot 1,8 %, volle melk minstens 3,5 % (met wat speling voor
+/// afronding). Matvaretabellen noemt Noorse lettmelk (0,5 à 1,2 %) "semi-skimmed": die staat dan niet vooraan bij
+/// "halfvolle melk", maar een melk met 1,5 % wel. Geldt voor elk product dat zo heet, niet voor één bepaalde melk.
+bool offStandardMilk(Food f) {
+  final fat = f.per100g['fat'];
+  final n = f.name.toLowerCase();
+  if (fat == null || f.label?.group != 'dairy' || !RegExp(r'\bmilk\b').hasMatch(n)) return false;
+  if (RegExp(r'\b(semi|half|partially)[- ]skimmed\b').hasMatch(n)) return fat < 1.4 || fat > 1.9;
+  if (RegExp(r'\bskimmed\b').hasMatch(n)) return fat > 0.6;
+  if (RegExp(r'\bwhole\b').hasMatch(n) && !RegExp(r'\b(powder|dried|dry|condensed|evaporated)\b').hasMatch(n)) return fat < 3.4;
+  return false;
+}
+
+/// Beter = niet gewogen met afval, de gewone vorm (geen diepvries-ei of kipgehakt), een vetgehalte dat bij de naam past
+/// ([offStandardMilk]), de voorkeursbron ([FoodSource.priority]: CIQUAL/Frida/Matvaretabellen/Livsmedelsverket, dan
+/// CoFID, dan USDA), meer gemeten (niet geschatte) waarden; anders de zoekvolgorde.
 int _better(Food a, Food b) {
   int score(Food f) =>
       (weighedWithWaste(f) ? 0 : 2000) +
+      // Zwaarder dan de bronvoorkeur (250 per stap) plus het aantal gemeten waarden
+      (offStandardMilk(f) ? 0 : 600) +
       (_variant.allMatches(_prepared.hasMatch(f.name) ? f.name.replaceAll(RegExp(r'\b(frozen|dried)\b', caseSensitive: false), '') : f.name).length *
               -300)
           .clamp(-900, 0) +
-      (f.source.european ? 500 : 0) +
-      (f.per100g.length - f.estimated.length).clamp(0, 499);
+      // Bronvoorkeur (zie FoodSource.priority) weegt zwaarder dan het aantal gemeten waarden (hooguit ~80)
+      (3 - f.source.priority).clamp(0, 3) * 250 +
+      (f.per100g.length - f.estimated.length).clamp(0, 249);
   return score(b).compareTo(score(a));
 }
 
@@ -291,6 +310,17 @@ double foodQueryScore(Food f, String rawQuery) {
       !RegExp(r'liver|kidney|heart|gizzard|tongue|lever').hasMatch(query)) {
     s -= 25;
   }
+  // Met vel alleen als je het vraagt: kipfilet is zonder vel. "Met vel gegrild, alleen het vlees" is wel zonder vel.
+  final withSkin =
+      f.label?.part == 'muscle+skin' || (f.label?.flags.contains('with skin') ?? false) || RegExp(r'\b(with|and) skin\b|\bskin[- ]on\b').hasMatch(n);
+  if (withSkin &&
+      const {'poultry', 'meat', 'fish', 'processed meat'}.contains(f.label?.group ?? 'poultry') &&
+      !RegExp(r'\b(meat|flesh) only\b|\bwithout skin\b|\bskinless\b').hasMatch(n) &&
+      !RegExp(r'skin|\bvel\b').hasMatch(query)) {
+    s -= 10;
+  }
+  // Verrijkt (extra vitaminen of ijzer) is niet de gewone vorm: "havermout" is gewone havervlokken
+  if (RegExp(r'\b(enriched|fortified)\b').hasMatch(n) && !RegExp(r'enrich|fortif|verrijk').hasMatch(query)) s -= 6;
   if (RegExp(r'\b(gluten free|low fat|reduced|diet|light|sugar free|unsalted|low sodium)\b').hasMatch(dish) &&
       !RegExp(r'gluten|low|reduced|diet|light|free|unsalted').hasMatch(query)) {
     s -= 10;

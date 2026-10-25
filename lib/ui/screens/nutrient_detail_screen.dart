@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/food.dart';
 import '../../data/user_db.dart';
+import '../../nutrition/gap_plan.dart' show isAdviceFood;
 import '../../nutrition/insights.dart';
 import '../../nutrition/nutrients.dart';
 import '../../nutrition/targets.dart';
@@ -102,7 +103,7 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
 
   /// Stoffen waarvan minder beter is, ook zonder ingesteld maximum (alle suikers samen hebben er geen): de lijst met
   /// bronnen is dan een waarschuwing, geen aanrader (N26).
-  static const _lessIsBetter = {'sugars', 'free_sugars', 'sfa', 'trans', 'sodium', 'salt', 'alcohol', 'cholesterol', 'caffeine'};
+  static const _lessIsBetter = {'sugars', 'free_sugars', 'sfa', 'trans', 'sodium', 'salt', 'alcohol', 'cholesterol', 'caffeine', 'retinol'};
 
   static String _groupLabel(NutrientGroup g) => switch (g) {
     NutrientGroup.vitamins => tr('Vitamin', 'Vitamine'),
@@ -289,6 +290,10 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     );
   }
 
+  /// Een product met een onwaarschijnlijk deel van je doel per 100 g (zie [absurdShare]): niet als bron tonen.
+  bool _absurd(AppState s, Food f) =>
+      absurdShare(withDerived(f.per100g)[n.key] ?? 0, s.targets[n.key], wholeFood: isAdviceFood(f));
+
   Widget _hero(AppState s, Palette p, Target? target, double total, int logged) {
     final ref = target?.goal ?? target?.upper;
     final level = levelOf(total, target);
@@ -300,8 +305,9 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
       final need = target.goal! - total;
       final candidates = [
         for (final food in s.recentFoods())
-          if ((withDerived(food.per100g)[n.key] ?? 0) > 0) food,
-        for (final r in s.richestFor(n.key, limit: 10, advice: true)) r.$1,
+          if ((withDerived(food.per100g)[n.key] ?? 0) > 0 && !_absurd(s, food)) food,
+        for (final r in s.richestFor(n.key, limit: 10, advice: true))
+          if (!_absurd(s, r.$1)) r.$1,
       ];
       for (final food in candidates) {
         final per100 = withDerived(food.per100g)[n.key] ?? 0;
@@ -789,11 +795,16 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     final mine = <(Food, double)>[];
     for (final f in s.recentFoods()) {
       if (!recentRefs.add(f.ref)) continue;
+      // Ook wat je zelf at: een onwaarschijnlijke waarde (SP-1) is geen bron om aan te raden
+      if (_absurd(s, f)) continue;
       final v = _score(withDerived(f.per100g), n.key, _perKcal);
       if (v > 0) mine.add((f, v));
     }
     mine.sort((a, b) => b.$2.compareTo(a.$2));
-    final db = s.richestFor(n.key, perKcal: _perKcal, limit: 12);
+    final db = [
+      for (final r in s.richestFor(n.key, perKcal: _perKcal, limit: 12))
+        if (!_absurd(s, r.$1)) r,
+    ];
     final list = [
       ...mine.take(3),
       for (final r in db)

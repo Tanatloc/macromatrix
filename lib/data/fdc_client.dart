@@ -29,6 +29,7 @@ const _ids = <int, (String, String)>{
   1018: ('alcohol', 'G'),
   1057: ('caffeine', 'MG'),
   1106: ('vit_a', 'UG'),
+  1105: ('retinol', 'UG'),
   1107: ('beta_carotene', 'UG'),
   1162: ('vit_c', 'MG'),
   1114: ('vit_d', 'UG'),
@@ -71,6 +72,8 @@ NutrientMap mapFdcNutrients(List<dynamic> list) {
   // Energie soms alleen in kJ; vitamine D soms alleen in IE (1 µg = 40 IE)
   if (!out.containsKey('energy') && raw[1062] != null) out['energy'] = raw[1062]!.$2 / 4.184;
   if (!out.containsKey('vit_d') && raw[1110] != null) out['vit_d'] = raw[1110]!.$2 / 40;
+  // USDA geeft vitamine A als RAE (bètacaroteen / 12); de app rekent in RE (bètacaroteen / 6) zoals de EFSA-doelen
+  if (out['vit_a'] case final rae? when out['beta_carotene'] != null) out['vit_a'] = rae + out['beta_carotene']! / 12;
   // Koolhydraten "by difference" bevatten vezels; Europese etiketten niet
   final diff = raw[1005]?.$2;
   if (diff != null) out['carbs'] = (diff - (out['fiber'] ?? 0)).clamp(0, 100).toDouble();

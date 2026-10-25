@@ -976,7 +976,8 @@ class _MacroLine extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Bar(fraction: goal <= 0 ? 0 : amount / goal, color: color),
+            // Te veel kleurt de balk rood, zoals op gsm en in het Dashboard (NW-15)
+            child: Bar(fraction: goal <= 0 ? 0 : amount / goal, color: tooMuch ? p.highFill : color),
           ),
           const SizedBox(width: 10),
           SizedBox(

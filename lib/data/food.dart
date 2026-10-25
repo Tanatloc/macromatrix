@@ -36,6 +36,18 @@ enum FoodSource {
 
   String get labelWithCountry => country == null ? label : '$label ($country)';
 
+  /// Voorkeur als hoofdbron bij hetzelfde basisproduct uit meerdere databanken (lager = eerst; zoekvak, Snel loggen
+  /// en het Orakel tonen dan die bron vooraan). Eerst de volledige Europese tabellen (CIQUAL, Frida, Matvaretabellen,
+  /// Livsmedelsverket), dan CoFID: koolhydraten staan daar als monosacharide-equivalenten (omgerekend, maar het blijft
+  /// een andere analyse: havermout 64 g tegenover 58 g elders) en B12 in melk ligt dubbel zo hoog als elders (NF-1,
+  /// NF-16). USDA als laatste: Amerikaanse producten en verrijking. Merk- en eigen producten doen hier niet mee.
+  int get priority => switch (this) {
+    ciqual || frida || mvt || slv => 0,
+    cofid => 1,
+    usda => 2,
+    _ => 3,
+  };
+
   /// Bron uit de kolom "source" van de ingebouwde database (usda_sr en usda_fnd zijn allebei USDA).
   static FoodSource fromDb(String s) => s.startsWith('usda') ? usda : FoodSource.values.byName(s);
 }

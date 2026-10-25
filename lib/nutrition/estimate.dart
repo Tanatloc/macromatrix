@@ -17,7 +17,7 @@ const _protein = {
 
 const _fat = {
   'sfa', 'mufa', 'pufa', 'trans', 'cholesterol', 'omega3', 'ala', 'epa', 'dpa', 'dha', 'epa_dha', 'omega6', 'la', 'aa', //
-  'vit_a', 'vit_d', 'vit_e', 'vit_k', 'vit_k2', 'beta_carotene', 'lycopene', 'lutein_zeaxanthin',
+  'vit_a', 'retinol', 'vit_d', 'vit_e', 'vit_k', 'vit_k2', 'beta_carotene', 'lycopene', 'lutein_zeaxanthin',
 };
 
 /// Deze komen altijd van het etiket (of ontbreken): niet schatten.

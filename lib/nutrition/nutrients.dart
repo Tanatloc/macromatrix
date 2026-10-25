@@ -99,7 +99,12 @@ const nutrients = <Nutrient>[
   Nutrient('valine', 'Valine', 'g', NutrientGroup.protein, indent: 1, decimals: 2),
 
   // Vitaminen
-  Nutrient('vit_a', 'Vitamine A (RAE)', 'µg', NutrientGroup.vitamins),
+  // Vitamine A in RE (retinol + bètacaroteen / 6), zoals de EFSA-doelen; B3 in niacine-equivalenten (niacine +
+  // tryptofaan / 60), zoals het EFSA-doel van 1,6 mg NE/MJ. Zie VIT_A_BC en niacin_ne in tool/build_foods.py.
+  Nutrient('vit_a', 'Vitamine A (RE)', 'µg', NutrientGroup.vitamins),
+  // Het voorgevormde deel (uit dierlijke producten en supplementen), met de EFSA-bovengrens van 3000 µg per dag. Geen
+  // bovengrens op het totaal: bètacaroteen uit wortels is niet schadelijk (zie targetsFor en nutrientNote).
+  Nutrient('retinol', 'waarvan retinol', 'µg', NutrientGroup.vitamins, indent: 1),
   Nutrient('vit_c', 'Vitamine C', 'mg', NutrientGroup.vitamins),
   Nutrient('vit_d', 'Vitamine D', 'µg', NutrientGroup.vitamins, decimals: 1),
   Nutrient('vit_e', 'Vitamine E', 'mg', NutrientGroup.vitamins),
@@ -107,7 +112,7 @@ const nutrients = <Nutrient>[
   Nutrient('vit_k2', 'Vitamine K2 (MK-4)', 'µg', NutrientGroup.vitamins, decimals: 1),
   Nutrient('b1', 'B1 (thiamine)', 'mg', NutrientGroup.vitamins, decimals: 2),
   Nutrient('b2', 'B2 (riboflavine)', 'mg', NutrientGroup.vitamins, decimals: 2),
-  Nutrient('b3', 'B3 (niacine)', 'mg', NutrientGroup.vitamins),
+  Nutrient('b3', 'B3 (niacine-equivalenten)', 'mg', NutrientGroup.vitamins),
   Nutrient('b5', 'B5 (pantotheenzuur)', 'mg', NutrientGroup.vitamins, decimals: 2),
   Nutrient('b6', 'B6 (pyridoxine)', 'mg', NutrientGroup.vitamins, decimals: 2),
   Nutrient('b7', 'B7 (biotine)', 'µg', NutrientGroup.vitamins, decimals: 1),
@@ -183,7 +188,8 @@ const _englishNames = {
   'threonine': 'Threonine',
   'tryptophan': 'Tryptophan',
   'valine': 'Valine',
-  'vit_a': 'Vitamin A (RAE)',
+  'vit_a': 'Vitamin A (RE)',
+  'retinol': 'of which retinol',
   'vit_c': 'Vitamin C',
   'vit_d': 'Vitamin D',
   'vit_e': 'Vitamin E',
@@ -191,7 +197,7 @@ const _englishNames = {
   'vit_k2': 'Vitamin K2 (MK-4)',
   'b1': 'B1 (thiamine)',
   'b2': 'B2 (riboflavin)',
-  'b3': 'B3 (niacin)',
+  'b3': 'B3 (niacin equivalents)',
   'b5': 'B5 (pantothenic acid)',
   'b6': 'B6 (pyridoxine)',
   'b7': 'B7 (biotin)',
@@ -224,6 +230,14 @@ String? nutrientNote(String key) => switch (key) {
   'free_sugars' => tr(
     'Added sugar plus the sugar in honey, syrups and fruit juice. Sugar in whole fruit, vegetables, legumes and plain milk or yoghurt does not count. Estimated from the kind of product. The WHO advises less than 10% of your energy.',
     'Toegevoegde suiker plus de suiker in honing, siropen en vruchtensap. Suiker in heel fruit, groenten, peulvruchten en gewone melk of yoghurt telt niet mee. Geschat uit het soort product. De WHO raadt minder dan 10% van je energie aan.',
+  ),
+  'retinol' => tr(
+    'Preformed vitamin A, from animal foods (liver, butter, cheese, eggs) and most supplements. Unlike the beta-carotene '
+        'in vegetables, too much of it can harm, also in pregnancy: EFSA sets a safe upper limit of 3,000 µg a day. '
+        '100 g of liver has 10,000 to 30,000 µg.',
+    'Voorgevormde vitamine A, uit dierlijke producten (lever, boter, kaas, eieren) en de meeste supplementen. Anders dan '
+        'het bètacaroteen uit groenten kan te veel ervan schaden, ook tijdens de zwangerschap: de EFSA legt de veilige '
+        'bovengrens op 3000 µg per dag. 100 g lever bevat 10.000 tot 30.000 µg.',
   ),
   'sugars' => tr(
     'All sugars together, also those in fruit and milk. For your maximum, look at free sugars.',

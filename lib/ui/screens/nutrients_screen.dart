@@ -351,6 +351,8 @@ class ScoreCard extends StatelessWidget {
     final v = s.totals.values;
     final empty = (v['energy'] ?? 0) <= 0;
     final score = completenessScore(v, s.targets);
+    // Dezelfde regel als de balken en percentages (levelOf / isTooMuch), maar alleen over de vitaminen en mineralen:
+    // dat staat erbij, zodat rood vet of verzadigd vet niet tegen "0 te veel" lijkt in te gaan (NW-15)
     final levels = [
       for (final k in stripKeys)
         if (s.targets[k] != null) levelOf(v[k] ?? 0, s.targets[k]),
@@ -431,6 +433,10 @@ class ScoreCard extends StatelessWidget {
                       ),
                       style: numStyle(11.5, weight: FontWeight.w400, color: p.ink2),
                     ),
+                  Text(
+                    tr('(vitamins & minerals)', '(vitaminen en mineralen)'),
+                    style: TextStyle(fontSize: 11.5, color: p.ink3),
+                  ),
                 ],
               ),
               const SizedBox(height: 2),

@@ -22,6 +22,28 @@ Level levelOf(double amount, Target? t) {
   return amount >= t.goal! ? Level.ok : Level.low;
 }
 
+/// "Te veel" (rood, driehoekje): één regel voor balken, percentages, de score en de lijsten (NF-6, NW-15). Alleen
+/// boven een echte bovengrens of limiet, of meer dan 10% boven een doel-om-ongeveer-te-halen ([levelOf]). Zonder
+/// maximum (EPA+DHA, aminozuren, mangaan, B12, …) is veel nooit rood, ook niet bij 300% of meer: dat is "ruim", neutraal.
+bool isTooMuch(double amount, Target? t) => levelOf(amount, t) == Level.high;
+
+/// Vanaf hoeveel keer de referentie een hoeveelheid onwaarschijnlijk veel is (zie [absurdShare]).
+const absurdShareFactor = 10.0;
+
+/// Een onwaarschijnlijk groot deel van je dag in [amount] (bij de bronnenlijsten: per 100 g, zoals ze gerangschikt
+/// zijn): meer dan 10× de bovengrens, of zonder bovengrens meer dan 10× het doel bij een product dat geen gewoon
+/// basisvoedingsmiddel is ([wholeFood] = false). Zoiets is bijna altijd een fout in de bron (eiwitshake met 125 mg
+/// mangaan per 100 g = 42× het doel, SP-1) en wordt niet als bron aangeraden. Lever (B12, vitamine A) of mosselen
+/// halen zonder bovengrens makkelijk 20× het doel: als gewoon voedingsmiddel ([wholeFood]) blijven die staan. Met een
+/// bovengrens blijven paranoten (selenium 7,5×) en levertraan (vitamine D 2,5×) staan, kombu (jodium 700×) niet.
+/// Bij een limiet (zout, suiker) gaat het niet om aanraden.
+bool absurdShare(double amount, Target? t, {bool wholeFood = false}) {
+  if (t == null || t.isLimit) return false;
+  if (t.upper case final u? when u > 0) return amount > u * absurdShareFactor;
+  if (wholeFood || t.goal == null || t.goal! <= 0) return false;
+  return amount > t.goal! * absurdShareFactor;
+}
+
 /// Marge rond je energiedoel: binnen ±10% telt een dag als op doel, op elk scherm dezelfde regel.
 const energyMargin = 0.1;
 
@@ -67,6 +89,10 @@ const stripMinerals = [
 final stripKeys = [
   for (final (k, _) in [...stripVitamins, ...stripMinerals]) k,
 ];
+
+/// Voedingsstoffen met alleen een veiligheidsgrens, buiten de score en het overzicht: voorgevormd retinol (lever,
+/// EFSA 3000 µg per dag). Ze verschijnen bij "wat aandacht vraagt" en in de gezondheidscheck als je erboven zit.
+const safetyKeys = ['retinol'];
 
 /// Volledigheidsscore 0–100: hoe dicht je bij je doel zit voor de 25 vitaminen en mineralen.
 /// Per stof telt het deel van het doel (maximaal 100%); boven een bovengrens of limiet daalt de score.
@@ -116,10 +142,16 @@ List<(Nutrient, double, Level)> attentionList(NutrientMap values, Map<String, Ta
     if (level == Level.high) high.add((n, f, level));
     if (level == Level.low) low.add((n, f, level));
   }
+  // Een veiligheidsgrens (retinol uit lever) krijgt een eigen plaats: anders verdringt het koper van dezelfde lever ze
+  final safety = [
+    for (final k in safetyKeys)
+      if (fractionOf(values[k] ?? 0, targets[k]) case final f? when isTooMuch(values[k] ?? 0, targets[k])) (nutrientByKey[k]!, f, Level.high),
+  ];
   low.sort((a, b) => a.$2.compareTo(b.$2));
   high.sort((a, b) => b.$2.compareTo(a.$2));
-  // Hooguit één "te veel" bovenaan, zodat de tekorten zichtbaar blijven
-  return [...low.take(limit - math.min(1, high.length)), ...high.take(1)].take(limit).toList()
+  // Hooguit één "te veel" bovenaan (plus een overschreden veiligheidsgrens), zodat de tekorten zichtbaar blijven
+  final highs = [...high.take(1), ...safety];
+  return [...low.take(math.max(0, limit - highs.length)), ...highs].take(limit).toList()
     ..sort((a, b) => a.$3 == b.$3 ? a.$2.compareTo(b.$2) : (a.$3 == Level.low ? -1 : 1));
 }
 
