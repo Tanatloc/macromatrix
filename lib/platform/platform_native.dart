@@ -45,16 +45,23 @@ Future<(FoodDb, UserDb)> openDatabases() async {
   return (foods, user);
 }
 
-/// Op de pc stond de database eerst in een map met de oude naam (online.divinenet.voedingsapp). Bestaat er nog
-/// geen database onder de nieuwe naam, dan die overnemen (de oude map blijft als reserve).
+/// Op de pc stond de database eerder in een map met een oude naam: de app-id en de maker zijn veranderd. Onder Linux
+/// is dat de app-id (online.divinenet.macromatrix, daarvoor online.divinenet.voedingsapp), onder Windows maker\product
+/// (DivineNet\MacroMatrix). Bestaat er nog geen database onder de nieuwe naam, dan de eerste oude overnemen die er is
+/// (de oude map blijft als reserve).
 void _moveFromOldName(Directory dir) {
   if (!Platform.isLinux && !Platform.isWindows) return;
   if (File(p.join(dir.path, 'user.db')).existsSync()) return;
-  final old = Directory(dir.path.replaceAll('macromatrix', 'voedingsapp'));
-  if (old.path == dir.path) return;
-  for (final name in ['user.db', 'user.db-wal', 'user.db-shm']) {
-    final f = File(p.join(old.path, name));
-    if (f.existsSync()) f.copySync(p.join(dir.path, name));
+  final old = Platform.isLinux
+      ? [for (final id in ['online.divinenet.macromatrix', 'online.divinenet.voedingsapp']) p.join(dir.parent.path, id)]
+      : [for (final product in ['MacroMatrix', 'voedingsapp']) p.join(dir.parent.parent.path, 'DivineNet', product)];
+  for (final o in old) {
+    if (o == dir.path || !File(p.join(o, 'user.db')).existsSync()) continue;
+    for (final name in ['user.db', 'user.db-wal', 'user.db-shm']) {
+      final f = File(p.join(o, name));
+      if (f.existsSync()) f.copySync(p.join(dir.path, name));
+    }
+    return;
   }
 }
 

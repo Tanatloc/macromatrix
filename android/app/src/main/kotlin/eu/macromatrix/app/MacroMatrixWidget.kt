@@ -1,4 +1,4 @@
-package online.divinenet.macromatrix
+package eu.macromatrix.app
 
 import android.appwidget.AppWidgetManager
 import android.content.Context

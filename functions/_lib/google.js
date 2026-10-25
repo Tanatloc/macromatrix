@@ -4,7 +4,7 @@
 //
 // Nooit tokens of sleutels loggen: foutmeldingen bevatten alleen een statuscode.
 
-export const PACKAGE = 'online.divinenet.macromatrix';
+export const PACKAGE = 'eu.macromatrix.app';
 export const PLAY_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 const PLAY_API = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE}/purchases`;
 

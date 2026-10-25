@@ -1,5 +1,5 @@
 #!/bin/bash
-# Voor de F-Droid-build (prebuild in fdroid/online.divinenet.macromatrix.yml): Google Play Billing eruit halen.
+# Voor de F-Droid-build (prebuild in fdroid/eu.macromatrix.app.yml): Google Play Billing eruit halen.
 # De Play Billing-bibliotheek (com.android.billingclient) is niet vrij. We halen in_app_purchase uit pubspec.yaml en
 # vervangen lib/sync/play_store_plugin.dart door de stub zonder winkel; Pro toont dan "Binnenkort", zoals op het web.
 set -euo pipefail

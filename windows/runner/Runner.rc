@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "DivineNet" "\0"
+            VALUE "CompanyName", "VanoWeb" "\0"
             VALUE "FileDescription", "MacroMatrix" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "macromatrix" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 DivineNet. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 VanoWeb. All rights reserved." "\0"
             VALUE "OriginalFilename", "macromatrix.exe" "\0"
             VALUE "ProductName", "MacroMatrix" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

@@ -105,7 +105,7 @@ source code available to its users.
 The AGPL covers the code, not the brand. The name **MacroMatrix**, the logo and the app icon are not covered by this
 licence and may not be used for modified versions or other products without written permission from VanoWeb. If you
 publish your own build (in an app store or as a website), give it a different name, icon and application id (not
-`online.divinenet.macromatrix`), and don't suggest that it is the official app. Saying that your version is based on
+`eu.macromatrix.app`), and don't suggest that it is the official app. Saying that your version is based on
 MacroMatrix, with a link to this repository, is fine.
 
 Data from the sources above remains under their own licences.

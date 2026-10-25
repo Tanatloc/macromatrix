@@ -87,7 +87,7 @@ class FakeVerifier implements PlayVerifier {
 }
 
 StorePurchase bought(String token, {String product = 'pro_yearly', StorePurchaseStatus status = StorePurchaseStatus.purchased}) =>
-    StorePurchase(productId: product, token: token, status: status, packageName: 'online.divinenet.macromatrix', needsCompletion: true);
+    StorePurchase(productId: product, token: token, status: status, packageName: 'eu.macromatrix.app', needsCompletion: true);
 
 /// Ingelogd (of niet) zonder echte server.
 class _Signed extends Account {
@@ -291,14 +291,14 @@ void main() {
           sent = r;
           return res;
         }),
-      ).verify(token: 'tok', productId: 'pro_yearly', packageName: 'online.divinenet.macromatrix');
+      ).verify(token: 'tok', productId: 'pro_yearly', packageName: 'eu.macromatrix.app');
 
       final ok = await run(http.Response('{"ok":true,"until":"2027-11-05T12:00:00.000Z"}', 200));
       expect(ok.ok, isTrue);
       expect(ok.until, DateTime.utc(2027, 11, 5, 12));
       expect(sent.url.path, '/api/play-verify');
       expect(sent.headers['Authorization'], 'Bearer jwt-1');
-      expect(jsonDecode(sent.body), {'purchaseToken': 'tok', 'productId': 'pro_yearly', 'packageName': 'online.divinenet.macromatrix'});
+      expect(jsonDecode(sent.body), {'purchaseToken': 'tok', 'productId': 'pro_yearly', 'packageName': 'eu.macromatrix.app'});
 
       expect((await run(http.Response('{"ok":false,"reason":"other_account"}', 409))).reason, 'other_account');
       expect((await run(http.Response('{"ok":false,"reason":"not_configured"}', 503))).reason, 'not_configured');
