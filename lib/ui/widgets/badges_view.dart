@@ -131,8 +131,13 @@ void showBadgeCategory(BuildContext context, String id, {int? value, int? tier, 
       final pal = ctx.pal;
       final t = tier ?? (value == null ? 0 : c.tierFor(value));
       return AlertDialog(
+        // Een schermlezer las hier alleen "0, Sluiten": het icoon krijgt een naam, de balk een uitleg (SU-14)
         icon: Align(
-          child: BadgeIcon(category: id, tier: t, size: 72),
+          child: Semantics(
+            image: true,
+            label: '${c.name}, ${tierName(t)}',
+            child: ExcludeSemantics(child: BadgeIcon(category: id, tier: t, size: 72)),
+          ),
         ),
         title: Text(c.name, textAlign: TextAlign.center),
         content: SingleChildScrollView(
@@ -162,6 +167,10 @@ void showBadgeCategory(BuildContext context, String id, {int? value, int? tier, 
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: (value / c.thresholds[t]).clamp(0.0, 1.0),
+                    semanticsLabel: tr(
+                      'Progress to ${tierName(t + 1)}: $value of ${c.thresholds[t]}',
+                      'Voortgang naar ${tierName(t + 1)}: $value van ${c.thresholds[t]}',
+                    ),
                     minHeight: 8,
                     backgroundColor: pal.track,
                     color: tierColor(t + 1),
@@ -245,6 +254,30 @@ class ShowcaseRow extends StatelessWidget {
   );
 }
 
+/// Icoon van een titel zonder badgecategorie, in dezelfde ronde stijl als de badges: een gouden hartje voor de
+/// supportertitels (Supporter, Founder), anders een persoontje in de merkkleur (SU-11).
+class TitleIcon extends StatelessWidget {
+  const TitleIcon({super.key, required this.supporter, this.size = 34});
+  final bool supporter;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = context.pal;
+    final (gold, goldSoft) = supporterGold(context);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: supporter ? goldSoft : pal.brandSoft),
+      child: Icon(
+        supporter ? Icons.favorite_rounded : Icons.person_rounded,
+        size: size * 0.55,
+        color: supporter ? gold : pal.brand,
+      ),
+    );
+  }
+}
+
 /// Titel kiezen uit de titels die je vrijspeelde.
 Future<void> pickTitle(BuildContext context) async {
   final s = context.read<AppState>();
@@ -281,7 +314,7 @@ Future<void> pickTitle(BuildContext context) async {
                     return ListTile(
                       enabled: open,
                       leading: c == null
-                          ? Icon(t.pro ? Icons.favorite_rounded : Icons.person_rounded)
+                          ? TitleIcon(supporter: t.pro, size: 34)
                           : BadgeIcon(category: c.id, tier: open ? t.tier : 0, size: 34),
                       title: Text(t.name),
                       // Op slot: zeggen hoe je de titel vrijspeelt, met het doel als zin

@@ -572,8 +572,10 @@ class _HealthConnectTileState extends State<_HealthConnectTile> {
           title: Text(tr('Import from Health Connect', 'Overnemen uit Health Connect')),
           subtitle: Text(
             tr(
-              'Steps, workouts and weight from your watch, scale or other apps, automatically. Workouts count as exercise.',
-              'Stappen, workouts en gewicht van je horloge, weegschaal of andere apps, automatisch. Workouts tellen als beweging.',
+              'Steps, workouts (with distance and energy burned), weight and body composition (body fat, lean mass and body '
+                  'water) from your watch, scale or other apps, automatically. Workouts count as exercise.',
+              'Stappen, workouts (met afstand en verbruikte energie), gewicht en lichaamssamenstelling (vetpercentage, '
+                  'vetvrije massa en lichaamsvocht) van je horloge, weegschaal of andere apps, automatisch. Workouts tellen als beweging.',
             ),
           ),
           value: h.enabled,
@@ -618,7 +620,16 @@ class AccentPicker extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(tr('Colour', 'Kleur'), style: TextStyle(fontSize: 13, color: pal.ink2)),
+            // De naam van de gekozen kleur staat erbij: de stalen zelf hebben geen tekst (SU-14)
+            Flexible(
+              child: Text(
+                '${tr('Colour', 'Kleur')} · ${accentById(current).name}',
+                key: const ValueKey('accent-current'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: pal.ink2),
+              ),
+            ),
             const SizedBox(width: 8),
             const ProTag(),
           ],
@@ -637,8 +648,11 @@ class AccentPicker extends StatelessWidget {
                     button: true,
                     selected: on,
                     label: locked ? tr('${a.name} (Supporter)', '${a.name} (Supporter)') : a.name,
+                    // Eén keer voorlezen: de tooltip niet nog eens ("Petrol Petrol", SU-14)
+                    excludeSemantics: true,
                     child: Tooltip(
                       message: locked ? tr('${a.name} · for supporters', '${a.name} · voor supporters') : a.name,
+                      excludeFromSemantics: true,
                       child: InkResponse(
                         key: ValueKey('accent-${a.id}'),
                         radius: 24,

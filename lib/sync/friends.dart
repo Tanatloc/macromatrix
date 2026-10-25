@@ -150,6 +150,12 @@ class Battle {
   bool get finished => accepted && !DateTime.now().isBefore(DateTime(week.year, week.month, week.day + 7));
   bool get live => accepted && !finished && !DateTime.now().isBefore(week);
   bool get pending => !accepted && !DateTime.now().isAfter(DateTime(week.year, week.month, week.day + 7));
+
+  /// Aanvaard voor een week die nog moet beginnen (uitgedaagd voor volgende week, SO-8).
+  bool get upcoming => accepted && DateTime.now().isBefore(week);
+
+  /// Voor volgende week (of later), nog niet voor deze.
+  bool get nextWeek => week.isAfter(mondayOf(DateTime.now()));
   BattleResult get result => myPoints > otherPoints ? BattleResult.won : (myPoints < otherPoints ? BattleResult.lost : BattleResult.draw);
 
   /// Na woensdag achter en toch gewonnen.
@@ -186,8 +192,22 @@ String addMessage(String result, {String name = ''}) => switch (result) {
         : tr('You\'re already friends with $name.', 'Je bent al vrienden met $name.'),
   'already' => tr('You already sent this person a request.', 'Je hebt die persoon al een verzoek gestuurd.'),
   'self' => tr('That is your own code.', 'Dat is je eigen code.'),
-  _ => tr('No account found with that code. Check the letters and numbers.', 'Geen account gevonden met die code. Controleer de letters en cijfers.'),
+  // Bewust vaag: ook bij een blokkade, zonder dat te verraden (SO-7)
+  _ => tr('Could not add a friend with this code. Check the letters and numbers.', 'Met deze code kon geen vriend toegevoegd worden. Controleer de letters en cijfers.'),
 };
+
+/// Verstuurde vriendschapsverzoeken van vroeger ([before], id → naam) tegenover de lijst van nu: wie intussen je
+/// vriend is, aanvaardde je verzoek (SO-5). Geeft de meldingen terug.
+List<String> acceptedRequestNotices(Map<String, String> before, List<Friend> now) => [
+  for (final x in now)
+    if (x.state == FriendState.friend && before.containsKey(x.id))
+      () {
+        final n = x.name.isNotEmpty ? x.name : before[x.id]!;
+        return n.isEmpty
+            ? tr('Your friend request was accepted.', 'Je vriendschapsverzoek werd aanvaard.')
+            : tr('$n accepted your friend request.', '$n aanvaardde je vriendschapsverzoek.');
+      }(),
+];
 
 /// Vergelijkt je open battle-uitdagingen van vroeger ([before], id → naam) met de lijst van nu. Geeft de meldingen
 /// terug (geweigerd of aanvaard) en de uitdagingen die nu nog open staan. Wat je zelf introk ([cancelled]) of wat
@@ -202,6 +222,13 @@ String addMessage(String result, {String name = ''}) => switch (result) {
       if (!cancelled.contains(id)) {
         messages.add(tr('${name(n)} declined your battle challenge.', '${name(n)} weigerde je uitdaging voor een battle.'));
       }
+    } else if (b.upcoming) {
+      messages.add(
+        tr(
+          '${name(b.otherName)} accepted your challenge: the battle starts on Monday.',
+          '${name(b.otherName)} aanvaardde je uitdaging: de battle begint maandag.',
+        ),
+      );
     } else if (b.accepted && !b.finished) {
       messages.add(
         tr('${name(b.otherName)} accepted your challenge: the battle is on!', '${name(b.otherName)} aanvaardde je uitdaging: de battle is begonnen!'),
@@ -360,10 +387,13 @@ class Friends extends ChangeNotifier {
   }
 
   /// Battle van deze week met een vriend (lopend of nog niet aanvaard).
-  Battle? currentBattleWith(String friendId) {
-    final monday = mondayOf(DateTime.now());
-    return battles.where((b) => b.other == friendId && b.week == monday && (b.accepted || b.pending)).firstOrNull;
-  }
+  Battle? currentBattleWith(String friendId) => battleWith(friendId, mondayOf(DateTime.now()));
+
+  /// Battle van volgende week met een vriend (aanvaard of nog niet).
+  Battle? nextBattleWith(String friendId) => battleWith(friendId, mondayOf(DateTime.now()).plusDays(7));
+
+  Battle? battleWith(String friendId, DateTime monday) =>
+      battles.where((b) => b.other == friendId && b.week == monday && (b.accepted || b.pending)).firstOrNull;
 
   /// Hoogste aantal vrienden dat je ooit tegelijk had (bewaard bij je account). De badge Sociaal blijft zo staan
   /// als je een vriend verwijdert (S11).
@@ -510,7 +540,12 @@ class Friends extends ChangeNotifier {
         rows = await client.rpc('friend_list', params: week) as List;
       }
       if (gen != _loadGen) return;
+      final sent = {
+        for (final x in list)
+          if (x.state == FriendState.outgoing) x.id: x.name,
+      };
       list = [for (final r in rows) Friend.fromRow((r as Map).cast<String, dynamic>())];
+      notices.addAll(acceptedRequestNotices(sent, list));
       _keepSocialBest();
       await _loadFrames(client, gen);
       try {
@@ -646,15 +681,24 @@ class Friends extends ChangeNotifier {
     return AddResult(result, addMessage(result, name: name));
   }
 
-  /// Een vriend uitdagen voor deze week. Geeft een korte uitleg terug.
-  Future<String?> challenge(String friendId) async {
+  /// Een vriend uitdagen voor deze week, of met [nextWeek] voor volgende week (vanaf maandag; SO-8). Geeft een korte
+  /// uitleg terug.
+  Future<String?> challenge(String friendId, {bool nextWeek = false}) async {
+    final monday = mondayOf(DateTime.now()).plusDays(nextWeek ? 7 : 0);
     final r = await _run(
-      () async => await account.client!.rpc('battle_challenge', params: {'p_other': friendId, 'p_week': dayKey(mondayOf(DateTime.now()))}) as String,
+      () async => await account.client!.rpc('battle_challenge', params: {'p_other': friendId, 'p_week': dayKey(monday)}) as String,
     );
     if (r == null) return null;
     await load();
     final name = list.where((x) => x.id == friendId).firstOrNull?.name ?? '';
     return switch (r) {
+      'created' when nextWeek =>
+        name.isEmpty
+            ? tr('Challenge sent for next week. The battle starts on Monday if they accept.', 'Uitdaging voor volgende week verstuurd. De battle begint maandag als die persoon aanvaardt.')
+            : tr(
+                'Challenge sent to $name for next week. The battle starts on Monday if they accept.',
+                'Uitdaging voor volgende week verstuurd naar $name. De battle begint maandag als die aanvaardt.',
+              ),
       'created' =>
         name.isEmpty
             ? tr('Challenge sent. The battle starts as soon as they accept.', 'Uitdaging verstuurd. De battle begint zodra die persoon aanvaardt.')
@@ -662,7 +706,12 @@ class Friends extends ChangeNotifier {
                 'Challenge sent to $name. The battle starts as soon as they accept.',
                 'Uitdaging verstuurd naar $name. De battle begint zodra die aanvaardt.',
               ),
+      'accepted' when nextWeek => tr(
+        'They had already challenged you for next week: the battle starts on Monday.',
+        'Die persoon had jou al uitgedaagd voor volgende week: de battle begint maandag.',
+      ),
       'accepted' => tr('They had already challenged you: the battle is on!', 'Die persoon had jou al uitgedaagd: de battle is begonnen!'),
+      'exists' when nextWeek => tr('You already have a battle with this friend next week.', 'Je hebt volgende week al een battle met deze vriend.'),
       'exists' => tr('You already have a battle with this friend this week.', 'Je hebt deze week al een battle met deze vriend.'),
       _ => tr('That did not work.', 'Dat lukte niet.'),
     };

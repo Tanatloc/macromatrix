@@ -20,7 +20,7 @@ AvatarFrame? myFrameOf(BuildContext context, {bool listen = true}) => proOf(cont
 void openProScreen(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProScreen()));
 
 /// Warm goud voor supporters, los van de merkkleur (die kan zelf een andere kleur zijn).
-(Color, Color) _gold(BuildContext context) => Theme.of(context).brightness == Brightness.dark
+(Color, Color) supporterGold(BuildContext context) => Theme.of(context).brightness == Brightness.dark
     ? (const Color(0xFFE5B85C), const Color(0xFF2E2510))
     : (const Color(0xFF835C00), const Color(0xFFF6EDD6));
 
@@ -35,7 +35,7 @@ class SupporterBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (fg, bg) = _gold(context);
+    final (fg, bg) = supporterGold(context);
     final label = tr('Supporter', 'Supporter');
     if (compact) {
       return Tooltip(
@@ -81,7 +81,7 @@ class ProTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (fg, bg) = _gold(context);
+    final (fg, bg) = supporterGold(context);
     final heart = Icon(Icons.favorite_rounded, size: 10, color: fg);
     return Tooltip(
       message: tr('For supporters', 'Voor supporters'),

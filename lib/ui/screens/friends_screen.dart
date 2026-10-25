@@ -66,18 +66,29 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (!widget.active && old.active) _poll?.cancel();
   }
 
+  /// Iedereen die al in je lijst stond (vriend of verzoek), om te zien wanneer er iemand bijkomt.
+  Set<String>? _known;
+
   /// Nieuwe meldingen van Friends (bv. een geweigerde battle) tonen zolang het tabblad zichtbaar is.
   void _onFriends() {
-    if (mounted && widget.active && _f.notices.isNotEmpty) _flushNotices();
+    if (!mounted) return;
+    final ids = {for (final x in _f.list) x.id};
+    // Er kwam iemand bij (bv. die persoon voegde jou toe): een oude foutmelding bij het codeveld klopt niet meer (SO-7)
+    if (_codeError != null && _known != null && ids.difference(_known!).isNotEmpty) {
+      setState(() => _codeError = null);
+      _code.clear();
+    }
+    _known = ids;
+    if (widget.active && _f.notices.isNotEmpty) _flushNotices();
   }
 
   void _flushNotices() {
     // Na de frame: een melding kan binnenkomen terwijl een ander scherm aan het opbouwen is
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.active) return;
-      for (final m in _f.takeNotices()) {
-        _say(m);
-      }
+      // Samen in één melding: een nieuwe melding vervangt de vorige (SO-4)
+      final all = _f.takeNotices();
+      if (all.isNotEmpty) _say(all.join('\n'));
     });
   }
 
@@ -111,7 +122,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   void _say(String? m) {
-    if (m != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    if (m != null && mounted) friendsSay(ScaffoldMessenger.of(context), m);
   }
 
   Future<void> _add(Friends f) async {
@@ -164,7 +175,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
         ],
       ),
     );
-    if (ok == true) await f.remove(x);
+    if (ok != true) return;
+    await f.remove(x);
+    _say(f.error ?? tr('${_who(x.name)} is no longer your friend.', '${_who(x.name)} is geen vriend meer.'));
   }
 
   @override
@@ -391,7 +404,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         ),
                         const SizedBox(height: 6),
                         // Grote, gescheiden knoppen: Weigeren is geen klein tekstlinkje naast Aanvaarden (S14)
-                        AnswerButtons(onDecline: () => f.respond(x, false), onAccept: () => f.respond(x, true)),
+                        AnswerButtons(
+                          onDecline: () => f.respond(x, false),
+                          onAccept: () async {
+                            await f.respond(x, true);
+                            // Meteen zeggen dat het gelukt is (SO-5)
+                            _say(f.error ?? addMessage('accepted', name: x.name));
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -426,7 +446,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   onBlock: r.friend == null || !f.blockAvailable
                       ? null
                       : () => confirmBlock(context, r.friend!.id, r.friend!.name, avatar: r.friend!.avatar),
-                  onReport: r.friend == null || !f.blockAvailable ? null : () => showReportDialog(context, r.friend!.id, r.friend!.name),
+                  onReport: r.friend == null || !f.blockAvailable ? null : () => showReportDialog(context, r.friend!.id, r.friend!.name, avatar: r.friend!.avatar),
                 ),
               if (friends.isEmpty)
                 Padding(
@@ -468,7 +488,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     subtitle: Text(tr('waiting for acceptance', 'wacht op aanvaarding')),
                     trailing: TextButton(
                       style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-                      onPressed: () => f.remove(x),
+                      onPressed: () async {
+                        await f.remove(x);
+                        _say(f.error ?? tr('Request withdrawn.', 'Verzoek ingetrokken.'));
+                      },
                       child: Text(tr('Withdraw', 'Intrekken')),
                     ),
                   ),
@@ -751,6 +774,12 @@ class RankTile extends StatelessWidget {
 
 String _who(String name) => name.isEmpty ? tr('this person', 'deze persoon') : name;
 
+/// Een korte melding op het vriendenscherm. Eerst weg wat er nog stond of nog wachtte: met een schermlezer bleef een
+/// melding soms staan, en een oude tekst kwam later terug over een nieuwe actie heen (SO-4). Met een sluitknop.
+void friendsSay(ScaffoldMessengerState messenger, String text) => messenger
+  ..clearSnackBars()
+  ..showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 5), showCloseIcon: true));
+
 /// Vragen of je iemand echt wil blokkeren, en dan blokkeren. Geeft true terug als het lukte.
 Future<bool> confirmBlock(BuildContext context, String id, String name, {String? avatar}) async {
   final f = context.read<Friends>();
@@ -761,10 +790,12 @@ Future<bool> confirmBlock(BuildContext context, String id, String name, {String?
       title: Text(tr('Block ${_who(name)}?', '${name.isEmpty ? 'Deze persoon' : name} blokkeren?')),
       content: Text(
         tr(
-          'You will no longer be friends, open battles and challenge invites between you disappear, and neither of you '
-              'can send the other a friend request. They are not told that you blocked them. You can unblock them later.',
-          'Jullie zijn dan geen vrienden meer, open battles en uitnodigingen voor uitdagingen tussen jullie verdwijnen, en '
-              'niemand van jullie kan de ander nog een verzoek sturen. Die persoon krijgt geen bericht. Je kan later deblokkeren.',
+          'You will no longer be friends, open battles and challenge invites between you disappear, you no longer see '
+              'each other in challenges you share, and neither of you can send the other a friend request. They are not '
+              'told that you blocked them. You can unblock them later.',
+          'Jullie zijn dan geen vrienden meer, open battles en uitnodigingen voor uitdagingen tussen jullie verdwijnen, '
+              'jullie zien elkaar niet meer in uitdagingen waar jullie allebei aan meedoen, en niemand van jullie kan de '
+              'ander nog een verzoek sturen. Die persoon krijgt geen bericht. Je kan later deblokkeren.',
         ),
       ),
       actions: [
@@ -775,30 +806,32 @@ Future<bool> confirmBlock(BuildContext context, String id, String name, {String?
   );
   if (ok != true) return false;
   final done = await f.block(id, name: name, avatar: avatar);
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(
-        done
-            ? tr('${name.isEmpty ? 'They are' : '$name is'} blocked.', '${_who(name)} is geblokkeerd.')
-            : (f.error ?? tr('That did not work.', 'Dat lukte niet.')),
-      ),
-    ),
-  );
+  friendsSay(messenger, done ? _blockedText(name) : (f.error ?? tr('That did not work.', 'Dat lukte niet.')));
   return done;
 }
 
-/// Iemand melden: een reden kiezen en eventueel een korte notitie.
-Future<void> showReportDialog(BuildContext context, String id, String name) async {
+String _blockedText(String name) => tr('${name.isEmpty ? 'They are' : '$name is'} blocked.', '${_who(name)} is geblokkeerd.');
+
+/// Iemand melden: een reden kiezen en eventueel een korte notitie. Wie nog niet geblokkeerd is, kan je meteen ook
+/// blokkeren (SO-6). Geeft true terug als die persoon daarbij geblokkeerd werd.
+Future<bool> showReportDialog(BuildContext context, String id, String name, {String? avatar}) async {
   final f = context.read<Friends>();
   final messenger = ScaffoldMessenger.of(context);
-  final r = await showDialog<(String, String)>(
+  final canBlock = f.blockAvailable && !f.blocked.any((b) => b.id == id);
+  final r = await showDialog<(String, String, bool)>(
     context: context,
-    builder: (_) => _ReportDialog(name: name),
+    builder: (_) => _ReportDialog(name: name, canBlock: canBlock),
   );
-  if (r == null) return;
-  final (reason, note) = r;
+  if (r == null) return false;
+  final (reason, note, alsoBlock) = r;
   final res = await f.report(id, reason, note: note);
-  messenger.showSnackBar(SnackBar(content: Text(res == null ? (f.error ?? tr('That did not work.', 'Dat lukte niet.')) : reportMessage(res))));
+  if (res == null) {
+    friendsSay(messenger, f.error ?? tr('That did not work.', 'Dat lukte niet.'));
+    return false;
+  }
+  final blocked = alsoBlock && res == 'reported' && await f.block(id, name: name, avatar: avatar);
+  friendsSay(messenger, [reportMessage(res), if (blocked) _blockedText(name)].join(' '));
+  return blocked;
 }
 
 /// Tekst bij een reden uit [reportReasons].
@@ -810,8 +843,11 @@ String reportReasonLabel(String reason) => switch (reason) {
 };
 
 class _ReportDialog extends StatefulWidget {
-  const _ReportDialog({required this.name});
+  const _ReportDialog({required this.name, this.canBlock = false});
   final String name;
+
+  /// Een vinkje "Ook blokkeren" tonen (niet als die persoon al geblokkeerd is).
+  final bool canBlock;
 
   @override
   State<_ReportDialog> createState() => _ReportDialogState();
@@ -819,6 +855,7 @@ class _ReportDialog extends StatefulWidget {
 
 class _ReportDialogState extends State<_ReportDialog> {
   String? _reason;
+  bool _block = false;
   final _note = TextEditingController();
 
   @override
@@ -862,6 +899,15 @@ class _ReportDialogState extends State<_ReportDialog> {
               minLines: 1,
               decoration: InputDecoration(hintText: tr('Anything else we should know? (optional)', 'Nog iets dat we moeten weten? (optioneel)')),
             ),
+            if (widget.canBlock)
+              CheckboxListTile(
+                key: const Key('report-block'),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _block,
+                onChanged: (v) => setState(() => _block = v ?? false),
+                title: Text(tr('Also block ${_who(widget.name)}', 'Ook ${_who(widget.name)} blokkeren')),
+              ),
           ],
         ),
       ),
@@ -869,7 +915,7 @@ class _ReportDialogState extends State<_ReportDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel', 'Annuleren'))),
         FilledButton(
           key: const Key('report-send'),
-          onPressed: _reason == null ? null : () => Navigator.pop(context, (_reason!, _note.text)),
+          onPressed: _reason == null ? null : () => Navigator.pop(context, (_reason!, _note.text, _block)),
           child: Text(tr('Report', 'Melden')),
         ),
       ],
@@ -895,7 +941,7 @@ class SafetyMenu extends StatelessWidget {
         PopupMenuItem(value: 1, child: Text(tr('Block', 'Blokkeren'))),
         PopupMenuItem(value: 2, child: Text(tr('Report', 'Melden'))),
       ],
-      onSelected: (v) => v == 1 ? confirmBlock(context, id, name, avatar: avatar) : showReportDialog(context, id, name),
+      onSelected: (v) => v == 1 ? confirmBlock(context, id, name, avatar: avatar) : showReportDialog(context, id, name, avatar: avatar),
     );
   }
 }
@@ -923,15 +969,36 @@ class BlockedPanel extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: AvatarImage(avatar: x.avatar, size: 40),
               title: Text(x.name.isEmpty ? tr('Someone without a name', 'Iemand zonder naam') : x.name),
-              trailing: TextButton(
-                key: Key('unblock-${x.id}'),
-                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final ok = await f.unblock(x.id);
-                  if (!ok) messenger.showSnackBar(SnackBar(content: Text(f.error ?? tr('That did not work.', 'Dat lukte niet.'))));
-                },
-                child: Text(tr('Unblock', 'Deblokkeren')),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Melden kan ook na het blokkeren, zonder eerst te deblokkeren (SO-6)
+                  IconButton(
+                    key: Key('blocked-report-${x.id}'),
+                    tooltip: tr('Report', 'Melden'),
+                    icon: Icon(Icons.flag_outlined, size: 20, color: pal.ink3),
+                    style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+                    onPressed: () => showReportDialog(context, x.id, x.name, avatar: x.avatar),
+                  ),
+                  TextButton(
+                    key: Key('unblock-${x.id}'),
+                    style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final ok = await f.unblock(x.id);
+                      friendsSay(
+                        messenger,
+                        ok
+                            ? tr(
+                                '${x.name.isEmpty ? 'They are' : '${x.name} is'} unblocked. To be friends again, add each other with your code.',
+                                '${_who(x.name)} is gedeblokkeerd. Om weer vrienden te zijn, voeg je elkaar opnieuw toe met je code.',
+                              )
+                            : (f.error ?? tr('That did not work.', 'Dat lukte niet.')),
+                      );
+                    },
+                    child: Text(tr('Unblock', 'Deblokkeren')),
+                  ),
+                ],
               ),
             ),
         ],

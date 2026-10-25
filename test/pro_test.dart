@@ -393,24 +393,25 @@ void main() {
       expect(find.textContaining('Coming soon'), findsOneWidget);
       expect(find.byKey(const ValueKey('pro-renews')), findsNothing);
 
-      // Herstellen vraagt de server: niets gevonden
-      await tester.tap(find.byKey(const ValueKey('pro-restore')));
-      await tester.pumpAndSettle();
-      expect(find.text('No Supporter subscription found for this account.'), findsOneWidget);
+      // Zonder winkel valt er niets te herstellen: geen knop "Aankoop herstellen" (SU-6)
+      expect(find.byKey(const ValueKey('pro-restore')), findsNothing);
     });
 
-    testWidgets('herstellen vindt Pro dat met de hand toegekend werd', (tester) async {
+    testWidgets('met de hand toegekend: een geschenk dat niet verlengt, met de prijzen erbij (SU-6)', (tester) async {
       final s = newState();
       final server = FakeProRemote();
       final pro = newPro(s, server);
       await pump(tester, s, pro, const ProScreen());
       server.status = ProStatus(until: DateTime(2099, 3, 1), source: 'manual');
-      await tester.tap(find.byKey(const ValueKey('pro-restore')));
+      await pro.refresh();
       await tester.pumpAndSettle();
-      expect(find.text("You're a supporter on this account."), findsOneWidget);
       expect(find.text('You are a supporter'), findsOneWidget);
       expect(find.textContaining('Supporter until 1 March 2099'), findsOneWidget);
-      expect(find.byKey(const ValueKey('pro-prices')), findsNothing);
+      expect(find.byKey(const ValueKey('pro-renewal')), findsOneWidget);
+      expect(find.textContaining('does not renew'), findsOneWidget);
+      // Wat het kost, blijft zichtbaar; herstellen niet (kopen kan hier niet)
+      expect(find.byKey(const ValueKey('pro-prices')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pro-restore')), findsNothing);
       // Badge verbergen voor vrienden
       await tester.tap(find.byKey(const ValueKey('pro-show-badge')));
       await tester.pumpAndSettle();
@@ -424,9 +425,7 @@ void main() {
       expect(find.text('Always free'), findsOneWidget);
       expect(find.byKey(const ValueKey('pro-subscribe')), findsNothing);
       expect(find.textContaining('Coming soon'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('pro-restore')));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Log in first'), findsOneWidget);
+      expect(find.byKey(const ValueKey('pro-restore')), findsNothing);
 
       final pro = newPro(s, FakeProRemote()..missing = true);
       await pump(tester, s, pro, const ProScreen());

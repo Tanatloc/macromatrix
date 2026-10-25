@@ -233,7 +233,7 @@ void main() {
       expect(f.added, ['ABCD-1235']);
       // De code blijft staan, de uitleg staat onder het veld (geen melding over "Your code")
       expect(find.text('ABCD-1235'), findsOneWidget);
-      expect(find.text('No account found with that code. Check the letters and numbers.'), findsOneWidget);
+      expect(find.text('Could not add a friend with this code. Check the letters and numbers.'), findsOneWidget);
       expect(find.byType(SnackBar), findsNothing);
       expect(add().onPressed, isNotNull);
 

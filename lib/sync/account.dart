@@ -175,20 +175,33 @@ class Account extends ChangeNotifier {
   /// De bevestigingscode opnieuw sturen.
   Future<void> resendConfirmation(String email) => _client!.auth.resend(type: OtpType.signup, email: email.trim());
 
-  Future<void> signIn(String email, String password) async {
-    await _client!.auth.signInWithPassword(email: email.trim(), password: password);
-    await _afterLogin();
+  /// Net ingelogd op een bestaand account en de eerste synchronisatie loopt nog: je profiel kan nog onderweg zijn.
+  /// Zolang toont de app nog geen "Over jou" (dat flitste even voor het profiel binnenkwam, GP-11).
+  bool get fetchingAfterLogin => _fetching;
+  bool _fetching = false;
+
+  Future<void> _existingLogin(Future<void> Function() auth) async {
+    _fetching = true;
+    try {
+      await auth();
+      await _afterLogin();
+    } finally {
+      _fetching = false;
+      notifyListeners();
+    }
   }
+
+  Future<void> signIn(String email, String password) =>
+      _existingLogin(() => _client!.auth.signInWithPassword(email: email.trim(), password: password));
 
   /// Wachtwoord vergeten, stap 1: een code mailen.
   Future<void> requestPasswordReset(String email) => _client!.auth.resetPasswordForEmail(email.trim());
 
   /// Wachtwoord vergeten, stap 2: code controleren en het nieuwe wachtwoord instellen (je bent dan ingelogd).
-  Future<void> resetPassword(String email, String code, String newPassword) async {
+  Future<void> resetPassword(String email, String code, String newPassword) => _existingLogin(() async {
     await _client!.auth.verifyOTP(type: OtpType.recovery, email: email.trim(), token: code.trim());
     await _client!.auth.updateUser(UserAttributes(password: newPassword));
-    await _afterLogin();
-  }
+  });
 
   Future<void> changePassword(String newPassword) => _client!.auth.updateUser(UserAttributes(password: newPassword));
 

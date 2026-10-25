@@ -8,7 +8,8 @@
 <meta name="theme-color" content="#F4F3EF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0D0F11" media="(prefers-color-scheme: dark)">
 <meta property="og:title" content="MacroMatrix · Know what you eat, better together">
-<meta property="og:description" content="Every vitamin and mineral, a scanner for additives and allergens, and friends to keep you going. Free for nearly everything, open source, no ads, and your data is never sold.">
+<meta property="og:description" content="Every vitamin and mineral, a scanner for additives and allergens, and friends to keep you going. Free, with an optional Supporter subscription for a few extras. Open source, no ads, and your data is never sold.">
+<link rel="canonical" href="https://macromatrix.eu/">
 <meta property="og:image" content="https://macromatrix.eu/assets/img/og.png">
 <meta property="og:type" content="website">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -31,7 +32,7 @@
       <a href="#friends">Friends</a>
       <a href="#more">More</a>
       <a href="#pricing">Free &amp; Supporter</a>
-      <a href="#download">Download</a>
+      <!--dl--><a href="#download">Download</a><!--/dl-->
       <a href="#faq">FAQ</a>
     </nav>
     <div class="header-cta">
@@ -47,9 +48,9 @@
       <div>
         <span class="eyebrow">Food diary for Android and the web</span>
         <h1>Know what you eat.<br><span class="grad">Better together.</span></h1>
-        <p class="lead">See every vitamin and mineral you get, scan products for additives and allergens, and keep each other going with friends. Free for nearly everything, open source, no ads, and your data is never sold.</p>
+        <p class="lead">See every vitamin and mineral you get, scan products for additives and allergens, and keep each other going with friends. Free, with an optional Supporter subscription for a few extras. Open source, no ads, and your data is never sold.</p>
         <div class="ctas">
-          <a class="btn btn-primary" href="#download"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Android</a>
+          <!--dl--><a class="btn btn-primary" href="#download"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Android</a><!--/dl-->
           <a class="btn btn-ghost" href="/app/">Open in browser</a>
         </div>
         <ul class="pills" aria-label="Highlights">
@@ -299,7 +300,7 @@
     <div class="wrap">
       <div class="section-head">
         <span class="eyebrow">Free &amp; Supporter</span>
-        <h2>Free for nearly everything. No paywall.</h2>
+        <h2>Free to use. No paywall.</h2>
         <p>The diary, the scanner, friends and backups are free, and they stay free. Supporter adds a few extras nobody needs. Mostly it helps pay for the servers.</p>
       </div>
       <div class="plans">
@@ -410,6 +411,7 @@
     </div>
   </section>
 
+  <!--dl-->
   <section class="block" id="download">
     <div class="wrap">
       <div class="section-head">
@@ -420,16 +422,18 @@
       <div class="download">
         <div class="dl-card">
           <h3>Android</h3>
-          <p>Download the app and open the file on your phone. Android asks once to allow installing apps from your browser.</p>
+          <p>Tap the button and open the downloaded file on your phone. The first time, Android asks whether your browser may install apps. Say yes, and the app installs like any other.</p>
           <div class="ctas">
-            <a class="btn btn-primary" href="https://github.com/Tanatloc/macromatrix-releases/releases/latest/download/MacroMatrix.apk"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download APK</a>
-            <a class="btn btn-ghost" href="https://github.com/Tanatloc/macromatrix-releases/releases/latest">All versions on GitHub</a>
+            <a class="btn btn-primary" href="https://github.com/Tanatloc/macromatrix-releases/releases/latest/download/MacroMatrix.apk"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Android</a>
           </div>
-          <p class="small">Want automatic updates? Install <a href="https://github.com/ImranR98/Obtainium">Obtainium</a> and add <code>https://github.com/Tanatloc/macromatrix-releases</code>.</p>
+          <details class="more">
+            <summary>Other ways to install</summary>
+            <p class="small">Every version is also on <a href="https://github.com/Tanatloc/macromatrix-releases/releases">GitHub</a>. If you use <a href="https://github.com/ImranR98/Obtainium">Obtainium</a> for updates, add <code>https://github.com/Tanatloc/macromatrix-releases</code>.</p>
+          </details>
         </div>
         <div class="dl-card">
           <h3>Browser</h3>
-          <p>On a computer or iPhone, use the web version. It works in any modern browser, with or without an account, and also offline after your first visit.</p>
+          <p>On a computer or iPhone, use the web version. You don't need an account: choose "Use without an account" and start logging. It also works offline after your first visit.</p>
           <div class="ctas">
             <a class="btn btn-ghost" href="/app/">Open the web app</a>
           </div>
@@ -438,6 +442,7 @@
       </div>
     </div>
   </section>
+  <!--/dl-->
 
   <section class="block" id="faq" style="padding-top:0">
     <div class="wrap">
@@ -446,14 +451,14 @@
         <h2>Frequently asked questions</h2>
       </div>
       <div class="faq">
-        <details><summary>Is the app free?</summary><p>Yes, nearly everything is free and there is no paywall. An account is free too, and optional. Supporter is an optional subscription (€2.99 a month or €19.99 a year) with a few extras like avatar frames, colours and more AI scans per day. It helps pay for the AI and the servers. It is coming soon through Google Play.</p></details>
+        <details><summary>Is the app free?</summary><p>Yes, and there is no paywall. An account is free too, and optional. Supporter is an optional subscription (€2.99 a month or €19.99 a year) with a few extras like avatar frames, colours and more AI scans per day. It helps pay for the AI and the servers. It is coming soon through Google Play.</p></details>
         <details><summary>Are there ads? Do you sell my data?</summary><p>No and no. There are no ads, no tracking cookies and no analytics. Your data is stored in the EU and is never sold or used for anything other than running the app. See the <a href="/privacy/">privacy policy</a>.</p></details>
         <details><summary>Is MacroMatrix open source?</summary><p>Yes. The code is public under the AGPL licence on <a href="https://github.com/Tanatloc/macromatrix">GitHub</a>.</p></details>
         <details><summary>Can I use it without an account?</summary><p>Yes, in the Android app and in the browser. Choose "Use without an account" on the start screen. Everything then stays on that device only, or in that browser if you use the web version. Clearing your browsing data or using a private window wipes it. Without an account there is no sync, no friends or battles, and no logging with a photo. You can create an account later in Settings and what you logged comes along.</p></details>
-        <details><summary>What do my friends see?</summary><p>Your chosen name, your avatar or photo, your level, title and showcase badges, and your average Nutrient Score per week. In a battle they also see your points for that week. Never your diary, your weight or your email address.</p></details>
+        <details><summary>What do my friends see?</summary><p>Your chosen name, your avatar or photo, your level, title and showcase badges, your average Nutrient Score per week and how many days you logged. In a battle they also see your points for that week, and in a challenge whether you made each day. If you are a supporter, they see your Supporter badge and avatar frame. Never your diary, your weight or your email address.</p></details>
         <details><summary>How do battles work?</summary><p>You challenge a friend for a week. Every day you log, your Nutrient Score for that day adds to your points. Whoever has the most points on Sunday wins. Wins count towards your battle badges and your rivalry record with that friend.</p></details>
         <details><summary>How is the product score calculated?</summary><p>60% comes from the Nutri-Score, 30% from the additives (based on EFSA assessments) and 10% from whether the product is organic. A product with a high-risk additive scores 49 at most.</p></details>
-        <details><summary>Which devices does it work on?</summary><p>In any modern browser, on your computer and on your phone. The Android app (barcode scanner, widget, Health Connect) can be downloaded from <a href="#download">GitHub</a>; the Play Store is coming soon.</p></details>
+        <details><summary>Which devices does it work on?</summary><p>In any modern browser, on your computer and on your phone.<!--dl--> The Android app (barcode scanner, widget, Health Connect) can be <a href="#download">downloaded here</a>; the Play Store is coming soon.<!--/dl--></p></details>
         <details><summary>Does it work without internet?</summary><p>Yes. Everything is also stored on your device, including products you scanned before. With an account, what you log offline is sent once you are back online.</p></details>
         <details><summary>How accurate are the nutrition values?</summary><p>Basic foods come from official food composition tables. Branded products come from Open Food Facts, which is filled in by its users, and USDA; check the label if in doubt. Estimated values are always marked with ≈.</p></details>
         <details><summary>Is this medical advice?</summary><p>No. The targets are general EFSA reference values for healthy adults. If you are pregnant, breastfeeding or have a medical condition, talk to your doctor or dietitian.</p></details>

@@ -555,6 +555,33 @@ class _RecipeImportScreenState extends State<RecipeImportScreen> {
   Widget build(BuildContext context) {
     final pro = proOf(context);
     final p = context.pal;
+    // Een nagekeken import gaat niet zomaar verloren met Terug: eerst vragen (SU-14)
+    return PopScope(
+      canPop: _rows == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmLeave();
+      },
+      child: _scaffold(pro, p),
+    );
+  }
+
+  Future<void> _confirmLeave() async {
+    final nav = Navigator.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(tr('Discard this import?', 'Deze import weggooien?')),
+        content: Text(tr('The ingredients you checked will be lost.', 'De ingrediënten die je nakeek, gaan verloren.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: Text(tr('Keep editing', 'Verder nakijken'))),
+          FilledButton(key: const ValueKey('recipe-import-discard'), onPressed: () => Navigator.pop(d, true), child: Text(tr('Discard', 'Weggooien'))),
+        ],
+      ),
+    );
+    if (ok == true && mounted) nav.pop();
+  }
+
+  Widget _scaffold(Pro? pro, Palette p) {
     return Scaffold(
       appBar: AppBar(title: Text(tr('Import recipe', 'Recept importeren'))),
       body: ListView(

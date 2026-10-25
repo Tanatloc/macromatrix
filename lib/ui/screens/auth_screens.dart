@@ -37,13 +37,26 @@ Future<void> openPage(String path) => launchUrl(
 bool? debugWebOverride;
 bool get runsOnWeb => debugWebOverride ?? kIsWeb;
 
+/// "Meer over de app": in de app de homepage zonder downloadknoppen (/about/, zie tool/build_site.sh). Een app uit
+/// Google Play wijst niet naar een APK buiten de Play Store (GP-18). Op het web gewoon de homepage.
+String get aboutPagePath => runsOnWeb ? '/' : '/about/';
+
 enum GateScreen { loading, welcome, profileSetup, app }
 
 /// Wat [AuthGate] toont. Zonder account (bewust gekozen) kom je overal in de app, ook in de browser: je gegevens
 /// staan dan in de opslag van de browser (IndexedDB, zie platform_web.dart).
-GateScreen gateScreen({required bool ready, required bool configured, required bool signedIn, required bool localOnly, required bool hasProfile}) {
+/// [fetching]: net ingelogd op een bestaand account, het profiel kan nog onderweg zijn (GP-11).
+GateScreen gateScreen({
+  required bool ready,
+  required bool configured,
+  required bool signedIn,
+  required bool localOnly,
+  required bool hasProfile,
+  bool fetching = false,
+}) {
   if (!ready) return GateScreen.loading;
   if (configured && !signedIn && !localOnly) return GateScreen.welcome;
+  if (configured && !hasProfile && fetching) return GateScreen.loading;
   if (configured && !hasProfile) return GateScreen.profileSetup;
   return GateScreen.app;
 }
@@ -62,6 +75,7 @@ class AuthGate extends StatelessWidget {
       signedIn: a.signedIn,
       localOnly: a.localOnly,
       hasProfile: s.hasProfile,
+      fetching: a.fetchingAfterLogin,
     )) {
       GateScreen.loading => Scaffold(backgroundColor: context.pal.bg, body: const SizedBox.expand()),
       GateScreen.welcome => const WelcomeScreen(),
@@ -261,7 +275,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     alignment: WrapAlignment.center,
                     spacing: 4,
                     children: [
-                      TextButton(onPressed: () => openPage('/'), child: Text(tr('More about the app', 'Meer over de app'))),
+                      TextButton(onPressed: () => openPage(aboutPagePath), child: Text(tr('More about the app', 'Meer over de app'))),
                       TextButton(onPressed: () => openPage('/privacy/'), child: const Text('Privacy')),
                       TextButton(onPressed: () => openPage('/terms/'), child: Text(tr('Terms', 'Voorwaarden'))),
                     ],

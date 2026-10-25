@@ -89,8 +89,8 @@ class BattleNotify {
           id: (r['id'] as String).hashCode & 0x7fffffff,
           title: tr('New battle challenge', 'Nieuwe battle-uitdaging'),
           body: tr(
-            '$who challenged you to a battle this week. Open MacroMatrix to accept.',
-            '$who daagt je uit voor een battle deze week. Open MacroMatrix om te aanvaarden.',
+            '$who challenged you to a battle. Open MacroMatrix to accept.',
+            '$who daagt je uit voor een battle. Open MacroMatrix om te aanvaarden.',
           ),
           notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(

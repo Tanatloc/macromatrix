@@ -25,7 +25,9 @@ class RoadmapMissing implements Exception {
   String toString() => 'RoadmapMissing';
 }
 
-enum RoadmapStatus { idea, planned, building, done }
+/// [early]: in vroege toegang (klaar voor supporters, nog niet voor iedereen); stemmen kan dan niet meer, net als
+/// bij [done] (migratie 20261106300000_challenge_blocks_roadmap.sql).
+enum RoadmapStatus { idea, planned, building, early, done }
 
 /// Een item op de roadmap.
 @immutable
@@ -54,7 +56,8 @@ class RoadmapItem {
 
   String get title => tr(titleEn, titleNl.isEmpty ? titleEn : titleNl);
   String get description => tr(descEn, descNl.isEmpty ? descEn : descNl);
-  bool get done => status == RoadmapStatus.done;
+  /// Klaar of in vroege toegang: stemmen kan niet meer, en een stem erop telt niet mee voor de grens.
+  bool get closed => status == RoadmapStatus.done || status == RoadmapStatus.early;
 
   factory RoadmapItem.fromJson(Map j) => RoadmapItem(
     id: j['id'] as String,
@@ -172,7 +175,7 @@ class Roadmap extends ChangeNotifier {
 
   /// Stemmen die je nog over hebt (stemmen op wat klaar is, tellen niet mee).
   int get votesLeft {
-    final used = items.where((i) => i.mine && !i.done).length;
+    final used = items.where((i) => i.mine && !i.closed).length;
     return (roadmapVotesMax - used).clamp(0, roadmapVotesMax);
   }
 
@@ -210,7 +213,7 @@ class Roadmap extends ChangeNotifier {
     final on = !item.mine;
     // Lokaal al nakijken, zodat de teller niet even naar boven springt
     if (on && votesLeft <= 0) return VoteResult.limit;
-    if (item.done) return VoteResult.closed;
+    if (item.closed) return VoteResult.closed;
     busy.add(item.id);
     _replace(item.copyWith(mine: on, votes: (item.votes + (on ? 1 : -1)).clamp(0, 1 << 30)));
     notifyListeners();
