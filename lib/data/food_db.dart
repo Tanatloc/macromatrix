@@ -30,7 +30,7 @@ class FoodDb {
   static const asset = 'assets/db/foods.db';
 
   /// Bronnen in de ingebouwde database (prefix van [Food.ref]).
-  static const dbSources = {'ciqual', 'slv', 'mvt', 'frida', 'cofid', 'usda_sr', 'usda_fnd'};
+  static const dbSources = {'ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'usda_sr', 'usda_fnd', 'usda_fndds'};
 
   static bool isDbRef(String ref) => dbSources.contains(ref.split(':').first);
 

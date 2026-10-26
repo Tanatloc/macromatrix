@@ -37,8 +37,10 @@ void main() {
 
   test('gewone bronnen bovenaan: wortel voor vitamine A, vette vis voor omega-3', () {
     expect(s.richestFor('vit_a', perKcal: true, limit: 3, advice: true).first.$1.label!.food, 'carrot');
-    final fish = {for (final (f, _) in s.richestFor('epa_dha', perKcal: true, limit: 10, advice: true)) f.label!.group};
-    expect(fish, {'fish'});
+    // Vette vis bovenaan; verderop mogen oesters (BLS: veel EPA/DHA per kcal), maar geen ander soort product
+    final omega = [for (final (f, _) in s.richestFor('epa_dha', perKcal: true, limit: 10, advice: true)) f.label!.group];
+    expect(omega.take(5), everyElement('fish'));
+    expect(omega.toSet().difference({'fish', 'shellfish'}), isEmpty);
   });
 
   test('geen frieten, fastfood, gepaneerd of gezoet als advies, ook niet uit wat je eet', () {
@@ -53,7 +55,10 @@ void main() {
   });
 
   test('Orakel: geen uitschieters tussen databanken (eend zonder vel 46,7 g eiwit) of stamspecifieke producten', () {
-    final s = AppState(foods: FoodDb(sqlite3.open('assets/db/foods.db', mode: OpenMode.readOnly)), user: UserDb(sqlite3.openInMemory()));
+    final s = AppState(
+      foods: FoodDb(sqlite3.open('assets/db/foods.db', mode: OpenMode.readOnly)),
+      user: UserDb(sqlite3.openInMemory()),
+    );
     for (final every in [true, false]) {
       final protein = s.oracle('protein', limit: 40, everyday: every);
       expect(protein.map((r) => r.$1.ref), isNot(contains('mvt:03.232')), reason: 'eend zonder vel, gebraden');

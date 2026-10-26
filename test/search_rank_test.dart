@@ -179,12 +179,20 @@ void main() {
     // Geen ongezoete gewone yoghurt of pindakaas zonder suiker in de databank: dan de gewone, geen fruityoghurt of koekje
     for (final q in ['unsweetened yoghurt', 'unsweetened yogurt', 'ongezoete yoghurt', 'yoghurt no added sugar']) {
       for (final f in [box(q), quick(q)]) {
-        expect(f.name.toLowerCase(), allOf(matches(RegExp(r'yog(h)?urt.*plain|plain.*yog(h)?urt')), isNot(matches(RegExp(r'fruit|vanilla')))),
-            reason: '$q: ${f.name}');
+        expect(
+          f.name.toLowerCase(),
+          allOf(matches(RegExp(r'yog(h)?urt.*plain|plain.*yog(h)?urt')), isNot(matches(RegExp(r'fruit|vanilla')))),
+          reason: '$q: ${f.name}',
+        );
       }
     }
+    // Pindakaas: sinds FNDDS (26-10-2026) bestaat er een variant met minder suiker, en die is de dichtste bij de wens
     for (final f in [box('peanut butter no added sugar'), quick('peanut butter no added sugar')]) {
-      expect(f.name.toLowerCase(), allOf(startsWith('peanut butter'), isNot(matches(RegExp(r'cookie|sugar')))), reason: f.name);
+      expect(
+        f.name.toLowerCase(),
+        allOf(startsWith('peanut butter'), isNot(matches(RegExp(r'cookie'))), anyOf(isNot(contains('sugar')), contains('lower sugar'))),
+        reason: f.name,
+      );
     }
     // Alleen de suikerwens, of gewoon suiker: geen woorden om weg te laten
     expect(splitSugarAsk('sugar free'), ('sugar free', null));

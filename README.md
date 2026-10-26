@@ -35,26 +35,33 @@ friends, levels, badges and weekly battles to keep you going. European data firs
 | Source | Licence |
 |---|---|
 | ANSES-CIQUAL 2025 (France) | Licence Ouverte 2.0 (Etalab) |
-| Frida, DTU Food Institute (Denmark) | Free use with attribution |
+| Frida, DTU Food Institute (Denmark) | CC BY 4.0 |
 | McCance and Widdowson's CoFID 2021 (UK) | Open Government Licence v3.0 |
 | Livsmedelsverket (Sweden) | CC BY 4.0 |
 | Matvaretabellen, Mattilsynet (Norway) | NLOD |
-| USDA FoodData Central (US), incl. Branded Foods | Public domain (CC0) |
+| Bundeslebensmittelschlüssel (BLS) 4.0, Max Rubner-Institut (Germany) | CC BY 4.0 |
+| USDA FoodData Central (US): SR Legacy, Foundation Foods, FNDDS 2021–2023 (dishes) and Branded Foods | Public domain (CC0) |
 | Open Food Facts (products, additives) | ODbL |
 
 The values from these tables were converted to common units and definitions, combined, and in places estimated or
 corrected (see `tool/FOODS_CHANGES.md`); estimated values are marked with ≈ in the app.
 
 - ANSES. 2025. Ciqual French food composition table (https://ciqual.anses.fr), Licence Ouverte 2.0.
-- Food data (frida.fooddata.dk), version 6.1, National Food Institute, Technical University of Denmark (DTU).
+- The Danish Food Composition Database (https://fcdb.fooddata.dk/), version 6.1, National Food Institute, Technical
+  University of Denmark (DTU), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); changes were made.
 - Contains public sector information licensed under the Open Government Licence v3.0 (McCance and Widdowson's
   Composition of Foods Integrated Dataset 2021, Public Health England / Office for Health Improvement and Disparities).
 - Livsmedelsverket, Livsmedelsdatabasen (https://soknaringsinnehall.livsmedelsverket.se), licensed under
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); changes were made.
 - Contains data under the Norwegian licence for Open Government data (NLOD) made available by Mattilsynet
   (Matvaretabellen, https://www.matvaretabellen.no).
+- Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0 — Deutsche Nährstoffdatenbank. Karlsruhe.
+  DOI: 10.25826/Data20251217-134202-0. Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); changes
+  were made.
 - U.S. Department of Agriculture, Agricultural Research Service. FoodData Central (https://fdc.nal.usda.gov).
-- Open Food Facts (https://world.openfoodfacts.org), available under the Open Database License (ODbL).
+- Open Food Facts (https://world.openfoodfacts.org), available under the Open Database License (ODbL). The additive
+  list derived from it, `assets/additives.json`, is likewise available under the
+  [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 
 Reference values: EFSA Dietary Reference Values; essential amino acids: WHO/FAO/UNU 2007. **Not medical advice.**
 

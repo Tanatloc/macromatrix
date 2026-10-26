@@ -154,3 +154,19 @@ geen ander gegeven is.
 Versie blijft `37c9dfe721a2` (alleen namen en zoektekst, geen waarden). CoFID "Potato chips, …" heet nu "French fries, …"
 (Britse chips zijn frieten) en Matvaretabellen "Oatmeal" met lokale naam "Havremel" heet "Oat flour". De oude naam blijft
 in de zoektekst. Eerder gebeurde dit alleen bij het tonen (`tidyFoodName`), waardoor de nieuwe naam niet vindbaar was.
+
+## 26-10-2026: BLS 4.0 en FNDDS erbij
+
+- **BLS 4.0** (Max Rubner-Institut, Duitsland, CC BY 4.0): 7.140 voedingsmiddelen, Engelse naam met de Duitse als
+  lokale naam (doorzoekbaar). Waarden zoals BLS ze geeft, ook de eigen berekeningen van BLS (zoals bij CIQUAL en
+  Livsmedelsverket). Vitamine A staat al als RE; B6, koper, mangaan en fluoride van µg naar mg.
+- **USDA FNDDS 2021–2023** (publiek domein): 3.731 samengestelde gerechten. Producten met één ingrediënt (kopieën van
+  SR Legacy), babyvoeding, zuigelingenvoeding en moedermelk niet. "NFS" en "NS as to …" weg uit de getoonde naam.
+- Labels voor beide (pakketten 059–070, voedingsapp-data/labels), met een gelijktrekronde voor varianten van dezelfde
+  naam (harmonize_new.py).
+- **Gewogen met afval** (dop, schil, pit, graat): schatten schaalt nu op de energie in plaats van de vetvrije droge stof,
+  die de dop meetelde (walnoten met dop kregen 400 µg chroom tegenover 145 in de pit; nu 59).
+- **Gejodeerd** telt als eigen product bij het aanvullen op naam: gewoon pekelzout nam de jodium van gejodeerd pekelzout
+  over (1.987 µg); nu onbekend.
+- Nauwkeurigheid (HOLDOUT=3000, dezelfde verborgen waarden van de oude bronnen, met en zonder de nieuwe):
+  typische afwijking 27 % → 26 %, binnen 2× 78 % → 78 %.

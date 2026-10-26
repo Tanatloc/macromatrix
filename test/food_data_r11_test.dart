@@ -69,7 +69,12 @@ void main() {
     });
 
     test('bronvoorkeur: CIQUAL/Frida/Matvaretabellen/Livsmedelsverket, dan CoFID, dan USDA', () {
-      expect({for (final x in [FoodSource.ciqual, FoodSource.frida, FoodSource.mvt, FoodSource.slv]) x.priority}, {0});
+      expect(
+        {
+          for (final x in [FoodSource.ciqual, FoodSource.frida, FoodSource.mvt, FoodSource.slv]) x.priority,
+        },
+        {0},
+      );
       expect(FoodSource.cofid.priority, 1);
       expect(FoodSource.usda.priority, 2);
       // Halfvolle melk: niet de CoFID-rij met 0,9 µg B12 vooraan (NF-16)
@@ -210,7 +215,8 @@ void main() {
         for (final f in all)
           if ((f.n['protein'] ?? 0) >= 1 && f.n['tryptophan'] != null && f.n['tryptophan']! / f.n['protein']! > 0.025) f.label['f'],
       };
-      expect(high, everyElement(isIn(['date', 'pecan nut'])));
+      // Spinazie: sinds 26-10-2026 ook door BLS gemeten, naast de USDA (2,5 à 2,8 % van het eiwit)
+      expect(high, everyElement(isIn(['date', 'pecan nut', 'spinach'])));
     });
 
     test('1. tryptofaan, chroom en molybdeen zitten in de uitschieterscontrole', () {
@@ -327,10 +333,13 @@ void main() {
       }
       // USDA zonder apart retinol: RAE − bètacaroteen / 12 (boter 671 µg)
       expect(ref('usda_sr:173410').per100g['retinol'], closeTo(671, 1));
-      expect(mapFdcNutrients([
-        [1008, 'KCAL', 100],
-        [1105, 'UG', 250],
-      ])['retinol'], 250);
+      expect(
+        mapFdcNutrients([
+          [1008, 'KCAL', 100],
+          [1105, 'UG', 250],
+        ])['retinol'],
+        250,
+      );
     });
 
     test('8. een dag met 100 g lever: waarschuwing; 300 g wortel: niet', () {
@@ -341,7 +350,10 @@ void main() {
       final carrots = day('ciqual:20009', 300);
       expect(isTooMuch(carrots['vit_a']!, adult['vit_a']), isFalse);
       expect(isTooMuch(carrots['retinol'] ?? 0, adult['retinol']), isFalse);
-      expect([for (final a in attentionList(carrots, adult, limit: 4)) if (a.$3 == Level.high) a.$1.key], isEmpty);
+      expect([
+        for (final a in attentionList(carrots, adult, limit: 4))
+          if (a.$3 == Level.high) a.$1.key,
+      ], isEmpty);
     });
 
     test('8. gezondheidscheck: gemiddeld boven 3000 µg retinol geeft een tip over lever', () {
@@ -359,10 +371,8 @@ void main() {
         const {},
         10,
       );
-      List<String> tips(double retinol) => healthCheck([for (var i = 0; i < 7; i++) (day(retinol), t)], weightKg: 75)!
-          .factors
-          .firstWhere((f) => f.key == 'micro')
-          .tips;
+      List<String> tips(double retinol) =>
+          healthCheck([for (var i = 0; i < 7; i++) (day(retinol), t)], weightKg: 75)!.factors.firstWhere((f) => f.key == 'micro').tips;
       expect(tips(5000).join(' '), contains('retinol'));
       expect(tips(1000).join(' '), isNot(contains('retinol')));
     });
@@ -371,7 +381,12 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildTheme(Brightness.light),
-          home: Scaffold(body: SizedBox(width: 400, child: NutrientRow(nutrient: nutrientByKey['retinol']!, amount: 13800, target: adult['retinol']))),
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              child: NutrientRow(nutrient: nutrientByKey['retinol']!, amount: 13800, target: adult['retinol']),
+            ),
+          ),
         ),
       );
       expect(tester.widget<StatusMark>(find.byType(StatusMark)).level, Level.high);
@@ -457,8 +472,14 @@ void main() {
         final g = f.label['g'], k = f.label['k'];
         if (f.label.isEmpty || f.label['d'] == 1 || f.label['p'] == 'starch' || except.hasMatch(f.name) || fixes.containsKey(f.ref)) continue;
         final keys = [
-          if ((plant.contains(g) && (k == 'plant' || k == 'algae')) || (animal.contains(g) && k == 'animal'))
-            ...['calcium', 'iron', 'magnesium', 'potassium', 'phosphorus', 'zinc'],
+          if ((plant.contains(g) && (k == 'plant' || k == 'algae')) || (animal.contains(g) && k == 'animal')) ...[
+            'calcium',
+            'iron',
+            'magnesium',
+            'potassium',
+            'phosphorus',
+            'zinc',
+          ],
           if (animal.contains(g) && k == 'animal') 'selenium',
         ];
         for (final key in keys) {
@@ -621,7 +642,12 @@ void main() {
         return healthCheck(week, weightKg: 75)!.factors.firstWhere((f) => f.key == 'micro').tips;
       }
 
-      const retinyl = Supplement(id: 'c-a', name: 'Vitamine A (retinylpalmitaat) 2400 µg', dose: '1 capsule', nutrients: {'energy': 0, 'vit_a': 2400});
+      const retinyl = Supplement(
+        id: 'c-a',
+        name: 'Vitamine A (retinylpalmitaat) 2400 µg',
+        dose: '1 capsule',
+        nutrients: {'energy': 0, 'vit_a': 2400},
+      );
       const carotene = Supplement(id: 'c-b', name: 'Bètacaroteen 15 mg', dose: '1 capsule', nutrients: {'energy': 0, 'vit_a': 2400});
       // Lever één keer per week, zonder supplement: gemiddeld ~700 µg, geen waarschuwing
       expect(tips(null).join(' '), isNot(contains('retinol')));

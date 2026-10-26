@@ -4,10 +4,14 @@ Bouwt assets/db/foods.db: de ingebouwde database met basisvoedingsmiddelen uit m
 Bronnen (zet ze in één map, elk in een eigen submap):
   ciqual/  ANSES-CIQUAL 2020, Frankrijk (Licence Ouverte): XML-zip van https://ciqual.anses.fr, uitgepakt
   slv/     Livsmedelsverket, Zweden (CC BY 4.0): ophalen met tool/fetch_slv.py
+  bls4/    BLS 4.0, Max Rubner-Institut, Duitsland (CC BY 4.0): zip van https://blsdb.de/download, uitgepakt
   mvt/     Matvaretabellen, Noorwegen (NLOD): foods_en.json, foods_nb.json, food_groups_en.json
            van https://www.matvaretabellen.no/api/{en,nb}/...
   FoodData_Central_sr_legacy_food_csv_*/ en FoodData_Central_foundation_food_csv_*/
            USDA FoodData Central, VS (publiek domein): CSV-zips van https://fdc.nal.usda.gov/download-datasets
+  FoodData_Central_survey_food_csv_*/
+           USDA FNDDS (Survey Foods), VS (publiek domein), zelfde downloadpagina: alleen de samengestelde gerechten
+           (zie fndds_rows)
 
 Bronnen die ontbreken, worden overgeslagen.
 
@@ -42,11 +46,13 @@ from pathlib import Path
 SOURCES = {
     'ciqual': 'ANSES-CIQUAL 2025 (Frankrijk), Licence Ouverte 2.0',
     'cofid': "McCance and Widdowson's Composition of Foods Integrated Dataset 2021 (VK), Open Government Licence v3.0",
-    'frida': 'Frida, DTU Fødevareinstituttet, versie 6.1 (Denemarken), vrij te gebruiken met bronvermelding',
+    'frida': 'Frida, DTU Fødevareinstituttet, versie 6.1 (Denemarken), CC BY 4.0',
+    'bls': 'Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0 (Duitsland), CC BY 4.0',
     'slv': 'Livsmedelsverket, Livsmedelsdatabasen (Zweden), CC BY 4.0',
     'mvt': 'Matvaretabellen, Mattilsynet (Noorwegen), NLOD',
     'usda_fnd': 'USDA FoodData Central, Foundation Foods (VS), publiek domein',
     'usda_sr': 'USDA FoodData Central, SR Legacy (VS), publiek domein',
+    'usda_fndds': 'USDA FoodData Central, FNDDS 2021-2023 (VS), publiek domein',
 }
 
 
@@ -172,7 +178,7 @@ FACTOR = {
     ('G', 'g'): 1, ('MG', 'mg'): 1, ('UG', 'µg'): 1, ('KCAL', 'kcal'): 1,
     ('UG', 'mg'): 0.001, ('MG', 'g'): 0.001, ('G', 'mg'): 1000,
 }
-EUROPEAN = ('ciqual', 'slv', 'mvt', 'frida', 'cofid')
+EUROPEAN = ('ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls')
 
 # Hoofdbestanddelen: die vullen we nooit met een geschaalde waarde van een ander product aan
 MACROS = {'energy', 'protein', 'carbs', 'fat', 'fiber', 'sugars', 'starch', 'water', 'alcohol', '_salt'}
@@ -180,9 +186,17 @@ MACROS = {'energy', 'protein', 'carbs', 'fat', 'fiber', 'sugars', 'starch', 'wat
 USDA_SKIP_CATEGORIES = {'Quality Control Materials', 'Branded Food Products Database'}
 
 
-def usda_load(d, only_ids=None):
-    units = {r['id']: r['unit_name'] for r in read_csv(d / 'nutrient.csv')}
-    cats = {r['id']: r['description'] for r in read_csv(d / 'food_category.csv')}
+def usda_load(d, only_ids=None, by_number=False):
+    """[by_number]: food_nutrient.csv verwijst met het oude voedingsstofnummer (nutrient_nbr, bv. 208 voor energie)
+    in plaats van het id (1008), zoals in FNDDS."""
+    nutrients = list(read_csv(d / 'nutrient.csv'))
+    units = {r['id']: r['unit_name'] for r in nutrients}
+    nbr_id = {r['nutrient_nbr']: r['id'] for r in nutrients if r.get('nutrient_nbr')} if by_number else {}
+    # FNDDS heeft geen food_category.csv maar de WWEIA-categorieën (zelfde kolom food_category_id in food.csv)
+    if (d / 'food_category.csv').exists():
+        cats = {r['id']: r['description'] for r in read_csv(d / 'food_category.csv')}
+    else:
+        cats = {r['wweia_food_category']: r['wweia_food_category_description'] for r in read_csv(d / 'wweia_food_category.csv')}
     foods = {}
     for r in read_csv(d / 'food.csv'):
         if only_ids is not None and r['fdc_id'] not in only_ids:
@@ -191,7 +205,8 @@ def usda_load(d, only_ids=None):
     for r in read_csv(d / 'food_nutrient.csv'):
         f = foods.get(r['fdc_id'])
         if f is not None and r['amount'] != '':
-            f['raw'][int(r['nutrient_id'])] = (float(r['amount']), units.get(r['nutrient_id'], ''))
+            nid = nbr_id.get(r['nutrient_id'], r['nutrient_id']) if by_number else r['nutrient_id']
+            f['raw'][int(nid)] = (float(r['amount']), units.get(nid, ''))
     mu = {r['id']: r['name'] for r in read_csv(d / 'measure_unit.csv')}
     for r in read_csv(d / 'food_portion.csv'):
         f = foods.get(r['fdc_id'])
@@ -273,6 +288,52 @@ def usda_rows(root):
         raw = dict(old['raw']) if old else {}
         raw.update(f['raw'])
         yield 'usda_fnd', fid, f['name'], '', f['category'], raw, f['portions'] or (old['portions'] if old else [])
+
+
+# FNDDS (Food and Nutrient Database for Dietary Studies): wat Amerikanen echt eten, als gerecht (lasagne, taco, soep,
+# stoofpot, ontbijtgranen met melk). De waarden zijn door de USDA berekend uit de ingrediënten (SR Legacy en
+# Foundation, met kookverliezen). We nemen alleen de samengestelde gerechten: een product met één ingrediënt is in FNDDS
+# een kopie van een SR-product dat er al is (dat gaf dubbels). Babyvoeding, zuigelingenvoeding en moedermelk niet.
+FNDDS_SKIP_CATEGORY = re.compile(r'^(human milk|baby |formula,)', re.I)
+# Porties die niemand gebruikt of die geen portie zijn
+FNDDS_SKIP_PORTION = re.compile(r'cubic inch|surface inch|oz yields', re.I)
+
+
+def fndds_portions(portions):
+    out = []
+    for label, grams in portions:
+        # De omschrijving bevat de hoeveelheid al ("1 cup"); usda_load zet er "1" voor als de kolom leeg is
+        label = re.sub(r'^1 (?=\d)', '', label)
+        label = re.sub(r'\s*\(NFS\)|,\s*NFS\b', '', label).strip()
+        if FNDDS_SKIP_PORTION.search(label):
+            continue
+        if label.lower() in ('1 quantity not specified', 'quantity not specified'):
+            label = '1 serving'
+        out.append((label, grams))
+    return out
+
+
+def fndds_rows(root):
+    dirs = sorted(p.parent for p in root.rglob('food.csv') if 'survey_food' in str(p))
+    if not dirs:
+        print('FNDDS: niet gevonden, overgeslagen')
+        return
+    d = dirs[-1]
+    inputs = {}
+    for r in read_csv(d / 'input_food.csv'):
+        inputs[r['fdc_id']] = inputs.get(r['fdc_id'], 0) + 1
+    for fid, f in usda_load(d, by_number=True).items():
+        if inputs.get(fid, 0) < 2 or FNDDS_SKIP_CATEGORY.search(f['category']):
+            continue
+        yield 'usda_fndds', fid, f['name'], '', f['category'], f['raw'], fndds_portions(f['portions'])
+
+
+def fndds_name(name):
+    """De USDA-afkortingen weg uit de getoonde naam: "NFS" (niet nader bepaald) en "NS as to fat" (niet gezegd of er vet
+    bij kwam). De oorspronkelijke naam blijft zoekbaar."""
+    n = re.sub(r',\s*NFS\b', '', name)
+    n = re.sub(r',?\s*NS as to [^,;]+', '', n)
+    return re.sub(r'\s{2,}', ' ', n).strip(' ,')
 
 
 # ─────────────────────────── CIQUAL (Frankrijk) ───────────────────────────
@@ -564,6 +625,81 @@ def frida_rows(root):
         yield 'frida', fid, f['name'], f['local'], f['group'], {k: v for k, v in n.items() if k not in ('_vit_k1', '_b1')}, []
 
 
+# ─────────────────────────── BLS 4.0 (Duitsland) ───────────────────────────
+#
+# Bundeslebensmittelschlüssel 4.0, Max Rubner-Institut (CC BY 4.0, sinds 16-12-2025 zonder licentiekosten). Excel met
+# per voedingsstof een kolom "<CODE> <naam> [<eenheid>/100g]" en een kolom "<CODE> Datenherkunft" (analyse,
+# receptberekening, overgenomen waarde, …). De waarden nemen we zoals BLS ze geeft, ook de eigen berekeningen (zoals bij
+# CIQUAL en Livsmedelsverket); "-" is geen waarde. De Engelse naam wordt de naam, de Duitse de lokale naam.
+# Code → (sleutel, eenheid in BLS, factor naar onze eenheid)
+BLS = {
+    'ENERCC': ('energy', 'kcal', 1), 'WATER': ('water', 'g', 1), 'ALC': ('alcohol', 'g', 1), 'PROT625': ('protein', 'g', 1),
+    'FAT': ('fat', 'g', 1), 'CHO': ('carbs', 'g', 1), 'FIBT': ('fiber', 'g', 1), 'SUGAR': ('sugars', 'g', 1),
+    'STARCH': ('starch', 'g', 1), 'FASAT': ('sfa', 'g', 1), 'FAMS': ('mufa', 'g', 1), 'FAPU': ('pufa', 'g', 1),
+    'F18:3CN3': ('ala', 'g', 1), 'F20:5CN3': ('epa', 'g', 1), 'F22:5CN3': ('dpa', 'g', 1), 'F22:6CN3': ('dha', 'g', 1),
+    'F18:2CN6': ('la', 'g', 1), 'F20:4CN6': ('aa', 'g', 1), 'CHORL': ('cholesterol', 'mg', 1),
+    'HIS': ('histidine', 'g', 1), 'ILE': ('isoleucine', 'g', 1), 'LEU': ('leucine', 'g', 1), 'LYS': ('lysine', 'g', 1),
+    'MET': ('methionine', 'g', 1), 'CYSTE': ('cystine', 'g', 1), 'PHE': ('phenylalanine', 'g', 1),
+    'TYR': ('tyrosine', 'g', 1), 'THR': ('threonine', 'g', 1), 'TRP': ('tryptophan', 'g', 1), 'VAL': ('valine', 'g', 1),
+    # Vitamine A staat al als RE (retinolequivalenten), zoals wij het willen
+    'VITA': ('vit_a', 'µg', 1), 'RETOL': ('retinol', 'µg', 1), 'CARTB': ('beta_carotene', 'µg', 1),
+    'VITD': ('vit_d', 'µg', 1), 'VITE': ('vit_e', 'mg', 1), 'VITK1': ('vit_k', 'µg', 1), 'VITK': ('_vit_k', 'µg', 1),
+    'VITK2': ('vit_k2', 'µg', 1), 'THIA': ('b1', 'mg', 1), 'RIBF': ('b2', 'mg', 1),
+    # Niacine zelf en de niacine-equivalenten (met tryptofaan), zoals bij Frida (zie niacin_ne)
+    'NIA': ('b3', 'mg', 1), 'NIAEQ': ('_ne', 'mg', 1), 'PANTAC': ('b5', 'mg', 1), 'VITB6': ('b6', 'µg', 0.001),
+    'BIOT': ('b7', 'µg', 1), 'FOL': ('b9', 'µg', 1), 'VITB12': ('b12', 'µg', 1), 'VITC': ('vit_c', 'mg', 1),
+    'NA': ('sodium', 'mg', 1), 'NACL': ('_salt', 'g', 1), 'CLD': ('chloride', 'mg', 1), 'K': ('potassium', 'mg', 1),
+    'CA': ('calcium', 'mg', 1), 'MG': ('magnesium', 'mg', 1), 'P': ('phosphorus', 'mg', 1), 'FE': ('iron', 'mg', 1),
+    'ZN': ('zinc', 'mg', 1), 'ID': ('iodine', 'µg', 1), 'CU': ('copper', 'µg', 0.001), 'MN': ('manganese', 'µg', 0.001),
+    'FD': ('fluoride', 'µg', 0.001), 'CR': ('chromium', 'µg', 1), 'MO': ('molybdenum', 'µg', 1),
+}
+# Hoofdgroep = eerste letter van de BLS-code (documentatie BLS 4.0)
+BLS_GROUPS = {
+    'B': 'Bread and rolls', 'C': 'Cereals and grains', 'D': 'Bakery products and snacks', 'E': 'Pasta', 'F': 'Fruit',
+    'G': 'Vegetables', 'H': 'Legumes, sprouts and soy', 'K': 'Potatoes and starches', 'M': 'Milk and dairy',
+    'N': 'Non-alcoholic beverages', 'P': 'Alcoholic beverages', 'Q': 'Oils and fats', 'R': 'Salt, spices and condiments',
+    'S': 'Sugar, honey and sweets', 'T': 'Fish and seafood', 'U': 'Meat', 'V': 'Game, poultry and offal',
+    'W': 'Sausages and meat products', 'X': 'Soups, stocks and dishes', 'Y': 'Dishes and desserts',
+}
+BLS_HEADER = re.compile(r'^(\S+) .*\[(.+)/100\s*g\]$')
+
+
+def bls_rows(root):
+    files = sorted(glob.glob(str(root / 'bls4' / '**' / 'BLS_4_0_Daten_*.xlsx'), recursive=True))
+    if not files:
+        print('BLS: niet gevonden, overgeslagen')
+        return
+    from xlsx_read import sheet_rows
+    rows = sheet_rows(files[-1], Path(files[-1]).stem)
+    head = next(rows)
+    cols = {}
+    for i, h in enumerate(head):
+        m = BLS_HEADER.match(h.strip())
+        if m and m.group(1) in BLS:
+            key, unit, factor = BLS[m.group(1)]
+            if m.group(2).strip() != unit:
+                sys.exit(f'BLS: eenheid {m.group(2)} voor {m.group(1)}, verwacht {unit}')
+            cols[i] = (key, factor)
+    missing = set(BLS) - {head[i].split()[0] for i in cols}
+    if missing:
+        sys.exit(f'BLS: kolommen niet gevonden: {sorted(missing)}')
+    for r in rows:
+        if len(r) < 3 or not r[0].strip():
+            continue
+        code, local, name = r[0].strip(), r[1].strip(), r[2].strip()
+        n = {}
+        for i, (key, factor) in cols.items():
+            v = r[i].strip().replace(',', '.') if i < len(r) else ''
+            try:
+                n[key] = max(0.0, float(v)) * factor
+            except ValueError:
+                continue
+        if 'vit_k' not in n and '_vit_k' in n:
+            n['vit_k'] = n['_vit_k']
+        n.pop('_vit_k', None)
+        yield 'bls', code, name or local, local, BLS_GROUPS.get(code[:1], ''), n, []
+
+
 # ─────────────────────────── Livsmedelsverket (Zweden) ───────────────────────────
 
 SLV = {
@@ -703,7 +839,7 @@ SIGNIFICANT = {
     'liver', 'kidney', 'heart', 'tongue', 'skin', 'bone', 'skimmed', 'semi', 'nonfat', 'lowfat', 'low', 'reduced',
     'light', 'lean', 'fat', 'wild', 'farmed', 'sweetened', 'unsweetened', 'sugar', 'dark',
     'brown', 'wholemeal', 'wholegrain', 'wheat', 'red', 'green', 'yellow', 'black', 'baby', 'infant', 'fortified',
-    'enriched', 'bran', 'germ', 'sprouted', 'seed', 'leaves', 'leaf', 'stalk', 'root', 'peel', 'zest',
+    'enriched', 'iodised', 'iodized', 'bran', 'germ', 'sprouted', 'seed', 'leaves', 'leaf', 'stalk', 'root', 'peel', 'zest',
     'without', 'added', 'vitamin', 'hydrogenated', 'margarine', 'spread', 'dressing', 'mayonnaise', 'smoothie',
     # Andere ingrediënten of smaken: staan ze maar in één naam, dan is het een ander product
     'chocolate', 'cocoa', 'vanilla', 'strawberry', 'raspberry', 'blueberry', 'cherry', 'coffee', 'honey', 'caramel',
@@ -1091,7 +1227,19 @@ PUFA_PARTS = {'la', 'ala', 'aa', 'epa', 'dpa', 'dha'}
 SALTY = {'sodium', 'chloride', 'iodine'}
 
 
+# Gewogen mét afval (dop, schil, pit, graat, been): de dop telt als vetvrije droge stof, dus schalen daarop gaf zo'n
+# product veel te veel (walnoten met dop 400 µg chroom tegenover 145 in de pit). Daar schalen we op de energie, die met
+# het eetbare deel meegaat. De nutriëntenlijsten van zulke producten (id), zie main.
+WASTE_NAME = re.compile(r'weighed with|as purchased|including (skin|bones?|pips|shells?)', re.I)
+WASTE = set()
+
+
 def _scale(key, target, donor):
+    if (id(target) in WASTE or id(donor) in WASTE) and key not in AMINO and key not in PUFA_PARTS:
+        a, b = target.get('energy'), donor.get('energy')
+        if not a or not b:
+            return None
+        return min(20.0, max(0.05, a / b))
     if key in PUFA_PARTS and target.get('pufa') is not None and donor.get('pufa'):
         a, b = target['pufa'], donor['pufa']
     elif key in FATTY or (key in FAT_SOLUBLE and (_fatty_product(target) or _fatty_product(donor))):
@@ -1973,10 +2121,18 @@ HOLDOUT_KEYS = ['choline', 'b5', 'vit_k', 'iodine', 'selenium', 'vit_d', 'b12', 
 
 def holdout(rows, n):
     """Verbergt n willekeurige gemeten waarden (> 0) en onthoudt ze."""
+    # HOLDOUT_OLD=1: alleen uit de bronnen van vóór 26-10-2026 (zelfde steekproef met en zonder BLS en FNDDS)
+    new = {'bls', 'usda_fndds'} if os.environ.get('HOLDOUT_OLD') else set()
     pool = [(i, k) for i, r in enumerate(rows) for k in HOLDOUT_KEYS
-            if r['nut'].get(k, 0) > 0 and k not in r.get('bio0', ()) and r['category'] not in SKIP_GROUP_CATEGORIES]
-    rng = random.Random(42)
-    picked = rng.sample(pool, min(n, len(pool)))
+            if r['source'] not in new and r['nut'].get(k, 0) > 0 and k not in r.get('bio0', ()) and r['category'] not in SKIP_GROUP_CATEGORIES]
+    if new:
+        # Zelfde steekproef in beide builds: kiezen op een vaste hash van product en stof, niet op positie (een
+        # verschoven lijst gaf een heel andere loting)
+        def h(x):
+            return hashlib.sha1(f"{rows[x[0]]['source']}:{rows[x[0]]['sid']}:{x[1]}".encode()).hexdigest()
+        picked = sorted(pool, key=h)[:n]
+    else:
+        picked = random.Random(42).sample(pool, min(n, len(pool)))
     hidden = []
     for i, k in picked:
         hidden.append((rows[i], k, rows[i]['nut'].pop(k)))
@@ -2043,8 +2199,12 @@ def main(root, target):
         CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     ''')
     rows = []
-    for gen in (ciqual_rows, slv_rows, mvt_rows, frida_rows, cofid_rows, usda_rows):
+    # SKIP_SOURCES=bls,usda_fndds: zonder die bronnen bouwen (om te vergelijken, zie HOLDOUT)
+    skip = set(filter(None, os.environ.get('SKIP_SOURCES', '').split(',')))
+    for gen in (ciqual_rows, slv_rows, mvt_rows, frida_rows, cofid_rows, bls_rows, usda_rows, fndds_rows):
         for source, sid, name, local, category, raw, portions in gen(root):
+            if source in skip:
+                continue
             loq, retinol, ne, unsplit, below_loq = {}, None, None, False, set()
             if source.startswith('usda'):
                 if category in USDA_SKIP_CATEGORIES:
@@ -2067,6 +2227,7 @@ def main(root, target):
                          'nut': nut, 'est': {}, 'portions': portions, 'loq': loq, 'retinol': retinol, 'ne': ne,
                          'unsplit': unsplit, 'nodonor': set(), 'below_loq': below_loq})
 
+    WASTE.update(id(r['nut']) for r in rows if WASTE_NAME.search(r['name']))
     print(f'correcties uit {FIXES_FILE.name}: {apply_fixes(rows)} waarden')
     for r in rows:
         validate_measured(r)
@@ -2170,6 +2331,8 @@ def main(root, target):
             n = re.sub(r'^Potato chips\b', 'French fries', n)
         if r['source'] == 'mvt' and (r['local'] or '').startswith('Havremel'):
             n = re.sub(r'^Oatmeal\b', 'Oat flour', n)
+        if r['source'] == 'usda_fndds':
+            n = fndds_name(n)
         return n
 
     counts = {}

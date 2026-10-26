@@ -10,6 +10,7 @@ enum FoodSource {
   mvt('Matvaretabellen', ('Norway', 'Noorwegen'), 'Matvaretabellen, Mattilsynet', european: true),
   frida('Frida', ('Denmark', 'Denemarken'), 'Frida, DTU Fødevareinstituttet', european: true),
   cofid('CoFID', ('UK', 'VK'), "McCance and Widdowson's Composition of Foods Integrated Dataset", european: true),
+  bls('BLS', ('Germany', 'Duitsland'), 'Max Rubner-Institut, Bundeslebensmittelschlüssel (BLS) 4.0', european: true),
   usda('USDA', ('US', 'VS'), 'USDA FoodData Central'),
   off('Open Food Facts', null, 'Open Food Facts (ODbL)'),
   custom('Eigen product', null, 'Eigen product'),
