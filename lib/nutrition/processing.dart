@@ -162,9 +162,13 @@ Nova? novaOfRecipe(List<(Nova?, double kcal)> ingredients) {
 
 /// Verdeling van de energie over de NOVA-groepen; [unknown] = energie waarvan we de groep niet kennen.
 class ProcessingShare {
-  const ProcessingShare(this.kcal, this.unknown);
+  const ProcessingShare(this.kcal, this.unknown, [this.foods = const []]);
   final Map<Nova, double> kcal;
   final double unknown;
+
+  /// Wat je at, per product (zelfde naam samengeteld), met de groep (null = niet in te delen) en de kcal; de meeste
+  /// kcal eerst. Leeg als de namen niet meegegeven zijn (zie [named]).
+  final List<(String name, Nova? nova, double kcal)> foods;
 
   double get known => kcal.values.fold(0.0, (a, b) => a + b);
 
@@ -186,5 +190,17 @@ class ProcessingShare {
       }
     }
     return ProcessingShare(kcal, unknown);
+  }
+
+  /// Zoals [of], maar met de naam van elk product erbij, zodat de kaart kan tonen wát er in elke groep zat.
+  static ProcessingShare named(Iterable<(String name, Nova?, double kcal)> items) {
+    final base = of([for (final (_, n, k) in items) (n, k)]);
+    final byName = <(String, Nova?), double>{};
+    for (final (name, n, k) in items) {
+      if (k <= 0) continue;
+      byName[(name, n)] = (byName[(name, n)] ?? 0) + k;
+    }
+    final foods = [for (final MapEntry(key: (name, n), value: k) in byName.entries) (name, n, k)]..sort((a, b) => b.$3.compareTo(a.$3));
+    return ProcessingShare(base.kcal, base.unknown, foods);
   }
 }

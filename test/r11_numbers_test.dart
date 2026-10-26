@@ -100,7 +100,7 @@ void main() {
       ),
     );
     final v = s.totals.values;
-    expect(find.text('${dayScore(v, s.targets)}'), findsOneWidget);
+    expect(find.text('${dayScore(v, s.targets)} /100', findRichText: true), findsOneWidget);
     expect(find.textContaining('Score lowered:'), findsOneWidget);
     expect(find.textContaining('kcal under your goal'), findsOneWidget);
   });

@@ -31,6 +31,9 @@ class PeriodTrends extends StatefulWidget {
 class _PeriodTrendsState extends State<PeriodTrends> {
   bool _allHeat = false;
 
+  /// De tabel per dag is ingeklapt: eerst alleen hoeveel je meestal haalt, de rijen pas op vraag.
+  bool _heatOpen = false;
+
   /// Volledig gelogde dagen vóór vandaag: de basis voor alle tellers en gemiddelden (zie [_basis]).
   Set<String> _full = const {};
 
@@ -119,7 +122,8 @@ class _PeriodTrendsState extends State<PeriodTrends> {
                 _heatmap(p, keys, daily, targets),
                 if (sugar != null && !sugarFirst) ...[const SizedBox(height: 10), sugar],
                 const SizedBox(height: 10),
-                processing,
+                // Gsm: ingeklapt tot één regel, de hele kaart pas op een tik
+                ProcessingFold(share: s.processingBetween(from, to), period: true),
                 const SizedBox(height: 18),
                 _averages(s, p, daily, targets),
               ],
@@ -367,112 +371,136 @@ class _PeriodTrendsState extends State<PeriodTrends> {
             tr('What you reach, day by day', 'Wat haal je, dag na dag'),
             trailing: Text(tr('last ${keys.length} days', 'laatste ${keys.length} dagen'), style: TextStyle(fontSize: 11.5, color: p.ink3)),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const SizedBox(width: 92),
-              Expanded(
-                child: grid([
-                  for (final (i, d) in keys.indexed)
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        weekday[parseDay(d).weekday - 1],
-                        textAlign: TextAlign.center,
-                        style: numStyle(
-                          9.5,
-                          weight: i == keys.length - 1 ? FontWeight.w600 : FontWeight.w400,
-                          color: i == keys.length - 1 ? p.ink : p.ink3,
+          if (!_heatOpen) ...[
+            const SizedBox(height: 6),
+            Text(
+              logged == 0
+                  ? tr('No fully logged days yet.', 'Nog geen volledig gelogde dagen.')
+                  : tr(
+                      '${rows.where((r) => r.$2.where((c) => c == 2).length >= logged * 0.7).length} of ${rows.length} nutrients on target most days.',
+                      '${rows.where((r) => r.$2.where((c) => c == 2).length >= logged * 0.7).length} van ${rows.length} voedingsstoffen meestal op doel.',
+                    ),
+              style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2),
+            ),
+          ],
+          if (_heatOpen) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const SizedBox(width: 92),
+                Expanded(
+                  child: grid([
+                    for (final (i, d) in keys.indexed)
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          weekday[parseDay(d).weekday - 1],
+                          textAlign: TextAlign.center,
+                          style: numStyle(
+                            9.5,
+                            weight: i == keys.length - 1 ? FontWeight.w600 : FontWeight.w400,
+                            color: i == keys.length - 1 ? p.ink : p.ink3,
+                          ),
                         ),
                       ),
-                    ),
-                ]),
-              ),
-              SizedBox(
-                width: 44,
-                child: Text(
-                  tr('on target', 'op doel'),
-                  textAlign: TextAlign.right,
-                  style: numStyle(9.5, weight: FontWeight.w400, color: p.ink3),
+                  ]),
                 ),
-              ),
-            ],
-          ),
-          for (final (n, cats) in shown)
-            Padding(
-              padding: const EdgeInsets.only(top: 5),
-              child: InkWell(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => NutrientDetailScreen(nutrient: n, from: widget.from, to: widget.to),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    tr('on target', 'op doel'),
+                    textAlign: TextAlign.right,
+                    style: numStyle(9.5, weight: FontWeight.w400, color: p.ink3),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 92,
-                      child: Text(
-                        n.key == 'sodium' ? tr('Sodium (max)', 'Natrium (max)') : n.name.replaceAll(RegExp(r'\s*\(.*\)'), ''),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: p.ink),
-                      ),
+              ],
+            ),
+            for (final (n, cats) in shown)
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: InkWell(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => NutrientDetailScreen(nutrient: n, from: widget.from, to: widget.to),
                     ),
-                    Expanded(
-                      child: grid([
-                        for (final (i, c) in cats.indexed)
-                          // Alleen bij een bewuste tik of als de muis even blijft staan, niet als je eroverheen
-                          // scrolt (N53)
-                          Tooltip(
-                            triggerMode: TooltipTriggerMode.tap,
-                            waitDuration: const Duration(milliseconds: 700),
-                            message: '${n.name}, ${DateFormat('EEE d MMM', appLocale).format(parseDay(keys[i]))}: ${cellText(c)}',
-                            child: Container(
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: cellColor(c),
-                                borderRadius: BorderRadius.circular(3),
-                                border: c == 1
-                                    ? Border.all(color: p.lowFill)
-                                    : (c == null ? Border.all(color: p.line) : (c == -1 ? Border.all(color: p.lineStrong) : null)),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 92,
+                        child: Text(
+                          n.key == 'sodium' ? tr('Sodium (max)', 'Natrium (max)') : n.name.replaceAll(RegExp(r'\s*\(.*\)'), ''),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: p.ink),
+                        ),
+                      ),
+                      Expanded(
+                        child: grid([
+                          for (final (i, c) in cats.indexed)
+                            // Alleen bij een bewuste tik of als de muis even blijft staan, niet als je eroverheen
+                            // scrolt (N53)
+                            Tooltip(
+                              triggerMode: TooltipTriggerMode.tap,
+                              waitDuration: const Duration(milliseconds: 700),
+                              message: '${n.name}, ${DateFormat('EEE d MMM', appLocale).format(parseDay(keys[i]))}: ${cellText(c)}',
+                              child: Container(
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: cellColor(c),
+                                  borderRadius: BorderRadius.circular(3),
+                                  border: c == 1
+                                      ? Border.all(color: p.lowFill)
+                                      : (c == null ? Border.all(color: p.line) : (c == -1 ? Border.all(color: p.lineStrong) : null)),
+                                ),
                               ),
                             ),
-                          ),
-                      ]),
-                    ),
-                    SizedBox(
-                      width: 44,
-                      child: Builder(
-                        builder: (context) {
-                          final ok = cats.where((c) => c == 2).length;
-                          return Text(
-                            '$ok/$logged',
-                            textAlign: TextAlign.right,
-                            style: numStyle(11.5, color: ok >= logged * 0.7 ? p.ok : (ok >= logged * 0.35 ? p.ink2 : p.low)),
-                          );
-                        },
+                        ]),
                       ),
-                    ),
-                  ],
+                      SizedBox(
+                        width: 44,
+                        child: Builder(
+                          builder: (context) {
+                            final ok = cats.where((c) => c == 2).length;
+                            return Text(
+                              '$ok/$logged',
+                              textAlign: TextAlign.right,
+                              style: numStyle(11.5, color: ok >= logged * 0.7 ? p.ok : (ok >= logged * 0.35 ? p.ink2 : p.low)),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          if (rows.length > 12)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                onPressed: () => setState(() => _allHeat = !_allHeat),
-                child: Text(_allHeat ? tr('Show less', 'Minder tonen') : tr('Show all', 'Alles tonen')),
+            if (rows.length > 12)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                  onPressed: () => setState(() => _allHeat = !_allHeat),
+                  child: Text(_allHeat ? tr('Show less', 'Minder tonen') : tr('Show all', 'Alles tonen')),
+                ),
               ),
+            ChartLegend(
+              items: [
+                (LegendItem.box(p.lowFill, w: 10, h: 10, radius: 3), '< 50%'),
+                (LegendItem.box(p.lowSoft, w: 10, h: 10, radius: 3, border: p.lowFill), '50–99%'),
+                (LegendItem.box(p.okFill, w: 10, h: 10, radius: 3), tr('on target', 'op doel')),
+                (LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), tr('above max', 'boven max')),
+              ],
             ),
-          ChartLegend(
-            items: [
-              (LegendItem.box(p.lowFill, w: 10, h: 10, radius: 3), '< 50%'),
-              (LegendItem.box(p.lowSoft, w: 10, h: 10, radius: 3, border: p.lowFill), '50–99%'),
-              (LegendItem.box(p.okFill, w: 10, h: 10, radius: 3), tr('on target', 'op doel')),
-              (LegendItem.box(p.highFill, w: 10, h: 10, radius: 3), tr('above max', 'boven max')),
-            ],
+          ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('heat-toggle'),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              onPressed: () => setState(() => _heatOpen = !_heatOpen),
+              icon: Icon(_heatOpen ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18),
+              label: Text(_heatOpen ? tr('Hide days', 'Dagen verbergen') : tr('Show day by day', 'Toon per dag')),
+            ),
           ),
           if (rare.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -993,6 +1021,7 @@ class _PeriodTrendsState extends State<PeriodTrends> {
           incomplete: incomplete,
           hidden: s.hiddenNutrients,
           columns: columns,
+          plain: true,
           onTapNutrient: (n) => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => NutrientDetailScreen(nutrient: n, from: widget.from, to: widget.to),

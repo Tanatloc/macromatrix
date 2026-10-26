@@ -23,9 +23,14 @@ class NutrientRow extends StatelessWidget {
     this.single = false,
     this.onTap,
     this.first = false,
+    this.plain = false,
   });
 
   final Nutrient nutrient;
+
+  /// Eenvoudige weergave (dashboard): een volle balk is je doel gehaald, en rechts in woorden wat er nog moet
+  /// ("nog 3,2 mg", "op doel", "120 mg te veel") in plaats van een percentage, doelstreepje en rode zone.
+  final bool plain;
 
   /// Tik op de regel (bv. naar het detailscherm van de voedingsstof).
   final VoidCallback? onTap;
@@ -147,9 +152,109 @@ class NutrientRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: first ? null : Border(top: BorderSide(color: p.line)),
       ),
-      child: row,
+      child: plain ? _plainRow(p, value, t, ref, level, amountText) : row,
     );
     return onTap == null ? framed : InkWell(onTap: onTap, child: framed);
+  }
+}
+
+extension on NutrientRow {
+  /// Zie [NutrientRow.plain]: naam en hoeveelheid boven, een balk tot je doel (of je maximum) en wat dat betekent.
+  Widget _plainRow(Palette p, double? value, Target? t, double? ref, Level level, String amountText) {
+    final sub = nutrient.indent > 0;
+    final unit = nutrient.shownUnit;
+    String amount(double v) => '${formatAmount(v, nutrient)} $unit';
+    final (String status, Color color) = switch (level) {
+      _ when value == null || t == null || ref == null => ('', p.ink3),
+      Level.low => (tr('${amount(ref - value)} to go', 'nog ${amount(ref - value)}'), p.low),
+      Level.high => (tr('${amount(value - (t.upper ?? t.goal!))} too much', '${amount(value - (t.upper ?? t.goal!))} te veel'), p.high),
+      // Alleen een maximum en eronder: goed, en zo staat het er ook
+      _ when t.isLimit => (tr('under max', 'onder max'), p.ok),
+      _ => (tr('on target', 'op doel'), p.ok),
+    };
+    final fill = switch (level) {
+      Level.low => p.lowFill,
+      Level.high => p.highFill,
+      _ => p.okFill,
+    };
+    final refText = ref == null ? '' : ' / ${t!.isLimit ? 'max ' : ''}${formatAmount(ref, nutrient)}';
+    // Zonder doel of maximum (alcohol, zetmeel, …): geen lege balk, alleen de naam en hoeveel
+    if (ref == null || ref <= 0 || value == null) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(nutrient.indent.clamp(0, 3) * 12.0, 11, 0, 11),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                nutrient.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, fontWeight: sub ? FontWeight.w400 : FontWeight.w600, color: sub ? p.ink2 : p.ink),
+              ),
+            ),
+            Text('$amountText $unit', style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3)),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(nutrient.indent.clamp(0, 3) * 12.0, 10, 0, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  nutrient.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: sub ? FontWeight.w400 : FontWeight.w600, color: sub ? p.ink2 : p.ink),
+                ),
+              ),
+              if (status.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                StatusMark(level),
+                const SizedBox(width: 6),
+                Text(status, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: color)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          // De balk met rechts ernaast hoeveel je hebt en je doel (of maximum)
+          Row(
+            children: [
+              Expanded(
+                child: Bar(fraction: (value / ref).clamp(0.0, 1.0).toDouble(), color: fill, height: 7),
+              ),
+              const SizedBox(width: 10),
+              // Vaste breedte: zo eindigen alle balken op dezelfde plek
+              SizedBox(
+                width: 112,
+                child: Text(
+                  '$amountText$refText $unit',
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: numStyle(11.5, weight: FontWeight.w400, color: p.ink3),
+                ),
+              ),
+              if (!complete) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: tr(
+                    'For part of what you ate there is no data on ${nutrient.name}. The real total is probably higher.',
+                    'Voor een deel van wat je at, zijn er geen gegevens over ${nutrient.name}. Het echte totaal ligt waarschijnlijk hoger.',
+                  ),
+                  triggerMode: TooltipTriggerMode.tap,
+                  child: Icon(Icons.info_outline_rounded, size: 12, color: p.ink3),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -168,7 +273,11 @@ class NutrientPanel extends StatelessWidget {
     this.hidden = const {},
     this.collapseAmino = true,
     this.columns = 1,
+    this.plain = false,
   });
+
+  /// Zie [NutrientRow.plain].
+  final bool plain;
 
   final NutrientMap values;
   final Map<String, Target> targets;
@@ -208,6 +317,7 @@ class NutrientPanel extends StatelessWidget {
     complete: !incomplete.contains(n.key),
     estimate: estimates[n.key],
     single: single,
+    plain: plain,
     onTap: onTapNutrient == null ? null : () => onTapNutrient!(n),
   );
 

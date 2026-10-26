@@ -62,12 +62,13 @@ class Palette extends ThemeExtension<Palette> {
   final List<BoxShadow> shadow;
 
   static const light = Palette(
-    bg: Color(0xFFF4F3EF),
+    // De vlakken van Mist (koel lichtgrijs) zijn sinds 27-10 de standaard in het licht
+    bg: Color(0xFFEEF1F5),
     surface: Color(0xFFFFFFFF),
-    surface2: Color(0xFFFAF9F6),
-    sunken: Color(0xFFEEECE7),
-    line: Color(0xFFE4E1DA),
-    lineStrong: Color(0xFFD3CFC6),
+    surface2: Color(0xFFF7F9FB),
+    sunken: Color(0xFFE9EDF2),
+    line: Color(0xFFDAE0E8),
+    lineStrong: Color(0xFFC8D0DB),
     ink: Color(0xFF15171A),
     ink2: Color(0xFF4B5058),
     ink3: Color(0xFF676C75),
@@ -87,7 +88,7 @@ class Palette extends ThemeExtension<Palette> {
     high: Color(0xFFB3362A),
     highFill: Color(0xFFD2513F),
     highSoft: Color(0xFFF8E2DE),
-    track: Color(0xFFECE9E3),
+    track: Color(0xFFE3E8EE),
     shadow: [
       BoxShadow(color: Color(0x0A15171A), blurRadius: 2, offset: Offset(0, 1)),
       BoxShadow(color: Color(0x3815171A), blurRadius: 32, offset: Offset(0, 12), spreadRadius: -18),

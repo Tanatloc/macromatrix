@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -93,17 +92,8 @@ class _DayNutrientsState extends State<DayNutrients> {
                       _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
                     ],
                   )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const ScoreCard(),
-                      const SizedBox(height: 10),
-                      _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
-                      const SizedBox(height: 10),
-                      ProcessingCard(share: s.processingOf(s.entries)),
-                      const SizedBox(height: 4),
-                    ],
-                  ),
+                // Gsm: eerst de score, meteen daarna wat je nog mist; balans en bewerking ingeklapt onderaan
+                : const ScoreCard(),
           ),
         ),
         if (s.entries.isNotEmpty) ...[
@@ -127,23 +117,6 @@ class _DayNutrientsState extends State<DayNutrients> {
           Narrow(
             maxWidth: mw,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 12,
-                children: [
-                  LegendItem(swatch: LegendItem.box(p.ink, w: 2, h: 10, radius: 1), label: tr('goal', 'doel')),
-                  LegendItem(
-                    swatch: LegendItem.box(p.highSoft, w: 14, h: 6, border: p.highFill),
-                    label: tr('above maximum', 'boven maximum'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Narrow(
-            maxWidth: mw,
-            child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -156,6 +129,7 @@ class _DayNutrientsState extends State<DayNutrients> {
                       incomplete: s.totals.incomplete,
                       hidden: s.hiddenNutrients,
                       columns: wide ? 2 : 1,
+                      plain: true,
                       onShowAll: () => setState(() => _filter = _Filter.all),
                     )
                   else
@@ -167,21 +141,25 @@ class _DayNutrientsState extends State<DayNutrients> {
                       hidden: s.hiddenNutrients,
                       collapseAmino: _filter != _Filter.amino,
                       columns: wide ? 2 : 1,
+                      plain: true,
                       onTapNutrient: (n) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NutrientDetailScreen(nutrient: n))),
                     ),
+                  // Balans en bewerking: extra inzicht, dicht onder de lijsten (op een pc staan ze bovenaan)
+                  if (!wide) ...[
+                    const SizedBox(height: 6),
+                    _MoreInsights(values: s.totals.values, tips: s.bioTipsToday.length),
+                    const SizedBox(height: 10),
+                    ProcessingFold(share: s.processingOf(s.entries)),
+                  ],
                   const SizedBox(height: 4),
-                  Text(
-                    tr(
-                      'Tap a nutrient for your history, the best sources and your own goal. '
-                          'Reference values: EFSA (healthy adults), amino acids: WHO. Not medical advice. '
-                          'The i icon means more than 10% of that day\'s calories come from products without data for that nutrient: '
-                          'the real total is then probably higher.',
-                      'Tik op een voedingsstof voor je verloop, de beste bronnen en je eigen doel. '
-                          'Richtwaarden: EFSA (gezonde volwassenen), aminozuren: WHO. Geen medisch advies. '
-                          'Het i-icoontje betekent dat meer dan 10% van je calorieën van die dag uit producten komt zonder gegevens voor die stof: '
-                          'het echte totaal ligt dan waarschijnlijk hoger.',
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('dashboard-howto'),
+                      icon: const Icon(Icons.help_outline_rounded, size: 18),
+                      label: Text(tr('How do I read this?', 'Hoe lees ik dit?')),
+                      onPressed: () => _howToRead(context),
                     ),
-                    style: TextStyle(fontSize: 12, height: 1.45, color: p.ink3),
                   ),
                 ],
               ),
@@ -192,6 +170,32 @@ class _DayNutrientsState extends State<DayNutrients> {
     );
   }
 }
+
+/// Uitleg bij het dashboard (vroeger een lange tekst onderaan).
+void _howToRead(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (c) => AlertDialog(
+    title: Text(tr('How do I read this?', 'Hoe lees ik dit?')),
+    content: Text(
+      tr(
+        'A full bar means you reached your goal. Next to it you see what that means: how much is still to go, on target, '
+            'or how much is too much. For salt, saturated fat and free sugars the bar runs to your maximum: staying under it is good.\n\n'
+            'Tap a nutrient for your history, the best sources and your own goal.\n\n'
+            'The i icon means more than 10% of that day\'s calories come from products without data for that nutrient: '
+            'the real total is then probably higher.\n\n'
+            'Reference values: EFSA (healthy adults), amino acids: WHO. Not medical advice.',
+        'Een volle balk betekent: doel gehaald. Ernaast staat wat dat betekent: hoeveel je nog nodig hebt, op doel, of hoeveel te veel. '
+            'Bij zout, verzadigd vet en vrije suikers loopt de balk tot je maximum: daaronder blijven is goed.\n\n'
+            'Tik op een voedingsstof voor je verloop, de beste bronnen en je eigen doel.\n\n'
+            'Het i-icoontje betekent dat meer dan 10% van je calorieën van die dag uit producten komt zonder gegevens voor die stof: '
+            'het echte totaal ligt dan waarschijnlijk hoger.\n\n'
+            'Richtwaarden: EFSA (gezonde volwassenen), aminozuren: WHO. Geen medisch advies.',
+      ),
+      style: TextStyle(fontSize: 14, height: 1.5, color: c.pal.ink2),
+    ),
+    actions: [TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('OK', 'OK')))],
+  ),
+);
 
 /// Wat er echt toe doet: energie, macro's, vezels, verzadigd vet, zout, en de vitaminen en mineralen waarvan je
 /// vandaag het minst hebt (hooguit 10, alleen wat onder je doel zit).
@@ -206,7 +210,11 @@ class KeyNutrients extends StatelessWidget {
     this.columns = 1,
     this.isToday = true,
     this.sugarFocus,
+    this.plain = false,
   });
+
+  /// Dashboard: eenvoudige regels (zie [NutrientRow.plain]) en eerst wat je nog tekortkomt, dan de basis.
+  final bool plain;
 
   final NutrientMap values;
   final Map<String, Target> targets;
@@ -247,6 +255,7 @@ class KeyNutrients extends StatelessWidget {
       amount: values[k],
       target: targets[k],
       complete: !incomplete.contains(k),
+      plain: plain,
       onTap: () => open(nutrientByKey[k]!),
     );
     final sugar = sugarFocus ?? Provider.of<AppState?>(context)?.sugarFocus ?? false;
@@ -319,7 +328,11 @@ class KeyNutrients extends StatelessWidget {
               Expanded(child: lowPanel),
             ],
           )
-        else ...[
+        else if (plain) ...[
+          lowPanel,
+          const SizedBox(height: 10),
+          basicsPanel,
+        ] else ...[
           basicsPanel,
           const SizedBox(height: 10),
           lowPanel,
@@ -361,127 +374,112 @@ class ScoreCard extends StatelessWidget {
     final coverage = dataCoverage(s.totals);
     final reason = empty ? null : scoreEnergyNote(v, s.targets, closed: s.dateClosed);
 
-    final body = Row(
+    final info = InfoTip(
+      title: tr('Nutrient score', 'Voedingsscore'),
+      message: tr(
+        'How close you are to your goal for ${stripKeys.length} vitamins and minerals, on average. '
+            'Each nutrient counts up to 100%; above an upper limit the score drops. '
+            'Once the day is over, energy counts too: more than ${fmtPct(energyScoreBand)} under or over your energy goal lowers the score.',
+        'Hoe dicht je bij je doel zit voor ${stripKeys.length} vitaminen en mineralen, gemiddeld. '
+            'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score. '
+            'Als de dag voorbij is, telt ook energie: meer dan ${fmtPct(energyScoreBand)} onder of boven je energiedoel verlaagt de score.',
+      ),
+    );
+    // ui-nieuw: zoals de calorieënkaart van Vandaag: links het getal groot, rechts drie rustige tellers
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: 84,
-          height: 84,
-          child: CustomPaint(
-            painter: _ScoreRing(score / 100, p),
-            child: Center(child: Text(empty ? '—' : '$score', style: numStyle(24))),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Flexible(
-                    child: Text(
-                      tr('Nutrient score', 'Voedingsscore'),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          tr('NUTRIENT SCORE', 'VOEDINGSSCORE'),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: p.ink3),
+                        ),
+                      ),
+                      info,
+                    ],
                   ),
-                  InfoTip(
-                    title: tr('Nutrient score', 'Voedingsscore'),
-                    message: tr(
-                      'How close you are to your goal for ${stripKeys.length} vitamins and minerals, on average. '
-                          'Each nutrient counts up to 100%; above an upper limit the score drops. '
-                          'Once the day is over, energy counts too: more than ${fmtPct(energyScoreBand)} under or over your energy goal lowers the score.',
-                      'Hoe dicht je bij je doel zit voor ${stripKeys.length} vitaminen en mineralen, gemiddeld. '
-                          'Per stof telt maximaal 100%; boven een bovengrens of limiet daalt de score. '
-                          'Als de dag voorbij is, telt ook energie: meer dan ${fmtPct(energyScoreBand)} onder of boven je energiedoel verlaagt de score.',
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: empty ? '—' : '$score',
+                          style: numStyle(44, weight: FontWeight.w800, color: p.ink),
+                        ),
+                        if (!empty)
+                          TextSpan(
+                            text: ' /100',
+                            style: numStyle(14, weight: FontWeight.w500, color: p.ink3),
+                          ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: SizedBox(
-                  height: 6,
-                  child: Row(
-                    children: [
-                      for (final l in [Level.ok, Level.low, Level.high])
-                        if (count(l) > 0)
-                          Expanded(
-                            flex: count(l),
-                            child: Container(color: p.fillOf(l), margin: const EdgeInsets.only(right: 2)),
-                          ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final (l, label) in [
                     (Level.ok, tr('on target', 'op doel')),
                     (Level.low, tr('short', 'tekort')),
                     (Level.high, tr('too much', 'te veel')),
                   ])
-                    Text.rich(
-                      TextSpan(
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          TextSpan(
-                            text: '${count(l)}',
-                            style: TextStyle(color: p.ink, fontWeight: FontWeight.w600),
+                          StatusMark(l),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 24,
+                            child: Text(
+                              '${count(l)}',
+                              style: numStyle(14, weight: FontWeight.w700, color: p.ink),
+                            ),
                           ),
-                          TextSpan(text: ' $label'),
+                          Text(label, style: TextStyle(fontSize: 13, color: p.ink2)),
                         ],
                       ),
-                      style: numStyle(11.5, weight: FontWeight.w400, color: p.ink2),
                     ),
-                  Text(
-                    tr('(vitamins & minerals)', '(vitaminen en mineralen)'),
-                    style: TextStyle(fontSize: 11.5, color: p.ink3),
-                  ),
                 ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                empty
-                    ? tr('Nothing logged yet', 'Nog niets gelogd')
-                    : tr('Data complete for ${fmtPct(coverage)} of your kcal', 'Gegevens compleet voor ${fmtPct(coverage)} van je kcal'),
-                style: TextStyle(fontSize: 11.5, color: p.ink3),
-              ),
-              if (reason != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(reason.$1, style: TextStyle(fontSize: 11.5, color: reason.$2 ? p.low : p.ink3)),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
+        const SizedBox(height: 6),
+        // Alleen iets zeggen over de gegevens als er echt iets ontbreekt; anders is het ruis
+        if (empty || coverage < 0.9)
+          Text(
+            empty
+                ? tr('Nothing logged yet', 'Nog niets gelogd')
+                : tr(
+                    'Data complete for ${fmtPct(coverage)} of your kcal: the score may be a bit low',
+                    'Gegevens compleet voor ${fmtPct(coverage)} van je kcal: de score ligt misschien wat te laag',
+                  ),
+            style: TextStyle(fontSize: 12, color: empty ? p.ink3 : p.low),
+          ),
+        if (reason != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(reason.$1, style: TextStyle(fontSize: 12, color: reason.$2 ? p.low : p.ink3)),
+          ),
       ],
     );
     return bare ? body : Panel(child: body);
   }
-}
-
-class _ScoreRing extends CustomPainter {
-  _ScoreRing(this.fraction, this.p);
-  final double fraction;
-  final Palette p;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const stroke = 7.0;
-    final rect = (Offset.zero & size).deflate(stroke / 2 + 1);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, 0, math.pi * 2, false, paint..color = p.track);
-    canvas.drawArc(rect, -math.pi / 2, math.pi * 2 * fraction.clamp(0, 1), false, paint..color = p.okFill);
-  }
-
-  @override
-  bool shouldRepaint(_ScoreRing old) => old.fraction != fraction || old.p != p;
 }
 
 /// Twee verhoudingen in gewone taal: omega-6 tegenover omega-3, en kalium tegenover natrium. Een balk toont waar
@@ -742,3 +740,4 @@ class _MoreInsightsState extends State<_MoreInsights> {
     );
   }
 }
+

@@ -2652,10 +2652,11 @@ class AppState extends ChangeNotifier {
   }
 
   /// Hoeveel van je energie uit onbewerkt tot ultrabewerkt eten komt, voor een reeks dagboekregels.
-  ProcessingShare processingOf(Iterable<DiaryEntry> entries) => ProcessingShare.of([
+  ProcessingShare processingOf(Iterable<DiaryEntry> entries) => ProcessingShare.named([
     for (final e in entries)
       if (!e.foodRef.startsWith('supp:'))
         (
+          e.name,
           novaFor(
             e.foodRef,
             food: Food(ref: e.foodRef, name: e.name, source: FoodSource.custom, per100g: e.per100g),

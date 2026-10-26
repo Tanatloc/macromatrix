@@ -41,7 +41,7 @@ class ProcessingCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PanelTitle(
-            tr('Processing', 'Bewerkingsgraad'),
+            tr('Processed food', 'Bewerkt eten'),
             subtitle: period
                 ? tr('share of your energy, NOVA', 'deel van je energie, NOVA')
                 : tr('share of today\'s energy, NOVA', 'deel van je energie vandaag, NOVA'),
@@ -96,6 +96,7 @@ class ProcessingCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (share.foods.isNotEmpty) _NovaFoods(foods: share.foods),
             if (share.unknown > 0 && share.unknown >= (share.known + share.unknown) * 0.1)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -108,6 +109,146 @@ class ProcessingCard extends StatelessWidget {
                 ),
               ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Wat je at per groep, van ultrabewerkt naar onbewerkt (en wat niet in te delen is), met de kcal per product. Per
+/// groep eerst de zes grootste; de rest op een tik.
+class _NovaFoods extends StatefulWidget {
+  const _NovaFoods({required this.foods});
+  final List<(String name, Nova? nova, double kcal)> foods;
+
+  @override
+  State<_NovaFoods> createState() => _NovaFoodsState();
+}
+
+class _NovaFoodsState extends State<_NovaFoods> {
+  static const _first = 6;
+  final _all = <Nova?>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final groups = [
+      for (final n in [Nova.ultra, Nova.processed, Nova.culinary, Nova.unprocessed, null])
+        if (widget.foods.where((f) => f.$2 == n).toList() case final list when list.isNotEmpty) (n, list),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 14),
+        Text(tr('What you ate', 'Wat je at'), style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.ink)),
+        for (final (n, list) in groups) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: n == null ? p.lineStrong : novaColor(p, n), borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  n?.label ?? tr('Not classified', 'Niet in te delen'),
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.ink2),
+                ),
+              ),
+              Text(
+                '${fmtInt(list.fold(0.0, (a, f) => a + f.$3))} kcal',
+                style: numStyle(12, weight: FontWeight.w500, color: p.ink3),
+              ),
+            ],
+          ),
+          for (final (name, _, kcal) in _all.contains(n) ? list : list.take(_first))
+            Padding(
+              padding: const EdgeInsets.only(left: 18, top: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: p.ink)),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(fmtInt(kcal), style: numStyle(12, weight: FontWeight.w400, color: p.ink3)),
+                ],
+              ),
+            ),
+          if (list.length > _first && !_all.contains(n))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                style: TextButton.styleFrom(padding: const EdgeInsets.only(left: 18), visualDensity: VisualDensity.compact),
+                onPressed: () => setState(() => _all.add(n)),
+                child: Text(tr('Show ${list.length - _first} more', 'Nog ${list.length - _first} tonen')),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Bewerking (NOVA) op een gsm: ingeklapt één regel met het aandeel ultrabewerkt, een tik toont de hele kaart.
+class ProcessingFold extends StatefulWidget {
+  const ProcessingFold({super.key, required this.share, this.period = false});
+  final ProcessingShare share;
+
+  /// Over een week of maand in plaats van één dag (zie [ProcessingCard.period]).
+  final bool period;
+
+  @override
+  State<ProcessingFold> createState() => _ProcessingFoldState();
+}
+
+class _ProcessingFoldState extends State<ProcessingFold> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    if (_open) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ProcessingCard(share: widget.share, period: widget.period),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _open = false),
+              icon: const Icon(Icons.expand_less_rounded, size: 18),
+              label: Text(tr('Hide', 'Verbergen')),
+            ),
+          ),
+        ],
+      );
+    }
+    final ultra = (widget.share.share(Nova.ultra) * 100).round();
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+      onTap: () => setState(() => _open = true),
+      child: Row(
+        children: [
+          Icon(Icons.fastfood_outlined, size: 20, color: p.ink2),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr('Processed food', 'Bewerkt eten'),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.ink),
+                ),
+                Text(
+                  tr('$ultra% of your energy ultra-processed', '$ultra% van je energie ultrabewerkt'),
+                  style: TextStyle(fontSize: 12.5, color: ultra > 10 ? p.low : p.ink3),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.expand_more_rounded, color: p.ink3),
         ],
       ),
     );

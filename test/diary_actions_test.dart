@@ -76,9 +76,9 @@ void main() {
     expect(find.text('Kiezen'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Score'));
     await tester.pumpAndSettle();
-    expect(find.text('Voedingsscore'), findsOneWidget);
+    expect(find.text('VOEDINGSSCORE'), findsOneWidget);
     // Vegen gaat nog altijd naar de volgende pagina, en na de laatste terug naar de eerste
-    await tester.fling(find.text('Voedingsscore'), const Offset(-300, 0), 1000);
+    await tester.fling(find.text('VOEDINGSSCORE'), const Offset(-300, 0), 1000);
     await tester.pumpAndSettle();
     expect(find.text('DOELEN'), findsOneWidget);
   });
