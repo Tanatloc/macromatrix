@@ -49,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .replaceAll('Noorwegen', 'Norway')
             .replaceAll('Denemarken', 'Denmark')
             .replaceAll('Duitsland', 'Germany')
+            .replaceAll('Nederland', 'Netherlands')
             .replaceAll('(VK)', '(UK)')
             .replaceAll('versie', 'version')
             .replaceAll('vrij te gebruiken met bronvermelding', 'free to use with attribution')
@@ -502,7 +503,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Values were converted, combined and in places estimated (≈) or corrected by MacroMatrix. '
                   'Contains public sector information licensed under the Open Government Licence v3.0 (CoFID). '
                   'Contains data under the Norwegian licence for Open Government data (NLOD) made available by Mattilsynet. '
-                  'Livsmedelsverket data under CC BY 4.0. Frida food data, version 6.1, DTU Food Institute.\n'
+                  'Livsmedelsverket data under CC BY 4.0. Frida food data, version 6.1, DTU Food Institute. '
+                  'Based on data from NEVO online version 2025/9.0, RIVM, Bilthoven and other data sources.\n'
                   'Branded products: Open Food Facts, available under the Open Database License (ODbL).\n'
                   'Reference values: EFSA Dietary Reference Values; essential amino acids: WHO/FAO/UNU 2007.\n'
                   'Fonts: Geist and Geist Mono (SIL Open Font License).\n'
@@ -510,7 +512,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Waarden werden door MacroMatrix omgerekend, samengevoegd en soms geschat (≈) of gecorrigeerd. '
                   'Bevat overheidsinformatie onder de Open Government Licence v3.0 (CoFID). '
                   'Bevat gegevens onder de Noorse licentie voor open overheidsdata (NLOD), ter beschikking gesteld door Mattilsynet. '
-                  'Gegevens van Livsmedelsverket onder CC BY 4.0. Frida-voedingsdata, versie 6.1, DTU Food Institute.\n'
+                  'Gegevens van Livsmedelsverket onder CC BY 4.0. Frida-voedingsdata, versie 6.1, DTU Food Institute. '
+                  'Gebaseerd op gegevens uit NEVO-online versie 2025/9.0, RIVM, Bilthoven en andere gegevensbronnen.\n'
                   'Merkproducten: Open Food Facts, beschikbaar onder de Open Database License (ODbL).\n'
                   'Richtwaarden: EFSA Dietary Reference Values; essentiële aminozuren: WHO/FAO/UNU 2007.\n'
                   'Lettertypes: Geist en Geist Mono (SIL Open Font License).\n'

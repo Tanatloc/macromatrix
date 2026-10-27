@@ -224,18 +224,30 @@ double foodQueryScore(Food f, String rawQuery, {SugarAsk? sugar}) {
   final head = n.split(',').first;
   // Samen één woord: "apple sauce" is "applesauce" (NF-8), geen ander product
   final compound = queryWords.length > 1 && RegExp('\\b${RegExp.escape(queryWords.join())}').hasMatch(n);
+  var named = false;
   for (final w in queryWords) {
     final stem = w.replaceAll(RegExp(r'(es|s)$'), '');
     final whole = RegExp('\\b${RegExp.escape(stem)}(es|s|ed)?\\b');
     if (whole.hasMatch(n)) {
+      if (w == queryWords.first) named = true;
       s += 4;
       if (whole.hasMatch(head)) s += 6;
     } else if (compound) {
+      if (w == queryWords.first) named = true;
       s += 4;
       if (head.contains(queryWords.join())) s += 6;
     } else if (n.contains(stem)) {
       s -= 14;
     }
+  }
+  // Het eigenlijke product (het eerste zoekwoord) staat niet in de naam, en ook niet in de lokale naam: alleen
+  // gevonden via een synoniem (NEVO: "spaghetti" bij "Pasta, wit, gekookt"). Dan gaat een product dat het wel in de
+  // naam heeft voor.
+  if (queryWords.isNotEmpty && !named) {
+    final local = sameSpelling((f.localName ?? '').toLowerCase());
+    final typed = rawQuery.toLowerCase().trim().split(RegExp(r'\s+')).first;
+    final inLocal = [queryWords.first, typed].any((w) => w.length > 1 && RegExp('\\b${RegExp.escape(w)}').hasMatch(local));
+    if (!inLocal) s -= 20;
   }
   // Een woord dat alleen iets anders beschrijft ("spinach spaghetti", "quinoa pasta") is niet het product zelf. Wat
   // tussen haakjes staat, telt niet ("Muesli (average)" is gewoon muesli).
@@ -295,7 +307,12 @@ double foodQueryScore(Food f, String rawQuery, {SugarAsk? sugar}) {
   final cookable = RegExp(
     r'\b(chicken|beef|pork|turkey|lamb|fish|salmon|cod|tuna|rice|pasta|spaghetti|noodles?|quinoa|potato(es)?|lentils?|beans?|egg|eggs|kip|rijst|vis|aardappel(en)?)\b',
   );
-  if (cookable.hasMatch(n) && RegExp(r'\b(cooked|boiled|baked|grilled|roasted|steamed|whole)\b').hasMatch(n)) s += 12;
+  // Niet bij chips: "potato crisps, oven baked" is geen gebakken aardappel
+  if (cookable.hasMatch(n) &&
+      RegExp(r'\b(cooked|boiled|baked|grilled|roasted|steamed|whole)\b').hasMatch(n) &&
+      !RegExp(r'\b(crisps?|chips)\b').hasMatch(n)) {
+    s += 12;
+  }
   // Rauw vlees, rauwe vis of rauwe vleeswaren alleen als je het zo noemt: "ham" of "bacon" op je bord is bereid, geen
   // rauwe hamlap (SU-5). Gerookt, gedroogd of gezouten heet niet "raw" en blijft gewoon staan.
   if (RegExp(r'\braw\b').hasMatch(n) &&

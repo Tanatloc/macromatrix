@@ -12,6 +12,7 @@ enum FoodSource {
   cofid('CoFID', ('UK', 'VK'), "McCance and Widdowson's Composition of Foods Integrated Dataset", european: true),
   bls('BLS', ('Germany', 'Duitsland'), 'Max Rubner-Institut, Bundeslebensmittelschlüssel (BLS) 4.0', european: true),
   fineli('Fineli', ('Finland', 'Finland'), 'Fineli, Finnish Institute for Health and Welfare (THL), release 20', european: true),
+  nevo('NEVO', ('Netherlands', 'Nederland'), 'Based on data from NEVO online version 2025/9.0, RIVM, Bilthoven and other data sources', european: true),
   usda('USDA', ('US', 'VS'), 'USDA FoodData Central'),
   off('Open Food Facts', null, 'Open Food Facts (ODbL)'),
   custom('Eigen product', null, 'Eigen product'),
@@ -45,9 +46,9 @@ enum FoodSource {
   /// NF-16). USDA als laatste: Amerikaanse producten en verrijking. Merk- en eigen producten doen hier niet mee.
   int get priority => switch (this) {
     ciqual || frida || mvt || slv => 0,
-    // Fineli: volledig gemeten, maar de Engelse namen zijn vertalingen ("Muesli, granola", "Chicken, breast, boiled,
+    // Fineli en NEVO: volledig gemeten, maar de Engelse namen zijn vertalingen ("Muesli, granola", "Chicken, breast, boiled,
     // sliced" is beleg): bij dezelfde score gaan de producten met een gewone naam voor
-    cofid || fineli => 1,
+    cofid || fineli || nevo => 1,
     usda => 2,
     _ => 3,
   };

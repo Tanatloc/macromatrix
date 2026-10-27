@@ -213,7 +213,9 @@ void main() {
       // Boven 2,5 % van het eiwit alleen wat twee databanken onafhankelijk meten (dadels, pecannoten)
       final high = {
         for (final f in all)
-          if ((f.n['protein'] ?? 0) >= 1 && f.n['tryptophan'] != null && f.n['tryptophan']! / f.n['protein']! > 0.025) f.label['f'],
+          // NEVO niet: die waarden nemen we onveranderd over (voorwaarden RIVM), ook als ze hoog zijn
+          if (!f.ref.startsWith('nevo:') && (f.n['protein'] ?? 0) >= 1 && f.n['tryptophan'] != null && f.n['tryptophan']! / f.n['protein']! > 0.025)
+            f.label['f'],
       };
       // Spinazie: sinds 26-10-2026 ook door BLS gemeten, naast de USDA (2,5 à 2,8 % van het eiwit). Sinds Fineli
       // (28-10-2026): gebakken champignons, peterselie, mayonaise en mager ijs van Fineli, die een eigen meting in een

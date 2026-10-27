@@ -4,6 +4,7 @@ Bouwt assets/db/foods.db: de ingebouwde database met basisvoedingsmiddelen uit m
 Bronnen (zet ze in één map, elk in een eigen submap):
   ciqual/  ANSES-CIQUAL 2020, Frankrijk (Licence Ouverte): XML-zip van https://ciqual.anses.fr, uitgepakt
   slv/     Livsmedelsverket, Zweden (CC BY 4.0): ophalen met tool/fetch_slv.py
+  nevo/    NEVO-online 2025, RIVM, Nederland (eigen voorwaarden: onveranderd, zie nevo_rows): zip na aanvraag op rivm.nl
   bls4/    BLS 4.0, Max Rubner-Institut, Duitsland (CC BY 4.0): zip van https://blsdb.de/download, uitgepakt
   mvt/     Matvaretabellen, Noorwegen (NLOD): foods_en.json, foods_nb.json, food_groups_en.json
            van https://www.matvaretabellen.no/api/{en,nb}/...
@@ -49,6 +50,7 @@ SOURCES = {
     'frida': 'Frida, DTU Fødevareinstituttet, versie 6.1 (Denemarken), CC BY 4.0',
     'bls': 'Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0 (Duitsland), CC BY 4.0',
     'fineli': 'Fineli, Terveyden ja hyvinvoinnin laitos (THL), release 20 (Finland), CC BY 4.0',
+    'nevo': 'NEVO online versie 2025/9.0, RIVM, Bilthoven (Nederland)',
     'slv': 'Livsmedelsverket, Livsmedelsdatabasen (Zweden), CC BY 4.0',
     'mvt': 'Matvaretabellen, Mattilsynet (Noorwegen), NLOD',
     'usda_fnd': 'USDA FoodData Central, Foundation Foods (VS), publiek domein',
@@ -179,7 +181,7 @@ FACTOR = {
     ('G', 'g'): 1, ('MG', 'mg'): 1, ('UG', 'µg'): 1, ('KCAL', 'kcal'): 1,
     ('UG', 'mg'): 0.001, ('MG', 'g'): 0.001, ('G', 'mg'): 1000,
 }
-EUROPEAN = ('ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'fineli')
+EUROPEAN = ('ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'fineli', 'nevo')
 
 # Hoofdbestanddelen: die vullen we nooit met een geschaalde waarde van een ander product aan
 MACROS = {'energy', 'protein', 'carbs', 'fat', 'fiber', 'sugars', 'starch', 'water', 'alcohol', '_salt'}
@@ -787,6 +789,120 @@ def fineli_rows(root):
             n['_copied'] = copied[fid]
         name = fineli_name(en.get(fid) or fi.get(fid, ''))
         yield 'fineli', fid, name, fineli_name(fi.get(fid, '')), groups.get(f['IGCLASS'], ''), n, portions.get(fid, [])
+
+# ─────────────────────────── NEVO (Nederland) ───────────────────────────
+#
+# NEVO-online 2025/9.0, RIVM (eigen voorwaarden, zie voedingsapp-data/raw/nevo): de gegevens mogen alleen onveranderd
+# gebruikt worden, met bron en versie. Daarom doet NEVO niet mee aan het verwerken: geen correcties, geen weggelaten
+# uitschieters, en het dient niet als donor of vergelijking voor andere producten. De rijen komen pas vlak voor het
+# wegschrijven erbij (zie main). Alleen omrekenen naar onze eenheden (tryptofaan mg → g). Wat NEVO niet heeft, vult
+# nevo_fill aan uit hetzelfde voedingsmiddel in een andere tabel, als schatting gemarkeerd (RIVM akkoord 27-10-2026,
+# voedingsapp-data/nevo/antwoord-rivm.txt). Pipe-gescheiden CSV, decimale komma; de Nederlandse naam is de lokale naam,
+# synoniemen zoekbaar.
+NEVO = {
+    'ENERCC': ('energy', 'kcal', 1), 'WATER': ('water', 'g', 1), 'PROT': ('protein', 'g', 1), 'FAT': ('fat', 'g', 1),
+    'CHO': ('carbs', 'g', 1), 'SUGAR': ('sugars', 'g', 1), 'STARCH': ('starch', 'g', 1), 'FIBT': ('fiber', 'g', 1),
+    'ALC': ('alcohol', 'g', 1), 'FASAT': ('sfa', 'g', 1), 'FAMSCIS': ('mufa', 'g', 1), 'FAPU': ('pufa', 'g', 1),
+    'FAPUN3': ('omega3', 'g', 1), 'FAPUN6': ('omega6', 'g', 1), 'FATRS': ('trans', 'g', 1),
+    'F18:3CN3': ('ala', 'g', 1), 'F20:5CN3': ('epa', 'g', 1), 'F22:5CN3': ('dpa', 'g', 1), 'F22:6CN3': ('dha', 'g', 1),
+    'F18:2CN6': ('la', 'g', 1), 'F20:4CN6': ('aa', 'g', 1), 'CHORL': ('cholesterol', 'mg', 1),
+    'TRP': ('tryptophan', 'mg', 0.001), 'NA': ('sodium', 'mg', 1), 'K': ('potassium', 'mg', 1), 'CA': ('calcium', 'mg', 1),
+    'P': ('phosphorus', 'mg', 1), 'MG': ('magnesium', 'mg', 1), 'FE': ('iron', 'mg', 1), 'CU': ('copper', 'mg', 1),
+    'SE': ('selenium', 'µg', 1), 'ZN': ('zinc', 'mg', 1), 'ID': ('iodine', 'µg', 1), 'VITA_RE': ('vit_a', 'µg', 1),
+    'RETOL': ('retinol', 'µg', 1), 'CARTBTOT': ('beta_carotene', 'µg', 1), 'LUTN': ('_lutein', 'µg', 1),
+    'ZEA': ('_zeaxanthin', 'µg', 1), 'LYCPN': ('lycopene', 'µg', 1), 'VITD': ('vit_d', 'µg', 1), 'VITE': ('vit_e', 'mg', 1),
+    'VITK1': ('vit_k', 'µg', 1), 'VITK': ('_vit_k', 'µg', 1), 'VITK2': ('vit_k2', 'µg', 1), 'THIA': ('b1', 'mg', 1),
+    'RIBF': ('b2', 'mg', 1), 'VITB6': ('b6', 'mg', 1), 'VITB12': ('b12', 'µg', 1),
+    # NEVO geeft de niacine-equivalenten zelf: die zijn onze B3 (niet opnieuw berekenen)
+    'NIAEQ': ('b3', 'mg', 1), 'FOL': ('b9', 'µg', 1), 'VITC': ('vit_c', 'mg', 1),
+}
+NEVO_HEADER = re.compile(r'^(\S+) \((.+)\)$')
+
+
+def nevo_rows(root):
+    files = sorted(glob.glob(str(root / 'nevo' / 'NEVO*_v*.csv')))
+    files = [f for f in files if re.search(r'NEVO\d+_v[\d.]+\.csv$', f)]
+    if not files:
+        print('NEVO: niet gevonden, overgeslagen')
+        return
+    with open(files[-1], encoding='utf-8-sig', newline='') as fh:
+        reader = csv.reader(fh, delimiter='|')
+        head = next(reader)
+        cols = {}
+        for i, h in enumerate(head):
+            m = NEVO_HEADER.match(h.strip())
+            if m and m.group(1) in NEVO:
+                key, unit, factor = NEVO[m.group(1)]
+                if m.group(2).strip() != unit:
+                    sys.exit(f'NEVO: eenheid {m.group(2)} voor {m.group(1)}, verwacht {unit}')
+                cols[i] = (key, factor)
+        missing = set(NEVO) - {head[i].split()[0] for i in cols}
+        if missing:
+            sys.exit(f'NEVO: kolommen niet gevonden: {sorted(missing)}')
+        for r in reader:
+            if len(r) < 11 or not r[3].strip():
+                continue
+            n = {}
+            for i, (key, factor) in cols.items():
+                v = r[i].strip().replace(',', '.') if i < len(r) else ''
+                try:
+                    n[key] = float(v) * factor
+                except ValueError:
+                    continue
+            # Optellen is geen wijziging van een waarde: luteïne + zeaxanthine zoals onze sleutel, alleen als beide er zijn
+            if '_lutein' in n and '_zeaxanthin' in n:
+                n['lutein_zeaxanthin'] = n['_lutein'] + n['_zeaxanthin']
+            if 'vit_k' not in n and '_vit_k' in n:
+                n['vit_k'] = n['_vit_k']
+            n = {k: v for k, v in n.items() if not k.startswith('_')}
+            yield 'nevo', r[3].strip(), r[5].strip() or r[4].strip(), r[4].strip(), r[2].strip(), n, [], r[6].strip()
+
+
+def nevo_fill(nevo, rows, labels):
+    """Vult wat NEVO niet heeft aan uit hetzelfde voedingsmiddel (zelfde label: product, deel, gerecht, bereiding en
+    kenmerken) in de andere tabellen, alleen uit gemeten waarden, omgerekend naar dit product zoals label_fill (ronde 1).
+    Nooit uit een verwant product of de groep, en een NEVO-waarde verandert nooit. De schatting krijgt de bron in est
+    (≈ in de app)."""
+    refs = [f"{r['source']}:{r['sid']}" for r in rows]
+    by_same = {}
+    for j, ref in enumerate(refs):
+        l = labels.get(ref)
+        if l:
+            by_same.setdefault(_same_key(l), []).append(j)
+    measured = {}
+    filled = 0
+    for r in nevo:
+        l = labels.get(f"nevo:{r['sid']}")
+        if not l or l['g'] == 'supplement':
+            continue
+        same = by_same.get(_same_key(l), ())
+        if not same:
+            continue
+        words = name_profile(r['name'])[1]
+        for k in ALL_KEYS:
+            if k in r['nut']:
+                continue
+            vals = []
+            for j in same:
+                if j not in measured:
+                    measured[j] = donor_values(rows[j])
+                if k not in measured[j] or (k in FORTIF and _fortified(labels[refs[j]]) != _fortified(l)):
+                    continue
+                f = 1.0 if k in MACROS else _scale(k, r['nut'], rows[j]['nut'])
+                if f is None:
+                    continue
+                other = name_profile(rows[j]['name'])[1]
+                sim = len(words & other) / len(words | other) if words | other else 0
+                vals.append((sim, measured[j][k] * f, j))
+            if not vals:
+                continue
+            # De metingen waarvan de naam het best overeenkomt, dan de mediaan (zoals closest in label_fill)
+            top = max(x for x, _, _ in vals)
+            best = sorted((v, j) for x, v, j in vals if x >= top - 0.1)
+            r['nut'][k] = statistics.median(v for v, _ in best)
+            r['est'][k] = refs[best[(len(best) - 1) // 2][1]]
+            filled += 1
+    return filled
 
 
 # ─────────────────────────── Livsmedelsverket (Zweden) ───────────────────────────
@@ -2437,12 +2553,23 @@ def main(root, target):
             n = fndds_name(n)
         return n
 
+    # NEVO pas nu, onveranderd: niet verwerkt en geen donor; alleen aangevuld uit hetzelfde voedingsmiddel (nevo_fill)
+    if 'nevo' not in skip:
+        nevo = [{'source': source, 'sid': sid, 'name': name, 'local': local, 'category': category, 'nut': dict(raw),
+                 'est': {}, 'portions': portions, 'syn': syn}
+                for source, sid, name, local, category, raw, portions, syn in nevo_rows(root) if 'energy' in raw and name]
+        print(f'NEVO: {len(nevo)} producten, aangevuld uit hetzelfde voedingsmiddel: {nevo_fill(nevo, rows, labels)} waarden')
+        rows.extend(nevo)
+
     counts = {}
     for r in rows:
         nut, est = r['nut'], r['est']
         derive(nut, est)
         name = display_name(r)
         search = f"{name} {r['name']} {r['local']}" if name != r['name'] else f"{r['name']} {r['local']}"
+        # Synoniemen (NEVO: "Bloemkool rauw" bij "Kool bloem- rauw") zoekbaar, niet getoond
+        if r.get('syn'):
+            search = f"{search} {r['syn'].replace('/', ' ')}"
         cur = db.execute(
             'INSERT INTO foods (source, source_id, name, name_local, search, category, nutrients, estimated, label) VALUES (?,?,?,?,?,?,?,?,?)',
             (r['source'], r['sid'], name, r['local'], search.lower(), r['category'],

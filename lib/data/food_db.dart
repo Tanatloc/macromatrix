@@ -30,7 +30,7 @@ class FoodDb {
   static const asset = 'assets/db/foods.db';
 
   /// Bronnen in de ingebouwde database (prefix van [Food.ref]).
-  static const dbSources = {'ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'fineli', 'usda_sr', 'usda_fnd', 'usda_fndds'};
+  static const dbSources = {'ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'fineli', 'nevo', 'usda_sr', 'usda_fnd', 'usda_fndds'};
 
   static bool isDbRef(String ref) => dbSources.contains(ref.split(':').first);
 
@@ -154,9 +154,10 @@ class FoodDb {
       if (!RegExp('\\b${RegExp.escape(o)}').hasMatch(name)) match = math.max(match, 3);
     }
     final tier = match <= 1 ? 0 : match; // exacte en "begint met"-treffers samen, zodat Europa daar voorgaat
-    // Fineli na de andere Europese tabellen: de Engelse namen zijn vertalingen, en zo schuiven 4000 Finse producten
-    // niet tussen de vertrouwde producten (de plaats in deze volgorde telt mee in de score van het zoekvak)
-    final europe = !source.european ? 2 : (source == FoodSource.fineli ? 1 : 0);
+    // Fineli en NEVO na de andere Europese tabellen: de Engelse namen zijn vertalingen, en zo schuiven duizenden Finse
+    // en Nederlandse producten niet tussen de vertrouwde producten (de plaats in deze volgorde telt mee in de score van
+    // het zoekvak)
+    final europe = !source.european ? 2 : (source == FoodSource.fineli || source == FoodSource.nevo ? 1 : 0);
     final q = tokens.join(' ');
     // De gewone vorm: fruit en groenten rauw, maar granen, pasta en peulvruchten gekookt (P156)
     final cooks = RegExp(r'\b(rice|pasta|spaghetti|macaroni|noodles?|quinoa|lentils?|beans?|chickpeas?|barley|couscous|bulgur|egg|eggs)\b').hasMatch(name);

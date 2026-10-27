@@ -41,6 +41,7 @@ friends, levels, badges and weekly battles to keep you going. European data firs
 | Matvaretabellen, Mattilsynet (Norway) | NLOD |
 | Bundeslebensmittelschlüssel (BLS) 4.0, Max Rubner-Institut (Germany) | CC BY 4.0 |
 | Fineli release 20, Finnish Institute for Health and Welfare (THL) (Finland) | CC BY 4.0 |
+| NEVO online version 2025/9.0, RIVM (Netherlands) | NEVO conditions of use, used with RIVM's consent; values unchanged |
 | USDA FoodData Central (US): SR Legacy, Foundation Foods, FNDDS 2021–2023 (dishes) and Branded Foods | Public domain (CC0) |
 | Open Food Facts (products, additives) | ODbL |
 
@@ -61,6 +62,9 @@ corrected (see `tool/FOODS_CHANGES.md`); estimated values are marked with ≈ in
   were made.
 - Fineli, the Finnish food composition database, release 20, Finnish Institute for Health and Welfare (THL), Helsinki
   (https://fineli.fi), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); changes were made.
+- Based on data from NEVO online version 2025/9.0, RIVM, Bilthoven and other data sources. NEVO values are used unchanged;
+  values NEVO does not have are estimated from the same food in another table and marked with ≈. Free to use for
+  everyone in the app; NEVO data may not be sold.
 - U.S. Department of Agriculture, Agricultural Research Service. FoodData Central (https://fdc.nal.usda.gov).
 - Open Food Facts (https://world.openfoodfacts.org), available under the Open Database License (ODbL). The additive
   list derived from it, `assets/additives.json`, is likewise available under the

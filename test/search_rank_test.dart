@@ -198,7 +198,7 @@ void main() {
     expect(splitSugarAsk('sugar free'), ('sugar free', null));
     expect(splitSugarAsk('brown sugar'), ('brown sugar', null));
     expect(box('sugar').name.toLowerCase(), startsWith('sugar'));
-    expect(box('sugar free').name.toLowerCase(), contains('sugar free'));
+    expect(box('sugar free').name.toLowerCase(), matches(RegExp(r'sugar[- ]free')));
   });
 
   test('ml weegt in Snel loggen zoals op het productscherm (melk 1,03 g per ml), en hoofdletters tellen niet', () {

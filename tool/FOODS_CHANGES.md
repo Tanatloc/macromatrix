@@ -194,3 +194,21 @@ in de zoektekst. Eerder gebeurde dit alleen bij het tonen (`tidyFoodName`), waar
   78 % binnen 2×. Jodium 65 → 52 %, B3 33 → 27 %, B6 32 → 27 %; vitamine C 48 → 59 %, EPA 65 → 74 % (kleine aantallen).
   Fineli helpt vooral door zijn eigen, bijna volledig gemeten producten, niet door het schatten voor andere.
 - Databank `f8ed384cef93`, 35.679 producten, 81,0 MB.
+
+## 28-10-2026: NEVO erbij
+
+- **NEVO-online 2025/9.0** (RIVM, Nederland): 2.328 voedingsmiddelen, Engelse naam met de Nederlandse als lokale naam,
+  synoniemen doorzoekbaar. Gebruik met toestemming van het RIVM (antwoord 27-10-2026, voedingsapp-data/nevo/
+  antwoord-rivm.txt): gratis voor iedereen in de app, ook in de openbare repo, en ontbrekende waarden mogen geschat
+  worden uit hetzelfde voedingsmiddel in een andere tabel, gemarkeerd met ≈.
+- NEVO-waarden blijven onveranderd: geen correcties, geen uitschieterscontrole, geen nullen of plantenregels. De rijen
+  komen pas na alle verwerking erbij. Gecontroleerd: 103.137 NEVO-waarden, 0 veranderd, 0 als schatting gemarkeerd.
+- `nevo_fill`: wat NEVO niet heeft, alleen uit hetzelfde voedingsmiddel (zelfde label: product, deel, gerecht,
+  bereiding, kenmerken), alleen uit gemeten waarden, omgerekend naar dit product zoals label_fill ronde 1. Nooit uit een
+  verwant product of de groep. 31.110 waarden; daarna jodium 92 %, seleen 95 %, vitamine D 99 %, vitamine K 86 % van de
+  NEVO-producten.
+- NEVO is geen donor voor andere producten en telt niet mee in de nauwkeurigheidstest.
+- Zoeken: NEVO zoals Fineli na de andere Europese tabellen (vertaalde Engelse namen); de app blijft Engelstalig eerst.
+- Bronvermelding zoals met het RIVM afgesproken: "Based on data from NEVO online version 2025/9.0, RIVM, Bilthoven and
+  other data sources" (productscherm, Instellingen → Bronnen, README, site).
+- Databank 38.007 producten, 85,0 MB.
