@@ -16,7 +16,9 @@ class TapGuard extends NavigatorObserver {
   final blocked = ValueNotifier(false);
   Timer? _timer;
 
-  void _block([Duration d = const Duration(milliseconds: 300)]) {
+  // Zo kort als de schermovergang (220 ms, zie QuickPageTransitionsBuilder): langer voelde de app traag, want een
+  // tik vlak na het openen deed dan niets
+  void _block([Duration d = const Duration(milliseconds: 220)]) {
     _timer?.cancel();
     _timer = Timer(d, () => blocked.value = false);
     // Een navigator die tijdens het bouwen ontstaat of verandert (de tabbladen), mag de app niet midden in die
@@ -45,7 +47,7 @@ class TapGuard extends NavigatorObserver {
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     // Bij het sluiten wel kort blokkeren, zodat de tik die sloot niet op het scherm eronder landt. Iets langer dan
     // bij openen: een dubbele tik op "Toevoegen" heeft zijn tweede tik soms pas na 300 ms.
-    _block(const Duration(milliseconds: 400));
+    _block(const Duration(milliseconds: 320));
   }
 
   /// Rond de app (MaterialApp.builder): laat geen tikken door zolang [blocked] waar is.

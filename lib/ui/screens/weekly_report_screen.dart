@@ -475,14 +475,15 @@ class WeeklyReportCard extends StatelessWidget {
     if (DateTime.now().weekday > 3) return false;
     final key = dayKey(lastMonday());
     if (s.user.setting('_report_seen')?['week'] == key) return false;
-    return s.weeklyReport(lastMonday()) != null;
+    return s.weeklyReport(lastMonday(), tip: false) != null;
   }
 
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final p = context.pal;
-    final r = s.weeklyReport(lastMonday());
+    // Zonder producttip: die staat alleen op het rapportscherm, en is het dure deel
+    final r = s.weeklyReport(lastMonday(), tip: false);
     if (r == null) return const SizedBox.shrink();
     void open() {
       s.markReportSeen(dayKey(lastMonday()));

@@ -81,20 +81,6 @@ void main() {
     return s;
   }
 
-  testWidgets('Begin je dag: opgeslagen maaltijd gaat naar zijn eigen maaltijd', (tester) async {
-    // Een maaltijd die niet de voorgestelde is (die hangt van het uur af)
-    late Meal target;
-    final s = await pump(tester, (s) {
-      target = Meal.values.firstWhere((m) => m != s.suggestedMeal);
-      s.user.saveMeal('Kipcurry', [item], meal: target);
-    });
-    // De titel noemt de maaltijd waar hij heen gaat (N20)
-    await tester.tap(find.text('${target.label} · Kipcurry'));
-    await tester.pump();
-    expect(s.entriesFor(target), hasLength(1));
-    expect(s.entriesFor(s.suggestedMeal), isEmpty);
-  });
-
   testWidgets('Meestal bij: opnieuw toevoegen kan ongedaan gemaakt worden', (tester) async {
     final s = await pump(tester, (s) {
       final banana = s.foods.search('banana', limit: 1).first;

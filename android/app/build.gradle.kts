@@ -72,6 +72,11 @@ android {
             // Met de echte sleutel als die er is; anders ongetekend (zo bouwt F-Droid, dat zelf ondertekent)
             if (keystoreProperties.containsKey("storeFile")) signingConfig = signingConfigs.getByName("release")
         }
+        // Meetversie (flutter run --profile) met dezelfde sleutel: dan installeert ze over de gewone app heen en blijven
+        // de gegevens op het toestel staan (met de debugsleutel moest de app eerst weg)
+        maybeCreate("profile").apply {
+            if (keystoreProperties.containsKey("storeFile")) signingConfig = signingConfigs.getByName("release")
+        }
     }
 }
 

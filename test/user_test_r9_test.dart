@@ -127,7 +127,7 @@ void main() {
     });
   });
 
-  testWidgets('N03 sluiten van een scherm in een geneste navigator blokkeert tikken ~400 ms', (tester) async {
+  testWidgets('N03 sluiten van een scherm in een geneste navigator blokkeert tikken ~320 ms', (tester) async {
     final guard = TapGuard();
     final nested = guard.observer();
     final nav = GlobalKey<NavigatorState>();
@@ -149,9 +149,9 @@ void main() {
     nav.currentState!.pop();
     await tester.pump();
     expect(guard.blocked.value, isTrue);
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 280));
     expect(guard.blocked.value, isTrue);
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 60));
     expect(guard.blocked.value, isFalse);
     await tester.pumpAndSettle();
   });

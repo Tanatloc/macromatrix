@@ -508,6 +508,10 @@ class UserDb {
   /// Meldt elke wijziging aan de database (ook van de synchronisatie zelf).
   Stream<void> get changes => _db.updates.map((_) {});
 
+  /// Hoeveel rijen er sinds het openen gewijzigd zijn (SQLite total_changes): verandert bij elke schrijfactie, ook die
+  /// van de synchronisatie. Om berekeningen te onthouden zolang er niets veranderde.
+  int get changeCount => _db.select('SELECT total_changes() AS n').first['n'] as int;
+
   // ── Dagboek ──
 
   DiaryEntry _entry(Row r) => DiaryEntry(

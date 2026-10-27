@@ -2,6 +2,7 @@
 /// Het ontwerp zelf staat in design/project (System.dc.html).
 library;
 
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 import '../i18n.dart';
@@ -455,6 +456,34 @@ TextStyle numStyle(double size, {FontWeight weight = FontWeight.w600, Color? col
   fontFeatures: const [FontFeature.tabularFigures()],
 );
 
+/// Snelle schermovergang (220 ms): een korte fade met een kleine verschuiving die meteen zichtbaar begint. De
+/// standaard van Flutter op recente Android-toestellen duurt 450 ms en begint traag, waardoor openen op een Pixel
+/// aanvoelde alsof de app pas na een seconde reageerde (27-10).
+class QuickPageTransitionsBuilder extends PageTransitionsBuilder {
+  const QuickPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 220);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 180);
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final a = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+    return FadeTransition(
+      opacity: a,
+      child: SlideTransition(position: Tween(begin: const Offset(0, 0.03), end: Offset.zero).animate(a), child: child),
+    );
+  }
+}
+
 /// Rand van een chip in het donker (zie [buildTheme]).
 const chipEdgeDark = Color(0xFF6B727B);
 
@@ -520,6 +549,17 @@ ThemeData buildTheme(Brightness b, {String accent = defaultAccent, String backdr
     canvasColor: p.bg,
     dividerColor: p.line,
     splashFactory: InkSparkle.splashFactory,
+    // Snel openen en sluiten; op iPhone en Mac blijft de eigen veegovergang (terugvegen vanaf de rand)
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: QuickPageTransitionsBuilder(),
+        TargetPlatform.fuchsia: QuickPageTransitionsBuilder(),
+        TargetPlatform.linux: QuickPageTransitionsBuilder(),
+        TargetPlatform.windows: QuickPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      },
+    ),
     // Geen grijze vlakken die blijven staan na een tik of scroll (N55): ingedrukt toont alleen de rimpel, en de
     // hover is zo licht dat een rij onder de muis niet als geselecteerd (p.sunken) oogt.
     highlightColor: Colors.transparent,

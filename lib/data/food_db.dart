@@ -177,9 +177,18 @@ class FoodDb {
     _ => "json_extract(nutrients, '\$.$key')",
   };
 
+  // De databank verandert niet terwijl de app draait: deze zware zoekopdrachten (een volledige doorloop van alle
+  // producten) hoeven maar één keer. Ze liepen bij elke opbouw van Vandaag (weekrapport, tips) en kostten op een gsm,
+  // waar de databank van de opslag gelezen wordt, ±1 s per tik (27-10).
+  final _richest = <String, List<(Food, double)>>{};
+  final _siblings = <String, Map<String, List<(String, double, List<String>)>>>{};
+
   /// "Oracle": voedingsmiddelen die het rijkst zijn aan een voedingsstof, per 100 g of per 100 kcal.
   /// Alleen gemeten waarden (geen schattingen); producten met heel weinig energie tellen niet mee per kcal.
-  List<(Food, double)> richestIn(String key, {bool perKcal = false, int limit = 40}) {
+  List<(Food, double)> richestIn(String key, {bool perKcal = false, int limit = 40}) =>
+      _richest.putIfAbsent('$key|$perKcal|$limit', () => List.unmodifiable(_richestIn(key, perKcal: perKcal, limit: limit)));
+
+  List<(Food, double)> _richestIn(String key, {required bool perKcal, required int limit}) {
     if (!RegExp(r'^[a-z0-9_]+$').hasMatch(key)) return const [];
     final value = _valueSql(key);
     final score = perKcal ? '$value / json_extract(nutrients, \'\$.energy\') * 100' : value;
@@ -223,7 +232,10 @@ class FoodDb {
 
   /// Waarden van een voedingsstof per 100 g voor alle producten met dit label-voedingsmiddel ([FoodLabel.food]),
   /// per "voedingsmiddel|groep|bereiding". Om uitschieters (tikfouten in een databank) te herkennen.
-  Map<String, List<(String, double, List<String>)>> siblingValues(String key, Set<String> labelFoods) {
+  Map<String, List<(String, double, List<String>)>> siblingValues(String key, Set<String> labelFoods) =>
+      _siblings.putIfAbsent('$key|${(labelFoods.toList()..sort()).join('|')}', () => _siblingValues(key, labelFoods));
+
+  Map<String, List<(String, double, List<String>)>> _siblingValues(String key, Set<String> labelFoods) {
     if (labelFoods.isEmpty || !RegExp(r'^[a-z0-9_]+$').hasMatch(key)) return const {};
     final value = _valueSql(key);
     final rows = _db.select('''

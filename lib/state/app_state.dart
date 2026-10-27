@@ -422,9 +422,9 @@ class AppState extends ChangeNotifier {
 
   // ── Weergave ──
 
-  /// Licht, donker of zoals het toestel (opgeslagen als "light", "dark" of "system"); standaard zoals het toestel,
-  /// net als de website, tot je zelf kiest (NW-8, NW-16).
-  String get themeMode => (user.setting('ui')?['theme'] as String?) ?? 'system';
+  /// Licht, donker of zoals het toestel (opgeslagen als "light", "dark" of "system"); standaard licht (met Mist als
+  /// achtergrond) tot je zelf kiest. Was tot 27-10 "zoals het toestel" (NW-8, NW-16).
+  String get themeMode => (user.setting('ui')?['theme'] as String?) ?? 'light';
 
   /// Taal van de app (alleen op dit toestel).
   void setLanguage(AppLang lang) {
@@ -481,6 +481,8 @@ class AppState extends ChangeNotifier {
   /// Supplementen en (mineraal)zout horen niet thuis tussen de rijkste bronnen, behalve zout voor natrium en chloride.
   /// [advice]: alleen gewone voedingsmiddelen die je kunt aanraden (zie [isAdviceFood]); dan wordt dieper gezocht.
   List<(Food, double)> richestFor(String key, {bool perKcal = false, int limit = 40, bool advice = false}) {
+    // Eén keer lezen, niet per product (de allergieën komen uit de instellingen)
+    final allergies = this.allergies;
     final candidates = foods.richestIn(key, perKcal: perKcal, limit: advice ? math.max(300, limit * 15) : limit * 3);
     final outlier = _outlierCheck(key, candidates.take(math.min(candidates.length, limit * 6)).map((r) => r.$1));
     return [
@@ -1120,7 +1122,20 @@ class AppState extends ChangeNotifier {
   /// Weekrapport voor de week die op [monday] begint (null als je die week geen enkele volledige dag logde).
   /// Score, gemiddelden en gezondheidscheck volgen één regel: alleen volledig gelogde dagen ([isFullDay]) en nooit
   /// vandaag, want die dag loopt nog.
-  WeeklyReport? weeklyReport(DateTime monday) {
+  /// [tip]: met de producttip (zoekt in de hele voedingsdatabank, het zwaarste deel); de kaart op Vandaag heeft die
+  /// niet nodig, alleen het rapportscherm.
+  WeeklyReport? weeklyReport(DateTime monday, {bool tip = true}) {
+    // Onthouden zolang er niets aan je gegevens veranderde: het rapport werd bij elke opbouw van Vandaag opnieuw
+    // berekend (WeeklyReportCard.shouldShow) en kostte op een gsm ±1 s per tik (27-10)
+    final key = '${dayKey(monday)}|${dayKey(logicalNow())}|${user.changeCount}|${appLang.value.name}|$tip';
+    if (_weeklyReports.containsKey(key)) return _weeklyReports[key];
+    if (_weeklyReports.length > 8) _weeklyReports.clear();
+    return _weeklyReports[key] = _weeklyReport(monday, withTip: tip);
+  }
+
+  final _weeklyReports = <String, WeeklyReport?>{};
+
+  WeeklyReport? _weeklyReport(DateTime monday, {required bool withTip}) {
     final today = dayKey(logicalNow());
     final sunday = dayKey(DateTime(monday.year, monday.month, monday.day + 6));
     // Gewichtstrend over deze en de vorige week: bij een stabiel gewicht ligt een groot energietekort eerder aan je
@@ -1238,7 +1253,7 @@ class AppState extends ChangeNotifier {
     // Tip: een gewoon product dat je zwakste stof flink aanvult. Bij een duidelijk energieprobleem geen product-tip:
     // dan toont het rapport eerst dat (een wortel lost een tekort van 800 kcal niet op)
     WeeklyTip? tip;
-    for (final w in energyOff ? const <MapEntry<String, double>>[] : worst) {
+    for (final w in energyOff || !withTip ? const <MapEntry<String, double>>[] : worst) {
       final goal = _targets[w.key]?.goal;
       if (goal == null || goal <= 0 || w.key == 'energy' || w.key == 'sodium') continue;
       final upper = _targets[w.key]?.upper;

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../day_clock.dart';
 import '../../i18n.dart';
 import '../theme.dart';
+import 'kit.dart' show fmtDec;
 
 /// Grafiek over een periode: één waarde per dag (staafjes) of losse metingen (lijn), met optioneel een doel
 /// en een bovengrens als horizontale lijn.
@@ -22,7 +23,11 @@ class TimeSeriesChart extends StatelessWidget {
     this.second,
     this.band,
     this.trend,
+    this.unit = '',
   });
+
+  /// Eenheid in het label bij een tik (bv. "kg").
+  final String unit;
 
   final List<(DateTime, double)> points;
 
@@ -142,6 +147,59 @@ class TimeSeriesChart extends StatelessWidget {
         ),
       ),
     );
+    // Label bij een tik: klein, afgerond zoals de as ("84,6 kg") met de datum, in inkt op de achtergrondkleur zodat
+    // het in elk thema (licht, donker, elke achtergrond) leesbaar is. Vroeger: fl_chart-standaard met alle decimalen.
+    final p = context.pal;
+    String value(double v) => '${fmtDec(v, decimals)}${unit.isEmpty ? '' : ' $unit'}';
+    String date(double x) {
+      final d = from.plusDays(x.round());
+      return '${d.day}/${d.month}';
+    }
+
+    final tipStyle = numStyle(12.5, weight: FontWeight.w600, color: p.bg);
+    final tipSub = TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: p.bg.withValues(alpha: 0.75));
+    final lineTouch = LineTouchData(
+      touchTooltipData: LineTouchTooltipData(
+        getTooltipColor: (_) => p.ink,
+        tooltipBorderRadius: BorderRadius.circular(8),
+        tooltipPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        tooltipMargin: 10,
+        maxContentWidth: 140,
+        fitInsideHorizontally: true,
+        fitInsideVertically: true,
+        getTooltipItems: (spots) => [
+          for (final (i, s) in spots.indexed)
+            LineTooltipItem(
+              // Met een trendlijn: de trend krijgt het woord "trend", de weging zelf gewoon de waarde
+              '${trend != null && s.barIndex == 0 ? '${tr('trend', 'trend')} ' : ''}${value(s.y)}',
+              tipStyle,
+              children: [if (i == spots.length - 1) TextSpan(text: '\n${date(s.x)}', style: tipSub)],
+            ),
+        ],
+      ),
+      getTouchedSpotIndicator: (bar, indexes) => [
+        for (final _ in indexes)
+          TouchedSpotIndicatorData(
+            FlLine(color: p.ink3.withValues(alpha: 0.5), strokeWidth: 1, dashArray: [3, 3]),
+            FlDotData(getDotPainter: (_, _, _, _) => FlDotCirclePainter(radius: 4, color: color, strokeWidth: 2, strokeColor: p.surface)),
+          ),
+      ],
+    );
+    final barTouch = BarTouchData(
+      touchTooltipData: BarTouchTooltipData(
+        getTooltipColor: (_) => p.ink,
+        tooltipBorderRadius: BorderRadius.circular(8),
+        tooltipPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        maxContentWidth: 140,
+        fitInsideHorizontally: true,
+        fitInsideVertically: true,
+        getTooltipItem: (group, _, rod, _) => BarTooltipItem(
+          value(rod.toY),
+          tipStyle,
+          children: [TextSpan(text: '\n${date(group.x.toDouble())}', style: tipSub)],
+        ),
+      ),
+    );
     final grid = FlGridData(
       drawVerticalLine: false,
       getDrawingHorizontalLine: (_) => FlLine(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4), strokeWidth: 1),
@@ -153,6 +211,7 @@ class TimeSeriesChart extends StatelessWidget {
               minY: minY,
               maxY: maxY,
               alignment: BarChartAlignment.spaceBetween,
+              barTouchData: barTouch,
               gridData: grid,
               titlesData: titles,
               borderData: FlBorderData(show: false),
@@ -179,6 +238,7 @@ class TimeSeriesChart extends StatelessWidget {
               maxX: days.toDouble(),
               minY: minY,
               maxY: maxY,
+              lineTouchData: lineTouch,
               gridData: grid,
               titlesData: titles,
               borderData: FlBorderData(show: false),

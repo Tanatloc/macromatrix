@@ -114,20 +114,6 @@ void main() {
       expect(savedMealTitle(const SavedMeal(id: 'b', name: 'Breakfast', items: []), Meal.breakfast), 'Breakfast');
     });
 
-    testWidgets('kaart: naar de maaltijd van de naam, titel gesplitst, met Ongedaan maken', (tester) async {
-      const item = ItemTemplate(foodRef: 'ciqual:13005', name: 'Banana', grams: 120, quantity: 120, per100g: {'energy': 90});
-      final s = await pumpDiary(tester, setup: (s) => s.user.saveMeal('DinnerChicken stir fry', [item]));
-      expect(find.text('DinnerChicken stir fry'), findsNothing);
-      await tester.tap(find.text('Dinner · Chicken stir fry'));
-      await tester.pump();
-      expect(s.entriesFor(Meal.dinner), hasLength(1));
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.text('Chicken stir fry added to dinner'), findsOneWidget);
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
-      await tester.tap(find.text('Undo'));
-      await tester.pump();
-      expect(s.entriesFor(Meal.dinner), isEmpty);
-    });
   });
 
   testWidgets('N27 tik op het midden van + bij een lege maaltijd opent niet het …-menu', (tester) async {

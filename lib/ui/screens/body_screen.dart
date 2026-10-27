@@ -586,6 +586,7 @@ class _BodyScreenState extends State<BodyScreen> {
                       to: to,
                       color: pal.brand,
                       decimals: chartDec,
+                      unit: chartUnit,
                       band: band,
                       trend: trend,
                     ),

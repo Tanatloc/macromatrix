@@ -89,6 +89,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Nieuwe dag begint om'), findsNothing);
     expect(find.byTooltip('Toevoegen').hitTestable(), findsOneWidget);
+    // De korte tikbescherming na het sluiten (tap_guard) duurt langer dan de snelle overgang: laten aflopen
+    await tester.pump(const Duration(milliseconds: 400));
   });
 
   testWidgets('smal venster: het toevoegmenu is niet uitgerekt en de derde rij is bereikbaar', (tester) async {

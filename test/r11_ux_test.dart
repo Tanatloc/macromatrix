@@ -95,20 +95,20 @@ void main() {
   });
 
   group('thema (NW-8, NW-16)', () {
-    test('standaard zoals het toestel, tot je zelf kiest', () {
+    test('standaard licht, tot je zelf kiest', () {
       final s = AppState(foods: foods, user: UserDb(sqlite3.openInMemory()));
-      expect(s.themeMode, 'system');
-      s.setThemeMode('light');
       expect(s.themeMode, 'light');
+      s.setThemeMode('system');
+      expect(s.themeMode, 'system');
     });
 
-    testWidgets('de eerste stap zegt "Last step"; het thema volgt het toestel zonder vraag', (tester) async {
+    testWidgets('de eerste stap zegt "Last step"; het thema is licht zonder vraag', (tester) async {
       final (s, _) = await pump(tester, const ProfileSetupScreen());
       expect(find.text('Step 2 of 2'.toUpperCase()), findsNothing);
       expect(find.textContaining(RegExp('last step', caseSensitive: false)), findsOneWidget);
       // Geen themakeuze meer in de eerste stap (eerste-maaltijdmeting 25-10): in Instellingen → Weergave
       expect(find.byWidgetPredicate((w) => w is Segmented<String>), findsNothing);
-      expect(s.themeMode, 'system');
+      expect(s.themeMode, 'light');
     });
   });
 

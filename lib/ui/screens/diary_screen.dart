@@ -10,7 +10,6 @@ import '../../data/user_db.dart';
 import '../../nutrition/insights.dart';
 import '../../nutrition/targets.dart';
 import '../../nutrition/nutrients.dart';
-import '../../platform/platform.dart';
 import '../../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/kit.dart';
@@ -21,7 +20,6 @@ import 'nutrient_detail_screen.dart';
 import 'nutrients_screen.dart';
 import 'planner_screen.dart';
 import 'profile_screen.dart';
-import 'scan_screen.dart';
 import 'supplements_screen.dart';
 import 'recap_screen.dart';
 import 'weekly_report_screen.dart';
@@ -37,7 +35,6 @@ import '../widgets/info_tip.dart';
 import '../widgets/nutrient_row.dart';
 import '../../i18n.dart';
 import '../widgets/number_input.dart';
-import '../widgets/quick_log.dart';
 import '../widgets/undo.dart';
 
 /// Vandaag: energie en macro's, de 25 vitaminen en mineralen, wat aandacht vraagt, een suggestie,
@@ -94,7 +91,6 @@ class DiaryScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!s.hasProfile) ...[_ProfileHint(onOpenProfile: onOpenProfile), gap],
-          if (empty && s.isToday) ...[const _StartCard(), gap],
           if (s.note.trim().isNotEmpty) ...[const _NoteCard(), gap],
           if (s.planFor(s.day).isNotEmpty) ...[const _PlanCard(), gap],
           if (s.isToday) const ChallengeTodayStrip(),
@@ -488,14 +484,24 @@ Future<void> openDayMenu(BuildContext context) async {
   final hasItems = s.entries.any((e) => !e.foodRef.startsWith('supp:'));
   final from = s.date;
   final next = DateTime(from.year, from.month, from.day + 1);
+  final yesterday = s.user.entriesFor(dayKey(from.plusDays(-1))).where((e) => !e.foodRef.startsWith('supp:')).length;
   final v = await showModalBottomSheet<String>(
     context: context,
     builder: (ctx) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Stond vroeger op de startkaart van een lege dag (die is weg): de hele vorige dag in één tik
+          if (yesterday > 0)
+            ListTile(
+              key: const ValueKey('day-same-as-yesterday'),
+              leading: const Icon(Icons.content_copy_rounded),
+              title: Text(tr('Same as yesterday', 'Zoals gisteren')),
+              subtitle: Text(tr('Copy all $yesterday items of the day before', 'Alle $yesterday items van de dag ervoor kopiëren')),
+              onTap: () => Navigator.pop(ctx, 'yesterday'),
+            ),
           ListTile(
-            leading: const Icon(Icons.content_copy_rounded),
+            leading: const Icon(Icons.event_repeat_rounded),
             title: Text(tr('Copy day from…', 'Kopieer dag van…')),
             subtitle: Text(tr('Pick an earlier day with items', 'Kies een eerdere dag met items')),
             onTap: () => Navigator.pop(ctx, 'from'),
@@ -518,6 +524,8 @@ Future<void> openDayMenu(BuildContext context) async {
   );
   if (v == null || !context.mounted) return;
   switch (v) {
+    case 'yesterday':
+      await copyFromYesterday(context);
     case 'from':
       await pickDayToCopyFrom(context);
     case 'next':
@@ -566,7 +574,7 @@ class _DesktopDiary extends StatelessWidget {
           ];
           // Rechts: eerst hoe je dag ervoor staat, dan de inzichten
           final summary = <Widget>[
-            if (empty) ...[const _BudgetCard(), gap, const _StartCard()] else const _EnergyCard(),
+            if (empty) const _BudgetCard() else const _EnergyCard(),
           ];
           final insights = <Widget>[
             if (!empty) ...[const _ForTodayCard(), gap, _ShortfallCard(onOpenNutrients: onOpenNutrients), gap, _WeekCard(onOpen: onOpenWeek)],
@@ -1469,209 +1477,6 @@ String savedMealName(String name) {
 String savedMealTitle(SavedMeal m, Meal target) {
   final name = savedMealName(m.name);
   return name.toLowerCase() == target.label.toLowerCase() || mealInName(name) == target ? name : '${target.label} · $name';
-}
-
-class _StartCard extends StatefulWidget {
-  const _StartCard();
-
-  @override
-  State<_StartCard> createState() => _StartCardState();
-}
-
-/// Een lege dag: bovenaan meteen "Wat at je?" met een veld. Wat je typt, opent Snel loggen met de producten al
-/// gevonden, zodat je eerste maaltijd één zin en één tik is (eerste-maaltijdmeting 25-10).
-class _StartCardState extends State<_StartCard> {
-  final _text = TextEditingController();
-
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
-  }
-
-  void _quickLog(Meal meal) {
-    final text = _text.text.trim();
-    _text.clear();
-    FocusScope.of(context).unfocus();
-    showQuickLog(context, meal: meal, text: text.isEmpty ? null : text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = context.watch<AppState>();
-    final p = context.pal;
-    final meal = context.read<AppState>().suggestedMeal;
-    final yesterday = s.user
-        .entriesFor(dayKey(s.date.plusDays(-1)))
-        .where((e) => e.meal == meal && !e.foodRef.startsWith('supp:'))
-        .toList();
-    final saved = s.savedMeals();
-    final yesterdayAll = s.user.entriesFor(dayKey(s.date.plusDays(-1))).where((e) => !e.foodRef.startsWith('supp:')).toList();
-
-    Widget action({required IconData icon, required String title, required String sub, String meta = '', required VoidCallback onTap}) => Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Material(
-        color: p.surface2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: p.line),
-        ),
-        child: InkWell(
-          customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(color: p.sunken, borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, size: 18, color: p.ink),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
-                      ),
-                      Text(
-                        sub,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, color: p.ink2),
-                      ),
-                    ],
-                  ),
-                ),
-                if (meta.isNotEmpty)
-                  Text(
-                    meta,
-                    style: numStyle(12.5, weight: FontWeight.w400, color: p.ink3),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    return Panel(
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ExcludeSemantics(
-            child: Wrap(
-              spacing: 3,
-              runSpacing: 3,
-              children: [
-                for (var i = 0; i < 25; i++)
-                  Opacity(
-                    opacity: 1 - i * 0.025,
-                    child: Panel(dashed: true, radius: 5, padding: EdgeInsets.zero, child: const SizedBox(width: 20, height: 22)),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            meal == Meal.snacks
-                ? tr('What did you snack on?', 'Wat at je tussendoor?')
-                : tr('What did you have for ${meal.label.toLowerCase()}?', 'Wat at je als ${meal.label.toLowerCase()}?'),
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: -0.4, color: p.ink),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            key: const ValueKey('start-quick-log'),
-            controller: _text,
-            textInputAction: TextInputAction.go,
-            decoration: InputDecoration(
-              hintText: tr('e.g. 2 eggs and a slice of toast', 'bv. 2 eieren en een sneetje toast'),
-              suffixIcon: IconButton(
-                key: const ValueKey('start-quick-log-go'),
-                tooltip: tr('Find foods', 'Producten zoeken'),
-                icon: const Icon(Icons.arrow_forward_rounded),
-                onPressed: () => _quickLog(meal),
-              ),
-            ),
-            onSubmitted: (_) => _quickLog(meal),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            tr('Type it in your own words.', 'Typ het in je eigen woorden.'),
-            style: TextStyle(fontSize: 12.5, height: 1.4, color: p.ink3),
-          ),
-          const SizedBox(height: 4),
-          for (final m in saved.take(2))
-            action(
-              icon: Icons.restaurant_menu_rounded,
-              title: savedMealTitle(m, savedMealTarget(m, meal)),
-              sub: m.items.map((i) => i.name).join(' · '),
-              meta: '${fmtInt(m.kcal)} kcal',
-              onTap: () {
-                // Een opgeslagen 'Ontbijt' hoort bij het ontbijt, ook als je het om 12 uur logt (P60, N20)
-                final target = savedMealTarget(m, meal);
-                final name = savedMealName(m.name);
-                final added = s.addSavedMeal(m, target);
-                showUndo(
-                  context,
-                  tr('$name added to ${target.label.toLowerCase()}', '$name toegevoegd aan ${target.label.toLowerCase()}'),
-                  () => s.undoAdds(added),
-                );
-              },
-            ),
-          if (yesterday.isNotEmpty)
-            action(
-              icon: Icons.copy_rounded,
-              title: tr('Yesterday\'s ${meal.label.toLowerCase()}', '${meal.label} van gisteren'),
-              sub: tr(
-                'Copy ${yesterday.length} ${yesterday.length == 1 ? 'item' : 'items'}',
-                '${yesterday.length} ${yesterday.length == 1 ? 'item' : 'items'} kopiëren',
-              ),
-              meta: '${fmtInt(yesterday.fold<double>(0, (a, e) => a + e.kcal))} kcal',
-              onTap: () => copyFromYesterday(context, meal: meal),
-            ),
-          if (yesterdayAll.map((e) => e.meal).toSet().length > 1)
-            action(
-              icon: Icons.content_copy_rounded,
-              title: tr('Same as yesterday', 'Zoals gisteren'),
-              sub: tr('Copy all ${yesterdayAll.length} items of yesterday', 'Alle ${yesterdayAll.length} items van gisteren kopiëren'),
-              meta: '${fmtInt(yesterdayAll.fold<double>(0, (a, e) => a + e.kcal))} kcal',
-              onTap: () => copyFromYesterday(context),
-            ),
-          if (canScanBarcodes)
-            action(
-              icon: Icons.qr_code_scanner_rounded,
-              title: tr('Scan barcode', 'Barcode scannen'),
-              sub: tr('Look up a branded product', 'Merkproduct opzoeken'),
-              onTap: () async {
-                final code = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const ScanScreen()));
-                if (code == null || !context.mounted) return;
-                final food = await s.lookupBarcode(code);
-                if (food != null && context.mounted) {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FoodDetailScreen(food: food, meal: meal),
-                    ),
-                  );
-                }
-              },
-            )
-          else
-            action(
-              icon: Icons.search_rounded,
-              title: tr('Search', 'Zoeken'),
-              sub: tr('Basic foods, brands and recipes', 'Basisvoedingsmiddelen, merken en recepten'),
-              onTap: () => openAddFood(context, meal),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 // ── Maaltijden ──
@@ -2706,12 +2511,13 @@ class _SummaryPager extends StatelessWidget {
   final VoidCallback? onOpenNutrients;
   final VoidCallback? onOpenProfile;
 
-  static const pages = 4;
+  static const pages = 3;
 
   /// Alle pagina's even hoog, zodat het dagboek eronder niet verspringt als je veegt.
   static const height = 198.0;
 
-  static List<String> get _labels => [tr('Goals', 'Doelen'), tr('Energy', 'Energie'), tr('Highlighted', 'Uitgelicht'), tr('Score', 'Score')];
+  // Doelen en Energie zijn sinds 27-10 één pagina: de energiering met de macro's ernaast
+  static List<String> get _labels => [tr('Overview', 'Overzicht'), tr('Highlighted', 'Uitgelicht'), tr('Score', 'Score')];
 
   @override
   Widget build(BuildContext context) {
@@ -2720,13 +2526,9 @@ class _SummaryPager extends StatelessWidget {
     final page = s.summaryPage.clamp(0, pages - 1);
     void go(int i) => s.setSummaryPage((i + pages) % pages);
     final body = switch (page) {
-      1 => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [_PageTitle(tr('Energy balance', 'Energiebalans')), const SizedBox(height: 14), const _EnergyCard(bare: true, macros: false)],
-      ),
-      2 => const _HighlightedPage(),
-      3 => _ScorePage(onOpenNutrients: onOpenNutrients),
-      _ => _GoalsPage(onOpenProfile: onOpenProfile),
+      1 => const _HighlightedPage(),
+      2 => _ScorePage(onOpenNutrients: onOpenNutrients),
+      _ => _OverviewPage(onOpenProfile: onOpenProfile),
     };
     return Panel(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -2832,10 +2634,11 @@ class _PageTitle extends StatelessWidget {
   }
 }
 
-/// Doelen: energie en de drie macro's als "Eiwit - 105 / 205 g … 51%" met een balk eronder.
-/// Rechtsboven wissel je tussen wat je at en wat er nog bij mag.
-class _GoalsPage extends StatelessWidget {
-  const _GoalsPage({this.onOpenProfile});
+/// Overzicht: links de energiering met wat er nog over is, rechts eiwit, koolhydraten en vet met een balk. Rechtsboven
+/// wissel je tussen wat je at en wat er nog bij mag; een tik op de ring toont de hele energiebalans (doel, beweging,
+/// gegeten). Vroeger twee pagina's (Doelen en Energie).
+class _OverviewPage extends StatelessWidget {
+  const _OverviewPage({this.onOpenProfile});
   final VoidCallback? onOpenProfile;
 
   @override
@@ -2843,70 +2646,82 @@ class _GoalsPage extends StatelessWidget {
     final s = context.watch<AppState>();
     final p = context.pal;
     final remaining = s.macrosRemaining;
-    Widget row(String key, String name, String unit, Color color) {
+    final eaten = s.totals['energy'];
+    final budget = s.targets['energy']?.goal ?? 2000;
+    final burned = s.exerciseKcalInGoal;
+    final left = budget - eaten;
+    // Tot 10% boven je doel is nog binnen de marge: geen rood, zoals in de weekgrafiek
+    final over = left < 0 && !withinEnergyMargin(eaten, budget);
+    final extra = left < 0 && !over;
+
+    void openEnergy() => showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(tr('Energy balance', 'Energiebalans'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: p.ink)),
+              const SizedBox(height: 14),
+              const _EnergyCard(bare: true, macros: false),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    Widget macro(String key, String name) {
       final v = s.totals[key];
       final t = s.targets[key];
-      // Een eigen "hoogstens" (bv. koolhydraten of suikers bij diabetes) toont als maximum
       final limit = t?.isLimit ?? false;
       final goal = t?.goal ?? t?.upper ?? 0;
-      final over = goal > 0 && v > goal;
-      // Rood "te veel" alleen bij een doel-om-ongeveer (energie/koolh./vet) boven 110% of boven een bovengrens;
-      // eiwit erboven is prima.
+      final isOver = goal > 0 && v > goal;
+      // Rood "te veel" alleen boven een doel-om-ongeveer of een bovengrens; eiwit erboven is prima
       final tooMuch = levelOf(v, t) == Level.high;
+      final color = key.contains('sugars') ? p.macro('carbs') : p.macro(key);
       final value = !remaining
-          ? '${fmtInt(v)} / ${limit ? 'max ' : ''}${fmtInt(goal)} $unit'
-          : limit
-          ? (over
-                ? tr('${fmtInt(v - goal)} $unit over your max', '${fmtInt(v - goal)} $unit boven je max')
-                : tr('${fmtInt(goal - v)} $unit left', 'nog ${fmtInt(goal - v)} $unit ruimte'))
-          : over
-          ? (tooMuch
-                ? tr('${fmtInt(v - goal)} $unit over', '${fmtInt(v - goal)} $unit te veel')
-                : tr('${fmtInt(v - goal)} $unit extra', '${fmtInt(v - goal)} $unit extra'))
-          : tr('${fmtInt(goal - v)} $unit to go', 'nog ${fmtInt(goal - v)} $unit');
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 9),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: name,
-                          style: TextStyle(fontWeight: FontWeight.w600, color: p.ink),
-                        ),
-                        TextSpan(
-                          text: '  $value',
-                          style: numStyle(13, weight: FontWeight.w400, color: remaining && tooMuch ? p.high : p.ink2),
-                        ),
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13.5),
-                  ),
+          ? '${fmtInt(v)} / ${limit ? 'max ' : ''}${fmtInt(goal)} g'
+          : isOver
+          ? (tooMuch ? tr('${fmtInt(v - goal)} g over', '${fmtInt(v - goal)} g te veel') : tr('+${fmtInt(v - goal)} g', '+${fmtInt(v - goal)} g'))
+          : tr('${fmtInt(goal - v)} g to go', 'nog ${fmtInt(goal - v)} g');
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.ink),
                 ),
-                Text(
-                  goal <= 0 ? '' : fmtPct(v / goal),
-                  style: numStyle(12.5, weight: FontWeight.w500, color: tooMuch ? p.high : p.ink2),
-                ),
-              ],
-            ),
-            const SizedBox(height: 5),
-            // Energie binnen ±10% groen, zoals in de weekgrafiek en de ring
-            Bar(
-              fraction: goal <= 0 ? 0 : v / goal,
-              color: tooMuch ? p.highFill : (key == 'energy' && withinEnergyMargin(v, goal) ? p.okFill : color),
-              height: 8,
-            ),
-          ],
-        ),
+              ),
+              Text(value, style: numStyle(12.5, weight: FontWeight.w400, color: remaining && tooMuch ? p.high : p.ink2)),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Bar(fraction: goal <= 0 ? 0 : v / goal, color: tooMuch ? p.highFill : color, height: 7),
+        ],
       );
     }
+
+    final macros = [
+      ('protein', tr('Protein', 'Eiwit')),
+      ('carbs', tr('Carbs', 'Koolhydraten')),
+      ('fat', tr('Fat', 'Vet')),
+      // "Let op suiker": ook de suikergrens hier
+      if (s.sugarFocus)
+        if (s.targets['sugars']?.upper != null)
+          ('sugars', tr('Sugars', 'Suikers'))
+        else if (s.targets['free_sugars']?.upper != null)
+          ('free_sugars', tr('Free sugars', 'Vrije suikers')),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2930,17 +2745,61 @@ class _GoalsPage extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 4),
-        row('energy', tr('Energy', 'Energie'), 'kcal', p.ink),
-        row('protein', tr('Protein', 'Eiwit'), 'g', p.macro('protein')),
-        row('carbs', tr('Carbs', 'Koolhydraten'), 'g', p.macro('carbs')),
-        row('fat', tr('Fat', 'Vet'), 'g', p.macro('fat')),
-        // "Let op suiker": ook de suikergrens hier, met je eigen grens voor alle suikers als je die hebt
-        if (s.sugarFocus)
-          if (s.targets['sugars']?.upper != null)
-            row('sugars', tr('Sugars', 'Suikers'), 'g', p.macro('carbs'))
-          else if (s.targets['free_sugars']?.upper != null)
-            row('free_sugars', tr('Free sugars', 'Vrije suikers'), 'g', p.macro('carbs')),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Semantics(
+              button: true,
+              label: tr('Energy balance', 'Energiebalans'),
+              child: InkWell(
+                key: const ValueKey('overview-ring'),
+                customBorder: const CircleBorder(),
+                onTap: openEnergy,
+                child: SizedBox(
+                  width: 128,
+                  height: 128,
+                  child: CustomPaint(
+                    painter: _EnergyRing(eaten: eaten, budget: budget, burned: burned, p: p),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (burned > 0) ...[_BurnedPill(burned: burned), const SizedBox(height: 3)],
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              remaining || eaten <= 0 ? fmtInt(left.abs()) : fmtInt(eaten),
+                              style: numStyle(28, color: over && remaining ? p.high : p.ink, height: 1),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            !remaining && eaten > 0
+                                ? tr('of ${fmtInt(budget)} kcal', 'van ${fmtInt(budget)} kcal')
+                                : over
+                                ? tr('kcal over', 'kcal te veel')
+                                : (extra ? tr('kcal extra', 'kcal extra') : tr('kcal left', 'kcal te gaan')),
+                            style: TextStyle(fontSize: 11.5, color: p.ink2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (i, (key, name)) in macros.indexed) ...[if (i > 0) const SizedBox(height: 12), macro(key, name)],
+                ],
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

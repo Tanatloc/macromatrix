@@ -18,8 +18,10 @@ import 'package:macromatrix/ui/widgets/kit.dart';
 /// Van de allereerste start tot de eerste gelogde maaltijd (meting 25-10-2026, zie
 /// voedingsapp-data/evaluaties/eerste-maaltijd-2026-10-25.md). Deze test houdt dat pad kort: komt er een scherm,
 /// vraag of tik bij, dan faalt hij. Wil je toch iets toevoegen aan de eerste start, verhoog dan bewust de grenzen.
-const maxTaps = 8;
-const maxScreens = 4; // welkom, over jou, Vandaag, Snel loggen
+// Was 8 tikken en 4 schermen met de startkaart op een lege dag; die is op vraag van de gebruiker weg (27-10), de weg
+// loopt nu via + bij de maaltijd en Snel loggen in Toevoegen: één tik en één scherm meer.
+const maxTaps = 9;
+const maxScreens = 5; // welkom, over jou, Vandaag, Toevoegen, Snel loggen
 const maxOnboardingFields = 3; // geboortejaar, lengte, gewicht
 const maxOnboardingChoices = 2; // geslacht, doel
 
@@ -55,6 +57,14 @@ void main() {
   for (final web in [true, false]) {
     testWidgets('${web ? 'web' : 'app'}: eerste start tot eerste maaltijd in hoogstens $maxTaps tikken en $maxScreens schermen', (tester) async {
       debugWebOverride = web;
+      // Het testlettertype is veel breder dan het echte: een overloop van een paar pixels op het toevoegscherm is hier
+      // niet waar het om gaat (zoals in n88_semantics_test). Al het andere blijft een fout.
+      final previous = FlutterError.onError;
+      FlutterError.onError = (d) {
+        if (d.exception.toString().contains('overflowed')) return;
+        previous?.call(d);
+      };
+      addTearDown(() => FlutterError.onError = previous);
       // 8 uur 's ochtends: Vandaag vraagt naar het ontbijt
       appClock = () => DateTime(2026, 10, 25, 8, 15);
       final user = UserDb(sqlite3.openInMemory());
@@ -126,20 +136,19 @@ void main() {
       expect(state.profile.activity, Activity.light, reason: 'redelijke standaard tot je het zelf kiest');
       expect(state.profile.birthYear, 1991);
 
-      // 3. Vandaag, een lege dag: meteen een veld "Wat at je?"
+      // 3. Vandaag, een lege dag: de maaltijden staan meteen in beeld (geen startkaart meer, 27-10); + bij het ontbijt
       expect(find.byType(DiaryScreen), findsOneWidget);
       screens.add('today');
-      expect(find.text('What did you have for breakfast?'), findsOneWidget);
-      final field = find.byKey(const ValueKey('start-quick-log'));
-      expect(field, findsOneWidget);
-      await type(field, '2 eggs and a slice of toast');
-      taps++; // Enter op het toetsenbord
-      await tester.testTextInput.receiveAction(TextInputAction.go);
-      await tester.pumpAndSettle();
+      await tap(find.byTooltip('Add to breakfast'));
+      await tap(find.byTooltip('Quick log (speak or type)'));
 
-      // 4. Snel loggen: de producten staan al klaar
-      expect(find.text('Quick log'), findsOneWidget);
+      // 4. Snel loggen (via Toevoegen): in je eigen woorden typen, de producten worden gevonden
+      screens.add('add-food');
       screens.add('quick-log');
+      await type(find.byType(TextField).last, '2 eggs and a slice of toast');
+      taps++; // Enter op het toetsenbord
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
       await tap(find.text('Add 2 to breakfast'));
 
       final logged = state.entriesFor(Meal.breakfast);
@@ -148,8 +157,9 @@ void main() {
       expect(taps, lessThanOrEqualTo(maxTaps), reason: '$taps tikken tot de eerste maaltijd');
       expect(screens.length, lessThanOrEqualTo(maxScreens), reason: 'schermen: $screens');
 
-      // Na de eerste maaltijd: de vraag naar je activiteit, één keer
-      expect(find.text('What did you have for breakfast?'), findsNothing);
+      // Na de eerste maaltijd: terug naar Vandaag, daar de vraag naar je activiteit, één keer
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const ValueKey('activity-ask')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('activity-ask')));

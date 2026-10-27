@@ -90,7 +90,8 @@ void main() {
     });
 
     testWidgets('andere indeling: geen oude scrollpositie van vroeger', (tester) async {
-      await pumpShell(tester, const Size(700, 700));
+      // Laag venster: Vandaag is korter sinds de startkaart weg is (27-10), en er moet genoeg te scrollen zijn
+      await pumpShell(tester, const Size(700, 480));
       await tester.drag(find.byType(ListView).first, const Offset(0, -600));
       await tester.pumpAndSettle();
       expect(offset(tester), greaterThan(300));
@@ -100,7 +101,7 @@ void main() {
       await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
       await tester.pumpAndSettle();
       expect(offset(tester), 0);
-      tester.view.physicalSize = const Size(700, 700);
+      tester.view.physicalSize = const Size(700, 480);
       await tester.pumpAndSettle();
       expect(offset(tester), 0);
     });
@@ -124,14 +125,17 @@ void main() {
       // over, los van deze test
       await pumpShell(tester, const Size(340, 640));
       expect(tester.takeException(), isNull);
-      for (final t in ['Doelen', 'Energie', 'Uitgelicht', 'Score']) {
+      for (final t in ['Overzicht', 'Uitgelicht', 'Score']) {
         final tab = find.ancestor(of: find.text(t), matching: find.byType(InkWell)).first;
         expect(tester.getSize(tab).height, greaterThanOrEqualTo(44));
         expect(tester.getSize(tab).width, greaterThanOrEqualTo(44));
       }
-      await tester.tap(find.text('Energie'));
+      // Doelen en Energie zijn één pagina: een tik op de ring toont de energiebalans
+      await tester.tap(find.byKey(const ValueKey('overview-ring')));
       await tester.pumpAndSettle();
-      expect(find.text('ENERGIEBALANS'), findsOneWidget);
+      expect(find.text('Energiebalans'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Energiebalans'))).pop();
+      await tester.pumpAndSettle();
       // Ruimte voor de dag tussen de pijlen: vroeger amper 36 px (de titel kromp tot ±13 px)
       final title = find.byWidgetPredicate((w) => w is Text && w.data == 'Vandaag' && w.style?.fontSize == 21);
       final box = find.ancestor(of: title, matching: find.byType(FittedBox)).first;
