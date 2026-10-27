@@ -13,6 +13,7 @@ import 'profile_screen.dart';
 import '../widgets/avatar.dart';
 import '../widgets/coach_panel.dart';
 import '../widgets/health_view.dart';
+import '../widgets/info_tip.dart';
 import '../widgets/kit.dart';
 import '../widgets/share_actions.dart';
 import '../widgets/pro_widgets.dart';
@@ -75,6 +76,51 @@ class WeeklyReportScreen extends StatelessWidget {
       'Exercise: ${e.sessions} ${e.sessions == 1 ? 'session' : 'sessions'}$min, ${fmtGrouped(e.kcal, 0)} kcal',
       'Beweging: ${e.sessions} ${e.sessions == 1 ? 'activiteit' : 'activiteiten'}$min, ${fmtGrouped(e.kcal, 0)} kcal',
     );
+  }
+
+  /// Uitleg achter de (i) bij de score: welke dagen meetellen, en energie, gewicht en beweging in zinnen.
+  static String scoreInfo(WeeklyReport r) => [
+    tr(
+      'The score is the average of the fully logged days of this week (${r.days} of 7). A day counts once you log at least half your energy goal, and today counts from tomorrow.',
+      'De score is het gemiddelde van de volledig gelogde dagen van deze week (${r.days} van 7). Een dag telt vanaf de helft van je energiedoel, en vandaag telt vanaf morgen.',
+    ),
+    if (r.partialDays > 0)
+      tr(
+        '${r.partialDays} ${r.partialDays == 1 ? 'day' : 'days'} not counted: logged too little, or still in progress.',
+        '${r.partialDays} ${r.partialDays == 1 ? 'dag telt' : 'dagen tellen'} niet mee: te weinig gelogd, of nog bezig.',
+      ),
+    ?energyLine(r),
+    ?weightLine(r),
+    ?exerciseLine(r),
+  ].join('\n\n');
+
+  /// Energie, gewicht en beweging als kleine tegels met één kerngetal, zoals bij de coach. Kort, zodat elk onderschrift
+  /// op één regel past; het verschil met vorige week en de minuten staan in [scoreInfo].
+  static List<StatTile> weekTiles(WeeklyReport r, Palette p) {
+    final weightChange = r.weightChange, e = r.exercise;
+    return [
+      if (r.kcalAvg case final avg?)
+        StatTile(
+          large: true,
+          label: tr('Energy a day', 'Energie per dag'),
+          value: fmtInt(avg),
+          sub: r.kcalGoal == null ? null : tr('goal ${fmtInt(r.kcalGoal!)}', 'doel ${fmtInt(r.kcalGoal!)}'),
+        ),
+      if (r.weightEnd case final end?)
+        StatTile(
+          large: true,
+          label: tr('Weight', 'Gewicht'),
+          value: '${fmtGrouped(end)} kg',
+          sub: weightChange == null || weightChange == 0 ? null : '${weightChange > 0 ? '▲' : '▼'} ${fmtGrouped(weightChange.abs())} kg',
+        ),
+      if (e.sessions > 0)
+        StatTile(
+          large: true,
+          label: tr('Exercise', 'Beweging'),
+          value: '${fmtGrouped(e.kcal, 0)} kcal',
+          sub: tr('${e.sessions} ${e.sessions == 1 ? 'session' : 'sessions'}', '${e.sessions} ${e.sessions == 1 ? 'activiteit' : 'activiteiten'}'),
+        ),
+    ];
   }
 
   /// Verschil tegenover vorige week in procent van je doel, bv. "▲ 12%", of null. Begrensd op 999, want een
@@ -272,52 +318,57 @@ class WeeklyReportScreen extends StatelessWidget {
                         ],
                         // Score
                         Panel(
-                          child: Row(
+                          key: const ValueKey('week-score'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              LevelAvatar(avatar: s.avatar, level: level.level, size: 56, frame: myFrameOf(context)),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(tr('Nutrient score', 'Voedingsscore'), style: TextStyle(fontSize: 13, color: p.ink2)),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                                      textBaseline: TextBaseline.alphabetic,
+                              Row(
+                                children: [
+                                  LevelAvatar(avatar: s.avatar, level: level.level, size: 56, frame: myFrameOf(context)),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text('${r.score}', style: numStyle(40, color: p.ink)),
-                                        const SizedBox(width: 10),
-                                        if (r.change != null)
-                                          Text(
-                                            '${r.change! > 0 ? '▲' : (r.change! < 0 ? '▼' : '=')} ${r.change!.abs()} ${tr('vs last week', 't.o.v. vorige week')}',
-                                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: r.change! >= 0 ? p.ok : p.low),
-                                          ),
+                                        Text(tr('Nutrient score', 'Voedingsscore'), style: TextStyle(fontSize: 13, color: p.ink2)),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                                          textBaseline: TextBaseline.alphabetic,
+                                          children: [
+                                            Text('${r.score}', style: numStyle(40, color: p.ink)),
+                                            const SizedBox(width: 10),
+                                            if (r.change != null)
+                                              Text(
+                                                '${r.change! > 0 ? '▲' : (r.change! < 0 ? '▼' : '=')} ${r.change!.abs()} ${tr('vs last week', 't.o.v. vorige week')}',
+                                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: r.change! >= 0 ? p.ok : p.low),
+                                              ),
+                                          ],
+                                        ),
+                                        // Kort; de uitleg (welke dagen tellen, energie en gewicht in zinnen) achter de (i)
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                tr(
+                                                  '${r.days} of 7 days logged · ${s.streak.current}-day streak',
+                                                  '${r.days} van 7 dagen gelogd · reeks van ${s.streak.current}',
+                                                ),
+                                                style: TextStyle(fontSize: 12.5, color: p.ink3),
+                                              ),
+                                            ),
+                                            InfoTip(
+                                              key: const ValueKey('week-score-info'),
+                                              title: tr('Nutrient score', 'Voedingsscore'),
+                                              message: scoreInfo(r),
+                                            ),
+                                          ],
+                                        ),
                                       ],
                                     ),
-                                    Text(
-                                      tr(
-                                        'Average of ${r.days} fully logged ${r.days == 1 ? 'day' : 'days'} (of 7) · ${s.streak.current}-day streak',
-                                        'Gemiddelde van ${r.days} volledig gelogde ${r.days == 1 ? 'dag' : 'dagen'} (van 7) · reeks van ${s.streak.current}',
-                                      ),
-                                      style: TextStyle(fontSize: 12.5, color: p.ink3),
-                                    ),
-                                    if (r.partialDays > 0)
-                                      Text(
-                                        tr(
-                                          '${r.partialDays} ${r.partialDays == 1 ? 'day' : 'days'} not counted: logged too little, or still in progress',
-                                          '${r.partialDays} ${r.partialDays == 1 ? 'dag telt' : 'dagen tellen'} niet mee: te weinig gelogd, of nog bezig',
-                                        ),
-                                        style: TextStyle(fontSize: 12, color: p.ink3),
-                                      ),
-                                    // Energiebalans, gewicht en beweging van de week
-                                    for (final line in [?energyLine(r), ?weightLine(r), ?exerciseLine(r)])
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(line, style: TextStyle(fontSize: 12.5, color: p.ink2)),
-                                      ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
+                              if (weekTiles(r, p) case final tiles when tiles.isNotEmpty) ...[const SizedBox(height: 12), StatTiles(tiles)],
                             ],
                           ),
                         ),

@@ -183,6 +183,9 @@ bool isAdviceFood(Food f) {
   // cantharellen voor vitamine D), wild, en "gewogen met schaal of graat" (die grammen eet je niet op)
   if (_seasoningVeg.hasMatch(f.name) || _seasoningVeg.hasMatch(l.food)) return false;
   if (l.group == 'mushroom' && l.state == 'raw') return false;
+  // Gedroogde paddenstoelen, ook geweekt of gekookt ("Oyster mushroom dried, boiled"): per portie gewogen als droog
+  // product, en geen gewone groente (rijkste bron van B3 tussen tonijn en kip)
+  if (l.group == 'mushroom' && RegExp(r'\bdried\b|\bgedroogd', caseSensitive: false).hasMatch(f.name)) return false;
   if (_game.hasMatch(f.name) || _game.hasMatch(l.food)) return false;
   if (l.flags.contains('with bone') || _withShell.hasMatch(f.name)) return false;
   // Rauwe kiemen van bonen (behalve taugé en soja) bevatten giftige lectines
@@ -205,6 +208,8 @@ bool isAdviceFood(Food f) {
     'vegetable' when leaf && l.state == 'raw' => (50, 80),
     'vegetable' => (100, 200),
     'mushroom' => (75, 125),
+    // Geroosterde sojabonen of kikkererwten zijn een knabbel zoals noten: 120 g is ruim 500 kcal
+    'legume' when l.state == 'roasted' || RegExp(r'\b(roasted|toasted|geroosterd)\b').hasMatch(name) => (30, 40),
     'legume' => (120, 200),
     'nut/seed' when RegExp(r'\bseeds?\b').hasMatch(name) => (15, 20),
     'nut/seed' => (30, 30),

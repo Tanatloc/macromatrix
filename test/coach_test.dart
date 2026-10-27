@@ -265,6 +265,38 @@ void main() {
       }
     });
 
+    test('voorstellen met kcal per portie; wat de coach onlangs voorstelde schuift achteraan', () {
+      final s = newState();
+      final first = s.coachOptions(const ['vit_k']);
+      expect(first['vit_k'], isNotEmpty);
+      for (final x in first['vit_k']!) {
+        expect(x.kcal, isNotNull, reason: x.food);
+      }
+      final top = first['vit_k']!.first.food;
+      final tip = 'Add 80 g of ${top.split(',').first} to your dinner.';
+      expect(coachOptionUsed(top, [tip]), isTrue);
+      final again = s.coachOptions(const ['vit_k'], avoid: [tip]);
+      expect(again['vit_k']!.first.food, isNot(top));
+    });
+
+    test('recente tips: bewaard over weken heen, na $coachAvoidDays dagen mogen ze terug', () {
+      final s = newState();
+      final cache = CoachCache(s);
+      final now = DateTime(2026, 10, 27, 12);
+      cache.save(
+        monday: _monday,
+        result: const CoachResult(summary: 'A short summary of the week.', tips: ['Tip one here.', 'Tip two here.']),
+        now: now,
+      );
+      cache.save(
+        monday: _monday,
+        result: const CoachResult(summary: 'A short summary of the week.', tips: ['Tip three here.']),
+        now: now,
+      );
+      expect(cache.recentTips(now), ['Tip three here.', 'Tip one here.', 'Tip two here.']);
+      expect(cache.recentTips(now.add(const Duration(days: coachAvoidDays + 1))), isEmpty);
+    });
+
     test('vorige week: de tips uit het geheugen van het toestel en hoe die stoffen veranderden', () async {
       final s = newState();
       final cache = CoachCache(s);
@@ -382,16 +414,19 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('zonder vlaggen, zonder rij of met te weinig dagen: niets', (tester) async {
+    testWidgets('zonder vlaggen of zonder rij: niets; te weinig dagen: een melding', (tester) async {
       final (s, f) = await setup(pro: true, flag: false);
       await pump(tester, s, null);
       expect(find.byKey(const ValueKey('coach-panel')), findsNothing);
       await pump(tester, s, f);
       expect(find.byKey(const ValueKey('coach-panel')), findsNothing);
       final (s2, f2) = await setup(pro: true);
+      // Te weinig dagen: geen knop, wel vanaf wanneer de coach schrijft
       await pump(tester, s2, f2, report: _report(days: 2));
       expect(find.byKey(const ValueKey('coach-panel')), findsNothing);
-      expect(find.text('Weekly coach'), findsNothing);
+      expect(find.byKey(const ValueKey('coach-write')), findsNothing);
+      expect(find.byKey(const ValueKey('coach-waiting')), findsOneWidget);
+      expect(find.textContaining('from 3 fully logged days in a week (now 2)'), findsOneWidget);
     });
 
     testWidgets('geen supporter tijdens vroege toegang: een rustige regel met de datum, naar Pro', (tester) async {

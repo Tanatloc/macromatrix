@@ -50,6 +50,9 @@ bool coachUnavailable = false;
 /// Hoeveel weken de app bewaart.
 const _keepWeeks = 8;
 
+/// Hoe lang een getoonde tip niet terugkomt: daarna mag een goede tip weer.
+const coachAvoidDays = 21;
+
 /// Wat de coach per week schreef en de laatste stand van de teller, alleen op dit toestel (instelling '_coach').
 class CoachCache {
   CoachCache(this.s);
@@ -58,6 +61,17 @@ class CoachCache {
   Map<String, Object?> get _raw => s.user.setting('_coach') ?? const {};
 
   CoachResult? result(DateTime monday) => CoachResult.fromJson((_raw['weeks'] as Map?)?[dayKey(monday)]);
+
+  /// De tips van de laatste [coachAvoidDays] dagen, nieuwste eerst: de coach stelt die niet opnieuw voor.
+  List<String> recentTips(DateTime now) => [
+    for (final e in _recent)
+      if (now.millisecondsSinceEpoch - e.$1 < coachAvoidDays * Duration.millisecondsPerDay) e.$2,
+  ].take(coachAvoidMax).toList();
+
+  List<(int, String)> get _recent => [
+    for (final e in (_raw['recent'] as List?) ?? const [])
+      if (e case {'at': final int at, 'tip': final String tip}) (at, tip),
+  ];
 
   /// De stand van de teller, of null als die van een vorige dag is (vandaag begin je opnieuw), of zonder Supporter
   /// van een vorige week.
@@ -74,14 +88,25 @@ class CoachCache {
     return p.day == p.periodKey(now) ? p : null;
   }
 
-  void save({DateTime? monday, CoachResult? result, PhotoQuota? quota}) {
+  void save({DateTime? monday, CoachResult? result, PhotoQuota? quota, DateTime? now}) {
     final weeks = {...?(_raw['weeks'] as Map?)?.cast<String, Object?>()};
     if (monday != null && result != null) weeks[dayKey(monday)] = result.toJson();
+    // Nieuwe tips vooraan; ouder dan coachAvoidDays of meer dan coachAvoidMax valt weg
+    final at = (now ?? DateTime.now()).millisecondsSinceEpoch;
+    final recent = [
+      if (result != null)
+        for (final t in result.tips) (at, t),
+      for (final e in _recent)
+        if (at - e.$1 < coachAvoidDays * Duration.millisecondsPerDay) e,
+    ].take(coachAvoidMax);
     final keep = (weeks.keys.toList()..sort()).reversed.take(_keepWeeks).toSet();
     weeks.removeWhere((k, _) => !keep.contains(k));
     final q = quota ?? _raw['quota'];
     s.user.setSetting('_coach', {
       'weeks': weeks,
+      'recent': [
+        for (final (at, tip) in recent) {'at': at, 'tip': tip},
+      ],
       if (quota != null)
         'quota': {'used': quota.used, 'limit': quota.limit, 'pro': quota.pro, 'day': quota.day, if (quota.weekly) 'per': 'week'}
       else
@@ -97,17 +122,31 @@ Future<Map<String, Object?>> coachWeekFor(AppState s, CoachCache cache, WeeklyRe
   // Eerst een beeld tekenen (het draaiende wieltje), dan pas het Orakel: dat rekent op deze draad
   await Future<void>.delayed(Duration.zero);
   final sw = Stopwatch()..start();
-  final options = s.coachOptions(coachGapKeys(r.avg), goals: r.goals);
-  if (kDebugMode) debugPrint('coach: voorstellen voor ${options.length} stoffen in ${sw.elapsedMilliseconds} ms');
   final m = r.monday;
+  // Ook de tips die nu voor deze week staan (bewaard vóór de app recente tips bijhield)
+  final avoid = {...cache.recentTips(DateTime.now()), ...?cache.result(m)?.tips}.take(coachAvoidMax).toList();
+  final options = s.coachOptions(coachGapKeys(r.avg), goals: r.goals, avoid: avoid);
+  if (kDebugMode) debugPrint('coach: voorstellen voor ${options.length} stoffen in ${sw.elapsedMilliseconds} ms');
   final previous = cache.result(DateTime(m.year, m.month, m.day - 7));
-  return coachWeek(r, diet: s.preferences, allergies: s.allergies, options: options, lastWeek: coachLastWeek(r, previous));
+  return coachWeek(
+    r,
+    diet: s.preferences,
+    allergies: s.allergies,
+    options: options,
+    lastWeek: coachLastWeek(r, previous),
+    avoid: avoid,
+    // "Write again": er staat al een tekst voor deze week
+    again: cache.result(m) != null,
+  );
 }
 
 /// Wat het paneel toont.
 enum CoachAccess {
-  /// Niet tonen: te weinig dagen, de server kent de coach niet, of de functie staat nog uit.
+  /// Niet tonen: de server kent de coach niet, of de functie staat nog uit.
   hidden,
+
+  /// Je mag de coach gebruiken, maar deze week heeft nog te weinig volledig gelogde dagen ([coachMinDays]).
+  waiting,
 
   /// Nog in vroege toegang en je bent geen supporter.
   locked,
@@ -119,8 +158,8 @@ enum CoachAccess {
 /// Mag je de coach nu gebruiken, volgens de vlaggen en de week? [features] null (bv. in tests zonder account): de
 /// standaard, en die staat uit.
 CoachAccess coachAccess(WeeklyReport r, Features? features) {
-  if (r.days < coachMinDays || coachUnavailable || features == null || !features.available) return CoachAccess.hidden;
-  if (features.has(coachFeature)) return CoachAccess.open;
+  if (coachUnavailable || features == null || !features.available) return CoachAccess.hidden;
+  if (features.has(coachFeature)) return r.days < coachMinDays ? CoachAccess.waiting : CoachAccess.open;
   return features.inEarlyAccess.any((f) => f.id == coachFeature) ? CoachAccess.locked : CoachAccess.hidden;
 }
 
@@ -243,6 +282,31 @@ class _CoachPanelState extends State<CoachPanel> {
         if (early) const EarlyAccessChip(),
       ],
     );
+
+    // Te weinig dagen: zeggen vanaf wanneer, zoals bij het gezondheidsoordeel, in plaats van de coach te verbergen
+    if (access == CoachAccess.waiting) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Panel(
+          key: const ValueKey('coach-waiting'),
+          shadow: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              title,
+              const SizedBox(height: 8),
+              Text(
+                tr(
+                  'The coach writes from $coachMinDays fully logged days in a week (now ${widget.report.days}).',
+                  'De coach schrijft vanaf $coachMinDays volledig gelogde dagen in een week (nu ${widget.report.days}).',
+                ),
+                style: TextStyle(fontSize: 13, height: 1.4, color: p.ink2),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (access == CoachAccess.locked) {
       final from = features!.inEarlyAccess.firstWhere((f) => f.id == coachFeature).publicFrom;
@@ -526,65 +590,25 @@ class _CoachStats extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.pal;
     final r = report;
-    // Labels en onderschriften mogen op twee regels (SU-7: "goal 1,857 kc…" op een smalle gsm); alle tegels even hoog
-    Widget tile(String label, String value, String? sub, {Color? subColor}) => Expanded(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        decoration: BoxDecoration(
-          color: p.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: p.line),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11.5, height: 1.25, color: p.ink3),
-            ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(value, style: numStyle(17, color: p.ink)),
-            ),
-            if (sub != null)
-              Text(
-                sub,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11.5, height: 1.25, color: subColor ?? p.ink3),
-              ),
-          ],
-        ),
-      ),
-    );
     final change = r.change;
     // Het laagste aandeel onder je doel (niet wat erboven zit, zoals te veel energie)
     final gaps = [...r.worst.where((w) => w.$2 < 1)]..sort((a, b) => a.$2.compareTo(b.$2));
     final gap = gaps.isEmpty ? null : gaps.first;
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          tile(
-            tr('Score', 'Score'),
-            '${r.score}',
-            change == null || change == 0 ? null : '${change > 0 ? '▲' : '▼'} ${change.abs()}',
-            subColor: change == null ? null : (change > 0 ? p.ok : p.high),
-          ),
-          const SizedBox(width: 8),
-          tile(
-            tr('Energy', 'Energie'),
-            r.kcalAvg == null ? '–' : fmtInt(r.kcalAvg!),
-            r.kcalGoal == null ? null : tr('goal ${fmtInt(r.kcalGoal!)} kcal', 'doel ${fmtInt(r.kcalGoal!)} kcal'),
-          ),
-          const SizedBox(width: 8),
-          tile(tr('Biggest gap', 'Grootste tekort'), gap == null ? '–' : fmtPct(gap.$2), gap?.$1.name),
-        ],
+    return StatTiles([
+      StatTile(
+        large: true,
+        label: tr('Score', 'Score'),
+        value: '${r.score}',
+        sub: change == null || change == 0 ? null : '${change > 0 ? '▲' : '▼'} ${change.abs()}',
+        subColor: change == null ? null : (change > 0 ? p.ok : p.high),
       ),
-    );
+      StatTile(
+        large: true,
+        label: tr('Energy', 'Energie'),
+        value: r.kcalAvg == null ? '–' : fmtInt(r.kcalAvg!),
+        sub: r.kcalGoal == null ? null : tr('goal ${fmtInt(r.kcalGoal!)} kcal', 'doel ${fmtInt(r.kcalGoal!)} kcal'),
+      ),
+      StatTile(large: true, label: tr('Biggest gap', 'Grootste tekort'), value: gap == null ? '–' : fmtPct(gap.$2), sub: gap?.$1.name),
+    ]);
   }
 }

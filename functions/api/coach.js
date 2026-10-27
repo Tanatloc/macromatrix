@@ -3,7 +3,8 @@
 // boven een bovengrens, je gewichtstrend, je doel, de 5 producten met de meeste energie als gewone namen, en je
 // voorkeuren en allergieën als codes, een paar gewone voedingsmiddelen met een portie die je tekorten aanvullen (uit het
 // Orakel van de app) en de tips van vorige week met hoe die stoffen sindsdien veranderden). Geen dagboek, geen namen,
-// geen notities. Een tekstmodel van Workers AI schrijft
+// geen notities. Bij "Write again" ook de tips die de app onlangs toonde (om die niet te herhalen). Een tekstmodel van
+// Workers AI schrijft
 // daarmee een korte samenvatting en 2 à 3 tips voor volgende week, in het Engels of het Nederlands.
 // Alleen voor ingelogde gebruikers. Er wordt niets bewaard: niet wat de app stuurt, niet wat het model schrijft (tenzij
 // de gebruiker de tekst in de app meldt: dan bewaart ai_report die, migratie 20261105000000_ai_reports).
@@ -19,8 +20,12 @@ import { readBytes } from '../_lib/body.js';
 // Gekozen na een vergelijking op echte weekcijfers: concretere tips dan Llama 3.3 70B, en goedkoper per antwoord
 export const TEXT_MODEL = '@cf/openai/gpt-oss-120b';
 
-// Wat de app stuurt is 1 à 3 kB (met voorstellen en de tips van vorige week); alles boven deze grens is geen weekoverzicht
-export const MAX_INPUT_BYTES = 6000;
+// Wat de app stuurt is 1 à 5 kB (met voorstellen, de tips van vorige week en de recente tips om niet te herhalen);
+// alles boven deze grens is geen weekoverzicht
+export const MAX_INPUT_BYTES = 9000;
+// Temperatuur: rustig bij de eerste tekst, wat losser bij "Write again" (anders kwamen vaak dezelfde tips terug)
+export const TEMPERATURE = 0.4;
+export const TEMPERATURE_AGAIN = 0.75;
 const PER_HOUR = 6;
 // Langer wachten heeft geen zin: de app geeft het na 60 s op. Te wijzigen met COACH_TIMEOUT_MS (in tests).
 const TIMEOUT_MS = 25_000;
@@ -100,7 +105,8 @@ export function cleanWeek(raw) {
         const food = label(x?.food, 50);
         const portion = label(x?.portion, 30);
         const pct = num(x?.pct, 0, 2000);
-        return food && portion && pct != null ? { food, portion, pct } : null;
+        const kcal = num(x?.kcal, 0, 2000);
+        return food && portion && pct != null ? { food, portion, pct, ...(kcal != null ? { kcal } : {}) } : null;
       });
       if (name && foods.length) options[name] = foods;
     }
@@ -136,6 +142,8 @@ export function cleanWeek(raw) {
     ...macroGaps.filter((m) => m.pct_of_target < 80).map((m) => m.nutrient),
     ...belowTarget.filter((b) => b.pct_of_target < 80).map((b) => b.nutrient),
   ];
+  // Afvallen, of al op of boven het energiedoel: liever iets vervangen dan iets toevoegen
+  const preferSwaps = goal === 'lose' || (ratio != null && ratio >= 0.95);
   const week = {
     lang,
     days_logged: days,
@@ -158,7 +166,10 @@ export function cleanWeek(raw) {
     diet: list(raw.diet, 12, code),
     allergies: list(raw.allergies, 15, code),
     options,
+    prefer_swaps: preferSwaps,
     last_week: lastWeek,
+    avoid_tips: list(raw.avoid_tips, 9, (x) => sentence(x, 320)),
+    again: raw.again === true,
   };
   return { week };
 }
@@ -195,6 +206,23 @@ export function systemPrompt(lang) {
     'database names.',
     'tips: 2 or 3 tips for next week. Each tip is one or two short sentences about a concrete food or meal change,',
     'with a normal amount, aimed at the biggest gaps.',
+    '',
+    'Make every tip something a normal person would actually eat:',
+    '- Combinations must make culinary sense for that meal. Breakfast with muesli, oats or yoghurt: nuts, seeds,',
+    '  berries or fruit. Pasta, rice or a sauce: vegetables such as spinach, broccoli, peppers or courgette. Bread: a',
+    '  topping or a side of raw vegetables. Beans, lentils, chickpeas and edamame go in soups, stews, salads or curries,',
+    '  or on the side, never into breakfast or muesli. Fish, meat or eggs as the protein of a lunch or dinner.',
+    '- Use the portion from options (never more), or a smaller everyday amount: a handful of nuts, a spoon of seeds,',
+    '  one piece of fruit, a side of vegetables.',
+    '- Options carry kcal for their portion. When prefer_swaps is true, prefer a swap over an addition: replace (part of)',
+    '  a food from top_foods_by_energy with the option ("swap half of the pasta for broccoli", "have salmon instead of',
+    '  the burger"). An addition is fine only if it is small (under about 150 kcal) or clearly replaces something.',
+    '  Write the swap explicitly with "instead of" or "swap".',
+    '- Prefer foods this person already eats (top_foods_by_energy) and ordinary foods from a Belgian supermarket. No',
+    '  roasted soybeans, specialty powders, extracts or foods you would have to look for in a health shop.',
+    '',
+    'avoid_tips: tips this person already saw recently. Never repeat them, and do not suggest the same food for the',
+    'same meal again: use other foods from options and, where you can, another meal or another gap nutrient.',
     '',
     'About the data: energy_kcal.goal already includes the plan in "goal" (for "lose" it is already a gentle deficit),',
     'so eating close to it is right; never push below it. nutrient_score (0-100) is how close the vitamins and minerals',
@@ -405,7 +433,8 @@ export function coachInput(week, { retry = false, correction = null } = {}) {
   return {
     messages: [
       { role: 'system', content: system },
-      { role: 'user', content: JSON.stringify(week) },
+      // Zonder "again": dat stuurt alleen de temperatuur, het model hoeft het niet te lezen
+      { role: 'user', content: JSON.stringify({ ...week, again: undefined }) },
     ],
     response_format: { type: 'json_schema', json_schema: SCHEMA },
     // Dit model denkt eerst na. Met weinig nadenken is het antwoord er in 3 à 6 s in plaats van 10 à 20 s, met even
@@ -413,7 +442,7 @@ export function coachInput(week, { retry = false, correction = null } = {}) {
     reasoning_effort: 'low',
     // Het nadenken telt mee; met 600 viel het antwoord soms weg
     max_tokens: 1200,
-    temperature: 0.4,
+    temperature: week.again ? TEMPERATURE_AGAIN : TEMPERATURE,
   };
 }
 

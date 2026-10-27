@@ -51,11 +51,14 @@ List<String> coachGapKeys(Map<String, double> avg) {
 /// dagdoel die portie geeft.
 @immutable
 class CoachOption {
-  const CoachOption({required this.food, required this.portion, required this.pct});
+  const CoachOption({required this.food, required this.portion, required this.pct, this.kcal});
   final String food, portion;
   final int pct;
 
-  Map<String, Object?> toJson() => {'food': food, 'portion': portion, 'pct': pct};
+  /// Energie van de portie, zodat de coach weet wat een toevoeging kost (120 g geroosterde soja is ruim 500 kcal).
+  final int? kcal;
+
+  Map<String, Object?> toJson() => {'food': food, 'portion': portion, 'pct': pct, 'kcal': ?kcal};
 }
 
 /// Wat geen gewoon basisvoedingsmiddel is voor een tip, ook al laat het Orakel het door (wild, orgaanvlees, dranken).
@@ -128,6 +131,8 @@ Map<String, Object?> coachWeek(
   String? lang,
   Map<String, List<CoachOption>> options = const {},
   Map<String, Object?>? lastWeek,
+  List<String> avoid = const [],
+  bool again = false,
 }) {
   Map<String, Object?>? macro(String k) {
     final f = r.avg[k], g = r.goals[k];
@@ -184,7 +189,22 @@ Map<String, Object?> coachWeek(
           if (e.value.isNotEmpty && nutrientByKey[e.key] != null) nutrientByKey[e.key]!.name: [for (final o in e.value.take(4)) o.toJson()],
       },
     'last_week': ?lastWeek,
+    // Wat de coach onlangs al voorstelde ("Write again" gaf vaak dezelfde tips): niet opnieuw, iets anders
+    if (avoid.isNotEmpty) 'avoid_tips': avoid.take(coachAvoidMax).toList(),
+    if (again) 'again': true,
   };
+}
+
+/// Hoeveel recente tips de app meestuurt om niet te herhalen.
+const coachAvoidMax = 9;
+
+/// Welke voorstellen (voedingsmiddelen uit [CoachOption.food]) al in een van de [tips] staan: die schuiven achteraan,
+/// zodat de coach andere krijgt. Vergelijkt het eerste stuk van de naam ("spinach" uit "spinach, boiled").
+bool coachOptionUsed(String food, Iterable<String> tips) {
+  final head = food.split(',').first.trim().toLowerCase();
+  if (head.length < 3) return false;
+  final re = RegExp('\\b${RegExp.escape(head)}', caseSensitive: false);
+  return tips.any(re.hasMatch);
 }
 
 /// Wat de coach schreef.

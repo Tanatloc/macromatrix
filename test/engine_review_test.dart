@@ -75,6 +75,9 @@ void main() {
       await tester.pump();
       final set = find.text('Custom goal');
       await tester.scrollUntilVisible(set, 300, scrollable: find.byType(Scrollable).first);
+      // Al gebouwd (in de cache onder het scherm) is nog niet zichtbaar
+      await tester.ensureVisible(set);
+      await tester.pumpAndSettle();
       await tester.tap(set);
       await tester.pumpAndSettle();
       await tester.enterText(find.widgetWithText(TextField, 'At least (recommended)'), '0');
@@ -90,8 +93,8 @@ void main() {
     });
   });
 
-  group('2. bodem onder het energiedoel', () {
-    test('afvallen aan 1 kg per week zakt nooit onder 1200 kcal (vrouw) en de afgeleide doelen volgen', () {
+  group('2. het energiedoel volgt het tempo, met een waarschuwing bij extremen', () {
+    test('afvallen aan 1 kg per week: doel volgt het tempo, waarschuwing onder 1200 kcal (vrouw)', () {
       const p = Profile(
         sex: Sex.female,
         birthYear: 1956,
@@ -99,32 +102,46 @@ void main() {
         heightCm: 160,
         activity: Activity.sedentary,
         goal: Goal.lose,
-        rateKgPerWeek: -1.0,
+        rateKgPerWeek: -0.5,
       );
-      // Zonder bodem: ±1307 − 1100 = ±207 kcal
-      expect(formulaTdee(p, 2026) + p.goalKcal, lessThan(300));
-      expect(energyTarget(p, 2026), 1200);
-      expect(energyFloored(p, 2026), isTrue);
+      final raw = (formulaTdee(p, 2026) + p.goalKcal).roundToDouble();
+      expect(raw, lessThan(1200));
+      expect(energyTarget(p, 2026), raw);
+      expect(paceWarning(p, 2026), PaceWarning.low);
       final t = targetsFor(p, year: 2026);
-      expect(t['energy']!.goal, 1200);
-      // Eiwit, koolhydraten en vet samen komen uit op het (begrensde) doel
+      expect(t['energy']!.goal, raw);
+      // Eiwit, koolhydraten en vet samen komen uit op het doel
       final macros = t['protein']!.goal! * 4 + t['carbs']!.goal! * 4 + t['fat']!.goal! * 9;
-      expect(macros, closeTo(1200, 1));
-      expect(t['b1']!.goal, closeTo(0.1 * 1200 * 4.184 / 1000, 1e-9));
-      // Een rustig tempo krijgt geen bodem
-      expect(energyFloored(p.copyWith(activity: Activity.active, rateKgPerWeek: () => -0.25), 2026), isFalse);
+      expect(macros, closeTo(raw, 1));
+      // Een rustig tempo geeft geen waarschuwing
+      expect(paceWarning(p.copyWith(activity: Activity.active, rateKgPerWeek: () => -0.25), 2026), isNull);
     });
 
-    test('mannen: minstens 1500 kcal, of je ruststofwisseling als die hoger ligt', () {
-      const p = Profile(sex: Sex.male, birthYear: 1950, weightKg: 60, heightCm: 165, activity: Activity.sedentary, goal: Goal.lose, rateKgPerWeek: -1.0);
-      expect(energyTarget(p, 2026), 1500);
-      const big = Profile(sex: Sex.male, birthYear: 1990, weightKg: 140, heightCm: 195, activity: Activity.sedentary, goal: Goal.lose, rateKgPerWeek: -1.0);
+    test('mannen: waarschuwing onder 1500 kcal, of onder je ruststofwisseling als die hoger ligt', () {
+      const big = Profile(
+        sex: Sex.male,
+        birthYear: 2001,
+        weightKg: 84.8,
+        heightCm: 184,
+        activity: Activity.sedentary,
+        goal: Goal.lose,
+        rateKgPerWeek: -0.5,
+      );
       final rest = bmr(big, big.ageIn(2026)).roundToDouble();
-      expect(rest, greaterThan(1500));
-      expect(energyTarget(big, 2026), greaterThanOrEqualTo(rest));
+      expect(energyMinimum(big, 2026), rest);
+      expect(energyTarget(big, 2026), lessThan(rest));
+      expect(paceWarning(big, 2026), PaceWarning.low);
     });
 
-    test('nooit negatief: wie minder verbruikt dan de bodem, blijft op zijn onderhoud', () {
+    test('aankomen: waarschuwing boven een halve kilo per week, doel blijft wat het tempo vraagt', () {
+      final p = Profile(weightKg: 70, goal: Goal.gain, targetWeightKg: 76, targetDate: DateTime(2026, 7, 1));
+      final day = DateTime(2026, 6, 1);
+      expect(paceWarning(p, 2026, day: day), PaceWarning.high);
+      expect(energyTarget(p, 2026, day: day), greaterThan(formulaTdee(p, 2026) + maxSurplusKcal));
+      expect(paceWarning(const Profile(goal: Goal.gain, rateKgPerWeek: 0.25), 2026), isNull);
+    });
+
+    test('nooit negatief', () {
       const p = Profile(
         sex: Sex.female,
         birthYear: 1931,
@@ -134,10 +151,9 @@ void main() {
         goal: Goal.lose,
         rateKgPerWeek: -1.0,
       );
-      final maintain = formulaTdee(p, 2026).roundToDouble();
-      expect(maintain + p.goalKcal, lessThan(0), reason: 'zonder bodem een negatief doel');
+      expect(formulaTdee(p, 2026) + p.goalKcal, lessThan(0), reason: 'het tempo vraagt een negatief doel');
       final t = targetsFor(p, year: 2026);
-      expect(t['energy']!.goal, maintain);
+      expect(t['energy']!.goal, 0);
       for (final e in t.entries) {
         expect(e.value.goal ?? 0, greaterThanOrEqualTo(0), reason: e.key);
         expect(e.value.upper ?? 0, greaterThanOrEqualTo(0), reason: e.key);
@@ -147,7 +163,7 @@ void main() {
     test('een eigen energiedoel blijft zoals je het typte', () {
       const p = Profile(sex: Sex.female, goal: Goal.lose, rateKgPerWeek: -1.0, energyOverride: 1100);
       expect(energyTarget(p, 2026), 1100);
-      expect(energyFloored(p, 2026), isFalse);
+      expect(paceWarning(p, 2026), isNull);
     });
   });
 

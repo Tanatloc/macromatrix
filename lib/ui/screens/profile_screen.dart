@@ -689,7 +689,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   tooltip: p.goal == Goal.lose ? tr('Slower', 'Trager') : tr('Slower', 'Trager'),
                   size: 28,
                   onTap: () {
-                    final next = p.goal == Goal.lose ? (rate + 0.05).clamp(-1.0, -0.1) : (rate - 0.05).clamp(0.05, 0.5);
+                    final next = p.goal == Goal.lose ? (rate + 0.05).clamp(-Profile.maxLoss, -0.1) : (rate - 0.05).clamp(0.05, Profile.maxGain);
                     _update(p.copyWith(rateKgPerWeek: () => double.parse(next.toStringAsFixed(2))));
                   },
                 ),
@@ -702,7 +702,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   tooltip: tr('Faster', 'Sneller'),
                   size: 28,
                   onTap: () {
-                    final next = p.goal == Goal.lose ? (rate - 0.05).clamp(-1.0, -0.1) : (rate + 0.05).clamp(0.05, 0.5);
+                    final next = p.goal == Goal.lose ? (rate - 0.05).clamp(-Profile.maxLoss, -0.1) : (rate + 0.05).clamp(0.05, Profile.maxGain);
                     _update(p.copyWith(rateKgPerWeek: () => double.parse(next.toStringAsFixed(2))));
                   },
                 ),
@@ -738,14 +738,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          // Je tempo vraagt minder dan gezond is: het doel blijft op de bodem (zie energyFloor)
-          if (energyFloored(p, year, tdee: s.adaptiveTdee))
+          // Een extreem tempo: alleen een waarschuwing, het doel volgt je keuze (zie paceWarning)
+          if (paceWarning(p, year, tdee: s.adaptiveTdee) case final warning?)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                _floorNote(p, year, s.adaptiveTdee),
-                key: const ValueKey('energy-floor-note'),
-                style: TextStyle(fontSize: 12, height: 1.4, color: pal.high),
+                _paceNote(warning, p, year),
+                key: const ValueKey('pace-warning-note'),
+                style: TextStyle(fontSize: 12, height: 1.4, color: pal.ink2),
               ),
             ),
           const SizedBox(height: 10),
@@ -805,22 +805,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Waarom het dagdoel hoger ligt dan je tempo vraagt: nooit onder je ruststofwisseling en 1200 (vrouwen) of 1500
-  /// kcal (mannen), en nooit boven je onderhoud.
-  String _floorNote(Profile p, int year, double? tdee) {
-    final floor = energyFloor(p, year, tdee: tdee);
-    final minimum = math.max(bmr(p, p.ageIn(year)), minimumKcal(p.sex));
-    if (floor < minimum.roundToDouble()) {
-      return tr(
-        'Your goal stays at your maintenance (${fmtInt(floor)} kcal): eating less than ${fmtInt(minimum)} kcal a day is too little to get enough nutrients.',
-        'Je doel blijft op je onderhoud (${fmtInt(floor)} kcal): minder dan ${fmtInt(minimum)} kcal per dag eten is te weinig om genoeg voedingsstoffen binnen te krijgen.',
-      );
-    }
-    return tr(
-      'Your pace asks for less, but the app keeps your goal at ${fmtInt(floor)} kcal: less is too little to get enough nutrients. You will lose weight a bit more slowly.',
-      'Je tempo vraagt minder, maar de app houdt je doel op ${fmtInt(floor)} kcal: minder is te weinig om genoeg voedingsstoffen binnen te krijgen. Je valt wat trager af.',
-    );
-  }
+  /// Waarschuwing bij een extreem tempo. Het doel blijft wat je tempo vraagt: de keuze ligt bij jou.
+  String _paceNote(PaceWarning warning, Profile p, int year) => switch (warning) {
+    PaceWarning.low => tr(
+      'This pace puts you under ${fmtInt(energyMinimum(p, year))} kcal a day; that makes it hard to get enough nutrients.',
+      'Dit tempo zit onder ${fmtInt(energyMinimum(p, year))} kcal per dag; dat maakt het moeilijk om genoeg voedingsstoffen binnen te krijgen.',
+    ),
+    PaceWarning.high => tr(
+      'This pace puts you more than ${fmtInt(maxSurplusKcal)} kcal a day above your maintenance; gaining more than half a kilo a week is mostly fat.',
+      'Dit tempo zit meer dan ${fmtInt(maxSurplusKcal)} kcal per dag boven je onderhoud; meer dan een halve kilo per week aankomen is vooral vet.',
+    ),
+  };
 
   /// Uitleg onder het dagdoel die klopt met wat er echt gebeurt: telt beweging mee, en wat kwam er vandaag bij of
   /// zat al in je activiteitsniveau (N17).

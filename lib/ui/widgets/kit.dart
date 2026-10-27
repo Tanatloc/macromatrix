@@ -214,6 +214,22 @@ class PanelTitle extends StatelessWidget {
   }
 }
 
+/// [StatTile]s naast elkaar, even breed en even hoog.
+class StatTiles extends StatelessWidget {
+  const StatTiles(this.tiles, {super.key});
+  final List<StatTile> tiles;
+
+  @override
+  Widget build(BuildContext context) => IntrinsicHeight(
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (i, t) in tiles.indexed) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: t)],
+      ],
+    ),
+  );
+}
+
 /// Klein bovenschrift in hoofdletters (mono), bv. "VRIJDAG · WEEK 42".
 class Eyebrow extends StatelessWidget {
   const Eyebrow(this.text, {super.key, this.color});
@@ -765,12 +781,16 @@ class LegendItem extends StatelessWidget {
   );
 }
 
-/// Klein vak met een label en een getal (bv. "7-daags gem. 340 mg").
+/// Klein vak met een label en een getal (bv. "7-daags gem. 340 mg"), eventueel met een korte regel eronder (bv. een
+/// trendpijltje). [large]: een groter getal op een lichte tegel, zoals de kerngetallen in het weekrapport.
 class StatTile extends StatelessWidget {
-  const StatTile({super.key, required this.label, required this.value, this.boxed = true});
+  const StatTile({super.key, required this.label, required this.value, this.boxed = true, this.sub, this.subColor, this.large = false});
   final String label;
   final String value;
   final bool boxed;
+  final String? sub;
+  final Color? subColor;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
@@ -784,17 +804,31 @@ class StatTile extends StatelessWidget {
           label,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 11.5, color: p.ink3),
+          style: TextStyle(fontSize: 11.5, height: large ? 1.25 : null, color: p.ink3),
         ),
-        const SizedBox(height: 1),
-        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: numStyle(boxed ? 15 : 17)),
+        SizedBox(height: large ? 2 : 1),
+        if (large)
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value, style: numStyle(17, color: p.ink)),
+          )
+        else
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: numStyle(boxed ? 15 : 17)),
+        if (sub != null)
+          Text(
+            sub!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11.5, height: 1.25, color: subColor ?? p.ink3),
+          ),
       ],
     );
     if (!boxed) return content;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: p.surface2,
+        color: large ? p.surface : p.surface2,
         border: Border.all(color: p.line),
         borderRadius: BorderRadius.circular(12),
       ),

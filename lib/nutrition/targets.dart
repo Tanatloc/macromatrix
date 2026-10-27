@@ -95,7 +95,7 @@ class Profile {
   bool get hasPlan => targetWeightKg != null && targetDate != null && goal != Goal.maintain;
 
   /// Hoogste tempo dat de app instelt (kg per week), afvallen en aankomen.
-  static const maxLoss = 1.0, maxGain = 0.5;
+  static const maxLoss = 1.0, maxGain = 1.0;
 
   /// Tempo dat het plan vandaag vraagt: wat er nog rest gedeeld door de weken tot de datum, zonder plafond.
   /// 0 als het doel bereikt is. null zonder plan.
@@ -235,26 +235,35 @@ double impliedRate(double kcal, double tdee) => (kcal - tdee) * 7 / kcalPerKg;
 /// grens als bij het kiezen van een doelgewicht (`WeightPlan.of`).
 double minimumKcal(Sex sex) => sex == Sex.male ? 1500 : 1200;
 
-/// Bodem onder een berekend energiedoel bij afvallen: minstens je ruststofwisseling en minstens [minimumKcal]. Nooit
-/// boven je onderhoud [tdee]: wie minder verbruikt dan die grens, krijgt zijn onderhoud en geen overschot.
-double energyFloor(Profile p, int year, {double? tdee}) {
-  final maintain = (tdee ?? formulaTdee(p, year)).roundToDouble();
-  return math.max(0, math.min(math.max(bmr(p, p.ageIn(year)), minimumKcal(p.sex)).roundToDouble(), maintain));
-}
+/// Onder dit dagdoel waarschuwt de app bij afvallen: je ruststofwisseling en minstens [minimumKcal]. Alleen een
+/// waarschuwing: het doel volgt altijd het tempo dat je kiest.
+double energyMinimum(Profile p, int year) => math.max(bmr(p, p.ageIn(year)), minimumKcal(p.sex)).roundToDouble();
 
-/// Energiedoel zonder bodem (verbruik plus het tekort of overschot van je doel op [day]).
+/// Boven dit overschot per dag waarschuwt de app bij aankomen: meer dan een halve kilo per week is vooral vet.
+const maxSurplusKcal = 0.5 * kcalPerKg / 7;
+
+/// Energiedoel zonder bijsturing (verbruik plus het tekort of overschot van je doel op [day]).
 double _rawEnergy(Profile p, int year, double? tdee, DateTime? day) =>
     ((tdee ?? formulaTdee(p, year)) + p.goalKcalOn(day ?? logicalNow())).roundToDouble();
 
 /// Energiebehoefte per dag inclusief activiteit en doel. [tdee] = verbruik uit een andere bron (adaptief). [day] = de
-/// dag waarvoor het doel geldt (standaard vandaag): het tempo van een plan met een datum hangt daarvan af. Een
-/// berekend doel zakt nooit onder [energyFloor]; een eigen doel blijft zoals je het typte.
-double energyTarget(Profile p, int year, {double? tdee, DateTime? day}) =>
-    p.energyOverride ?? math.max(_rawEnergy(p, year, tdee, day), energyFloor(p, year, tdee: tdee));
+/// dag waarvoor het doel geldt (standaard vandaag): het tempo van een plan met een datum hangt daarvan af. Het doel
+/// volgt je tempo; alleen onder nul gaat het nooit. Een eigen doel blijft zoals je het typte.
+double energyTarget(Profile p, int year, {double? tdee, DateTime? day}) => p.energyOverride ?? math.max(0, _rawEnergy(p, year, tdee, day));
 
-/// Houdt de bodem ([energyFloor]) het berekende doel op [day] tegen? Dan geeft het scherm uitleg.
-bool energyFloored(Profile p, int year, {double? tdee, DateTime? day}) =>
-    p.energyOverride == null && _rawEnergy(p, year, tdee, day) < energyFloor(p, year, tdee: tdee);
+/// Waarom een berekend doel op [day] extreem is: te weinig om genoeg voedingsstoffen binnen te krijgen
+/// ([PaceWarning.low], onder [energyMinimum]) of een overschot boven [maxSurplusKcal] ([PaceWarning.high]). null =
+/// niets aan de hand of een eigen doel.
+PaceWarning? paceWarning(Profile p, int year, {double? tdee, DateTime? day}) {
+  if (p.energyOverride != null) return null;
+  final raw = _rawEnergy(p, year, tdee, day);
+  final maintain = (tdee ?? formulaTdee(p, year)).roundToDouble();
+  if (raw < maintain && raw < energyMinimum(p, year)) return PaceWarning.low;
+  if (raw - maintain > maxSurplusKcal) return PaceWarning.high;
+  return null;
+}
+
+enum PaceWarning { low, high }
 
 /// Minimum eiwit per kg lichaamsgewicht (EFSA PRI voor volwassenen).
 const proteinMinPerKg = 0.83;

@@ -559,6 +559,7 @@ class _HealthConnectTileState extends State<_HealthConnectTile> {
 
   Future<void> _syncNow(HealthSync h) async {
     setState(() => _busy = true);
+    await h.requestMissing();
     final n = await h.sync();
     if (!mounted) return;
     setState(() => _busy = false);

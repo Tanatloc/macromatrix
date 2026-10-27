@@ -34,7 +34,11 @@ class NutrientDetailScreen extends StatefulWidget {
 }
 
 class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
-  bool _perKcal = false;
+  /// Rijkste bronnen: standaard per portie, want per 100 g wint gistextract (5 g per boterham) en drankpoeder.
+  OracleRank _rank = OracleRank.perPortion;
+
+  /// Alleen gewone voedingsmiddelen: geen extracten, specerijen, poeders, gedroogde varianten of verrijkte producten.
+  bool _everyday = true;
   late int _days = _isPeriod && _periodDays <= 7 ? 7 : 30;
 
   /// Aangetikte (of met de muis aangewezen) dag in het verloop van 30 of 90 dagen.
@@ -219,12 +223,16 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
     ].join(', ');
   }
 
-  /// Hoeveelheid per 100 g, of per 100 kcal (0 voor producten met heel weinig energie, zoals water of thee).
-  static double _score(NutrientMap per100g, String key, bool perKcal) {
+  /// Hoeveelheid per 100 g, per 100 kcal (0 voor producten met heel weinig energie, zoals water of thee) of per
+  /// portie (dezelfde portie als in het Orakel).
+  static double _score(Food f, String key, OracleRank rank) {
+    final per100g = withDerived(f.per100g);
     final v = per100g[key] ?? 0;
-    if (!perKcal) return v;
-    final kcal = per100g['energy'] ?? 0;
-    return kcal < 15 ? 0 : v / kcal * 100;
+    return switch (rank) {
+      OracleRank.per100g => v,
+      OracleRank.perPortion => v * AppState.oraclePortion(f) / 100,
+      OracleRank.per100kcal => (per100g['energy'] ?? 0) < 15 ? 0 : v / per100g['energy']! * 100,
+    };
   }
 
   String _amount(double v) => '${formatAmount(v, n)} ${n.shownUnit}';
@@ -800,14 +808,22 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
       if (!recentRefs.add(f.ref)) continue;
       // Ook wat je zelf at: een onwaarschijnlijke waarde (SP-1) is geen bron om aan te raden
       if (_absurd(s, f)) continue;
-      final v = _score(withDerived(f.per100g), n.key, _perKcal);
+      final v = _score(f, n.key, _rank);
       if (v > 0) mine.add((f, v));
     }
     mine.sort((a, b) => b.$2.compareTo(a.$2));
-    final db = [
-      for (final r in s.richestFor(n.key, perKcal: _perKcal, limit: 12))
-        if (!_absurd(s, r.$1)) r,
-    ];
+    // Via het Orakel: één regel per product, uitschieters weg, en bij "alleen gewone voedingsmiddelen" niets wat je
+    // niet per portie eet. Bij een stof met een maximum horen frieten en chips er net wel bij.
+    // Eén regel per soort voedingsmiddel: niet vijf keer tonijn (gebakken, gegrild, uit de diepvries…), en dan liefst
+    // uit een Europese databank (wat hier in de winkel ligt)
+    final kinds = <String, (Food, double)>{};
+    for (final r in s.oracle(n.key, rank: _rank, limit: 30, everyday: _everyday && !isLimit)) {
+      if (_absurd(s, r.$1)) continue;
+      final kind = r.$1.label?.food ?? r.$1.name;
+      final had = kinds[kind];
+      if (had == null || (!had.$1.source.european && r.$1.source.european)) kinds[kind] = r;
+    }
+    final db = (kinds.values.toList()..sort((a, b) => b.$2.compareTo(a.$2))).take(12).toList();
     final list = [
       ...mine.take(3),
       for (final r in db)
@@ -827,17 +843,25 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
             subtitle: isLimit
                 ? tr('Less of this is better — these foods have the most.', 'Minder hiervan is beter — deze producten bevatten het meest.')
                 : null,
-            trailing: SizedBox(
-              width: 190,
-              child: Segmented<bool>(
-                height: 24,
-                fontSize: 11.5,
-                items: const [(false, 'per 100 g'), (true, 'per 100 kcal')],
-                selected: _perKcal,
-                onChanged: (v) => setState(() => _perKcal = v),
-              ),
-            ),
           ),
+          const SizedBox(height: 8),
+          Segmented<OracleRank>(
+            key: const ValueKey('sources-rank'),
+            height: 28,
+            fontSize: 12,
+            items: [for (final r in [OracleRank.perPortion, OracleRank.per100g, OracleRank.per100kcal]) (r, r.label)],
+            selected: _rank,
+            onChanged: (v) => setState(() => _rank = v),
+          ),
+          if (!isLimit)
+            SwitchListTile(
+              key: const ValueKey('sources-everyday'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _everyday,
+              onChanged: (v) => setState(() => _everyday = v),
+              title: Text(tr('Everyday foods only', 'Alleen gewone voedingsmiddelen'), style: TextStyle(fontSize: 13, color: p.ink2)),
+            ),
           if (s.preferences.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -869,9 +893,16 @@ class _NutrientDetailScreenState extends State<NutrientDetailScreen> {
   /// Bij een stof met een maximum ([limit]) geen groene + en geen "eet je vaker" in de merkkleur: een groene + bij
   /// cola leest als "voeg dit toe" (N26). Tikken opent nog altijd het product.
   Widget _sourceRow(Palette p, Food f, double v, double top, bool mine, {bool limit = false}) {
-    final portion = f.portions.where((x) => x.grams >= 5 && x.grams <= 250).firstOrNull;
     final per100 = withDerived(f.per100g)[n.key] ?? 0;
-    final portionText = portion == null ? null : '${portion.label} ≈ ${_amount(per100 * portion.grams / 100)}';
+    final String? portionText;
+    if (_rank == OracleRank.perPortion) {
+      // Het getal rechts is al per portie: hier welke portie (met het gewicht erbij, N36)
+      final serving = AppState.oracleServing(f);
+      portionText = RegExp(r'\d\s*(g|ml)\b').hasMatch(serving.label) ? serving.label : '${serving.label} (${fmtInt(serving.grams)} g)';
+    } else {
+      final portion = f.portions.where((x) => x.grams >= 5 && x.grams <= 250).firstOrNull;
+      portionText = portion == null ? null : '${portion.label} ≈ ${_amount(per100 * portion.grams / 100)}';
+    }
     void open() => Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => FoodDetailScreen(food: f, meal: Meal.forHour(DateTime.now().hour)),

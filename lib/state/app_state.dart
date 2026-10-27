@@ -11,7 +11,7 @@ import '../day_clock.dart';
 export '../day_clock.dart';
 import '../data/food.dart';
 import '../i18n.dart';
-import '../nutrition/coach.dart' show CoachOption, coachFoodName, coachPortion, isFallbackServing;
+import '../nutrition/coach.dart' show CoachOption, coachFoodName, coachOptionUsed, coachPortion, isFallbackServing;
 import '../data/food_db.dart';
 import '../data/models.dart';
 import '../data/plan.dart';
@@ -778,7 +778,12 @@ class AppState extends ChangeNotifier {
   /// portie, alleen gewone voedingsmiddelen, met je voorkeuren en allergieën), met een gewone naam en portie in de taal
   /// van de app en het deel van het dagdoel ([goals], anders je doel van vandaag) dat die portie geeft. Eén kleine
   /// vraag aan het Orakel per stof (±0,1 à 0,2 s op een computer, zie test/coach_test.dart).
-  Map<String, List<CoachOption>> coachOptions(List<String> keys, {Map<String, double> goals = const {}, int perKey = 4}) {
+  Map<String, List<CoachOption>> coachOptions(
+    List<String> keys, {
+    Map<String, double> goals = const {},
+    int perKey = 4,
+    List<String> avoid = const [],
+  }) {
     final out = <String, List<CoachOption>>{};
     for (final k in keys) {
       final goal = goals[k] ?? _targets[k]?.goal;
@@ -794,10 +799,17 @@ class AppState extends ChangeNotifier {
         final portion = coachPortion(f, serving, nl: isNl);
         final pct = (v * portion.grams / serving.grams / goal * 100).round();
         if (pct < 5) continue;
-        list.add(CoachOption(food: name, portion: portion.label, pct: math.min(pct, 2000)));
+        final kcal = f.per100g['energy'];
+        list.add(
+          CoachOption(food: name, portion: portion.label, pct: math.min(pct, 2000), kcal: kcal == null ? null : (kcal * portion.grams / 100).round()),
+        );
       }
-      // Wat het meest aanvult eerst (een handvol gedroogd fruit zakt na het inkorten van de portie)
-      list.sort((a, b) => b.pct.compareTo(a.pct));
+      // Wat het meest aanvult eerst (een handvol gedroogd fruit zakt na het inkorten van de portie); wat de coach
+      // onlangs al voorstelde achteraan, zodat "Write again" andere voedingsmiddelen krijgt
+      list.sort((a, b) {
+        final used = (coachOptionUsed(a.food, avoid) ? 1 : 0) - (coachOptionUsed(b.food, avoid) ? 1 : 0);
+        return used != 0 ? used : b.pct.compareTo(a.pct);
+      });
       if (list.isNotEmpty) out[k] = list.take(perKey).toList();
     }
     return out;

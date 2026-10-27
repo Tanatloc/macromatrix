@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 
 import {
   EXAMPLES,
+  TEMPERATURE,
+  TEMPERATURE_AGAIN,
   MAX_INPUT_BYTES,
   TEXT_MODEL,
   cleanCoach,
@@ -539,4 +541,23 @@ test('energietip te klein voor een groot tekort: nieuwe poging, daarna valt die 
   assert.equal(inputs.length, 2);
   assert.match(inputs[1].messages[0].content, /slightly larger serving/);
   assert.deepEqual(out.tips, ['Add 120 g of salmon to dinner twice.']);
+});
+
+test('recente tips en "Write again": niet herhalen, losser schrijven, kcal per portie, liever vervangen', () => {
+  const avoid = ['Include 120 g roasted soybeans in your musli & fruits breakfast for extra fiber and protein.', 'see https://x.y', 42];
+  const options = { Fibre: [{ food: 'broccoli, boiled', portion: '100 g', pct: 11, kcal: 35 }] };
+  const { week: w } = cleanWeek(week({ avoid_tips: avoid, again: true, options }));
+  assert.deepEqual(w.avoid_tips, [avoid[0]]);
+  assert.deepEqual(w.options.Fibre[0], { food: 'broccoli, boiled', portion: '100 g', pct: 11, kcal: 35 });
+  // Afvallen: liever vervangen
+  assert.equal(w.prefer_swaps, true);
+  const input = coachInput(w);
+  assert.equal(input.temperature, TEMPERATURE_AGAIN);
+  assert.equal(JSON.parse(input.messages[1].content).again, undefined);
+  assert.equal(coachInput(cleanWeek(week()).week).temperature, TEMPERATURE);
+  // Aankomen ver onder het doel: toevoegen mag
+  const gain = cleanWeek(week({ goal: 'gain', energy: { avg: 1500, goal: 2600 } })).week;
+  assert.equal(gain.prefer_swaps, false);
+  assert.match(systemPrompt('en'), /avoid_tips/);
+  assert.match(systemPrompt('en'), /never into breakfast or muesli/);
 });

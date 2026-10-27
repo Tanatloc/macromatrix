@@ -100,21 +100,28 @@ void main() {
     expect(tester.widget<Text>(warn).data, contains('slower than your pace'));
   });
 
-  testWidgets('te snel afvallen: het dagdoel blijft op 1200 kcal en het Profiel zegt waarom', (tester) async {
+  testWidgets('te snel afvallen: het dagdoel volgt het tempo en het Profiel waarschuwt neutraal', (tester) async {
     final s = newState();
-    s.saveProfile(
-      const Profile(sex: Sex.female, birthYear: 1956, weightKg: 60, heightCm: 160, activity: Activity.sedentary, goal: Goal.lose, rateKgPerWeek: -1.0),
+    const p = Profile(
+      sex: Sex.female,
+      birthYear: 1956,
+      weightKg: 60,
+      heightCm: 160,
+      activity: Activity.sedentary,
+      goal: Goal.lose,
+      rateKgPerWeek: -0.5,
     );
+    s.saveProfile(p);
     await pumpProfile(tester, s);
-    expect(s.todayTargets['energy']!.goal, 1200);
-    final floor = find.byKey(const ValueKey('energy-floor-note'));
-    expect(floor, findsOneWidget);
-    expect(tester.widget<Text>(floor).data, contains('keeps your goal at 1,200 kcal'));
+    expect(s.todayTargets['energy']!.goal, lessThan(1200));
+    final note = find.byKey(const ValueKey('pace-warning-note'));
+    expect(note, findsOneWidget);
+    expect(tester.widget<Text>(note).data, contains('under 1,200 kcal a day'));
 
-    // Een rustiger tempo met meer beweging: geen bodem, geen uitleg
+    // Een rustiger tempo met meer beweging: geen waarschuwing
     s.saveProfile(s.profile.copyWith(activity: Activity.active, rateKgPerWeek: () => -0.25));
     await tester.pump();
-    expect(floor, findsNothing);
+    expect(note, findsNothing);
   });
 
   testWidgets('N24: 130 g koolhydraten blijft 130 g, en "hoogstens" maakt er een maximum van', (tester) async {

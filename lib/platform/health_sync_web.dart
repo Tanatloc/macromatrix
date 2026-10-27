@@ -7,6 +7,7 @@ class HealthSync {
   bool get enabled => false;
   Future<bool> enable() async => false;
   void disable() {}
+  Future<void> requestMissing() async {}
   Future<int> sync() async => 0;
   DateTime? get lastSync => null;
 }

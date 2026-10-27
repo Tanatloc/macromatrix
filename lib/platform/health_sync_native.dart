@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:health/health.dart';
 
 import '../i18n.dart';
+import '../nutrition/targets.dart';
 import '../state/app_state.dart';
+import 'workout_energy.dart';
 
 class HealthSync {
   HealthSync(this.state);
@@ -11,12 +13,14 @@ class HealthSync {
 
   static bool get supported => Platform.isAndroid;
   static final _health = Health();
-  // Workouts lezen ook hun verbrande energie en afstand, dus daar is aparte toestemming voor nodig
+  // Workouts lezen ook hun verbrande energie en afstand, dus daar is aparte toestemming voor nodig. Actieve energie:
+  // alleen wat je door de training extra verbrandde (rustverbruik zit al in je doel, zie workoutActiveKcal)
   static const _types = [
     HealthDataType.STEPS,
     HealthDataType.WEIGHT,
     HealthDataType.WORKOUT,
     HealthDataType.TOTAL_CALORIES_BURNED,
+    HealthDataType.ACTIVE_ENERGY_BURNED,
     HealthDataType.DISTANCE_DELTA,
     HealthDataType.BODY_FAT_PERCENTAGE,
     HealthDataType.LEAN_BODY_MASS,
@@ -50,6 +54,15 @@ class HealthSync {
   }
 
   void disable() => state.user.setSetting('_health', {'on': false});
+
+  /// Toestemming opnieuw vragen als er een soort bij kwam (zoals actieve energie sinds 1.22): Health Connect toont
+  /// dan alleen wat nog ontbreekt. Alleen bij een tik van de gebruiker, nooit bij het automatisch overnemen.
+  Future<void> requestMissing() async {
+    if (!supported || !enabled) return;
+    final read = [for (final _ in _types) HealthDataAccess.READ];
+    if (await _health.hasPermissions(_types, permissions: read) == true) return;
+    await _health.requestAuthorization(_types, permissions: read);
+  }
 
   /// De laatste 7 dagen overnemen. Geeft het aantal nieuwe of bijgewerkte items.
   Future<int> sync() async {
@@ -94,16 +107,27 @@ class HealthSync {
         }
       }
 
-      // Workouts met verbrande energie
+      // Workouts met verbrande energie: de actieve energie tijdens de workout, of het totaal min je rustverbruik
+      final active = await _activeEnergy(from, now);
+      final profile = state.profile;
+      final restPerMin = bmr(profile, profile.ageIn(now.year)) / 1440;
       for (final p in points.where((p) => p.type == HealthDataType.WORKOUT)) {
         final v = p.value;
-        if (v is! WorkoutHealthValue || (v.totalEnergyBurned ?? 0) <= 0) continue;
+        if (v is! WorkoutHealthValue) continue;
+        final kcal = workoutActiveKcal(
+          start: p.dateFrom,
+          end: p.dateTo,
+          total: v.totalEnergyBurned?.toDouble(),
+          active: active,
+          restKcalPerMin: restPerMin,
+        );
+        if (kcal == null || kcal <= 0) continue;
         final minutes = p.dateTo.difference(p.dateFrom).inMinutes.toDouble();
         if (db.insertExerciseOnce(
           id: 'hc:${p.uuid}',
           day: dayKey(p.dateFrom),
           name: _workoutName(v.workoutActivityType),
-          kcal: v.totalEnergyBurned!.toDouble(),
+          kcal: kcal.roundToDouble(),
           minutes: minutes > 0 ? minutes : null,
         )) {
           changed++;
@@ -115,6 +139,20 @@ class HealthSync {
       return changed;
     } on Exception {
       return 0;
+    }
+  }
+
+  /// Actieve-energieblokken van [from] tot [to]. Leeg zonder toestemming (wie Health Connect aanzette vóór 1.22)
+  /// of als de bron ze niet schrijft: dan rekent [workoutActiveKcal] met het totaal.
+  static Future<List<EnergySpan>> _activeEnergy(DateTime from, DateTime to) async {
+    try {
+      final points = await _health.getHealthDataFromTypes(types: [HealthDataType.ACTIVE_ENERGY_BURNED], startTime: from, endTime: to);
+      return [
+        for (final p in _health.removeDuplicates(points))
+          if (p.value case NumericHealthValue(:final numericValue)) EnergySpan(p.dateFrom, p.dateTo, numericValue.toDouble()),
+      ];
+    } on Exception {
+      return const [];
     }
   }
 

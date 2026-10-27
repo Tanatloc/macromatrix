@@ -16,11 +16,14 @@ Color novaColor(Palette p, Nova n) => switch (n) {
 
 /// Bewerkingsgraad: welk deel van je energie uit ultrabewerkt eten komt, met de verdeling over de vier NOVA-groepen.
 class ProcessingCard extends StatelessWidget {
-  const ProcessingCard({super.key, required this.share, this.period = false});
+  const ProcessingCard({super.key, required this.share, this.period = false, this.onCollapse});
   final ProcessingShare share;
 
   /// Over meerdere dagen (andere tekst).
   final bool period;
+
+  /// Uitgeklapt in [ProcessingFold]: een tik op de titel klapt de kaart weer dicht, zoals bij andere kaarten.
+  final VoidCallback? onCollapse;
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +43,23 @@ class ProcessingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PanelTitle(
-            tr('Processed food', 'Bewerkt eten'),
-            subtitle: period
-                ? tr('share of your energy, NOVA', 'deel van je energie, NOVA')
-                : tr('share of today\'s energy, NOVA', 'deel van je energie vandaag, NOVA'),
-            trailing: InfoTip(title: 'NOVA', message: novaInfo()),
+          InkWell(
+            key: const ValueKey('processing-title'),
+            onTap: onCollapse,
+            borderRadius: BorderRadius.circular(8),
+            child: PanelTitle(
+              tr('Processed food', 'Bewerkt eten'),
+              subtitle: period
+                  ? tr('share of your energy, NOVA', 'deel van je energie, NOVA')
+                  : tr('share of today\'s energy, NOVA', 'deel van je energie vandaag, NOVA'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InfoTip(title: 'NOVA', message: novaInfo()),
+                  if (onCollapse != null) Icon(Icons.expand_less_rounded, color: p.ink3),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           if (!share.meaningful)
@@ -140,7 +154,10 @@ class _NovaFoodsState extends State<_NovaFoods> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 14),
-        Text(tr('What you ate', 'Wat je at'), style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.ink)),
+        Text(
+          tr('What you ate', 'Wat je at'),
+          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.ink),
+        ),
         for (final (n, list) in groups) ...[
           const SizedBox(height: 12),
           Row(
@@ -169,10 +186,18 @@ class _NovaFoodsState extends State<_NovaFoods> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: p.ink)),
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: p.ink),
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text(fmtInt(kcal), style: numStyle(12, weight: FontWeight.w400, color: p.ink3)),
+                  Text(
+                    fmtInt(kcal),
+                    style: numStyle(12, weight: FontWeight.w400, color: p.ink3),
+                  ),
                 ],
               ),
             ),
@@ -209,22 +234,7 @@ class _ProcessingFoldState extends State<ProcessingFold> {
   @override
   Widget build(BuildContext context) {
     final p = context.pal;
-    if (_open) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ProcessingCard(share: widget.share, period: widget.period),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => setState(() => _open = false),
-              icon: const Icon(Icons.expand_less_rounded, size: 18),
-              label: Text(tr('Hide', 'Verbergen')),
-            ),
-          ),
-        ],
-      );
-    }
+    if (_open) return ProcessingCard(share: widget.share, period: widget.period, onCollapse: () => setState(() => _open = false));
     final ultra = (widget.share.share(Nova.ultra) * 100).round();
     return Panel(
       padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
