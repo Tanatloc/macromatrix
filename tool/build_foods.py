@@ -48,6 +48,7 @@ SOURCES = {
     'cofid': "McCance and Widdowson's Composition of Foods Integrated Dataset 2021 (VK), Open Government Licence v3.0",
     'frida': 'Frida, DTU Fødevareinstituttet, versie 6.1 (Denemarken), CC BY 4.0',
     'bls': 'Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0 (Duitsland), CC BY 4.0',
+    'fineli': 'Fineli, Terveyden ja hyvinvoinnin laitos (THL), release 20 (Finland), CC BY 4.0',
     'slv': 'Livsmedelsverket, Livsmedelsdatabasen (Zweden), CC BY 4.0',
     'mvt': 'Matvaretabellen, Mattilsynet (Noorwegen), NLOD',
     'usda_fnd': 'USDA FoodData Central, Foundation Foods (VS), publiek domein',
@@ -178,7 +179,7 @@ FACTOR = {
     ('G', 'g'): 1, ('MG', 'mg'): 1, ('UG', 'µg'): 1, ('KCAL', 'kcal'): 1,
     ('UG', 'mg'): 0.001, ('MG', 'g'): 0.001, ('G', 'mg'): 1000,
 }
-EUROPEAN = ('ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls')
+EUROPEAN = ('ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'fineli')
 
 # Hoofdbestanddelen: die vullen we nooit met een geschaalde waarde van een ander product aan
 MACROS = {'energy', 'protein', 'carbs', 'fat', 'fiber', 'sugars', 'starch', 'water', 'alcohol', '_salt'}
@@ -698,6 +699,94 @@ def bls_rows(root):
             n['vit_k'] = n['_vit_k']
         n.pop('_vit_k', None)
         yield 'bls', code, name or local, local, BLS_GROUPS.get(code[:1], ''), n, []
+
+
+# ─────────────────────────── Fineli (Finland) ───────────────────────────
+#
+# Fineli release 20, THL (CC BY 4.0), het pakket met 74 voedingsstoffen: CSV met ";" en decimale komma's, latin-1.
+# component_value.csv heeft per product en stof één waarde (BESTLOC); Fineli vult zelf al aan uit verwante producten
+# (METHTYPE I/K), die nemen we zoals ze zijn, net als bij BLS. Energie staat alleen in kJ; vitamine A als RAE;
+# afzonderlijke vetzuren en tryptofaan in mg; molybdeen in "mg" (0,005 voor wortel = 5 µg).
+# Code → (sleutel, eenheid in Fineli, factor naar onze eenheid)
+FINELI = {
+    'ENERC': ('energy', 'KJ', 1 / 4.184), 'FAT': ('fat', 'G', 1), 'CHOAVL': ('carbs', 'G', 1), 'PROT': ('protein', 'G', 1),
+    'ALC': ('alcohol', 'G', 1), 'WATER': ('water', 'G', 1), 'SUGAR': ('sugars', 'G', 1), 'STARCH': ('starch', 'G', 1),
+    'FIBC': ('fiber', 'G', 1), 'FASAT': ('sfa', 'G', 1), 'FAMCIS': ('mufa', 'G', 1), 'FAPU': ('pufa', 'G', 1),
+    'FATRN': ('trans', 'G', 1), 'F18D3N3': ('ala', 'MG', 0.001), 'F20D5N3': ('epa', 'MG', 0.001),
+    'F22D6N3': ('dha', 'MG', 0.001), 'F18D2CN6': ('la', 'MG', 0.001), 'F20D4N6': ('aa', 'MG', 0.001),
+    'CHOLE': ('cholesterol', 'MG', 1), 'TRP': ('tryptophan', 'MG', 0.001),
+    'VITA': ('_rae', 'UG', 1), 'RETOL': ('retinol', 'UG', 1), 'CARTB': ('beta_carotene', 'UG', 1),
+    'VITD': ('vit_d', 'UG', 1), 'VITE': ('vit_e', 'MG', 1), 'VITK': ('vit_k', 'UG', 1), 'THIA': ('b1', 'MG', 1),
+    'RIBF': ('b2', 'MG', 1), 'NIA': ('b3', 'MG', 1), 'NIAEQ': ('_ne', 'MG', 1), 'VITPYRID': ('b6', 'MG', 1),
+    'FOL': ('b9', 'UG', 1), 'VITB12': ('b12', 'UG', 1), 'VITC': ('vit_c', 'MG', 1),
+    'NA': ('sodium', 'MG', 1), 'NACL': ('_salt', 'MG', 0.001), 'K': ('potassium', 'MG', 1), 'CA': ('calcium', 'MG', 1),
+    'MG': ('magnesium', 'MG', 1), 'P': ('phosphorus', 'MG', 1), 'FE': ('iron', 'MG', 1), 'ZN': ('zinc', 'MG', 1),
+    'ID': ('iodine', 'UG', 1), 'SE': ('selenium', 'UG', 1), 'CU': ('copper', 'MG', 1), 'MN': ('manganese', 'MG', 1),
+    'CR': ('chromium', 'UG', 1), 'MO': ('molybdenum', 'MG', 1000), 'FD': ('fluoride', 'MG', 1),
+}
+# METHTYPE: berekend als recept (R), uit een verwant product (K, I, IG, O) of logisch afgeleid (U)
+FINELI_DERIVED = {'R', 'K', 'I', 'IG', 'O', 'U'}
+# Porties (foodaddunit.csv) die in de app zinvol zijn, met hun Engelse naam
+FINELI_PORTIONS = {
+    'PORTS': 'small portion', 'PORTM': 'medium portion', 'PORTL': 'large portion', 'KPL_S': 'small piece',
+    'KPL_M': 'medium piece', 'KPL_L': 'large piece', 'KPL_VALM': 'piece', 'DL': 'dl', 'RKL': 'tbsp', 'TL': 'tsp',
+}
+
+
+def fineli_name(s):
+    """Fineli schrijft namen in hoofdletters: gewone zinsvorm ("BANANA, DEEP-FRIED" → "Banana, deep-fried")."""
+    s = s.strip().lower()
+    return s[:1].upper() + s[1:]
+
+
+def fineli_rows(root):
+    d = next((Path(p) for p in sorted(glob.glob(str(root / 'fineli' / 'Fineli_Rel*74*'))) if Path(p).is_dir()), None)
+    if d is None:
+        print('Fineli: niet gevonden, overgeslagen')
+        return
+
+    def table(name):
+        with open(d / name, newline='', encoding='latin-1') as f:
+            yield from csv.DictReader(f, delimiter=';')
+
+    units = {r['EUFDNAME']: r['COMPUNIT'] for r in table('component.csv')}
+    for code, (_, unit, _) in FINELI.items():
+        if units.get(code) != unit:
+            sys.exit(f'Fineli: eenheid {units.get(code)} voor {code}, verwacht {unit}')
+    en = {r['FOODID']: r['FOODNAME'] for r in table('foodname_EN.csv')}
+    fi = {r['FOODID']: r['FOODNAME'] for r in table('foodname_FI.csv')}
+    groups = {r['THSCODE']: r['DESCRIPT'] for r in table('igclass_EN.csv')}
+    foods = {r['FOODID']: r for r in table('food.csv')}
+    values, copied = {}, {}
+    for r in table('component_value.csv'):
+        code = r['EUFDNAME']
+        if code not in FINELI or not r['BESTLOC'].strip():
+            continue
+        key, _, factor = FINELI[code]
+        values.setdefault(r['FOODID'], {})[key] = max(0.0, float(r['BESTLOC'].replace(',', '.'))) * factor
+        # Overgenomen uit een andere tabel (ACQTYPE F) of berekend uit andere producten (recept, verwant product,
+        # schatting): geen eigen meting, dus geen onafhankelijke bevestiging van een andere databank (zie tryptophan_check)
+        if r['ACQTYPE'] == 'F' or r['METHTYPE'] in FINELI_DERIVED:
+            copied.setdefault(r['FOODID'], set()).add(key)
+    portions = {}
+    for r in table('foodaddunit.csv'):
+        if r['FOODUNIT'] in FINELI_PORTIONS and r['MASS'].strip():
+            portions.setdefault(r['FOODID'], []).append((f"1 {FINELI_PORTIONS[r['FOODUNIT']]}", sig(float(r['MASS'].replace(',', '.')))))
+    for fid, f in foods.items():
+        n = values.get(fid, {})
+        if not n:
+            continue
+        # Vitamine A: RAE = retinol + bètacaroteen / 12 + andere provitamine-A / 24. Met retinol en bètacaroteen erbij
+        # volgen de andere carotenoïden daaruit, en zo de RE (zie VIT_A_BC); zonder retinol een gewone omrekening
+        rae = n.pop('_rae', None)
+        if rae is not None:
+            bc = n.get('beta_carotene')
+            other = max(0.0, (rae - n['retinol'] - bc / 12) * 24) if 'retinol' in n and bc is not None else 0.0
+            n['vit_a'] = rae_to_re(rae, bc, other)
+        if fid in copied:
+            n['_copied'] = copied[fid]
+        name = fineli_name(en.get(fid) or fi.get(fid, ''))
+        yield 'fineli', fid, name, fineli_name(fi.get(fid, '')), groups.get(f['IGCLASS'], ''), n, portions.get(fid, [])
 
 
 # ─────────────────────────── Livsmedelsverket (Zweden) ───────────────────────────
@@ -1931,13 +2020,25 @@ def tryptophan_check(rows, labels):
         if 'tryptophan' in n and n.get('protein', 0) >= 1:
             shares[i] = n['tryptophan'] / n['protein']
             by_food.setdefault(lab[i].get('f') or r['name'].lower(), []).append(i)
+    # Pass 1: hoge eigen metingen die een andere eigen meting (ook boven 2 %) bevestigt
+    confirmed = set()
+    for i, share in shares.items():
+        if share > TRP_MAX_SHARE and 'tryptophan' not in rows[i]['copied']:
+            f = lab[i].get('f') or rows[i]['name'].lower()
+            if any(j != i and rows[j]['source'][:4] != rows[i]['source'][:4] and shares[j] > TRP_SUPPORT_SHARE
+                   and 'tryptophan' not in rows[j]['copied'] for j in by_food[f]):
+                confirmed.add(i)
     lines = []
     for i, share in shares.items():
         if share <= TRP_MAX_SHARE:
             continue
         r = rows[i]
         f = lab[i].get('f') or r['name'].lower()
-        support = [j for j in by_food[f] if j != i and rows[j]['source'][:4] != r['source'][:4] and shares[j] > TRP_SUPPORT_SHARE]
+        # Alleen een eigen meting in een andere databank bevestigt: Fineli neemt eekhoorntjesbrood (0,21 g) over uit een
+        # andere tabel en rekent recepten uit zijn ingrediënten; zo'n waarde is geen tweede meting. En een bevestiging
+        # die zelf boven de grens ligt, telt alleen als die zelf onafhankelijk bevestigd is (pass 1).
+        support = [j for j in by_food[f] if j != i and rows[j]['source'][:4] != r['source'][:4] and shares[j] > TRP_SUPPORT_SHARE
+                   and 'tryptophan' not in rows[j]['copied'] and (shares[j] <= TRP_MAX_SHARE or j in confirmed)]
         reason = keep.get(refs[i], {}).get('tryptophan')
         if reason:
             action = f'behouden: {reason}'
@@ -2122,7 +2223,7 @@ HOLDOUT_KEYS = ['choline', 'b5', 'vit_k', 'iodine', 'selenium', 'vit_d', 'b12', 
 def holdout(rows, n):
     """Verbergt n willekeurige gemeten waarden (> 0) en onthoudt ze."""
     # HOLDOUT_OLD=1: alleen uit de bronnen van vóór 26-10-2026 (zelfde steekproef met en zonder BLS en FNDDS)
-    new = {'bls', 'usda_fndds'} if os.environ.get('HOLDOUT_OLD') else set()
+    new = {'bls', 'usda_fndds', 'fineli'} if os.environ.get('HOLDOUT_OLD') else set()
     pool = [(i, k) for i, r in enumerate(rows) for k in HOLDOUT_KEYS
             if r['source'] not in new and r['nut'].get(k, 0) > 0 and k not in r.get('bio0', ()) and r['category'] not in SKIP_GROUP_CATEGORIES]
     if new:
@@ -2201,11 +2302,11 @@ def main(root, target):
     rows = []
     # SKIP_SOURCES=bls,usda_fndds: zonder die bronnen bouwen (om te vergelijken, zie HOLDOUT)
     skip = set(filter(None, os.environ.get('SKIP_SOURCES', '').split(',')))
-    for gen in (ciqual_rows, slv_rows, mvt_rows, frida_rows, cofid_rows, bls_rows, usda_rows, fndds_rows):
+    for gen in (ciqual_rows, slv_rows, mvt_rows, frida_rows, cofid_rows, bls_rows, fineli_rows, usda_rows, fndds_rows):
         for source, sid, name, local, category, raw, portions in gen(root):
             if source in skip:
                 continue
-            loq, retinol, ne, unsplit, below_loq = {}, None, None, False, set()
+            loq, retinol, ne, unsplit, below_loq, copied = {}, None, None, False, set(), set()
             if source.startswith('usda'):
                 if category in USDA_SKIP_CATEGORIES:
                     continue
@@ -2213,6 +2314,7 @@ def main(root, target):
             else:
                 loq = raw.pop('_loq', {})
                 below_loq = raw.pop('_loq60', set())
+                copied = raw.pop('_copied', set())
                 # Vitamine A die we zelf uit retinol + bètacaroteen berekenen: na het aanvullen van bètacaroteen opnieuw
                 retinol = (raw.get('retinol', 'unknown')) if 'vit_a' not in raw else None
                 # Niacine-equivalenten zoals de bron ze gaf (CoFID, Frida, Livsmedelsverket), zie niacin_ne
@@ -2225,7 +2327,7 @@ def main(root, target):
                 continue
             rows.append({'source': source, 'sid': sid, 'name': name, 'local': local, 'category': category,
                          'nut': nut, 'est': {}, 'portions': portions, 'loq': loq, 'retinol': retinol, 'ne': ne,
-                         'unsplit': unsplit, 'nodonor': set(), 'below_loq': below_loq})
+                         'unsplit': unsplit, 'nodonor': set(), 'below_loq': below_loq, 'copied': copied})
 
     WASTE.update(id(r['nut']) for r in rows if WASTE_NAME.search(r['name']))
     print(f'correcties uit {FIXES_FILE.name}: {apply_fixes(rows)} waarden')

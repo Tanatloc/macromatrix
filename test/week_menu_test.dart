@@ -171,7 +171,8 @@ void main() {
       expect(s.planFor(dayKey(day.date)), hasLength(day.items.length + (day == m.days.first ? 1 : 0)));
     }
     expect(s.planFor(first).where((x) => x.meal == Meal.snacks), hasLength(1));
-    expect(s.planFor(first).any((x) => x.item.name.startsWith('Banana')), isFalse);
+    // De geplande banaan bij de lunch is weg (het menu zelf mag wel een banaan hebben, bv. bij het ontbijt)
+    expect(s.planFor(first).any((x) => x.meal == Meal.lunch && x.item.name.startsWith('Banana')), isFalse);
     expect(s.planTotals(first).values['energy'], closeTo(m.days.first.kcal + _snackKcal(s, first), 1));
 
     final n = s.shoppingFromMenu(m);

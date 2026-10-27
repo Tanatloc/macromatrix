@@ -40,6 +40,7 @@ friends, levels, badges and weekly battles to keep you going. European data firs
 | Livsmedelsverket (Sweden) | CC BY 4.0 |
 | Matvaretabellen, Mattilsynet (Norway) | NLOD |
 | Bundeslebensmittelschlüssel (BLS) 4.0, Max Rubner-Institut (Germany) | CC BY 4.0 |
+| Fineli release 20, Finnish Institute for Health and Welfare (THL) (Finland) | CC BY 4.0 |
 | USDA FoodData Central (US): SR Legacy, Foundation Foods, FNDDS 2021–2023 (dishes) and Branded Foods | Public domain (CC0) |
 | Open Food Facts (products, additives) | ODbL |
 
@@ -58,6 +59,8 @@ corrected (see `tool/FOODS_CHANGES.md`); estimated values are marked with ≈ in
 - Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0 — Deutsche Nährstoffdatenbank. Karlsruhe.
   DOI: 10.25826/Data20251217-134202-0. Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); changes
   were made.
+- Fineli, the Finnish food composition database, release 20, Finnish Institute for Health and Welfare (THL), Helsinki
+  (https://fineli.fi), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); changes were made.
 - U.S. Department of Agriculture, Agricultural Research Service. FoodData Central (https://fdc.nal.usda.gov).
 - Open Food Facts (https://world.openfoodfacts.org), available under the Open Database License (ODbL). The additive
   list derived from it, `assets/additives.json`, is likewise available under the

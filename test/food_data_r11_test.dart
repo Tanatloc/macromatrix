@@ -215,8 +215,12 @@ void main() {
         for (final f in all)
           if ((f.n['protein'] ?? 0) >= 1 && f.n['tryptophan'] != null && f.n['tryptophan']! / f.n['protein']! > 0.025) f.label['f'],
       };
-      // Spinazie: sinds 26-10-2026 ook door BLS gemeten, naast de USDA (2,5 à 2,8 % van het eiwit)
-      expect(high, everyElement(isIn(['date', 'pecan nut', 'spinach'])));
+      // Spinazie: sinds 26-10-2026 ook door BLS gemeten, naast de USDA (2,5 à 2,8 % van het eiwit). Sinds Fineli
+      // (28-10-2026): gebakken champignons, peterselie, mayonaise en mager ijs van Fineli, die een eigen meting in een
+      // andere databank boven 2 % bevestigt. Eekhoorntjesbrood niet: Fineli nam de 0,21 g van BLS over, dat is geen
+      // tweede meting
+      expect(high, everyElement(isIn(['date', 'pecan nut', 'spinach', 'mushroom', 'parsley', 'mayonnaise', 'ice cream'])));
+      expect(ref('bls:K718400').per100g['b3'], lessThan(40)); // gedroogd eekhoorntjesbrood, met de overgenomen 0,21 g 53
     });
 
     test('1. tryptofaan, chroom en molybdeen zitten in de uitschieterscontrole', () {

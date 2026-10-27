@@ -30,7 +30,7 @@ class FoodDb {
   static const asset = 'assets/db/foods.db';
 
   /// Bronnen in de ingebouwde database (prefix van [Food.ref]).
-  static const dbSources = {'ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'usda_sr', 'usda_fnd', 'usda_fndds'};
+  static const dbSources = {'ciqual', 'slv', 'mvt', 'frida', 'cofid', 'bls', 'fineli', 'usda_sr', 'usda_fnd', 'usda_fndds'};
 
   static bool isDbRef(String ref) => dbSources.contains(ref.split(':').first);
 
@@ -86,10 +86,14 @@ class FoodDb {
       for (final w in words)
         for (final t in w) '%$t%',
     ];
-    final rows = _db.select('SELECT * FROM foods WHERE $where LIMIT 600', params);
+    // Eerst alle treffers licht (naam, bron, aantal waarden) rangschikken, dan alleen de beste volledig ophalen. Een
+    // vast plafond vóór het rangschikken liet bij gewone woorden ("chicken" 1400 treffers) de bronnen achteraan in de
+    // databank weg, en welke dat waren hing af van de volgorde in het bestand (28-10: Fineli duwde worsten eruit)
+    const light = "id, name, source, length(nutrients) - length(replace(nutrients, ':', '')) AS n";
+    final rows = _db.select('SELECT $light FROM foods WHERE $where', params);
     final also = alsoWith.isEmpty
         ? const <Row>[]
-        : _db.select('SELECT * FROM foods WHERE $where AND (${List.filled(alsoWith.length, 'search LIKE ?').join(' OR ')}) LIMIT 600', [
+        : _db.select('SELECT $light FROM foods WHERE $where AND (${List.filled(alsoWith.length, 'search LIKE ?').join(' OR ')})', [
             ...params,
             for (final a in alsoWith) '%$a%',
           ]);
@@ -100,12 +104,19 @@ class FoodDb {
         if (seen.add(r['id'])) r,
     ];
     // Bij gelijke stand de volgorde van de databank (sort is niet stabiel)
-    final ranked = [for (final (i, r) in all.indexed) (_rank(r, tokens, sugar: alsoWith.isNotEmpty) * 1000 + i, r)]
-      ..sort((a, b) => a.$1.compareTo(b.$1));
-    return [
-      for (final (i, (_, r)) in ranked.indexed)
-        if (i < limit || alsoIds.contains(r['id'])) _food(r),
+    final ranked = [
+      for (final (i, r) in all.indexed)
+        (_rank(r['name'] as String, r['source'] as String, r['n'] as int, tokens, sugar: alsoWith.isNotEmpty) * 1000 + i, r['id'] as int),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    final ids = [
+      for (final (i, (_, id)) in ranked.indexed)
+        if (i < limit || alsoIds.contains(id)) id,
     ];
+    if (ids.isEmpty) return const [];
+    final full = {
+      for (final r in _db.select('SELECT * FROM foods WHERE id IN (${List.filled(ids.length, '?').join(',')})', ids)) r['id']: r,
+    };
+    return [for (final id in ids) _food(full[id]!)];
   }
 
   /// Lager = beter.
@@ -113,10 +124,9 @@ class FoodDb {
   /// 2. Bij een goede overeenkomst: Europese bronnen vóór USDA.
   /// 3. De gewone vorm (fruit rauw, rijst en pasta gekookt), dan producten met veel gegevens, dan kortere namen.
   /// Met [sugar] (een suikerwens bij het zoeken) is "reduced sugar" geen bijzondere vorm.
-  static int _rank(Row r, List<String> tokens, {bool sugar = false}) {
-    final name = sameSpelling((r['name'] as String).toLowerCase());
-    final source = FoodSource.fromDb(r['source'] as String);
-    final nutrientCount = ':'.allMatches(r['nutrients'] as String).length;
+  static int _rank(String rawName, String rawSource, int nutrientCount, List<String> tokens, {bool sugar = false}) {
+    final name = sameSpelling(rawName.toLowerCase());
+    final source = FoodSource.fromDb(rawSource);
 
     final parts = name.split(',').map((s) => s.trim()).toList();
     final first = parts.first;
@@ -144,7 +154,9 @@ class FoodDb {
       if (!RegExp('\\b${RegExp.escape(o)}').hasMatch(name)) match = math.max(match, 3);
     }
     final tier = match <= 1 ? 0 : match; // exacte en "begint met"-treffers samen, zodat Europa daar voorgaat
-    final europe = source.european ? 0 : 1;
+    // Fineli na de andere Europese tabellen: de Engelse namen zijn vertalingen, en zo schuiven 4000 Finse producten
+    // niet tussen de vertrouwde producten (de plaats in deze volgorde telt mee in de score van het zoekvak)
+    final europe = !source.european ? 2 : (source == FoodSource.fineli ? 1 : 0);
     final q = tokens.join(' ');
     // De gewone vorm: fruit en groenten rauw, maar granen, pasta en peulvruchten gekookt (P156)
     final cooks = RegExp(r'\b(rice|pasta|spaghetti|macaroni|noodles?|quinoa|lentils?|beans?|chickpeas?|barley|couscous|bulgur|egg|eggs)\b').hasMatch(name);
@@ -166,7 +178,7 @@ class FoodDb {
                 !RegExp(r'minc|frozen|lactose|reduced|energy').hasMatch(q))
         ? 1
         : 0;
-    return (((((tier * 2 + odd) * 2 + europe) * 5 + match) * 2 + raw) * 2 + (nutrientCount < 30 ? 1 : 0)) * 1000 + name.length.clamp(0, 999);
+    return (((((tier * 2 + odd) * 3 + europe) * 5 + match) * 2 + raw) * 2 + (nutrientCount < 30 ? 1 : 0)) * 1000 + name.length.clamp(0, 999);
   }
 
   /// SQL-uitdrukking voor de hoeveelheid van een voedingsstof per 100 g (ook voor afgeleide stoffen).

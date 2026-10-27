@@ -206,7 +206,8 @@ void main() {
     expect(milk.name.toLowerCase(), contains('milk'));
     expect(grams, closeTo(206, 0.01));
     expect(s.resolveQuick(const QuickItem('Fried ham')).first.$1.name, s.resolveQuick(const QuickItem('fried ham')).first.$1.name);
-    expect(s.resolveQuick(const QuickItem('fried sausages')).first.$1.name.toLowerCase(), startsWith('sausage'));
+    // Meervoud: "sausages" vindt een worst (sinds Fineli een gebakken Weense worst, ook goed), geen ander product
+    expect(s.resolveQuick(const QuickItem('fried sausages')).first.$1.name.toLowerCase(), contains('sausage'));
   });
 
   test('hernoemde voedingsmiddelen zijn vindbaar op hun nieuwe naam', () {

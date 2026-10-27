@@ -170,3 +170,27 @@ in de zoektekst. Eerder gebeurde dit alleen bij het tonen (`tidyFoodName`), waar
   over (1.987 µg); nu onbekend.
 - Nauwkeurigheid (HOLDOUT=3000, dezelfde verborgen waarden van de oude bronnen, met en zonder de nieuwe):
   typische afwijking 27 % → 26 %, binnen 2× 78 % → 78 %.
+
+## 28-10-2026: Fineli erbij
+
+- **Fineli release 20** (THL, Finland, CC BY 4.0), het pakket met 74 voedingsstoffen: 4.232 voedingsmiddelen, Engelse
+  naam met de Finse als lokale naam. Zeer volledig (jodium 96 %, seleen 99 %, vitamine D 100 %, vitamine K 98 %).
+  Waarden zoals Fineli ze geeft, ook wat Fineli zelf uit verwante producten aanvult. Omrekeningen: energie kJ → kcal
+  (÷ 4,184), vetzuren en tryptofaan mg → g, molybdeen mg → µg, vitamine A van RAE naar RE (andere carotenoïden uit
+  RAE − retinol − bètacaroteen / 12). Porties uit `foodaddunit.csv` (klein/middel/groot, stuk, dl, eetlepel, theelepel).
+- Labels: pakketten 074–079 (voedingsapp-data/labels). Pakket 075 werd half opnieuw gelabeld: twee hulpen schreven in
+  dezelfde map, waardoor regels 181–706 bij de verkeerde producten stonden (opgemerkt met een woordovereenkomst per
+  50 regels; nu nagekeken over alle zes pakketten).
+- **Tryptofaan**: Fineli neemt waarden over uit andere tabellen (ACQTYPE F) en rekent recepten uit (METHTYPE R, K, I,
+  IG, O, U). Zo'n waarde bevestigt geen hoge meting in een andere databank meer (`copied`, `tryptophan_check`), en een
+  bevestiging die zelf boven 2,5 % ligt, telt alleen als die zelf door een eigen meting bevestigd is. Eekhoorntjesbrood
+  (BLS en Fineli allebei 0,21 g, 3,9–6,7 % van het eiwit) blijft daardoor weggelaten: gedroogd B3 53 → 33 mg NE.
+- Frida `754` "Chicken, breast, boiled, sliced" (1120 mg natrium) is beleg: label nu bewerkt vlees, zoals de
+  USDA-varianten (`label_fixes.json`).
+- Zoeken: Fineli komt bij gelijke stand na de andere Europese tabellen (vertaalde Engelse namen), en `FoodDb.search`
+  rangschikt nu alle treffers voor het een plafond toepast (vroeger 600 rijen in bestandsvolgorde: bij "chicken",
+  "beef" of "cheese" vielen de laatste bronnen zonder reden weg).
+- Nauwkeurigheid (HOLDOUT=3000, HOLDOUT_OLD=1, dezelfde verborgen waarden): over alles gelijk, 26 % typische afwijking,
+  78 % binnen 2×. Jodium 65 → 52 %, B3 33 → 27 %, B6 32 → 27 %; vitamine C 48 → 59 %, EPA 65 → 74 % (kleine aantallen).
+  Fineli helpt vooral door zijn eigen, bijna volledig gemeten producten, niet door het schatten voor andere.
+- Databank `f8ed384cef93`, 35.679 producten, 81,0 MB.
