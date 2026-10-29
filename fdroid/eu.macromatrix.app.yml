@@ -5,8 +5,9 @@ AntiFeatures:
   NonFreeNet:
     en-US: The app works offline and without an account. Optional features use online
       services; syncing your account goes through the MacroMatrix server (Cloudflare),
-      branded products come from Open Food Facts and USDA, and voice logging on phones
-      without speech recognition uses Cloudflare Workers AI.
+      branded products come from Open Food Facts and USDA, and meal photo scans, label
+      scans and voice logging on phones without speech recognition use Cloudflare
+      Workers AI.
 Categories:
   - Diet
   - Health Manager
@@ -26,7 +27,7 @@ Repo: https://github.com/Tanatloc/macromatrix.git
 Builds:
   - versionName: 1.22.0
     versionCode: 58
-    commit: v1.22.0
+    commit: 65c7eeea687b19536a39f01c209ef9b6d6879d5e
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
       - flutter@3.47.7
