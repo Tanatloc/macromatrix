@@ -1,11 +1,39 @@
-<p>MacroMatrix shows what you really eat: energy, macros and all 69 nutrients, compared with EFSA reference values. It is free, with an optional Supporter subscription for a few extras. It is open source and has no ads.</p>
-<ul>
-<li><b>Diary</b>: every vitamin, mineral, fatty acid and essential amino acid, with a Nutrient Score per day, week and month, and a short list of foods that fill today's gaps.</li>
-<li><b>Logging</b>: search 20,000+ basic foods from official European tables and millions of branded products, scan a barcode, say what you ate, or take a photo of your meal (3 a day free; you check the estimate before it is saved).</li>
-<li><b>Scanner</b>: product score, Nutri-Score, processing level, additives with their EFSA-based risk, your allergens and a healthier alternative. Unknown product? Scan the label instead (1 a day free) and, if you want, share it with Open Food Facts.</li>
-<li><b>Friends</b>, if you want them: a weekly leaderboard, battles, challenges, levels, badges and titles. Friends only see your name, photo or avatar, level, title, badges, weekly score and days logged, your battle points and whether you made each challenge day. Never your diary, weight or email address. You can block and report.</li>
-<li>Week menu with shopping list, copy a day, backups, Health Connect import, home screen widget, reminders, English and Dutch, light and dark theme. Works offline.</li>
-</ul>
-<p>Supporter is optional (€2.99 a month or €19.99 a year). It adds extras you don't need, such as avatar frames, more colours, more photo and label scans per day, recipe import and early access. It mainly pays for the servers and the AI scans, so the app can stay online without ads.</p>
-<p>Works without an account. With a free account your data is synced between devices and stored in the EU. No tracking, and your data is never sold. Source code: github.com/Tanatloc/macromatrix</p>
-<p>Not medical advice.</p>
+Most apps count calories. MacroMatrix shows the whole picture: energy, protein, carbs and fat, plus every vitamin, mineral, fatty acid and essential amino acid. That is 69 nutrients, each compared with official EFSA reference values.
+
+Free and open source, with no ads and no trackers. No account needed: your diary stays on your phone and the app works offline.
+
+<b>Know what you're missing</b>
+• A Nutrient Score for every day, week and month
+• See at a glance which nutrients are low, fine or too high
+• Short lists of real foods that fill today's gaps
+• Weekly report with a clear verdict on salt, fibre, sugar, saturated fat and more
+
+<b>Log in seconds</b>
+• 38,000+ foods from official food tables (European first), plus millions of branded products
+• Scan a barcode, say what you ate, or take a photo of your meal (3 a day free; you check the estimate before it is saved)
+• Recipes, saved meals, copy a day, week menu with shopping list
+
+<b>Scan before you buy</b>
+• Product score, Nutri-Score, processing level and additives with their EFSA-based risk
+• Your allergens and a healthier alternative
+• Unknown product? Scan the label (1 a day free) and share it with Open Food Facts if you want
+
+<b>Better with friends (optional)</b>
+• Weekly leaderboard, battles, challenges, levels, badges and titles
+• Friends only see your name, avatar, level, badges and weekly score. Never your diary, weight or email address
+• Block and report built in
+
+<b>Fits your routine</b>
+• Health Connect: steps, workouts and weight from your watch or smart scale
+• Home screen widget, reminders, backups, light and dark theme
+• English and Dutch. Works offline
+
+<b>Free, no ads, privacy first</b>
+• Free, and open source under the AGPL: github.com/Tanatloc/macromatrix
+• No ads, no trackers, no analytics. Your data is never sold
+• No account needed: everything is stored on your phone and works offline
+• Want to sync between devices? A free account is optional, and your data is stored in the EU
+
+Supporter is optional (in the Google Play version): €3.99 a month or €29.99 a year, or Duo for you and a friend at €4.99 a month or €39.99 a year. It adds extras such as avatar frames, more colours, more photo and label scans per day, recipe import and early access, and it keeps the servers running without ads.
+
+MacroMatrix is not medical advice.
